@@ -4,17 +4,14 @@ version = "0.1.0"
 description = "Game-data tooling for the CrimsonAtomtic save editor"
 requires-python = ">=3.12"
 
-# crimson_rs is intentionally NOT a PyPI dependency. It is installed
-# locally from vendor/crimson-rs via:
-#   python -m maturin develop --release --manifest-path ../vendor/crimson-rs/Cargo.toml
-# See scripts/setup_python_env.ps1 in the project root.
+# This pyproject is metadata + ruff/pytest config only. The tools/ folder
+# is NOT installed as a package; scripts use a sys.path bootstrap to import
+# tools/common/. See tools/CLAUDE.md.
+#
+# crimson_rs is intentionally NOT a PyPI dependency either — it is installed
+# locally from vendor/crimson-rs via `maturin develop --release`. See
+# scripts/setup_python_env.ps1.
 dependencies = []
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.0",
-    "ruff>=0.5",
-]
 
 [tool.ruff]
 line-length = 100

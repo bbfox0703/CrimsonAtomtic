@@ -31,26 +31,31 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $VenvDir     = Join-Path $ProjectRoot ".venv"
 $VendorRs    = Join-Path $ProjectRoot "vendor\crimson-rs"
-$ToolsDir    = Join-Path $ProjectRoot "tools"
 
 if (-not (Test-Path $VendorRs)) {
     throw "vendor/crimson-rs is missing. Run .\vendor\update_vendors.ps1 first."
 }
 
-# Resolve Python 3.12+
-if (-not $PythonExe) {
-    if (Get-Command "py" -ErrorAction SilentlyContinue) {
-        $PythonExe = "py -3.12"
-    } elseif (Get-Command "python3.12" -ErrorAction SilentlyContinue) {
-        $PythonExe = "python3.12"
-    } elseif (Get-Command "python" -ErrorAction SilentlyContinue) {
-        $PythonExe = "python"
-    } else {
-        throw "No Python interpreter found. Install Python 3.12+ and re-run."
-    }
+# Resolve Python 3.12+ launcher. We split into command + args so PowerShell
+# can splat them correctly via `& $cmd @args`.
+$LauncherCmd = $null
+$LauncherArgs = @()
+if ($PythonExe) {
+    # User override: assume it's a single bare command.
+    $LauncherCmd  = $PythonExe
+    $LauncherArgs = @()
+} elseif (Get-Command "py" -ErrorAction SilentlyContinue) {
+    $LauncherCmd  = "py"
+    $LauncherArgs = @("-3.12")
+} elseif (Get-Command "python3.12" -ErrorAction SilentlyContinue) {
+    $LauncherCmd  = "python3.12"
+} elseif (Get-Command "python" -ErrorAction SilentlyContinue) {
+    $LauncherCmd  = "python"
+} else {
+    throw "No Python interpreter found. Install Python 3.12+ and re-run."
 }
 
-Write-Host "Using Python: $PythonExe" -ForegroundColor Cyan
+Write-Host "Using Python launcher: $LauncherCmd $($LauncherArgs -join ' ')" -ForegroundColor Cyan
 
 if ($Force -and (Test-Path $VenvDir)) {
     Write-Host "Removing existing .venv\ (-Force)" -ForegroundColor Yellow
@@ -59,7 +64,7 @@ if ($Force -and (Test-Path $VenvDir)) {
 
 if (-not (Test-Path $VenvDir)) {
     Write-Host "Creating .venv\..." -ForegroundColor Cyan
-    & $PythonExe.Split(" ") -m venv $VenvDir
+    & $LauncherCmd @LauncherArgs -m venv $VenvDir
     if ($LASTEXITCODE -ne 0) { throw "venv creation failed" }
 }
 
@@ -86,9 +91,11 @@ finally {
     Pop-Location
 }
 
-Write-Host "Installing tools[dev]..." -ForegroundColor Cyan
-& $VenvPy -m pip install -e "$ToolsDir[dev]"
-if ($LASTEXITCODE -ne 0) { throw "tools install failed" }
+Write-Host "Installing dev tooling (pytest, ruff)..." -ForegroundColor Cyan
+& $VenvPy -m pip install "pytest>=8.0" "ruff>=0.5"
+if ($LASTEXITCODE -ne 0) { throw "dev tooling install failed" }
+# Scripts under tools/ use a sys.path bootstrap to import tools/common/,
+# so we deliberately do NOT `pip install -e tools/` — see tools/CLAUDE.md.
 
 Write-Host ""
 Write-Host "Done. Activate with:" -ForegroundColor Green
