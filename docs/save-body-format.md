@@ -3,8 +3,11 @@
 > **Status**: schema + TOC + per-object field decoder all implemented in
 > [`vendor/crimson-rs/src/save/body/`](../vendor/crimson-rs/src/save/body/).
 > 100% block coverage and 100% present-field coverage against a live 1.06
-> save; ~1.2% of bytes (concentrated in 226 `FieldNPCSaveData` entries)
-> remain in `block.undecoded_ranges`.
+> save. The 1-byte engine trailer that the original Python parser
+> silently left as undecoded is now captured on `ObjectBlock.trailing_pad`
+> (232 blocks across 7 classes). The remaining 1.22% residual lives in
+> two blocks (`FactionSaveData`, `MercenaryClanSaveData`) and has a
+> different root cause — see [Open issues](#open-issues).
 
 The decompressed save body has three sequential sections:
 
@@ -136,8 +139,65 @@ referencing while the old repo is still useful to read.
 - [`tools/inspect/inspect_save_body.py`](../tools/inspect/inspect_save_body.py) — show schema + TOC only (cheap).
 - [`tools/inspect/inspect_save_section.py`](../tools/inspect/inspect_save_section.py) — run the full decoder; filter by `--class` or `--toc-index`; pretty-print or dump JSON.
 
-## Known gaps
+## The 1-byte engine trailer (`ObjectBlock.trailing_pad`)
 
-- 226 `FieldNPCSaveData` blocks have a small undecoded tail (~280 bytes each). The forward walk completes all schema fields; the residue is structural data not captured by the schema. Investigate when we need NPC state.
-- 8 other classes have tiny single-block residues (~1 byte each), likely alignment/padding.
-- The compact-list-element decode path from the Python parser isn't ported because it has known undefined-local bugs and isn't reached by our test save. Re-add only if a future patch needs it.
+After we implemented the field decoder, 232 blocks across 7 classes
+exhibited a consistent 1-byte residual. We investigated it empirically
+and now capture it explicitly rather than leaving it as undecoded.
+
+### Findings
+
+- **Where**: always exactly 1 byte at the boundary between the forward
+  walk's end and the start of the reverse-peeled tail (or, when no
+  reverse pass ran, at the very end of the block).
+- **Which classes**: 226 × `FieldNPCSaveData`, plus one block each of
+  `GameEventSaveData`, `InventoryItemContentsSaveData`,
+  `InventorySaveData`, `KnowledgeSaveData`, `ContentsMiscSaveData`, and
+  `FieldSaveData`.
+- **Value distribution**: 123 unique byte values across the 226
+  `FieldNPCSaveData` blocks, with the high bit set in 63% of them.
+  It's payload data, not a constant marker.
+- **Schema coverage**: the byte is not part of any schema field. Even
+  when more of the schema's "size-1" fields (e.g. `_armorDyeAppearanceIndexKey`)
+  are present in the mask, the trailer byte still appears separately.
+- **Reference behavior**: the Python parser in the legacy community
+  editor leaves this byte as `undecoded_ranges` too. We match its
+  decode but capture the byte instead of dropping it.
+
+### Decoder rule
+
+In `decode_one_block` (Rust), if `decode_fields_in_region` returns a
+single undecoded range of exactly 1 byte, we move that byte to
+`ObjectBlock.trailing_pad: Option<u8>` and clear the range. Multi-byte
+residues are left alone — they signal a real format gap (e.g. the
+`FactionSaveData` case below).
+
+The PyO3 binding surfaces `trailing_pad` on each decoded block dict
+when set.
+
+## Open issues
+
+### `FactionSaveData` — non-inline locator child payloads (63,277 bytes)
+
+`FactionSaveData` has two `object_list` fields whose elements are
+**non-inline** locator wrappers — i.e. the wrapper says "my child
+payload lives at offset X" where X is somewhere later in the same
+block, **not** immediately after the wrapper. The current decoder
+recurses only when `child_payload_offset == wrapper_end`. The
+non-inline payloads sit untouched in the block's data section.
+
+Plan: after decoding all wrappers in a list, fan out a second pass
+that visits each unique `child_payload_offset`, runs the field
+decoder there with the child type's schema, and attaches the result
+back to its locator field.
+
+### `MercenaryClanSaveData` — 3-byte residual
+
+Likely the same shape as `FactionSaveData` in miniature; the same
+fix should resolve it.
+
+## Not ported from the Python source
+
+- The compact-list-element decode path from `save_parser.py`. It has
+  undefined-local bugs in the original and is unreachable on our test
+  save. Re-add only if a future patch needs it.
