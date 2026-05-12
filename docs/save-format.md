@@ -1,6 +1,15 @@
 # `.save` file format
 
-> **Status**: known but not yet ported into our Rust core. Existing implementation lives in the old reference repo's `save_crypto.py` + `save_parser.py` (~1,800 lines combined). We will port the essence into `crimson-rs`, with regression fixtures, before the C# app reads any save data.
+> **Status (header + crypto)**: ported. Lives in
+> [`vendor/crimson-rs/src/save/`](../vendor/crimson-rs/src/save/) as
+> `header.rs`, `crypto.rs`, `io.rs`. Verified against a live 1.06 save
+> end-to-end (HMAC ok, LZ4 decompresses, write-parse round-trip preserves
+> the body).
+>
+> **Status (body parsing)**: ported. See
+> [save-body-format.md](save-body-format.md) for the decompressed body
+> layout (schema + TOC + per-block decoder). 100% block + present-field
+> coverage against the same live save.
 
 ## Header
 

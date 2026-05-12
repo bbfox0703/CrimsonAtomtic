@@ -60,6 +60,7 @@ Cross-platform goal: Windows (must), Linux, macOS.
 - Architecture decision (A1, Avalonia + crimson-rs C ABI): [docs/architecture.md](docs/architecture.md)
 - Game install + save paths, version history: [docs/game-versions.md](docs/game-versions.md)
 - `.save` format (header, ChaCha20, HMAC, LZ4): [docs/save-format.md](docs/save-format.md)
+- Decompressed save body (schema + TOC + decoder, Python ↔ Rust naming map): [docs/save-body-format.md](docs/save-body-format.md)
 - PABGB format family (iteminfo, skill, store, field, …): [docs/pabgb-formats.md](docs/pabgb-formats.md)
 - Asset containers (PAZ, PAMT, PAPGT, PALOC): [docs/paz-containers.md](docs/paz-containers.md)
 - Python toolchain conventions: [tools/CLAUDE.md](tools/CLAUDE.md)
