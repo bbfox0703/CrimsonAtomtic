@@ -5,9 +5,10 @@
 > 100% block coverage and 100% present-field coverage against a live 1.06
 > save. The 1-byte engine trailer that the original Python parser
 > silently left as undecoded is now captured on `ObjectBlock.trailing_pad`
-> (232 blocks across 7 classes). The remaining 1.22% residual lives in
-> two blocks (`FactionSaveData`, `MercenaryClanSaveData`) and has a
-> different root cause — see [Open issues](#open-issues).
+> (233 blocks across 7+ classes). Total residual: **3 bytes / 5.2 MB**
+> (0.0001%) in one `MercenaryClanSaveData` block, attributable to an
+> unfamiliar dynamic_array header variant that surfaces in ~8 of 1,158
+> `FactionNodeElementSaveData._reviveQuestList` instances.
 
 The decompressed save body has three sequential sections:
 
@@ -175,26 +176,50 @@ residues are left alone — they signal a real format gap (e.g. the
 The PyO3 binding surfaces `trailing_pad` on each decoded block dict
 when set.
 
-## Open issues
+## Locator inline-payload precedence
 
-### `FactionSaveData` — non-inline locator child payloads (63,277 bytes)
+The wrapper's `child_payload_offset` is treated as **advisory**, not
+authoritative. The decoder tries `wrapper_end` as the inline payload
+start first, and only falls back to the stated offset when that fails.
 
-`FactionSaveData` has two `object_list` fields whose elements are
-**non-inline** locator wrappers — i.e. the wrapper says "my child
-payload lives at offset X" where X is somewhere later in the same
-block, **not** immediately after the wrapper. The current decoder
-recurses only when `child_payload_offset == wrapper_end`. The
-non-inline payloads sit untouched in the block's data section.
+Empirically the engine sometimes writes a stale or wrong-looking
+`payload_offset` value while the actual payload still sits immediately
+after the wrapper — observed across many `FactionNodeElementSaveData`
+list elements where `payload_offset` pointed hundreds of bytes later
+into the block. The original Python parser only recurses when
+`payload_offset == wrapper_end` and consequently leaves all those
+"non-inline-looking" elements as undecoded; we don't, so the residual
+that motivated this work no longer appears.
 
-Plan: after decoding all wrappers in a list, fan out a second pass
-that visits each unique `child_payload_offset`, runs the field
-decoder there with the child type's schema, and attaches the result
-back to its locator field.
+## Best-effort field walk
 
-### `MercenaryClanSaveData` — 3-byte residual
+When a sub-decoder hits a shape it doesn't recognize (in practice,
+an unfamiliar `dynamic_array` header variant inside one specific
+quest-list field), the field walk in `decode_inline_object_payload`
+breaks out of the loop instead of propagating an error. The
+trailing-size probe then finds the payload's true end from wherever
+cursor stopped, so:
 
-Likely the same shape as `FactionSaveData` in miniature; the same
-fix should resolve it.
+- The outer forward walk still advances past the right number of
+  bytes — downstream elements in the same list remain decodable.
+- Fields that did decode are kept; the offending field stays as
+  `Unknown` rather than being silently filled with garbage.
+- `ObjectBlock.undecoded_ranges` is now reliable as a "we don't know
+  what's here" signal rather than a "we gave up" signal.
+
+This is the only departure from the Python `save_parser.py`'s decode
+strategy beyond what's already documented above.
+
+## Known unresolved variant
+
+Eight of 1,158 `FactionNodeElementSaveData` list elements have field
+`_reviveQuestList` (a `dynamic_array<QuestKey, size=4>`) encoded with
+a header shape that doesn't match any of the four variants the
+decoder currently recognises. The bytes are accounted for (the
+payload terminates at the trailing-size marker as usual) but the
+field's `kind` is `Unknown` and `value` is `None`. Inspect a failing
+element via `inspect_save_section.py --class FactionNodeElementSaveData`
+to see the raw bytes when ready to model the variant.
 
 ## Not ported from the Python source
 
