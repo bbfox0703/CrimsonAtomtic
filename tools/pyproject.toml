@@ -1,0 +1,29 @@
+[project]
+name = "crimson-atomtic-tools"
+version = "0.1.0"
+description = "Game-data tooling for the CrimsonAtomtic save editor"
+requires-python = ">=3.12"
+
+# crimson_rs is intentionally NOT a PyPI dependency. It is installed
+# locally from vendor/crimson-rs via:
+#   python -m maturin develop --release --manifest-path ../vendor/crimson-rs/Cargo.toml
+# See scripts/setup_python_env.ps1 in the project root.
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# Keep it strict for new code; loosen only with a written reason.
+select = ["E", "F", "I", "B", "UP", "SIM", "PL"]
+ignore = ["PLR0913"]  # function-too-many-args — common in CLI entry points
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

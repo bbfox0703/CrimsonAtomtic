@@ -427,3 +427,49 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# -----------------------------------------------------------------------------
+# CrimsonAtomtic project-specific
+# -----------------------------------------------------------------------------
+
+# Vendor deps: clones managed by vendor/update_vendors.ps1. Do NOT track them.
+# (Keep the script itself, README, and the empty folder structure.)
+vendor/*/
+!vendor/update_vendors.ps1
+!vendor/README.md
+
+# Python venv + cache
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Generated data (per docs/data-policy.md: only sources are tracked)
+data/*/
+out/
+dist/
+
+# Local game-asset mining outputs (one-time copies from old reference repo,
+# reprocessed before commit if at all)
+data/_mined/
+data/_raw/
+
+# Save fixtures used for regression; tracked explicitly under tests/fixtures/
+# but not anywhere else
+**/save.save
+**/lobby.save
+!tests/fixtures/**/save.save
+!tests/fixtures/**/lobby.save
+
+# Rust target/ inside vendor is already covered by vendor/*/ above; keep an
+# explicit rule for any top-level Rust experiments outside vendor.
+/target/
+
+# IDE / editor cruft beyond the VS template
+.idea/
+.vscode/settings.json
+*.swp
+
