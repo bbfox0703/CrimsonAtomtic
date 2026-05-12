@@ -6,9 +6,9 @@
 > save. The 1-byte engine trailer that the original Python parser
 > silently left as undecoded is now captured on `ObjectBlock.trailing_pad`
 > (233 blocks across 7+ classes). Total residual: **3 bytes / 5.2 MB**
-> (0.0001%) in one `MercenaryClanSaveData` block, attributable to an
-> unfamiliar dynamic_array header variant that surfaces in ~8 of 1,158
-> `FactionNodeElementSaveData._reviveQuestList` instances.
+> (0.0001%) in one `MercenaryClanSaveData` block — a small `01 01 01`
+> sequence between an `object_list` and the reverse-peeled tail; see
+> [Open issues](#open-issues).
 
 The decompressed save body has three sequential sections:
 
@@ -83,7 +83,7 @@ u32 reserved_u32
 
 | Variant name        | First-bytes pattern                                | Source notes                              |
 | ------------------- | -------------------------------------------------- | ----------------------------------------- |
-| `prefix_0000060100` | `00 00 06 01 00`, count u32, data, trailing `01×5` | Verified empirically; matches Python case |
+| `prefix_00xx0100`   | `00 00 XX 01 00`, count u32, data, trailing `01×5` | `XX` is a flag byte. Observed values: `0x06` (most arrays) and `0x01` (`FactionNodeElementSaveData._reviveQuestList`). Other prefix/trailer constraints + count bound are strict enough that this isn't ambiguous. |
 | `marker_prefix`     | 1+ leading `01` bytes, then `00`, then count u32   | Variable-length marker run                |
 | `compact`           | `00 00 <u16 count> 00 00`                          | Short header for small arrays             |
 | `generic`           | `<u8 prefix> <u32 count>`                          | Fallback                                  |
@@ -210,16 +210,30 @@ cursor stopped, so:
 This is the only departure from the Python `save_parser.py`'s decode
 strategy beyond what's already documented above.
 
-## Known unresolved variant
+## Open issues
 
-Eight of 1,158 `FactionNodeElementSaveData` list elements have field
-`_reviveQuestList` (a `dynamic_array<QuestKey, size=4>`) encoded with
-a header shape that doesn't match any of the four variants the
-decoder currently recognises. The bytes are accounted for (the
-payload terminates at the trailing-size marker as usual) but the
-field's `kind` is `Unknown` and `value` is `None`. Inspect a failing
-element via `inspect_save_section.py --class FactionNodeElementSaveData`
-to see the raw bytes when ready to model the variant.
+### `MercenaryClanSaveData` — 3-byte gap between an object_list and its reverse-peeled tail
+
+Three bytes (`01 01 01`) sit between the end of the top-level
+`_mercenaryDataList` (`object_list` field) and the start of the
+reverse-peeled fixed-size tail fields. They are NOT inside a
+schema-declared field, NOT a `trailing_pad` (which only fires for
+exactly 1 byte), and don't match any of the known `dynamic_array`
+variant trailers.
+
+Hypothesis: object_list fields may have a small trailer pattern at
+the list level that we don't model. The bytes look like the first
+three of variant 1's `01 01 01 01 01` trailer, suggesting the last
+element's inline payload terminated 2 bytes too early — or there is
+a per-list trailing run of `01`s we need to consume.
+
+Inspect with:
+
+```powershell
+python tools\inspect\inspect_save_section.py --class MercenaryClanSaveData --pretty
+```
+
+Resolving this would bring the total residual to **0 bytes**.
 
 ## Not ported from the Python source
 
