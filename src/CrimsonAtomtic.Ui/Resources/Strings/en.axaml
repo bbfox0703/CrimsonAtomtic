@@ -22,7 +22,7 @@
   <sys:String x:Key="SummaryHmacOk">verified</sys:String>
   <sys:String x:Key="SummaryHmacFail">FAILED</sys:String>
   <sys:String x:Key="SummaryPayload">Payload</sys:String>
-  <sys:String x:Key="SummaryBody">Body (decompressed)</sys:String>
+  <sys:String x:Key="SummaryBody">Body</sys:String>
   <sys:String x:Key="SummaryTypes">Schema types</sys:String>
   <sys:String x:Key="SummaryEntries">TOC entries</sys:String>
 
