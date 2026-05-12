@@ -3,9 +3,9 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-12 (end of session that completed UI polish for
-> field inspection: handle caching + filter + drill-down + Windows
-> save-folder default).
+> Last updated: 2026-05-12 (end of long session that closed out
+> read-side UI polish AND landed the first save-write hop — scalar
+> field mutation + write-to-file across the full stack).
 
 ## Where we are
 
@@ -37,19 +37,28 @@
     drill in recursively without further FFI getters. `value` is
     pre-formatted to mirror
     `tools/inspect/inspect_save_section.py --pretty`.
+  - `crimson_save_set_scalar_field(handle, block, field, bytes, len)` →
+    in-place byte patch over `fixed_prefix` / `fixed_suffix` fields,
+    validated by byte length. Re-decodes all blocks on success so the
+    next `get_block_json` reflects the new value. Errors:
+    `NOT_SCALAR (-12)`, `LENGTH_MISMATCH (-13)`, `OUT_OF_RANGE (-10)`.
+  - `crimson_save_write_to_file(handle, path)` → re-serializes the
+    save with the original nonce (HMAC + ChaCha20 + LZ4 rebuilt
+    against the modified body) and writes to disk. Error:
+    `WRITE_FAILED (-14)`.
   - `crimson_save_free`
-  - 53 tests pass (52 existing + `c_abi::tests::c_abi_smoke` covering
-    every entry point including `get_block_json` two-call sizing,
-    NUL terminator, required keys, child/elements/class_name presence,
-    out-of-range).
-- **Latest main**: `df037b8`. PRs landed this session: #14, #15, #16.
+  - 54 tests pass (52 existing + 2 c_abi smokes:
+    `c_abi_smoke` covering every read entry point, and
+    `c_abi_mutate_and_write_roundtrip` covering mutate → write →
+    reload → assert + every mutation error path).
+- **Latest main**: `3eff882`. PRs landed this session: #14, #15, #16, #17.
 - **Branch model**: dev → PR → main (rebase merge, linear history).
   After merge, local + origin/dev get force-reset to match main.
 
 ### `CrimsonAtomtic` (this repo)
 
 - **Foundation** (CLAUDE.md, docs/, .gitignore, vendor/, scripts/) — done.
-- **C# / Avalonia scaffolding** — done. Builds clean, 9/9 unit tests pass:
+- **C# / Avalonia scaffolding** — done. Builds clean, 13/13 unit tests pass:
   ```
   src/CrimsonAtomtic.Core         IPlatformPaths, ISingleInstanceGuard
   src/CrimsonAtomtic.SaveModel    SaveSummary, BlockSummary,
@@ -61,7 +70,9 @@
                                   (LibraryImport + SafeHandle wrapper
                                   around crimson_save_* C ABI).
                                   IDisposable; caches a live handle for
-                                  the currently-open save.
+                                  the currently-open save. Exposes
+                                  Load / LoadBlockDetails (read) +
+                                  SetScalarField / WriteToFile (write).
   src/CrimsonAtomtic.Ui           Avalonia 12 / .NET 10, PublishAot=true,
                                   Mutex single-instance, MainWindow with
                                   File menu + blocks DataGrid + lazy
@@ -69,22 +80,27 @@
                                   fields filter + breadcrumb-based
                                   drill-down into locator children and
                                   list elements. All DataGrids have
-                                  resizable columns.
-  src/CrimsonAtomtic.Tests        xUnit v3 — 9 tests against
+                                  resizable columns. No in-place
+                                  editing yet — see "Pick up here" #1.
+  src/CrimsonAtomtic.Tests        xUnit v3 — 13 tests against
                                   NativeSaveLoader incl. live-save
                                   summary, block-details, cache reuse,
                                   Dispose lifecycle, nested data
-                                  reachability (skip cleanly when no
-                                  save present)
+                                  reachability, mutation round-trip
+                                  (load → set → write → reload →
+                                  assert), mutation error paths
+                                  (skip cleanly when no save present)
   ```
-  The UI now reads **real saves** via `crimson_rs.dll`. Open Save
-  defaults to `%LOCALAPPDATA%\Pearl Abyss\CD\save\<user>\` when there's
-  a single user; clicking a row in the blocks DataGrid lazily loads its
+  The UI reads **real saves** via `crimson_rs.dll`. Open Save defaults
+  to `%LOCALAPPDATA%\Pearl Abyss\CD\save\<user>\` when there's a single
+  user; clicking a row in the blocks DataGrid lazily loads its
   per-field decode via `LoadBlockDetails` →
   `crimson_save_get_block_json` → System.Text.Json (source-generated,
   AOT-safe). Drill-down composes recursively
   (`InventorySaveData › inventorylist[18] › [14]:
   InventoryElementSaveData › itemList[40] › …`).
+  The mutation pipeline is reachable from any `ISaveLoader` consumer
+  but is not wired into the UI yet — the next task picks that up.
 - **AOT publish verified**: `dotnet publish -c Release -r win-x64
   -p:PublishAot=true` (csproj pins `TrimMode=full`; we don't pass
   `-p:PublishTrimmed=true` because it upgrades Avalonia DataGrid 12.0.0
@@ -93,7 +109,7 @@
   Avalonia native deps).
 - **Python tools** (unchanged, working): `tools/extract/extract_save.py`,
   `tools/inspect/inspect_save_body.py`, `tools/inspect/inspect_save_section.py`.
-- **Vendor**: `vendor/crimson-rs` at `df037b8`. Refresh via
+- **Vendor**: `vendor/crimson-rs` at `3eff882`. Refresh via
   `.\vendor\update_vendors.ps1`.
 
 ## How `crimson_rs.dll` flows into the C# build
@@ -111,56 +127,64 @@
 
 ## Pick up here (next concrete task)
 
-The C ABI is now read-everything. Field inspection is feature-complete
-for inspection (handle caching, filter, drill-down composing through
-locator children + list elements, resizable DataGrid columns, default
-save folder, breadcrumb navigation). The save editor is read-only —
-the next big step is making it actually edit.
+The C ABI is now read-and-write at the scalar level. The mutation
+pipeline is reachable through `ISaveLoader.SetScalarField` /
+`WriteToFile` and covered by 13 xUnit tests + 2 Rust c_abi smokes,
+but **the UI doesn't expose editing yet** — that's the immediate next
+step.
 
-1. **Save file writing** — re-encrypt + write back. Needs three
-   landings:
-   - **PR A — Rust + C ABI scalar field mutation**. Narrow scope:
-     in-place byte patch over fields whose `kind` is `fixed_prefix` or
-     `fixed_suffix`, validated by current byte length. No
-     ObjectBlock re-serializer; the body stays as `Vec<u8>` and we
-     overwrite the field's recorded `start..end` range. After a
-     successful set, re-decode all blocks (O(N), ms-scale on 1112
-     blocks) so the next `get_block_json` returns the new value.
-     Adds: error codes `NOT_SCALAR`, `LENGTH_MISMATCH`, `WRITE_FAILED`;
-     `crimson_save_set_scalar_field(handle, block_idx, field_idx,
-     bytes, bytes_len)`; `crimson_save_write_to_file(handle, path)`
-     (wraps the existing `Save::write_with_nonce`). Tests: mutate
-     `_currentHp`, write to temp file, reparse, verify the new value
-     round-trips.
-   - **PR B — Length-changing edits**. List add / remove / reorder,
-     inline-byte resize. Needs an ObjectBlock re-serializer (mirror
-     of `decoder.rs`) and a body re-emit path that re-computes TOC
-     offsets. Hard; defer until the editing UX actually demands it.
-   - **PR C — C# typed wrappers + "Save" / "Save As…" command in the
-     UI**. ISaveLoader grows a writer-side counterpart (perhaps
-     `ISaveMutator`). DataGrid cell-level editing for scalar fields.
-     Wires PR A's mutation API to typed setters per scalar variant.
+1. **UI editing surface for scalar fields**. The plumbing is done;
+   what's missing is interaction. Concrete sub-tasks:
+   - DataGrid cell editing on the fields pane. The Value column needs
+     to switch to a TextBox on click/Enter and commit on blur/Enter.
+     Avalonia DataGrid supports cell-level editing via
+     `DataGridTextColumn` + `IsReadOnly="False"`, but the cell
+     template currently shows `value` as a pre-formatted string
+     ("1650 <u64>") emitted by Rust — we want the user to edit only
+     the numeric part. Two approaches:
+       - Strip the `<…>` type tag in C# (split on the last space) and
+         show the raw number, parse back on commit.
+       - Add a parallel `value_raw` field to the JSON so we don't
+         have to round-trip through the display string.
+   - Per-scalar typed setters in NativeSaveLoader (or extension
+     methods): `SetScalarUInt32`, `SetScalarInt64`, etc., converting
+     the typed value to LE bytes via `BitConverter` + length check
+     against the field's recorded type. Saves the UI from doing
+     byte-fiddling.
+   - "Save" / "Save As…" commands on the File menu. Save reuses the
+     loaded path; Save As… opens a SaveFilePicker. Both call
+     `ISaveLoader.WriteToFile`.
+   - "Dirty" indicator in the title bar / window when there are
+     uncommitted edits. Tracked in the VM.
+   - Validation feedback when SetScalarField throws CrimsonSaveException
+     (e.g. user typed a non-numeric value, or a value that doesn't
+     fit the field's byte range).
 
-2. **Asset / icon pipeline** — one-time mine icons from
+2. **PR B — Length-changing edits**. List add / remove / reorder,
+   inline-byte resize. Needs an ObjectBlock re-serializer (mirror of
+   `decoder.rs`) and a body re-emit path that re-computes TOC
+   offsets. Hard; defer until the editing UX actually demands it.
+
+3. **Asset / icon pipeline** — one-time mine icons from
    `D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS`, run through
    a thumbnail pipeline (32 / 64 / 128), ship as a starter
    `IconCache/` in the AOT bundle.
 
-3. **Localization** — read game `paloc/*.paloc` via crimson-rs to
+4. **Localization** — read game `paloc/*.paloc` via crimson-rs to
    resolve item / skill / region names in the user's chosen game
    language (independent of UI shell language).
 
-4. **Save backup management** — auto-backup on every load + on every
+5. **Save backup management** — auto-backup on every load + on every
    write, configurable retention.
 
-5. **Mod awareness** — read `CDMods/cdumm.db` (SQLite) and
+6. **Mod awareness** — read `CDMods/cdumm.db` (SQLite) and
    `mods/_enabled/` to surface mod-added items without crashing on
    unknown keys.
 
-6. **Cross-platform save paths** — Wine/Proton prefix resolution on
+7. **Cross-platform save paths** — Wine/Proton prefix resolution on
    Linux/macOS. Currently `IPlatformPaths` is Windows-only.
 
-7. **Avalonia.Diagnostics 12.x** — add back behind a `Debug`
+8. **Avalonia.Diagnostics 12.x** — add back behind a `Debug`
    condition once published.
 
 ## Important context / gotchas (don't relearn these)
@@ -195,6 +219,21 @@ the next big step is making it actually edit.
   cache cleanly. Subsequent post-dispose calls still work via the slow
   path. Path comparison is `OrdinalIgnoreCase` to match Windows
   conventions.
+- **`SetScalarField` / `WriteToFile` operate on the cached handle**,
+  never the slow path — they throw `InvalidOperationException` when
+  no save is loaded. `SetScalarField` re-decodes all blocks on success
+  (~ms-scale on 1112 blocks); subsequent `LoadBlockDetails` sees the
+  new value. `WriteToFile` reuses the original header nonce; the
+  on-disk output passes the game's HMAC check.
+- **Scalar-only mutation today**. The C ABI accepts `fixed_prefix` /
+  `fixed_suffix` fields only, length-checked. List add/remove, inline
+  byte resize, and anything else that changes block length needs an
+  ObjectBlock re-serializer (PR B on the roadmap) — defer until the
+  UX actually demands it.
+- **`scripts/package_aot.ps1` no longer pre-deletes dist/<rid>/**.
+  Pre-cleaning races with file handles held by a prior `dotnet test`
+  (mmap on the freshly-published exe); ilc's first invocation fails
+  with exit -1. `dotnet publish` handles its own overwrite.
 - **`CrimsonSaveHandle` is a SafeHandle**. CA1419 requires the
   parameterless ctor at the type's visibility — kept public for the
   analyzer even though the marshaller never constructs one (LoadFromFile
