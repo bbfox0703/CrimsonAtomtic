@@ -2,6 +2,10 @@
 
 > **Minimal index.** Detailed specs, history, and rules live elsewhere — this
 > file points to them.
+>
+> **🎯 Picking up a new session?** Read [docs/status.md](docs/status.md)
+> first — it captures where we are, the next concrete task, and the
+> gotchas worth not relearning.
 
 ## Rule 0 — Minimalism
 

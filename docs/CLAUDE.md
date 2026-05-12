@@ -5,6 +5,7 @@
 
 ## How to read
 
+- **status.md** — current progress, next concrete task, roadmap, gotchas. **Start here on a new session.**
 - **architecture.md** — the big picture: layers, language boundaries, why we chose A1
 - **data-policy.md** — hygiene rules for game data and reference data (foundation-first)
 - **game-versions.md** — paths to current and historical game installs; version detection; diffing
