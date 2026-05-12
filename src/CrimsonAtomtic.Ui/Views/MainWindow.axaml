@@ -113,14 +113,22 @@
                       ResizeDirection="Rows" />
 
         <Grid Grid.Row="3"
-              RowDefinitions="Auto,Auto,*"
+              RowDefinitions="Auto,Auto,Auto,*"
               Margin="0,8,0,0">
 
-          <TextBlock Grid.Row="0"
-                     Text="{StaticResource FieldsHeader}"
-                     FontSize="14"
-                     FontWeight="SemiBold"
-                     Margin="0,0,0,4" />
+          <Grid Grid.Row="0"
+                ColumnDefinitions="*,Auto"
+                Margin="0,0,0,4">
+            <TextBlock Grid.Column="0"
+                       Text="{StaticResource FieldsHeader}"
+                       FontSize="14"
+                       FontWeight="SemiBold" />
+            <TextBlock Grid.Column="1"
+                       Text="{Binding FieldsFilterCountText}"
+                       Opacity="0.6"
+                       IsVisible="{Binding HasSelectedBlock}"
+                       VerticalAlignment="Center" />
+          </Grid>
 
           <!-- Empty state: no block selected. -->
           <TextBlock Grid.Row="1"
@@ -129,7 +137,7 @@
                      IsVisible="{Binding !HasSelectedBlock}"
                      Margin="0,0,0,4" />
 
-          <!-- Loaded-block state: metadata row + fields DataGrid. -->
+          <!-- Loaded-block state: metadata row. -->
           <Grid Grid.Row="1"
                 IsVisible="{Binding HasSelectedBlock}"
                 ColumnDefinitions="Auto,*,Auto,*,Auto,*"
@@ -143,8 +151,15 @@
             <TextBlock Grid.Column="5" Text="{Binding UndecodedRangesText}" FontFamily="Cascadia Code,Consolas,monospace" />
           </Grid>
 
-          <DataGrid Grid.Row="2"
-                    ItemsSource="{Binding SelectedBlockFields}"
+          <!-- Filter box: shown only when a block is selected. -->
+          <TextBox Grid.Row="2"
+                   Text="{Binding FieldsFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                   PlaceholderText="{StaticResource FieldsFilterPlaceholder}"
+                   IsVisible="{Binding HasSelectedBlock}"
+                   Margin="0,0,0,4" />
+
+          <DataGrid Grid.Row="3"
+                    ItemsSource="{Binding VisibleFields}"
                     IsVisible="{Binding HasSelectedBlock}"
                     IsReadOnly="True"
                     GridLinesVisibility="Horizontal"

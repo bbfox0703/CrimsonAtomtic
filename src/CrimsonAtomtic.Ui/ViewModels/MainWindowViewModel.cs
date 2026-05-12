@@ -42,8 +42,25 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader) : Observable
     [ObservableProperty]
     private string? _detailsError;
 
+    /// <summary>
+    /// Live text filter for <see cref="VisibleFields"/>. Empty / null
+    /// shows everything.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FieldsFilterCountText))]
+    private string? _fieldsFilter;
+
     public ObservableCollection<BlockSummary> Blocks { get; } = [];
-    public ObservableCollection<DecodedFieldRow> SelectedBlockFields { get; } = [];
+
+    /// <summary>
+    /// Source-of-truth field list for the currently selected block.
+    /// Populated by <see cref="OnSelectedBlockChanged"/>; the View binds
+    /// to <see cref="VisibleFields"/> instead so the filter applies.
+    /// </summary>
+    private readonly List<DecodedFieldRow> _allFields = [];
+
+    /// <summary>Filtered view of <see cref="_allFields"/>.</summary>
+    public ObservableCollection<DecodedFieldRow> VisibleFields { get; } = [];
 
     public bool HasSave => Summary is not null;
     public bool HasSelectedBlock => SelectedBlock is not null;
@@ -69,6 +86,9 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader) : Observable
             return string.Join(", ", ranges.Select(r => $"[{r[0]:N0}..{r[1]:N0})"));
         }
     }
+
+    public string FieldsFilterCountText =>
+        _allFields.Count == 0 ? string.Empty : $"{VisibleFields.Count:N0} of {_allFields.Count:N0}";
 
     /// <summary>
     /// Called from the View when the user picks a file via the
@@ -107,10 +127,8 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader) : Observable
         {
             var details = loader.LoadBlockDetails(_loadedPath, value.Index);
             SelectedBlockDetails = details;
-            foreach (var f in details.Fields)
-            {
-                SelectedBlockFields.Add(f);
-            }
+            _allFields.AddRange(details.Fields);
+            ApplyFieldsFilter();
         }
         catch (CrimsonSaveException ex)
         {
@@ -118,10 +136,43 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader) : Observable
         }
     }
 
+    partial void OnFieldsFilterChanged(string? value) => ApplyFieldsFilter();
+
+    private void ApplyFieldsFilter()
+    {
+        VisibleFields.Clear();
+        var needle = FieldsFilter;
+        if (string.IsNullOrWhiteSpace(needle))
+        {
+            foreach (var f in _allFields)
+            {
+                VisibleFields.Add(f);
+            }
+        }
+        else
+        {
+            // Case-insensitive substring match across the three columns
+            // a human is most likely to search by.
+            foreach (var f in _allFields)
+            {
+                if (f.Name.Contains(needle, StringComparison.OrdinalIgnoreCase)
+                    || f.TypeName.Contains(needle, StringComparison.OrdinalIgnoreCase)
+                    || f.Value.Contains(needle, StringComparison.OrdinalIgnoreCase))
+                {
+                    VisibleFields.Add(f);
+                }
+            }
+        }
+        OnPropertyChanged(nameof(FieldsFilterCountText));
+    }
+
     private void ClearBlockDetails()
     {
         SelectedBlockDetails = null;
-        SelectedBlockFields.Clear();
+        _allFields.Clear();
+        VisibleFields.Clear();
+        FieldsFilter = null;
         DetailsError = null;
+        OnPropertyChanged(nameof(FieldsFilterCountText));
     }
 }
