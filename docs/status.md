@@ -35,9 +35,7 @@
   - 53 tests pass (52 existing + `c_abi::tests::c_abi_smoke` covering
     every entry point including `get_block_json` two-call sizing,
     NUL terminator, required keys, out-of-range).
-- **Latest main**: `a73679b` once PR #15 merges (currently CI green,
-  awaiting rebase-merge). PRs landed this session: #14. PR #15 in
-  flight for `get_block_json`.
+- **Latest main**: `f1dd61c`. PRs landed this session: #14, #15.
 - **Branch model**: dev → PR → main (rebase merge, linear history).
   After merge, local + origin/dev get force-reset to match main.
 
@@ -72,9 +70,8 @@
   Avalonia native deps).
 - **Python tools** (unchanged, working): `tools/extract/extract_save.py`,
   `tools/inspect/inspect_save_body.py`, `tools/inspect/inspect_save_section.py`.
-- **Vendor**: `vendor/crimson-rs` at `7783f05` (PR #15 head). Refresh
-  via `.\vendor\update_vendors.ps1` after #15 merges to pick up the
-  rebase-merged main.
+- **Vendor**: `vendor/crimson-rs` at `f1dd61c`. Refresh via
+  `.\vendor\update_vendors.ps1`.
 
 ## How `crimson_rs.dll` flows into the C# build
 
