@@ -116,7 +116,7 @@
                       ResizeDirection="Rows" />
 
         <Grid Grid.Row="3"
-              RowDefinitions="Auto,Auto,Auto,*"
+              RowDefinitions="Auto,Auto,Auto,Auto,*"
               Margin="0,8,0,0">
 
           <Grid Grid.Row="0"
@@ -126,11 +126,17 @@
                        Text="{StaticResource FieldsHeader}"
                        FontSize="14"
                        FontWeight="SemiBold" />
-            <TextBlock Grid.Column="1"
-                       Text="{Binding FieldsFilterCountText}"
-                       Opacity="0.6"
-                       IsVisible="{Binding HasSelectedBlock}"
-                       VerticalAlignment="Center" />
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        Spacing="12"
+                        VerticalAlignment="Center">
+              <TextBlock Text="{Binding FieldsFilterCountText}"
+                         Opacity="0.6"
+                         IsVisible="{Binding IsShowingFields}" />
+              <TextBlock Text="{Binding ElementsCountText}"
+                         Opacity="0.6"
+                         IsVisible="{Binding IsShowingElements}" />
+            </StackPanel>
           </Grid>
 
           <!-- Empty state: no block selected. -->
@@ -140,12 +146,38 @@
                      IsVisible="{Binding !HasSelectedBlock}"
                      Margin="0,0,0,4" />
 
-          <!-- Loaded-block state: metadata row. -->
-          <Grid Grid.Row="1"
-                IsVisible="{Binding HasSelectedBlock}"
+          <!-- Breadcrumb. Each segment is a clickable button that pops
+               the navigation stack back to that depth. -->
+          <ItemsControl Grid.Row="1"
+                        ItemsSource="{Binding Breadcrumb}"
+                        IsVisible="{Binding HasSelectedBlock}"
+                        Margin="0,0,0,4">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="4" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:BreadcrumbItem">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                  <Button Content="{Binding Label}"
+                          Padding="6,2"
+                          MinHeight="0"
+                          Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).NavigateToDepthCommand}"
+                          CommandParameter="{Binding Depth}" />
+                  <TextBlock Text="›" Opacity="0.4" VerticalAlignment="Center" />
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <!-- Loaded-block state: metadata row. Visible only when a
+               BlockFrame is on top (not when showing an element list). -->
+          <Grid Grid.Row="2"
+                IsVisible="{Binding IsShowingFields}"
                 ColumnDefinitions="Auto,*,Auto,*,Auto,*"
                 ColumnSpacing="8"
-                Margin="0,0,0,8">
+                Margin="0,0,0,4">
             <TextBlock Grid.Column="0" Text="{StaticResource FieldsMask}" Opacity="0.6" />
             <TextBlock Grid.Column="1" Text="{Binding MaskBytesText}" FontFamily="Cascadia Code,Consolas,monospace" />
             <TextBlock Grid.Column="2" Text="{StaticResource FieldsTrailingPad}" Opacity="0.6" />
@@ -154,16 +186,17 @@
             <TextBlock Grid.Column="5" Text="{Binding UndecodedRangesText}" FontFamily="Cascadia Code,Consolas,monospace" />
           </Grid>
 
-          <!-- Filter box: shown only when a block is selected. -->
-          <TextBox Grid.Row="2"
+          <!-- Filter box: shown only when fields are being displayed. -->
+          <TextBox Grid.Row="3"
                    Text="{Binding FieldsFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                    PlaceholderText="{StaticResource FieldsFilterPlaceholder}"
-                   IsVisible="{Binding HasSelectedBlock}"
+                   IsVisible="{Binding IsShowingFields}"
                    Margin="0,0,0,4" />
 
-          <DataGrid Grid.Row="3"
+          <!-- Fields DataGrid (visible when a block is on top). -->
+          <DataGrid Grid.Row="4"
                     ItemsSource="{Binding VisibleFields}"
-                    IsVisible="{Binding HasSelectedBlock}"
+                    IsVisible="{Binding IsShowingFields}"
                     IsReadOnly="True"
                     GridLinesVisibility="Horizontal"
                     HeadersVisibility="Column"
@@ -175,6 +208,48 @@
               <DataGridTextColumn Header="{StaticResource FieldsColKind}"    Binding="{Binding Kind}"       Width="120" />
               <DataGridTextColumn Header="{StaticResource FieldsColPresent}" Binding="{Binding Present}"    Width="70" />
               <DataGridTextColumn Header="{StaticResource FieldsColValue}"   Binding="{Binding Value}"      Width="*" />
+              <DataGridTemplateColumn Header="{StaticResource FieldsColDrill}" Width="70">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="model:DecodedFieldRow">
+                    <Button Content="{StaticResource FieldsDrillButton}"
+                            IsVisible="{Binding HasNested}"
+                            HorizontalAlignment="Center"
+                            Padding="8,2"
+                            MinHeight="0"
+                            Command="{Binding $parent[DataGrid].((vm:MainWindowViewModel)DataContext).DrillIntoFieldCommand}"
+                            CommandParameter="{Binding}" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+            </DataGrid.Columns>
+          </DataGrid>
+
+          <!-- Elements DataGrid (visible when an ObjectList is on top:
+               lets the user pick which element to drill into). -->
+          <DataGrid Grid.Row="4"
+                    ItemsSource="{Binding VisibleElements}"
+                    IsVisible="{Binding IsShowingElements}"
+                    IsReadOnly="True"
+                    GridLinesVisibility="Horizontal"
+                    HeadersVisibility="Column"
+                    AutoGenerateColumns="False">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="{StaticResource ElementsColIndex}"  Binding="{Binding ClassIndex}" Width="60" />
+              <DataGridTextColumn Header="{StaticResource ElementsColClass}"  Binding="{Binding ClassName}"  Width="*" />
+              <DataGridTextColumn Header="{StaticResource ElementsColOffset}" Binding="{Binding DataOffset}" Width="120" />
+              <DataGridTextColumn Header="{StaticResource ElementsColSize}"   Binding="{Binding DataSize}"   Width="120" />
+              <DataGridTemplateColumn Header="{StaticResource ElementsColOpen}" Width="70">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="model:BlockDetails">
+                    <Button Content="{StaticResource ElementsOpenButton}"
+                            HorizontalAlignment="Center"
+                            Padding="8,2"
+                            MinHeight="0"
+                            Command="{Binding $parent[DataGrid].((vm:MainWindowViewModel)DataContext).DrillIntoElementCommand}"
+                            CommandParameter="{Binding}" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
             </DataGrid.Columns>
           </DataGrid>
         </Grid>

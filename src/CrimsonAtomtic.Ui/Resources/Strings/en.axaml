@@ -52,4 +52,16 @@
   <sys:String x:Key="FieldsFilterPlaceholder">Filter fields by name, type, or value…</sys:String>
   <sys:String x:Key="FieldsFilterCount">{0:N0} of {1:N0}</sys:String>
 
+  <!-- Drill-down + navigation -->
+  <sys:String x:Key="FieldsColDrill">Drill</sys:String>
+  <sys:String x:Key="FieldsDrillButton">▸</sys:String>
+  <sys:String x:Key="ElementsColIndex">#</sys:String>
+  <sys:String x:Key="ElementsColClass">Class</sys:String>
+  <sys:String x:Key="ElementsColOffset">Offset</sys:String>
+  <sys:String x:Key="ElementsColSize">Size</sys:String>
+  <sys:String x:Key="ElementsColFields">Fields</sys:String>
+  <sys:String x:Key="ElementsColOpen">Open</sys:String>
+  <sys:String x:Key="ElementsOpenButton">▸</sys:String>
+  <sys:String x:Key="NavigationBack">← Back</sys:String>
+
 </ResourceDictionary>

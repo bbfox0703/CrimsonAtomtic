@@ -1,4 +1,5 @@
 using CrimsonAtomtic.RustInterop;
+using CrimsonAtomtic.SaveModel;
 using Xunit;
 
 namespace CrimsonAtomtic.Tests;
@@ -221,5 +222,71 @@ public sealed class NativeSaveLoaderTests
 
         // Repeated Dispose is a no-op.
         loader.Dispose();
+    }
+
+    [Fact]
+    public void LoadBlockDetails_NestedDataReachable()
+    {
+        // Find any block whose decode contains an object_list or
+        // object_locator with inline children, then assert the JSON path
+        // surfaces it via Child / Elements. Inventory- and equipment-shaped
+        // blocks are the most likely candidates in a 1.06 save.
+        var path = FindLiveSave();
+        if (path is null)
+        {
+            return;
+        }
+
+        using var loader = new NativeSaveLoader();
+        var summary = loader.Load(path);
+
+        BlockDetails? withChild = null;
+        BlockDetails? withElements = null;
+        for (var i = 0; i < summary.Blocks.Count; i++)
+        {
+            var d = loader.LoadBlockDetails(path, i);
+            foreach (var f in d.Fields)
+            {
+                if (withChild is null && f.Child is not null)
+                {
+                    withChild = d;
+                }
+                if (withElements is null && f.Elements is { Count: > 0 })
+                {
+                    withElements = d;
+                }
+            }
+            if (withChild is not null && withElements is not null)
+            {
+                break;
+            }
+        }
+
+        // At least one of the two must show up in a real save — Inventory
+        // saves are full of ObjectLists, and Equipment uses Locators.
+        Assert.True(withChild is not null || withElements is not null,
+            "expected at least one block with nested data in a live save");
+
+        if (withChild is not null)
+        {
+            var locator = withChild.Fields.First(f => f.Child is not null);
+            Assert.Equal("object_locator", locator.Kind);
+            Assert.NotNull(locator.Child);
+            Assert.False(string.IsNullOrEmpty(locator.Child!.ClassName));
+            Assert.NotEmpty(locator.Child.Fields);
+        }
+        if (withElements is not null)
+        {
+            var list = withElements.Fields.First(f => f.Elements is { Count: > 0 });
+            Assert.Equal("object_list", list.Kind);
+            Assert.NotNull(list.Elements);
+            Assert.NotEmpty(list.Elements!);
+            // Every element has a class name; every element has its own
+            // (possibly empty) field list.
+            Assert.All(list.Elements!, e =>
+            {
+                Assert.False(string.IsNullOrEmpty(e.ClassName));
+            });
+        }
     }
 }
