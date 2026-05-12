@@ -38,7 +38,7 @@
 
     <!-- Loaded state -->
     <Grid IsVisible="{Binding HasSave}"
-          ColumnDefinitions="280,*"
+          ColumnDefinitions="320,*"
           Margin="12">
 
       <!-- Left: summary -->
@@ -52,7 +52,7 @@
                      FontWeight="SemiBold" />
 
           <Grid ColumnDefinitions="Auto,*"
-                RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
+                RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto"
                 ColumnSpacing="12"
                 RowSpacing="4">
 
@@ -73,6 +73,9 @@
 
             <TextBlock Grid.Row="5" Grid.Column="0" Text="{StaticResource SummaryTypes}" Opacity="0.6" />
             <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding SchemaTypeCountText}" />
+
+            <TextBlock Grid.Row="6" Grid.Column="0" Text="{StaticResource SummaryEntries}" Opacity="0.6" />
+            <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding TocEntryCountText}" />
           </Grid>
         </StackPanel>
       </Border>
