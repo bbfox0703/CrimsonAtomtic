@@ -18,10 +18,11 @@ public sealed class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // Composition root for the UI. The placeholder loader will be
-            // swapped for a real P/Invoke implementation once the C ABI
-            // on vendor/crimson-rs lands.
-            ISaveLoader loader = new PlaceholderSaveLoader();
+            // Composition root for the UI. NativeSaveLoader P/Invokes
+            // into vendor/crimson-rs/target/release/crimson_rs.dll, which
+            // .\scripts\build_rust.ps1 produces and the Ui csproj copies
+            // next to CrimsonAtomtic.exe.
+            ISaveLoader loader = new NativeSaveLoader();
             desktop.MainWindow = new MainWindow
             {
                 DataContext = new MainWindowViewModel(loader),

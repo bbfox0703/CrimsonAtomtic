@@ -4,9 +4,9 @@ namespace CrimsonAtomtic.RustInterop;
 
 /// <summary>
 /// Loads a Crimson Desert save file into a <see cref="SaveSummary"/>.
-/// The production implementation will call into <c>crimson_rs.dll</c>
-/// via P/Invoke; the placeholder implementation in this project returns
-/// canned data so the UI can be built and tested before the C ABI lands.
+/// The production implementation, <see cref="NativeSaveLoader"/>, P/Invokes
+/// into <c>crimson_rs.dll</c> (built from <c>vendor/crimson-rs</c> with the
+/// <c>c_abi</c> Cargo feature).
 /// </summary>
 public interface ISaveLoader
 {

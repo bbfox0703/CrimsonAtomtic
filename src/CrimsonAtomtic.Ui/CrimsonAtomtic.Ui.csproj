@@ -34,4 +34,19 @@
     <ProjectReference Include="..\CrimsonAtomtic.RustInterop\CrimsonAtomtic.RustInterop.csproj" />
   </ItemGroup>
 
+  <!-- crimson_rs.dll is produced by .\scripts\build_rust.ps1.
+       Copy it next to CrimsonAtomtic.exe so [LibraryImport("crimson_rs")]
+       can resolve it at runtime (dotnet build, run, and publish all
+       pick this up). The Condition lets the project still build before
+       the dll has ever been produced — runtime calls would fail then,
+       but that surfaces in tests, not in the build. -->
+  <ItemGroup>
+    <Content Include="..\..\vendor\crimson-rs\target\release\crimson_rs.dll"
+             Condition="Exists('..\..\vendor\crimson-rs\target\release\crimson_rs.dll')">
+      <Link>crimson_rs.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
