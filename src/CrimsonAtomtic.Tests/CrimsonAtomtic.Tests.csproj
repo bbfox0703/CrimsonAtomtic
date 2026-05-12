@@ -25,4 +25,15 @@
     <ProjectReference Include="..\CrimsonAtomtic.RustInterop\CrimsonAtomtic.RustInterop.csproj" />
   </ItemGroup>
 
+  <!-- Smoke tests in NativeSaveLoaderTests P/Invoke into crimson_rs.dll
+       (produced by .\scripts\build_rust.ps1). Copy the dll into the
+       test runner's output so [LibraryImport] can resolve it. -->
+  <ItemGroup>
+    <Content Include="..\..\vendor\crimson-rs\target\release\crimson_rs.dll"
+             Condition="Exists('..\..\vendor\crimson-rs\target\release\crimson_rs.dll')">
+      <Link>crimson_rs.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

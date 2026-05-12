@@ -5,6 +5,10 @@
     <RootNamespace>CrimsonAtomtic.RustInterop</RootNamespace>
     <AssemblyName>CrimsonAtomtic.RustInterop</AssemblyName>
 
+    <!-- NativeSaveLoader uses byte* with [LibraryImport] for the
+         two-call class-name pattern (and only there). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
     <!-- Suppress LibraryImport / DllImport related AOT warnings that are
          tied to placeholders we'll wire up to the real C ABI later. -->
     <NoWarn>$(NoWarn);CA1416</NoWarn>
