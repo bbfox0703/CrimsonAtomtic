@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>CrimsonAtomtic.SaveModel</RootNamespace>
+    <AssemblyName>CrimsonAtomtic.SaveModel</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CrimsonAtomtic.Core\CrimsonAtomtic.Core.csproj" />
+  </ItemGroup>
+
+</Project>

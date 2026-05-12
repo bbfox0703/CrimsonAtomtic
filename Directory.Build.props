@@ -1,0 +1,30 @@
+<Project>
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+
+    <!-- Every project is AOT-compatible by default. The UI executable
+         additionally sets PublishAot=true; library projects only need
+         IsAotCompatible so trim warnings surface during build. -->
+    <IsAotCompatible>true</IsAotCompatible>
+
+    <!-- Reproducibility + smaller binaries. -->
+    <Deterministic>true</Deterministic>
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+
+    <!-- Only audit direct dependencies. Transitive advisories from
+         third-party packages (e.g. Tmds.DBus.Protocol pulled via
+         Avalonia) shouldn't fail our build — that's outside our reach. -->
+    <NuGetAuditMode>direct</NuGetAuditMode>
+
+    <!-- Project metadata. -->
+    <Authors>CrimsonAtomtic</Authors>
+    <Product>CrimsonAtomtic</Product>
+  </PropertyGroup>
+
+</Project>

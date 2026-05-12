@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CrimsonAtomtic.Core/CrimsonAtomtic.Core.csproj" />
+    <Project Path="src/CrimsonAtomtic.RustInterop/CrimsonAtomtic.RustInterop.csproj" />
+    <Project Path="src/CrimsonAtomtic.SaveModel/CrimsonAtomtic.SaveModel.csproj" />
+    <Project Path="src/CrimsonAtomtic.Tests/CrimsonAtomtic.Tests.csproj" />
+    <Project Path="src/CrimsonAtomtic.Ui/CrimsonAtomtic.Ui.csproj" />
+  </Folder>
+</Solution>

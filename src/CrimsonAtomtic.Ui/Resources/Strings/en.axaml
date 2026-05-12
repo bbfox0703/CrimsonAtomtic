@@ -1,0 +1,37 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+
+  <!-- Window / chrome -->
+  <sys:String x:Key="WindowTitle">CrimsonAtomtic</sys:String>
+
+  <!-- Menu -->
+  <sys:String x:Key="MenuFile">_File</sys:String>
+  <sys:String x:Key="MenuOpenSave">_Open Save…</sys:String>
+  <sys:String x:Key="MenuExit">E_xit</sys:String>
+
+  <!-- Empty workspace -->
+  <sys:String x:Key="EmptyTitle">No save loaded</sys:String>
+  <sys:String x:Key="EmptyHint">Use File → Open Save to read a .save file.</sys:String>
+
+  <!-- Summary pane -->
+  <sys:String x:Key="SummaryHeader">Save summary</sys:String>
+  <sys:String x:Key="SummarySlot">Slot</sys:String>
+  <sys:String x:Key="SummaryVersion">Version</sys:String>
+  <sys:String x:Key="SummaryHmac">HMAC</sys:String>
+  <sys:String x:Key="SummaryHmacOk">verified</sys:String>
+  <sys:String x:Key="SummaryHmacFail">FAILED</sys:String>
+  <sys:String x:Key="SummaryPayload">Payload</sys:String>
+  <sys:String x:Key="SummaryBody">Body (decompressed)</sys:String>
+  <sys:String x:Key="SummaryTypes">Schema types</sys:String>
+  <sys:String x:Key="SummaryEntries">TOC entries</sys:String>
+
+  <!-- Blocks pane -->
+  <sys:String x:Key="BlocksHeader">Top-level blocks</sys:String>
+  <sys:String x:Key="BlocksColIndex">#</sys:String>
+  <sys:String x:Key="BlocksColClass">Class</sys:String>
+  <sys:String x:Key="BlocksColOffset">Offset</sys:String>
+  <sys:String x:Key="BlocksColSize">Size</sys:String>
+  <sys:String x:Key="BlocksColFields">Fields</sys:String>
+
+</ResourceDictionary>

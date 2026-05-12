@@ -1,0 +1,30 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Avalonia UI 12 -->
+    <PackageVersion Include="Avalonia" Version="12.0.3" />
+    <PackageVersion Include="Avalonia.Desktop" Version="12.0.3" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.0.3" />
+    <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.0.3" />
+    <!-- DataGrid lags Avalonia core slightly — 12.0.0 is the latest
+         published as of 2026-05. Will bump alongside core when a 12.0.3+
+         lands. -->
+    <PackageVersion Include="Avalonia.Controls.DataGrid" Version="12.0.0" />
+    <!-- Avalonia.Diagnostics is 11.x only as of 2026-05; once a 12.x is
+         published we'll add it back behind a Debug condition. -->
+
+    <!-- MVVM source generators (AOT-safe) -->
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+
+    <!-- Testing -->
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
+    <PackageVersion Include="xunit.v3" Version="2.0.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+</Project>
