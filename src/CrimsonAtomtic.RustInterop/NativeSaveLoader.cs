@@ -12,22 +12,115 @@ namespace CrimsonAtomtic.RustInterop;
 /// <see cref="LibraryImportAttribute"/> source generators so the
 /// marshalling is AOT-safe (no reflection at runtime).
 /// </summary>
-public sealed class NativeSaveLoader : ISaveLoader
+/// <remarks>
+/// <para>
+/// Keeps a live <see cref="CrimsonSaveHandle"/> cached after
+/// <see cref="Load"/> so subsequent <see cref="LoadBlockDetails"/> calls
+/// (one per block click in the UI) reuse it instead of re-parsing the
+/// .save file. <see cref="Load"/> with a different path frees the old
+/// handle automatically; <see cref="Dispose"/> tears the cache down on
+/// app exit.
+/// </para>
+/// <para>
+/// Cache reads / swaps are guarded by an internal lock for defensive
+/// concurrency, even though Avalonia's VM dispatcher is single-threaded.
+/// The SafeHandle's AddRef/Release semantics keep concurrent calls
+/// during a Dispose race correct on top of the lock.
+/// </para>
+/// </remarks>
+public sealed class NativeSaveLoader : ISaveLoader, IDisposable
 {
+    private readonly object _cacheLock = new();
+    private string? _cachedPath;
+    private CrimsonSaveHandle? _cachedHandle;
+
     public SaveSummary Load(string savePath, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(savePath);
         cancellationToken.ThrowIfCancellationRequested();
 
+        var newHandle = OpenHandle(savePath);
+
+        SaveSummary summary;
+        try
+        {
+            summary = BuildSummary(newHandle, savePath, cancellationToken);
+        }
+        catch
+        {
+            newHandle.Dispose();
+            throw;
+        }
+
+        // Swap into cache: free the old handle, take ownership of the new one.
+        CrimsonSaveHandle? previous;
+        lock (_cacheLock)
+        {
+            previous = _cachedHandle;
+            _cachedHandle = newHandle;
+            _cachedPath = savePath;
+        }
+        previous?.Dispose();
+
+        return summary;
+    }
+
+    public BlockDetails LoadBlockDetails(string savePath, int blockIndex, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(savePath);
+        ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Fast path: same save still loaded — reuse the cached handle.
+        // SafeHandle.AddRef'd implicitly when crossing the LibraryImport
+        // boundary, so a Dispose race can't yank the native handle out
+        // from under the FFI call.
+        lock (_cacheLock)
+        {
+            if (PathsMatch(_cachedPath, savePath)
+                && _cachedHandle is { IsInvalid: false } cached)
+            {
+                return ReadBlockDetails(cached, (uint)blockIndex);
+            }
+        }
+
+        // Slow path: the cache hasn't been primed for this save (e.g.
+        // LoadBlockDetails called before Load, or with a different
+        // path). Open transiently and tear down at scope end.
+        using var handle = OpenHandle(savePath);
+        return ReadBlockDetails(handle, (uint)blockIndex);
+    }
+
+    public void Dispose()
+    {
+        CrimsonSaveHandle? toDispose;
+        lock (_cacheLock)
+        {
+            toDispose = _cachedHandle;
+            _cachedHandle = null;
+            _cachedPath = null;
+        }
+        toDispose?.Dispose();
+    }
+
+    private static CrimsonSaveHandle OpenHandle(string savePath)
+    {
         var rc = NativeMethods.LoadFromFile(savePath, out var rawHandle);
         if (rc != NativeMethods.OK)
         {
             throw new CrimsonSaveException(rc, $"crimson_save_load_from_file failed: {ErrorName(rc)}");
         }
+        return CrimsonSaveHandle.FromOwnedPointer(rawHandle);
+    }
 
-        // Wrap immediately so a throw below still frees the handle.
-        using var handle = CrimsonSaveHandle.FromOwnedPointer(rawHandle);
+    private static bool PathsMatch(string? a, string b) =>
+        // Windows: file system is case-insensitive. Linux/macOS file
+        // systems are case-sensitive, but Crimson Desert ships Windows
+        // only — match that platform's behavior.
+        a is not null && string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
+    private static SaveSummary BuildSummary(CrimsonSaveHandle handle, string savePath, CancellationToken cancellationToken)
+    {
         var version          = ReadU16(handle, NativeMethods.GetVersion,         "version");
         var flags            = ReadU16(handle, NativeMethods.GetFlags,           "flags");
         var hmacOk           = ReadI32(handle, NativeMethods.GetHmacOk,          "hmac_ok") != 0;
@@ -76,32 +169,13 @@ public sealed class NativeSaveLoader : ISaveLoader
             Blocks:           blocks);
     }
 
-    /// <summary>
-    /// Load the full per-field decode of one block. The caller owns the
-    /// returned <see cref="BlockDetails"/>; no native resources outlive
-    /// this call. <paramref name="savePath"/> is parsed afresh each
-    /// call — for repeated lookups against the same save, the UI keeps
-    /// the path and re-invokes here.
-    /// </summary>
-    public BlockDetails LoadBlockDetails(string savePath, int blockIndex, CancellationToken cancellationToken = default)
+    private static BlockDetails ReadBlockDetails(CrimsonSaveHandle handle, uint blockIndex)
     {
-        ArgumentException.ThrowIfNullOrEmpty(savePath);
-        ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
-        cancellationToken.ThrowIfCancellationRequested();
-
-        var rc = NativeMethods.LoadFromFile(savePath, out var rawHandle);
-        if (rc != NativeMethods.OK)
-        {
-            throw new CrimsonSaveException(rc, $"crimson_save_load_from_file failed: {ErrorName(rc)}");
-        }
-        using var handle = CrimsonSaveHandle.FromOwnedPointer(rawHandle);
-
-        var json = ReadBlockJson(handle, (uint)blockIndex);
-        var details = JsonSerializer.Deserialize(json, SaveModelJsonContext.Default.BlockDetails)
+        var json = ReadBlockJson(handle, blockIndex);
+        return JsonSerializer.Deserialize(json, SaveModelJsonContext.Default.BlockDetails)
             ?? throw new CrimsonSaveException(
                 NativeMethods.PANIC,
                 "crimson_save_get_block_json returned a JSON document that deserialized to null.");
-        return details;
     }
 
     private static unsafe string ReadBlockJson(CrimsonSaveHandle h, uint index)

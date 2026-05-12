@@ -174,4 +174,52 @@ public sealed class NativeSaveLoaderTests
         // -10 == OUT_OF_RANGE.
         Assert.Equal(-10, ex.ErrorCode);
     }
+
+    [Fact]
+    public void LoadBlockDetails_AfterLoad_ReusesCachedHandle()
+    {
+        // We can't directly observe whether the cached handle was used,
+        // but we can prove the path stays functional across many calls
+        // and gives identical output to the slow path (a fresh loader).
+        var path = FindLiveSave();
+        if (path is null)
+        {
+            return;
+        }
+
+        using var cached = new NativeSaveLoader();
+        cached.Load(path);                              // primes cache
+        var cachedDetails = cached.LoadBlockDetails(path, 0);
+
+        using var fresh = new NativeSaveLoader();
+        var freshDetails = fresh.LoadBlockDetails(path, 0);   // slow path
+
+        Assert.Equal(freshDetails.ClassIndex,     cachedDetails.ClassIndex);
+        Assert.Equal(freshDetails.DataOffset,     cachedDetails.DataOffset);
+        Assert.Equal(freshDetails.DataSize,       cachedDetails.DataSize);
+        Assert.Equal(freshDetails.MaskBytesHex,   cachedDetails.MaskBytesHex);
+        Assert.Equal(freshDetails.Fields.Count,   cachedDetails.Fields.Count);
+    }
+
+    [Fact]
+    public void Dispose_AfterLoad_FreesCacheAndFallsBackToSlowPath()
+    {
+        var path = FindLiveSave();
+        if (path is null)
+        {
+            return;
+        }
+
+        var loader = new NativeSaveLoader();
+        loader.Load(path);
+        loader.Dispose();
+
+        // After Dispose the cache is empty, but LoadBlockDetails should
+        // still succeed via the slow path (transient open).
+        var details = loader.LoadBlockDetails(path, 0);
+        Assert.NotEmpty(details.Fields);
+
+        // Repeated Dispose is a no-op.
+        loader.Dispose();
+    }
 }

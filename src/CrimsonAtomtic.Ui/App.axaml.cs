@@ -22,7 +22,12 @@ public sealed class App : Application
             // into vendor/crimson-rs/target/release/crimson_rs.dll, which
             // .\scripts\build_rust.ps1 produces and the Ui csproj copies
             // next to CrimsonAtomtic.exe.
-            ISaveLoader loader = new NativeSaveLoader();
+            var loader = new NativeSaveLoader();
+            // Free the cached native handle on app exit. Without this the
+            // OS still reclaims the process memory, but a clean Dispose
+            // keeps the SafeHandle's finalizer book-keeping honest.
+            desktop.Exit += (_, _) => loader.Dispose();
+
             desktop.MainWindow = new MainWindow
             {
                 DataContext = new MainWindowViewModel(loader),

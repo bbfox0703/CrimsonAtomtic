@@ -49,5 +49,7 @@
   <sys:String x:Key="FieldsUndecoded">Undecoded</sys:String>
   <sys:String x:Key="FieldsLoading">Loading…</sys:String>
   <sys:String x:Key="FieldsError">Could not load block details.</sys:String>
+  <sys:String x:Key="FieldsFilterPlaceholder">Filter fields by name, type, or value…</sys:String>
+  <sys:String x:Key="FieldsFilterCount">{0:N0} of {1:N0}</sys:String>
 
 </ResourceDictionary>

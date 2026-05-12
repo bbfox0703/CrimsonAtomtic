@@ -3,7 +3,8 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-12 (end of session that added field-level inspection — get_block_json on the Rust side, lazy detail pane on the C# side).
+> Last updated: 2026-05-12 (end of session that added UI polish for field
+> inspection: handle caching + field filter).
 
 ## Where we are
 
@@ -42,23 +43,26 @@
 ### `CrimsonAtomtic` (this repo)
 
 - **Foundation** (CLAUDE.md, docs/, .gitignore, vendor/, scripts/) — done.
-- **C# / Avalonia scaffolding** — done. Builds clean, 6/6 unit tests pass:
+- **C# / Avalonia scaffolding** — done. Builds clean, 8/8 unit tests pass:
   ```
   src/CrimsonAtomtic.Core         IPlatformPaths, ISingleInstanceGuard
   src/CrimsonAtomtic.SaveModel    SaveSummary + BlockDetails + DecodedFieldRow
                                   + AOT JsonSerializerContext
   src/CrimsonAtomtic.RustInterop  ISaveLoader + NativeSaveLoader
                                   (LibraryImport + SafeHandle wrapper
-                                  around crimson_save_* C ABI). Exposes
-                                  Load(path) + LoadBlockDetails(path, idx).
+                                  around crimson_save_* C ABI).
+                                  IDisposable; caches a live handle for
+                                  the currently-open save.
   src/CrimsonAtomtic.Ui           Avalonia 12 / .NET 10, PublishAot=true,
                                   Mutex single-instance, MainWindow with
                                   File menu + blocks DataGrid + lazy
-                                  field-detail pane (GridSplitter)
-  src/CrimsonAtomtic.Tests        xUnit v3 — 6 tests against
+                                  field-detail pane (GridSplitter) +
+                                  fields filter TextBox.
+  src/CrimsonAtomtic.Tests        xUnit v3 — 8 tests against
                                   NativeSaveLoader incl. live-save
-                                  summary + block-details (skip cleanly
-                                  when no save present)
+                                  summary, block-details, cache reuse,
+                                  Dispose lifecycle (skip cleanly when
+                                  no save present)
   ```
   The UI now reads **real saves** via `crimson_rs.dll`, and clicking a
   block lazily loads its per-field decode via `LoadBlockDetails` →
@@ -88,19 +92,23 @@
 
 ## Pick up here (next concrete task)
 
-The C ABI is now read-everything. Next obvious chunk, in priority order:
+The C ABI is now read-everything. Field inspection has handle caching
+and a name/type/value filter as of this session; what's left in UI
+polish is the nested-block drill-down. Next chunk, in priority order:
 
-1. **UI polish for field inspection** (small): the detail pane works
-   but rough edges remain:
-   - Re-loading the save on every block click (LoadBlockDetails opens
-     the file fresh each time). Acceptable while saves are ~5 MB / load
-     takes ~400 ms; revisit if it gets sluggish. The fix is to keep a
-     single live `CrimsonSaveHandle` for the open save, but that means
-     teaching the loader / VM about handle lifetime, which adds shape.
-   - Inline child blocks (object locator / object list) currently show
-     only as a one-line summary in the `value` column. Drilling into
-     them needs either nested rows in the same DataGrid or a TreeView.
-   - Search / filter in the fields DataGrid.
+1. **Object locator / list drill-down**. Currently a field of kind
+   `object_locator` / `object_list` shows only a one-line summary in
+   the `value` column. Drilling into the inline child needs either:
+   - Nested rows in the same DataGrid (CommunityToolkit-friendly,
+     limited UX), or
+   - A TreeDataGrid (Avalonia 12 ships one, but it's separate from
+     the regular DataGrid and means a different binding shape), or
+   - Click-through navigation: clicking a locator field swaps the
+     fields-pane content to the child block, with a breadcrumb back.
+   The Rust side already emits the child inline (see `FieldValue::Locator`'s
+   `child` and `ObjectList`'s `elements`); the JSON formatter currently
+   collapses these to a `value` string. To surface them, extend the JSON
+   shape with a `child` / `elements` field on each `DecodedFieldRow`.
 
 2. **Save file writing** — re-encrypt + write back. Needs:
    - Rust: body re-serializer (`Body::write_to` per-object). Header
@@ -158,10 +166,13 @@ The C ABI is now read-everything. Next obvious chunk, in priority order:
   `tools/inspect/inspect_save_section.py --pretty`'s `format_field_value`,
   so cross-tool views of a block agree. Don't reformat in C# — let the
   Rust source-of-truth win.
-- **`LoadBlockDetails` re-opens the file**. Convenient but wasteful for
-  rapid click-through. If this becomes a UX issue, cache a live handle
-  in `NativeSaveLoader` keyed by path (and dispose on Load of a new
-  path). Not yet a problem at ~400 ms / load.
+- **`NativeSaveLoader` caches a live `CrimsonSaveHandle`** keyed by
+  path. `Load(path)` swaps it (disposing the old); `LoadBlockDetails`
+  fast-paths through the cache when the path matches; otherwise a slow
+  path opens transiently. `Dispose` (wired to `desktop.Exit`) frees the
+  cache cleanly. Subsequent post-dispose calls still work via the slow
+  path. Path comparison is `OrdinalIgnoreCase` to match Windows
+  conventions.
 - **`CrimsonSaveHandle` is a SafeHandle**. CA1419 requires the
   parameterless ctor at the type's visibility — kept public for the
   analyzer even though the marshaller never constructs one (LoadFromFile
