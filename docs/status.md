@@ -119,21 +119,27 @@ the next big step is making it actually edit.
 
 1. **Save file writing** — re-encrypt + write back. Needs three
    landings:
-   - **PR A — Rust body re-serializer**. Round-trip identical body
-     bytes from an unmodified `Body` + `Vec<ObjectBlock>`. The header
-     side already has `Save::write_with_nonce`. Add `Body::write` (or
-     similar) that emits the body byte-for-byte from the decoded
-     types. Tests: load a save, write it, parse the result, compare
-     bytes. Skips on absence like the existing save tests.
-   - **PR B — C ABI mutation surface**. For each scalar `FieldKind`,
-     a `crimson_save_set_field_<kind>(handle, block_idx, field_idx,
-     value)` that updates the in-memory model. Plus
-     `crimson_save_write_to_file(handle, path)`. List / inline-byte
-     mutation is a harder design (length changes) — defer to a later
-     PR; v1 only does same-size scalar edits.
-   - **PR C — C# typed wrappers + a "Save" / "Save As…" command in
-     the UI**. ISaveLoader grows a writer-side counterpart (perhaps
+   - **PR A — Rust + C ABI scalar field mutation**. Narrow scope:
+     in-place byte patch over fields whose `kind` is `fixed_prefix` or
+     `fixed_suffix`, validated by current byte length. No
+     ObjectBlock re-serializer; the body stays as `Vec<u8>` and we
+     overwrite the field's recorded `start..end` range. After a
+     successful set, re-decode all blocks (O(N), ms-scale on 1112
+     blocks) so the next `get_block_json` returns the new value.
+     Adds: error codes `NOT_SCALAR`, `LENGTH_MISMATCH`, `WRITE_FAILED`;
+     `crimson_save_set_scalar_field(handle, block_idx, field_idx,
+     bytes, bytes_len)`; `crimson_save_write_to_file(handle, path)`
+     (wraps the existing `Save::write_with_nonce`). Tests: mutate
+     `_currentHp`, write to temp file, reparse, verify the new value
+     round-trips.
+   - **PR B — Length-changing edits**. List add / remove / reorder,
+     inline-byte resize. Needs an ObjectBlock re-serializer (mirror
+     of `decoder.rs`) and a body re-emit path that re-computes TOC
+     offsets. Hard; defer until the editing UX actually demands it.
+   - **PR C — C# typed wrappers + "Save" / "Save As…" command in the
+     UI**. ISaveLoader grows a writer-side counterpart (perhaps
      `ISaveMutator`). DataGrid cell-level editing for scalar fields.
+     Wires PR A's mutation API to typed setters per scalar variant.
 
 2. **Asset / icon pipeline** — one-time mine icons from
    `D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS`, run through
