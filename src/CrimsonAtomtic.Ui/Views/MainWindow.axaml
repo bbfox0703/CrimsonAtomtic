@@ -77,9 +77,10 @@
         </StackPanel>
       </Border>
 
-      <!-- Right: blocks list -->
+      <!-- Right: blocks list (top) + field detail pane (bottom),
+           split by a draggable GridSplitter. -->
       <Grid Grid.Column="1"
-            RowDefinitions="Auto,*"
+            RowDefinitions="Auto,*,Auto,260"
             Margin="12,0,0,0">
 
         <TextBlock Grid.Row="0"
@@ -90,7 +91,9 @@
 
         <DataGrid Grid.Row="1"
                   ItemsSource="{Binding Blocks}"
+                  SelectedItem="{Binding SelectedBlock, Mode=TwoWay}"
                   IsReadOnly="True"
+                  SelectionMode="Single"
                   GridLinesVisibility="Horizontal"
                   HeadersVisibility="Column"
                   AutoGenerateColumns="False">
@@ -102,6 +105,61 @@
             <DataGridTextColumn Header="{StaticResource BlocksColFields}"  Binding="{Binding FieldsDecoded}" Width="80" />
           </DataGrid.Columns>
         </DataGrid>
+
+        <GridSplitter Grid.Row="2"
+                      Height="4"
+                      HorizontalAlignment="Stretch"
+                      Background="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                      ResizeDirection="Rows" />
+
+        <Grid Grid.Row="3"
+              RowDefinitions="Auto,Auto,*"
+              Margin="0,8,0,0">
+
+          <TextBlock Grid.Row="0"
+                     Text="{StaticResource FieldsHeader}"
+                     FontSize="14"
+                     FontWeight="SemiBold"
+                     Margin="0,0,0,4" />
+
+          <!-- Empty state: no block selected. -->
+          <TextBlock Grid.Row="1"
+                     Text="{StaticResource FieldsHint}"
+                     Opacity="0.6"
+                     IsVisible="{Binding !HasSelectedBlock}"
+                     Margin="0,0,0,4" />
+
+          <!-- Loaded-block state: metadata row + fields DataGrid. -->
+          <Grid Grid.Row="1"
+                IsVisible="{Binding HasSelectedBlock}"
+                ColumnDefinitions="Auto,*,Auto,*,Auto,*"
+                ColumnSpacing="8"
+                Margin="0,0,0,8">
+            <TextBlock Grid.Column="0" Text="{StaticResource FieldsMask}" Opacity="0.6" />
+            <TextBlock Grid.Column="1" Text="{Binding MaskBytesText}" FontFamily="Cascadia Code,Consolas,monospace" />
+            <TextBlock Grid.Column="2" Text="{StaticResource FieldsTrailingPad}" Opacity="0.6" />
+            <TextBlock Grid.Column="3" Text="{Binding TrailingPadText}" FontFamily="Cascadia Code,Consolas,monospace" />
+            <TextBlock Grid.Column="4" Text="{StaticResource FieldsUndecoded}" Opacity="0.6" />
+            <TextBlock Grid.Column="5" Text="{Binding UndecodedRangesText}" FontFamily="Cascadia Code,Consolas,monospace" />
+          </Grid>
+
+          <DataGrid Grid.Row="2"
+                    ItemsSource="{Binding SelectedBlockFields}"
+                    IsVisible="{Binding HasSelectedBlock}"
+                    IsReadOnly="True"
+                    GridLinesVisibility="Horizontal"
+                    HeadersVisibility="Column"
+                    AutoGenerateColumns="False">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="{StaticResource FieldsColIndex}"   Binding="{Binding FieldIndex}" Width="50" />
+              <DataGridTextColumn Header="{StaticResource FieldsColName}"    Binding="{Binding Name}"       Width="240" />
+              <DataGridTextColumn Header="{StaticResource FieldsColType}"    Binding="{Binding TypeName}"   Width="120" />
+              <DataGridTextColumn Header="{StaticResource FieldsColKind}"    Binding="{Binding Kind}"       Width="120" />
+              <DataGridTextColumn Header="{StaticResource FieldsColPresent}" Binding="{Binding Present}"    Width="70" />
+              <DataGridTextColumn Header="{StaticResource FieldsColValue}"   Binding="{Binding Value}"      Width="*" />
+            </DataGrid.Columns>
+          </DataGrid>
+        </Grid>
       </Grid>
     </Grid>
 

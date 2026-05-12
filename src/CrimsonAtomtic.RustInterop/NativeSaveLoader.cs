@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using CrimsonAtomtic.SaveModel;
 
 namespace CrimsonAtomtic.RustInterop;
@@ -73,6 +74,73 @@ public sealed class NativeSaveLoader : ISaveLoader
             TocEntryCount:    (int)tocEntryCount,
             TotalBlockBytes:  totalBlockBytes,
             Blocks:           blocks);
+    }
+
+    /// <summary>
+    /// Load the full per-field decode of one block. The caller owns the
+    /// returned <see cref="BlockDetails"/>; no native resources outlive
+    /// this call. <paramref name="savePath"/> is parsed afresh each
+    /// call — for repeated lookups against the same save, the UI keeps
+    /// the path and re-invokes here.
+    /// </summary>
+    public BlockDetails LoadBlockDetails(string savePath, int blockIndex, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(savePath);
+        ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var rc = NativeMethods.LoadFromFile(savePath, out var rawHandle);
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc, $"crimson_save_load_from_file failed: {ErrorName(rc)}");
+        }
+        using var handle = CrimsonSaveHandle.FromOwnedPointer(rawHandle);
+
+        var json = ReadBlockJson(handle, (uint)blockIndex);
+        var details = JsonSerializer.Deserialize(json, SaveModelJsonContext.Default.BlockDetails)
+            ?? throw new CrimsonSaveException(
+                NativeMethods.PANIC,
+                "crimson_save_get_block_json returned a JSON document that deserialized to null.");
+        return details;
+    }
+
+    private static unsafe string ReadBlockJson(CrimsonSaveHandle h, uint index)
+    {
+        // Two-call pattern, same as class_name. Blocks emit a few hundred
+        // bytes typical, with the biggest known one (StoreSaveData) at
+        // ~30 KB — well past the stack threshold, so this always rents
+        // from the pool.
+        nuint required = 0;
+        var sizeRc = NativeMethods.GetBlockJson(h, index, null, 0, out required);
+        if (sizeRc != NativeMethods.BUFFER_TOO_SMALL && sizeRc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(sizeRc,
+                $"crimson_save_get_block_json[{index}] (size query) failed: {ErrorName(sizeRc)}");
+        }
+        if (required <= 1)
+        {
+            return "{}";
+        }
+
+        var rented = ArrayPool<byte>.Shared.Rent((int)required);
+        try
+        {
+            fixed (byte* p = rented)
+            {
+                var rc = NativeMethods.GetBlockJson(h, index, p, (nuint)rented.Length, out _);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_save_get_block_json[{index}] failed: {ErrorName(rc)}");
+                }
+            }
+            // Exclude the trailing NUL.
+            return Encoding.UTF8.GetString(rented, 0, (int)required - 1);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
     }
 
     private delegate int GetU16(CrimsonSaveHandle h, out ushort value);
@@ -294,5 +362,9 @@ internal static partial class NativeMethods
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_save_get_block_class_name")]
     public static unsafe partial int GetBlockClassName(
+        CrimsonSaveHandle handle, uint index, byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_get_block_json")]
+    public static unsafe partial int GetBlockJson(
         CrimsonSaveHandle handle, uint index, byte* buf, nuint bufLen, out nuint required);
 }
