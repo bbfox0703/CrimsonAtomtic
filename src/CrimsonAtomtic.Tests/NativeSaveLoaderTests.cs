@@ -225,6 +225,108 @@ public sealed class NativeSaveLoaderTests
     }
 
     [Fact]
+    public void SetScalarField_LiveSave_RoundTripsThroughWriteToFile()
+    {
+        // End-to-end: load → mutate block 0 field 0 → write to a temp
+        // file → reload the temp file → confirm the mutation persisted
+        // across encrypt + LZ4 + HMAC. Mirrors the Rust-side smoke test
+        // (c_abi_mutate_and_write_roundtrip).
+        var path = FindLiveSave();
+        if (path is null)
+        {
+            return;
+        }
+
+        using var loader = new NativeSaveLoader();
+        loader.Load(path);
+
+        // Block 0 field 0 is _characterKey (fixed_suffix u32). Sanity-
+        // check the layout before mutating, so a schema drift surfaces
+        // here rather than silently corrupting bytes.
+        var before = loader.LoadBlockDetails(path, 0);
+        Assert.Equal("fixed_suffix", before.Fields[0].Kind);
+        Assert.Equal(4, before.Fields[0].End - before.Fields[0].Start);
+
+        // 0x01EFCDAB = 32_492_971; distinct from any plausible original.
+        ReadOnlySpan<byte> sentinel = [0xAB, 0xCD, 0xEF, 0x01];
+        loader.SetScalarField(0, 0, sentinel);
+
+        var after = loader.LoadBlockDetails(path, 0);
+        Assert.Equal("32492971 <u32>", after.Fields[0].Value);
+
+        // Write to a temp file, reload, confirm.
+        var tempPath = Path.Combine(Path.GetTempPath(),
+            $"crimsonatomtic_test_{Guid.NewGuid():N}.save");
+        try
+        {
+            loader.WriteToFile(tempPath);
+            using var fresh = new NativeSaveLoader();
+            var freshSummary = fresh.Load(tempPath);
+            Assert.True(freshSummary.HmacOk, "reloaded save must verify HMAC");
+
+            var reloaded = fresh.LoadBlockDetails(tempPath, 0);
+            Assert.Equal("32492971 <u32>", reloaded.Fields[0].Value);
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+        }
+    }
+
+    [Fact]
+    public void SetScalarField_BeforeLoad_ThrowsInvalidOperation()
+    {
+        // No file IO; the loader is empty.
+        using var loader = new NativeSaveLoader();
+        ReadOnlySpan<byte> bytes = [0, 0, 0, 0];
+        var bytesArr = bytes.ToArray();
+        Assert.Throws<InvalidOperationException>(() =>
+            loader.SetScalarField(0, 0, bytesArr));
+    }
+
+    [Fact]
+    public void WriteToFile_BeforeLoad_ThrowsInvalidOperation()
+    {
+        using var loader = new NativeSaveLoader();
+        Assert.Throws<InvalidOperationException>(() =>
+            loader.WriteToFile(Path.Combine(Path.GetTempPath(), "x.save")));
+    }
+
+    [Fact]
+    public void SetScalarField_NonScalarOrWrongLength_ThrowsTypedException()
+    {
+        var path = FindLiveSave();
+        if (path is null)
+        {
+            return;
+        }
+        using var loader = new NativeSaveLoader();
+        loader.Load(path);
+
+        // NOT_SCALAR: block 0 field 3 (_experience) is absent / non-scalar.
+        var notScalar = Assert.Throws<CrimsonSaveException>(() =>
+            loader.SetScalarField(0, 3, ReadOnlySpan<byte>.Empty));
+        Assert.Equal(-12, notScalar.ErrorCode);
+
+        // LENGTH_MISMATCH: field 0 is 4 bytes; pass 5.
+        ReadOnlySpan<byte> tooLong = [0, 0, 0, 0, 0];
+        var tooLongArr = tooLong.ToArray();
+        var lenMismatch = Assert.Throws<CrimsonSaveException>(() =>
+            loader.SetScalarField(0, 0, tooLongArr));
+        Assert.Equal(-13, lenMismatch.ErrorCode);
+
+        // OUT_OF_RANGE on field axis.
+        ReadOnlySpan<byte> any = [0, 0, 0, 0];
+        var anyArr = any.ToArray();
+        var oor = Assert.Throws<CrimsonSaveException>(() =>
+            loader.SetScalarField(0, int.MaxValue, anyArr));
+        Assert.Equal(-10, oor.ErrorCode);
+    }
+
+    [Fact]
     public void LoadBlockDetails_NestedDataReachable()
     {
         // Find any block whose decode contains an object_list or

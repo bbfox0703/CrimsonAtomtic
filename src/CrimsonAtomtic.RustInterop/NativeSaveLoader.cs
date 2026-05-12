@@ -91,6 +91,61 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         return ReadBlockDetails(handle, (uint)blockIndex);
     }
 
+    public void SetScalarField(int blockIndex, int fieldIndex, ReadOnlySpan<byte> bytes)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
+
+        CrimsonSaveHandle? cached;
+        lock (_cacheLock)
+        {
+            cached = _cachedHandle;
+        }
+        if (cached is null || cached.IsInvalid)
+        {
+            throw new InvalidOperationException(
+                "No save is currently loaded. Call Load(savePath) before SetScalarField.");
+        }
+
+        unsafe
+        {
+            fixed (byte* p = bytes)
+            {
+                var rc = NativeMethods.SetScalarField(cached, (uint)blockIndex, (uint)fieldIndex,
+                    p, (nuint)bytes.Length);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_save_set_scalar_field(block={blockIndex}, field={fieldIndex}, " +
+                        $"bytes={bytes.Length}) failed: {ErrorName(rc)}");
+                }
+            }
+        }
+    }
+
+    public void WriteToFile(string destinationPath)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(destinationPath);
+
+        CrimsonSaveHandle? cached;
+        lock (_cacheLock)
+        {
+            cached = _cachedHandle;
+        }
+        if (cached is null || cached.IsInvalid)
+        {
+            throw new InvalidOperationException(
+                "No save is currently loaded. Call Load(savePath) before WriteToFile.");
+        }
+
+        var rc = NativeMethods.WriteToFile(cached, destinationPath);
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_save_write_to_file({destinationPath}) failed: {ErrorName(rc)}");
+        }
+    }
+
     public void Dispose()
     {
         CrimsonSaveHandle? toDispose;
@@ -318,6 +373,9 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         NativeMethods.BODY_PARSE            => "BODY_PARSE",
         NativeMethods.OUT_OF_RANGE          => "OUT_OF_RANGE",
         NativeMethods.BUFFER_TOO_SMALL      => "BUFFER_TOO_SMALL",
+        NativeMethods.NOT_SCALAR            => "NOT_SCALAR",
+        NativeMethods.LENGTH_MISMATCH       => "LENGTH_MISMATCH",
+        NativeMethods.WRITE_FAILED          => "WRITE_FAILED",
         NativeMethods.PANIC                 => "PANIC",
         _                                   => $"UNKNOWN({code})",
     };
@@ -388,6 +446,9 @@ internal static partial class NativeMethods
     public const int BODY_PARSE            = -9;
     public const int OUT_OF_RANGE          = -10;
     public const int BUFFER_TOO_SMALL      = -11;
+    public const int NOT_SCALAR            = -12;
+    public const int LENGTH_MISMATCH       = -13;
+    public const int WRITE_FAILED          = -14;
     public const int PANIC                 = -99;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -441,4 +502,12 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "crimson_save_get_block_json")]
     public static unsafe partial int GetBlockJson(
         CrimsonSaveHandle handle, uint index, byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_set_scalar_field")]
+    public static unsafe partial int SetScalarField(
+        CrimsonSaveHandle handle, uint blockIdx, uint fieldIdx, byte* bytes, nuint bytesLen);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_write_to_file",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int WriteToFile(CrimsonSaveHandle handle, string path);
 }
