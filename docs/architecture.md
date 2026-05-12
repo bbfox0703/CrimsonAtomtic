@@ -91,8 +91,34 @@
 - `vendor/crimson-rs/` in this repo is a refreshable clone, ignored by parent git, updated via [vendor/update_vendors.ps1](../vendor/update_vendors.ps1).
 - Never commit anything under `vendor/crimson-rs/` from this project. All Rust changes flow through the upstream-of-vendor repo.
 
+## Current scaffolding (2026-05)
+
+`src/` now contains the 5 projects shown above:
+
+- **CrimsonAtomtic.Core** — `IPlatformPaths`, `ISingleInstanceGuard` (interfaces only).
+- **CrimsonAtomtic.SaveModel** — `SaveSummary`, `BlockSummary` records, plus
+  a `[JsonSerializable]` source-generated context for AOT-safe serialization.
+- **CrimsonAtomtic.RustInterop** — `ISaveLoader` + a `PlaceholderSaveLoader`
+  that returns canned data. Real P/Invoke implementation lands once
+  `crimson-rs` gets its C ABI.
+- **CrimsonAtomtic.Ui** — Avalonia 12 / .NET 10 app with `PublishAot=true`,
+  `BuiltInComInteropSupport=false`, `AvaloniaUseCompiledBindingsByDefault=true`.
+  Mutex-based single-instance guard on Windows, minimal MainWindow with
+  File menu + an empty-state / loaded-state split, DataGrid of block summaries.
+- **CrimsonAtomtic.Tests** — xUnit 3 with 4 sanity tests against the
+  placeholder loader.
+
+Builds clean, all tests pass.
+
 ## Open questions / future work
 
-- C ABI design: handle-based + function pointers for callbacks (progress reporting)? Decide before the first parser is exposed.
-- Save format: confirm 1.06 save layout matches what `save_parser.py` did for 1.04/1.05; build a regression corpus from `slot0`..`slot105` samples.
-- Cross-platform save path on Linux/macOS: probably Wine/Proton prefix only. Document once we test.
+- **C ABI design** (next big work item): handle-based + function pointers
+  for callbacks (progress reporting)? Decide before exposing the first
+  Rust parser. The C# `ISaveLoader` interface is already in place, so the
+  swap from `PlaceholderSaveLoader` to a real P/Invoke loader is a single
+  composition-root change in `App.axaml.cs`.
+- Cross-platform save path on Linux/macOS: probably Wine/Proton prefix
+  only. Document once we test.
+- Avalonia.Diagnostics 12.x doesn't exist yet (only 11.3.15). Add back
+  behind a Debug-only condition once Avalonia ships the 12.x version.
+- DataGrid lags Avalonia core (12.0.0 vs 12.0.3 for core).

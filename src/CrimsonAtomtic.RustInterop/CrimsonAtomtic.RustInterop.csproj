@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>CrimsonAtomtic.RustInterop</RootNamespace>
+    <AssemblyName>CrimsonAtomtic.RustInterop</AssemblyName>
+
+    <!-- Suppress LibraryImport / DllImport related AOT warnings that are
+         tied to placeholders we'll wire up to the real C ABI later. -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CrimsonAtomtic.Core\CrimsonAtomtic.Core.csproj" />
+    <ProjectReference Include="..\CrimsonAtomtic.SaveModel\CrimsonAtomtic.SaveModel.csproj" />
+  </ItemGroup>
+
+</Project>

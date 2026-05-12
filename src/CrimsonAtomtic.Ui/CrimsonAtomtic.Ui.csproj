@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>CrimsonAtomtic.Ui</RootNamespace>
+    <AssemblyName>CrimsonAtomtic</AssemblyName>
+
+    <!-- Avalonia + AOT settings. PublishAot is the executable-side toggle;
+         all library projects already have IsAotCompatible via
+         Directory.Build.props. -->
+    <PublishAot>true</PublishAot>
+    <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+
+    <!-- Trim XAML resources we don't reference. -->
+    <TrimMode>full</TrimMode>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CrimsonAtomtic.Core\CrimsonAtomtic.Core.csproj" />
+    <ProjectReference Include="..\CrimsonAtomtic.SaveModel\CrimsonAtomtic.SaveModel.csproj" />
+    <ProjectReference Include="..\CrimsonAtomtic.RustInterop\CrimsonAtomtic.RustInterop.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -8,12 +8,21 @@ Linux, macOS.
 
 ```
 CrimsonAtomtic/
-├── CLAUDE.md      # minimal rule index — start here
-├── docs/          # architecture, format specs, data hygiene policy
-├── src/           # C# / Avalonia 12 app, .NET 10, Native AOT  (scaffolding TBD)
-├── tools/         # Python 3.12+ toolchain: extract / diff / inspect / analyze
-├── vendor/        # cloned external deps (only crimson-rs for now)
-└── scripts/       # build / setup / package scripts (PowerShell 7+)
+├── CLAUDE.md                 # minimal rule index — start here
+├── CrimsonAtomtic.slnx       # .NET solution
+├── Directory.Build.props     # shared MSBuild settings
+├── Directory.Packages.props  # central package versions
+├── global.json               # .NET SDK pin (10.0.x)
+├── docs/                     # architecture, format specs, data hygiene policy
+├── src/                      # C# / Avalonia 12 / .NET 10 / Native AOT
+│   ├── CrimsonAtomtic.Core         # platform abstractions
+│   ├── CrimsonAtomtic.SaveModel    # domain types (records + AOT JSON ctx)
+│   ├── CrimsonAtomtic.RustInterop  # crimson-rs P/Invoke layer
+│   ├── CrimsonAtomtic.Ui           # Avalonia app
+│   └── CrimsonAtomtic.Tests        # xUnit 3
+├── tools/                    # Python 3.12+ toolchain: extract / diff / inspect / analyze
+├── vendor/                   # cloned external deps (only crimson-rs for now)
+└── scripts/                  # build / setup / package scripts (PowerShell 7+)
 ```
 
 ## Why this project exists

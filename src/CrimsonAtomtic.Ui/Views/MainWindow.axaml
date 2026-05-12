@@ -1,0 +1,109 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        xmlns:model="using:CrimsonAtomtic.SaveModel"
+        mc:Ignorable="d"
+        d:DesignWidth="900"
+        d:DesignHeight="600"
+        x:Class="CrimsonAtomtic.Ui.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="{StaticResource WindowTitle}"
+        Width="960" Height="640"
+        MinWidth="600" MinHeight="400">
+
+  <DockPanel LastChildFill="True">
+
+    <Menu DockPanel.Dock="Top">
+      <MenuItem Header="{StaticResource MenuFile}">
+        <MenuItem Header="{StaticResource MenuOpenSave}" Click="OnOpenSaveClick" />
+        <Separator />
+        <MenuItem Header="{StaticResource MenuExit}" Click="OnExitClick" />
+      </MenuItem>
+    </Menu>
+
+    <!-- Empty state -->
+    <StackPanel IsVisible="{Binding !HasSave}"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="8">
+      <TextBlock Text="{StaticResource EmptyTitle}"
+                 FontSize="24"
+                 HorizontalAlignment="Center" />
+      <TextBlock Text="{StaticResource EmptyHint}"
+                 Opacity="0.6"
+                 HorizontalAlignment="Center" />
+    </StackPanel>
+
+    <!-- Loaded state -->
+    <Grid IsVisible="{Binding HasSave}"
+          ColumnDefinitions="280,*"
+          Margin="12">
+
+      <!-- Left: summary -->
+      <Border Grid.Column="0"
+              Padding="12"
+              BorderThickness="0,0,1,0"
+              BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
+        <StackPanel Spacing="8">
+          <TextBlock Text="{StaticResource SummaryHeader}"
+                     FontSize="16"
+                     FontWeight="SemiBold" />
+
+          <Grid ColumnDefinitions="Auto,*"
+                RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
+                ColumnSpacing="12"
+                RowSpacing="4">
+
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="{StaticResource SummarySlot}" Opacity="0.6" />
+            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Summary.SlotName}" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="{StaticResource SummaryVersion}" Opacity="0.6" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Summary.Version}" />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="{StaticResource SummaryHmac}" Opacity="0.6" />
+            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding HmacStatusText}" />
+
+            <TextBlock Grid.Row="3" Grid.Column="0" Text="{StaticResource SummaryPayload}" Opacity="0.6" />
+            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PayloadSizeText}" />
+
+            <TextBlock Grid.Row="4" Grid.Column="0" Text="{StaticResource SummaryBody}" Opacity="0.6" />
+            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding UncompressedSizeText}" />
+
+            <TextBlock Grid.Row="5" Grid.Column="0" Text="{StaticResource SummaryTypes}" Opacity="0.6" />
+            <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding SchemaTypeCountText}" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- Right: blocks list -->
+      <Grid Grid.Column="1"
+            RowDefinitions="Auto,*"
+            Margin="12,0,0,0">
+
+        <TextBlock Grid.Row="0"
+                   Text="{StaticResource BlocksHeader}"
+                   FontSize="16"
+                   FontWeight="SemiBold"
+                   Margin="0,0,0,8" />
+
+        <DataGrid Grid.Row="1"
+                  ItemsSource="{Binding Blocks}"
+                  IsReadOnly="True"
+                  GridLinesVisibility="Horizontal"
+                  HeadersVisibility="Column"
+                  AutoGenerateColumns="False">
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="{StaticResource BlocksColIndex}"   Binding="{Binding Index}"      Width="60" />
+            <DataGridTextColumn Header="{StaticResource BlocksColClass}"   Binding="{Binding ClassName}"  Width="*" />
+            <DataGridTextColumn Header="{StaticResource BlocksColOffset}"  Binding="{Binding DataOffset}" Width="120" />
+            <DataGridTextColumn Header="{StaticResource BlocksColSize}"    Binding="{Binding DataSize}"   Width="120" />
+            <DataGridTextColumn Header="{StaticResource BlocksColFields}"  Binding="{Binding FieldsDecoded}" Width="80" />
+          </DataGrid.Columns>
+        </DataGrid>
+      </Grid>
+    </Grid>
+
+  </DockPanel>
+</Window>
