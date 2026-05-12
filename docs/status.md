@@ -3,8 +3,9 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-12 (end of session that added UI polish for field
-> inspection: handle caching + field filter).
+> Last updated: 2026-05-12 (end of session that completed UI polish for
+> field inspection: handle caching + filter + drill-down + Windows
+> save-folder default).
 
 ## Where we are
 
@@ -30,24 +31,32 @@
     standard two-call (query size → fill buffer) pattern
   - `crimson_save_get_block_json` → full per-field decode of one block
     as a JSON document (same two-call pattern). Hand-rolled JSON
-    formatter, no serde dep. `value` is pre-formatted to mirror
+    formatter, no serde dep. Each field also carries `child`
+    (object_locator inline child) and `elements` (object_list);
+    nested blocks themselves carry `class_name`, so a C# consumer can
+    drill in recursively without further FFI getters. `value` is
+    pre-formatted to mirror
     `tools/inspect/inspect_save_section.py --pretty`.
   - `crimson_save_free`
   - 53 tests pass (52 existing + `c_abi::tests::c_abi_smoke` covering
     every entry point including `get_block_json` two-call sizing,
-    NUL terminator, required keys, out-of-range).
-- **Latest main**: `f1dd61c`. PRs landed this session: #14, #15.
+    NUL terminator, required keys, child/elements/class_name presence,
+    out-of-range).
+- **Latest main**: `df037b8`. PRs landed this session: #14, #15, #16.
 - **Branch model**: dev → PR → main (rebase merge, linear history).
   After merge, local + origin/dev get force-reset to match main.
 
 ### `CrimsonAtomtic` (this repo)
 
 - **Foundation** (CLAUDE.md, docs/, .gitignore, vendor/, scripts/) — done.
-- **C# / Avalonia scaffolding** — done. Builds clean, 8/8 unit tests pass:
+- **C# / Avalonia scaffolding** — done. Builds clean, 9/9 unit tests pass:
   ```
   src/CrimsonAtomtic.Core         IPlatformPaths, ISingleInstanceGuard
-  src/CrimsonAtomtic.SaveModel    SaveSummary + BlockDetails + DecodedFieldRow
-                                  + AOT JsonSerializerContext
+  src/CrimsonAtomtic.SaveModel    SaveSummary, BlockSummary,
+                                  BlockDetails, DecodedFieldRow +
+                                  AOT JsonSerializerContext
+  src/CrimsonAtomtic.Ui/Platform  WindowsPlatformPaths
+                                  (resolves %LOCALAPPDATA%-based paths)
   src/CrimsonAtomtic.RustInterop  ISaveLoader + NativeSaveLoader
                                   (LibraryImport + SafeHandle wrapper
                                   around crimson_save_* C ABI).
@@ -57,24 +66,34 @@
                                   Mutex single-instance, MainWindow with
                                   File menu + blocks DataGrid + lazy
                                   field-detail pane (GridSplitter) +
-                                  fields filter TextBox.
-  src/CrimsonAtomtic.Tests        xUnit v3 — 8 tests against
+                                  fields filter + breadcrumb-based
+                                  drill-down into locator children and
+                                  list elements. All DataGrids have
+                                  resizable columns.
+  src/CrimsonAtomtic.Tests        xUnit v3 — 9 tests against
                                   NativeSaveLoader incl. live-save
                                   summary, block-details, cache reuse,
-                                  Dispose lifecycle (skip cleanly when
-                                  no save present)
+                                  Dispose lifecycle, nested data
+                                  reachability (skip cleanly when no
+                                  save present)
   ```
-  The UI now reads **real saves** via `crimson_rs.dll`, and clicking a
-  block lazily loads its per-field decode via `LoadBlockDetails` →
+  The UI now reads **real saves** via `crimson_rs.dll`. Open Save
+  defaults to `%LOCALAPPDATA%\Pearl Abyss\CD\save\<user>\` when there's
+  a single user; clicking a row in the blocks DataGrid lazily loads its
+  per-field decode via `LoadBlockDetails` →
   `crimson_save_get_block_json` → System.Text.Json (source-generated,
-  AOT-safe).
+  AOT-safe). Drill-down composes recursively
+  (`InventorySaveData › inventorylist[18] › [14]:
+  InventoryElementSaveData › itemList[40] › …`).
 - **AOT publish verified**: `dotnet publish -c Release -r win-x64
-  -p:PublishAot=true -p:PublishTrimmed=true` produces a working bundle
-  in `dist/win-x64/` (CrimsonAtomtic.exe ~21 MB, crimson_rs.dll 1.2 MB,
+  -p:PublishAot=true` (csproj pins `TrimMode=full`; we don't pass
+  `-p:PublishTrimmed=true` because it upgrades Avalonia DataGrid 12.0.0
+  trim warnings into ilc-blocking errors) produces a working bundle in
+  `dist/win-x64/` (CrimsonAtomtic.exe ~21 MB, crimson_rs.dll 1.2 MB,
   Avalonia native deps).
 - **Python tools** (unchanged, working): `tools/extract/extract_save.py`,
   `tools/inspect/inspect_save_body.py`, `tools/inspect/inspect_save_section.py`.
-- **Vendor**: `vendor/crimson-rs` at `f1dd61c`. Refresh via
+- **Vendor**: `vendor/crimson-rs` at `df037b8`. Refresh via
   `.\vendor\update_vendors.ps1`.
 
 ## How `crimson_rs.dll` flows into the C# build
@@ -92,53 +111,50 @@
 
 ## Pick up here (next concrete task)
 
-The C ABI is now read-everything. Field inspection has handle caching
-and a name/type/value filter as of this session; what's left in UI
-polish is the nested-block drill-down. Next chunk, in priority order:
+The C ABI is now read-everything. Field inspection is feature-complete
+for inspection (handle caching, filter, drill-down composing through
+locator children + list elements, resizable DataGrid columns, default
+save folder, breadcrumb navigation). The save editor is read-only —
+the next big step is making it actually edit.
 
-1. **Object locator / list drill-down**. Currently a field of kind
-   `object_locator` / `object_list` shows only a one-line summary in
-   the `value` column. Drilling into the inline child needs either:
-   - Nested rows in the same DataGrid (CommunityToolkit-friendly,
-     limited UX), or
-   - A TreeDataGrid (Avalonia 12 ships one, but it's separate from
-     the regular DataGrid and means a different binding shape), or
-   - Click-through navigation: clicking a locator field swaps the
-     fields-pane content to the child block, with a breadcrumb back.
-   The Rust side already emits the child inline (see `FieldValue::Locator`'s
-   `child` and `ObjectList`'s `elements`); the JSON formatter currently
-   collapses these to a `value` string. To surface them, extend the JSON
-   shape with a `child` / `elements` field on each `DecodedFieldRow`.
+1. **Save file writing** — re-encrypt + write back. Needs three
+   landings:
+   - **PR A — Rust body re-serializer**. Round-trip identical body
+     bytes from an unmodified `Body` + `Vec<ObjectBlock>`. The header
+     side already has `Save::write_with_nonce`. Add `Body::write` (or
+     similar) that emits the body byte-for-byte from the decoded
+     types. Tests: load a save, write it, parse the result, compare
+     bytes. Skips on absence like the existing save tests.
+   - **PR B — C ABI mutation surface**. For each scalar `FieldKind`,
+     a `crimson_save_set_field_<kind>(handle, block_idx, field_idx,
+     value)` that updates the in-memory model. Plus
+     `crimson_save_write_to_file(handle, path)`. List / inline-byte
+     mutation is a harder design (length changes) — defer to a later
+     PR; v1 only does same-size scalar edits.
+   - **PR C — C# typed wrappers + a "Save" / "Save As…" command in
+     the UI**. ISaveLoader grows a writer-side counterpart (perhaps
+     `ISaveMutator`). DataGrid cell-level editing for scalar fields.
 
-2. **Save file writing** — re-encrypt + write back. Needs:
-   - Rust: body re-serializer (`Body::write_to` per-object). Header
-     side already has `Save::write_with_nonce`.
-   - C ABI: a mutation API. For each scalar field type, a
-     `crimson_save_set_field_<kind>(handle, block_idx, field_idx, value)`.
-     Inline-byte / list mutation is a separate, harder design.
-   - C ABI: `crimson_save_write_to_file(handle, path)`.
-   - C# side: typed wrappers + a "save" command in the UI.
-
-3. **Asset / icon pipeline** — one-time mine icons from
+2. **Asset / icon pipeline** — one-time mine icons from
    `D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS`, run through
    a thumbnail pipeline (32 / 64 / 128), ship as a starter
    `IconCache/` in the AOT bundle.
 
-4. **Localization** — read game `paloc/*.paloc` via crimson-rs to
+3. **Localization** — read game `paloc/*.paloc` via crimson-rs to
    resolve item / skill / region names in the user's chosen game
    language (independent of UI shell language).
 
-5. **Save backup management** — auto-backup on every load + on every
+4. **Save backup management** — auto-backup on every load + on every
    write, configurable retention.
 
-6. **Mod awareness** — read `CDMods/cdumm.db` (SQLite) and
+5. **Mod awareness** — read `CDMods/cdumm.db` (SQLite) and
    `mods/_enabled/` to surface mod-added items without crashing on
    unknown keys.
 
-7. **Cross-platform save paths** — Wine/Proton prefix resolution on
+6. **Cross-platform save paths** — Wine/Proton prefix resolution on
    Linux/macOS. Currently `IPlatformPaths` is Windows-only.
 
-8. **Avalonia.Diagnostics 12.x** — add back behind a `Debug`
+7. **Avalonia.Diagnostics 12.x** — add back behind a `Debug`
    condition once published.
 
 ## Important context / gotchas (don't relearn these)
