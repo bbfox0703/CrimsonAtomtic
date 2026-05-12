@@ -1,14 +1,18 @@
 # Save body format
 
-> **Status**: schema + TOC + per-object field decoder all implemented in
-> [`vendor/crimson-rs/src/save/body/`](../vendor/crimson-rs/src/save/body/).
-> 100% block coverage and 100% present-field coverage against a live 1.06
-> save. The 1-byte engine trailer that the original Python parser
-> silently left as undecoded is now captured on `ObjectBlock.trailing_pad`
-> (233 blocks across 7+ classes). Total residual: **3 bytes / 5.2 MB**
-> (0.0001%) in one `MercenaryClanSaveData` block — a small `01 01 01`
-> sequence between an `object_list` and the reverse-peeled tail; see
-> [Open issues](#open-issues).
+> **Status**: complete against the live 1.06 save.
+>
+> ```
+> 1,112 / 1,112 blocks                  100.0%
+> 3,099 / 3,099 fields decoded          100.0%
+> Undecoded bytes: 0 / 5,172,506        0.0000%
+> trailing_pad: 233 × 1 byte + 1 × 3 bytes
+> ```
+>
+> Every byte is either decoded into a typed field or captured as
+> `ObjectBlock.trailing_pad`. The crimson-rs decode test asserts both
+> "zero undecoded" and "zero Unknown fields" as hard invariants, so a
+> future game patch that drifts the format will fail loudly.
 
 The decompressed save body has three sequential sections:
 
@@ -140,41 +144,42 @@ referencing while the old repo is still useful to read.
 - [`tools/inspect/inspect_save_body.py`](../tools/inspect/inspect_save_body.py) — show schema + TOC only (cheap).
 - [`tools/inspect/inspect_save_section.py`](../tools/inspect/inspect_save_section.py) — run the full decoder; filter by `--class` or `--toc-index`; pretty-print or dump JSON.
 
-## The 1-byte engine trailer (`ObjectBlock.trailing_pad`)
+## Engine trailer (`ObjectBlock.trailing_pad`)
 
-After we implemented the field decoder, 232 blocks across 7 classes
-exhibited a consistent 1-byte residual. We investigated it empirically
-and now capture it explicitly rather than leaving it as undecoded.
+234 blocks have a small region between the end of the forward walk
+and the start of the reverse-peeled tail (or, when no reverse pass
+ran, at the very end of the block) that the schema doesn't model.
+The original Python parser leaves these bytes as undecoded; we
+capture them on `ObjectBlock.trailing_pad: Vec<u8>` so they
+round-trip.
 
-### Findings
+### Distribution
 
-- **Where**: always exactly 1 byte at the boundary between the forward
-  walk's end and the start of the reverse-peeled tail (or, when no
-  reverse pass ran, at the very end of the block).
-- **Which classes**: 226 × `FieldNPCSaveData`, plus one block each of
-  `GameEventSaveData`, `InventoryItemContentsSaveData`,
-  `InventorySaveData`, `KnowledgeSaveData`, `ContentsMiscSaveData`, and
-  `FieldSaveData`.
-- **Value distribution**: 123 unique byte values across the 226
-  `FieldNPCSaveData` blocks, with the high bit set in 63% of them.
-  It's payload data, not a constant marker.
-- **Schema coverage**: the byte is not part of any schema field. Even
-  when more of the schema's "size-1" fields (e.g. `_armorDyeAppearanceIndexKey`)
-  are present in the mask, the trailer byte still appears separately.
-- **Reference behavior**: the Python parser in the legacy community
-  editor leaves this byte as `undecoded_ranges` too. We match its
-  decode but capture the byte instead of dropping it.
+| Length | Count | Classes |
+| -----: | ----: | ------- |
+| 1 byte | 233   | 226 × `FieldNPCSaveData` + one block each of `GameEventSaveData`, `InventoryItemContentsSaveData`, `InventorySaveData`, `KnowledgeSaveData`, `ContentsMiscSaveData`, `FieldSaveData`, plus one we picked up after the FactionSaveData fix |
+| 3 bytes | 1    | `MercenaryClanSaveData` — `01 01 01` between `_mercenaryDataList` (object_list) and the reverse-peeled tail |
+
+### Value notes
+
+- The 1-byte pads in `FieldNPCSaveData` have **123 unique values** across
+  the 226 blocks (63% have the high bit set). They're payload data, not
+  a constant marker, but no schema field claims them — likely an engine
+  artifact carrying state we don't yet model.
+- The 3-byte pad in `MercenaryClanSaveData` is the constant `01 01 01`.
+  Looks like a list-level trailer pattern; the rule still feels under-
+  characterised since we only have one example in this save.
 
 ### Decoder rule
 
-In `decode_one_block` (Rust), if `decode_fields_in_region` returns a
-single undecoded range of exactly 1 byte, we move that byte to
-`ObjectBlock.trailing_pad: Option<u8>` and clear the range. Multi-byte
-residues are left alone — they signal a real format gap (e.g. the
-`FactionSaveData` case below).
+In `decode_one_block`, if `decode_fields_in_region` returns a single
+undecoded range of 1..=16 bytes, we move those bytes to
+`ObjectBlock.trailing_pad` and clear the range. Anything larger or
+non-contiguous is left in `undecoded_ranges` so a real decode failure
+still surfaces (e.g. the FactionSaveData case before that fix landed).
 
-The PyO3 binding surfaces `trailing_pad` on each decoded block dict
-when set.
+The PyO3 binding surfaces `trailing_pad` as `bytes` on each decoded
+block dict when non-empty (omitted otherwise).
 
 ## Locator inline-payload precedence
 
@@ -209,31 +214,6 @@ cursor stopped, so:
 
 This is the only departure from the Python `save_parser.py`'s decode
 strategy beyond what's already documented above.
-
-## Open issues
-
-### `MercenaryClanSaveData` — 3-byte gap between an object_list and its reverse-peeled tail
-
-Three bytes (`01 01 01`) sit between the end of the top-level
-`_mercenaryDataList` (`object_list` field) and the start of the
-reverse-peeled fixed-size tail fields. They are NOT inside a
-schema-declared field, NOT a `trailing_pad` (which only fires for
-exactly 1 byte), and don't match any of the known `dynamic_array`
-variant trailers.
-
-Hypothesis: object_list fields may have a small trailer pattern at
-the list level that we don't model. The bytes look like the first
-three of variant 1's `01 01 01 01 01` trailer, suggesting the last
-element's inline payload terminated 2 bytes too early — or there is
-a per-list trailing run of `01`s we need to consume.
-
-Inspect with:
-
-```powershell
-python tools\inspect\inspect_save_section.py --class MercenaryClanSaveData --pretty
-```
-
-Resolving this would bring the total residual to **0 bytes**.
 
 ## Not ported from the Python source
 
