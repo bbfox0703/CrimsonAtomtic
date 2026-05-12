@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CrimsonAtomtic.Core;
 using CrimsonAtomtic.RustInterop;
 using CrimsonAtomtic.SaveModel;
 
@@ -11,8 +12,30 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 /// the file-open command. AOT-safe: every observable comes from a
 /// CommunityToolkit.Mvvm source generator, no reflection.
 /// </summary>
-public sealed partial class MainWindowViewModel(ISaveLoader loader) : ObservableObject
+public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPaths paths) : ObservableObject
 {
+    /// <summary>
+    /// Best initial folder for the Open Save dialog. Drills into the
+    /// single user-id subfolder (e.g. <c>save\102190433\</c>) when
+    /// exactly one exists, otherwise stops at the save root, falling
+    /// back to the root path even when it doesn't exist so the dialog
+    /// has a defined starting point.
+    /// </summary>
+    public string DefaultOpenSaveStartingPath
+    {
+        get
+        {
+            var root = paths.GameSaveRoot;
+            if (!Directory.Exists(root))
+            {
+                return root;
+            }
+            // Take(2) is enough to tell "exactly one" from "two or more".
+            var users = Directory.EnumerateDirectories(root).Take(2).ToArray();
+            return users.Length == 1 ? users[0] : root;
+        }
+    }
+
     private string? _loadedPath;
 
     [ObservableProperty]

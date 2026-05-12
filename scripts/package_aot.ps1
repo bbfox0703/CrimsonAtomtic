@@ -70,11 +70,14 @@ try {
     }
     New-Item -ItemType Directory -Force -Path $DistRoot | Out-Null
 
+    # PublishAot=true implies trimming; passing -p:PublishTrimmed=true
+    # in addition flips some AOT analyzers into error mode on Avalonia
+    # 12.x DataGrid trim warnings. The csproj already pins TrimMode=full,
+    # which is enough.
     & dotnet publish $UiProj `
         --configuration Release `
         --runtime $Runtime `
         -p:PublishAot=true `
-        -p:PublishTrimmed=true `
         --output $DistRoot
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed (exit $LASTEXITCODE)" }
 }

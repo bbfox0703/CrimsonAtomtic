@@ -20,10 +20,21 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        // Default to the Crimson Desert save folder when it exists.
+        // TryGetFolderFromPathAsync returns null for non-existent paths,
+        // in which case the picker falls back to its own default.
+        IStorageFolder? startLocation = null;
+        var startPath = vm.DefaultOpenSaveStartingPath;
+        if (Directory.Exists(startPath))
+        {
+            startLocation = await StorageProvider.TryGetFolderFromPathAsync(startPath);
+        }
+
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = "Open Crimson Desert save",
             AllowMultiple = false,
+            SuggestedStartLocation = startLocation,
             FileTypeFilter =
             [
                 new FilePickerFileType("Save files") { Patterns = ["*.save"] },
