@@ -65,9 +65,11 @@ Write-Host ""
 Write-Host "==> dotnet publish -c Release -r $Runtime -p:PublishAot=true" -ForegroundColor Cyan
 Push-Location $ProjectRoot
 try {
-    if (Test-Path $DistRoot) {
-        Remove-Item -Recurse -Force $DistRoot
-    }
+    # Don't pre-clean $DistRoot: when a previous dotnet host still
+    # holds file handles (mmap on CrimsonAtomtic.exe), Remove-Item
+    # marks for delete-on-close but leaves the directory in flux long
+    # enough that the subsequent ilc pass on first invocation flakes
+    # with exit code -1. dotnet publish handles its own overwrite.
     New-Item -ItemType Directory -Force -Path $DistRoot | Out-Null
 
     # PublishAot=true implies trimming; passing -p:PublishTrimmed=true
