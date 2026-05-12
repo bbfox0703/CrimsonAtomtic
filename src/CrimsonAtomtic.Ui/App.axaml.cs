@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using CrimsonAtomtic.RustInterop;
+using CrimsonAtomtic.Ui.Platform;
 using CrimsonAtomtic.Ui.ViewModels;
 using CrimsonAtomtic.Ui.Views;
 
@@ -28,9 +29,11 @@ public sealed class App : Application
             // keeps the SafeHandle's finalizer book-keeping honest.
             desktop.Exit += (_, _) => loader.Dispose();
 
+            var paths = new WindowsPlatformPaths();
+
             desktop.MainWindow = new MainWindow
             {
-                DataContext = new MainWindowViewModel(loader),
+                DataContext = new MainWindowViewModel(loader, paths),
             };
         }
 
