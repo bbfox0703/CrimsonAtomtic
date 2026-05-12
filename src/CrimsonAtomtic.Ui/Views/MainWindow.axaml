@@ -97,6 +97,7 @@
                   SelectedItem="{Binding SelectedBlock, Mode=TwoWay}"
                   IsReadOnly="True"
                   SelectionMode="Single"
+                  CanUserResizeColumns="True"
                   GridLinesVisibility="Horizontal"
                   HeadersVisibility="Column"
                   AutoGenerateColumns="False">
@@ -198,17 +199,18 @@
                     ItemsSource="{Binding VisibleFields}"
                     IsVisible="{Binding IsShowingFields}"
                     IsReadOnly="True"
+                    CanUserResizeColumns="True"
                     GridLinesVisibility="Horizontal"
                     HeadersVisibility="Column"
                     AutoGenerateColumns="False">
             <DataGrid.Columns>
               <DataGridTextColumn Header="{StaticResource FieldsColIndex}"   Binding="{Binding FieldIndex}" Width="50" />
-              <DataGridTextColumn Header="{StaticResource FieldsColName}"    Binding="{Binding Name}"       Width="240" />
-              <DataGridTextColumn Header="{StaticResource FieldsColType}"    Binding="{Binding TypeName}"   Width="120" />
+              <DataGridTextColumn Header="{StaticResource FieldsColName}"    Binding="{Binding Name}"       Width="280" />
+              <DataGridTextColumn Header="{StaticResource FieldsColType}"    Binding="{Binding TypeName}"   Width="160" />
               <DataGridTextColumn Header="{StaticResource FieldsColKind}"    Binding="{Binding Kind}"       Width="120" />
               <DataGridTextColumn Header="{StaticResource FieldsColPresent}" Binding="{Binding Present}"    Width="70" />
               <DataGridTextColumn Header="{StaticResource FieldsColValue}"   Binding="{Binding Value}"      Width="*" />
-              <DataGridTemplateColumn Header="{StaticResource FieldsColDrill}" Width="70">
+              <DataGridTemplateColumn Header="{StaticResource FieldsColDrill}" Width="80">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="model:DecodedFieldRow">
                     <Button Content="{StaticResource FieldsDrillButton}"
@@ -230,6 +232,7 @@
                     ItemsSource="{Binding VisibleElements}"
                     IsVisible="{Binding IsShowingElements}"
                     IsReadOnly="True"
+                    CanUserResizeColumns="True"
                     GridLinesVisibility="Horizontal"
                     HeadersVisibility="Column"
                     AutoGenerateColumns="False">
@@ -238,7 +241,7 @@
               <DataGridTextColumn Header="{StaticResource ElementsColClass}"  Binding="{Binding ClassName}"  Width="*" />
               <DataGridTextColumn Header="{StaticResource ElementsColOffset}" Binding="{Binding DataOffset}" Width="120" />
               <DataGridTextColumn Header="{StaticResource ElementsColSize}"   Binding="{Binding DataSize}"   Width="120" />
-              <DataGridTemplateColumn Header="{StaticResource ElementsColOpen}" Width="70">
+              <DataGridTemplateColumn Header="{StaticResource ElementsColOpen}" Width="80">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="model:BlockDetails">
                     <Button Content="{StaticResource ElementsOpenButton}"
