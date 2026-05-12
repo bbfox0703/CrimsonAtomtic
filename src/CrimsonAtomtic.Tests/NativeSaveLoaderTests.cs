@@ -110,4 +110,68 @@ public sealed class NativeSaveLoaderTests
         Assert.Throws<OperationCanceledException>(() =>
             loader.Load(@"C:\fake\slot0\save.save", cts.Token));
     }
+
+    [Fact]
+    public void LoadBlockDetails_LiveSave_ReturnsFieldsMatchingSummary()
+    {
+        var path = FindLiveSave();
+        if (path is null)
+        {
+            return;
+        }
+        var loader = new NativeSaveLoader();
+
+        // Pull the summary first so we know the index range.
+        var summary = loader.Load(path);
+        Assert.NotEmpty(summary.Blocks);
+
+        // Block 0 always exists in any non-empty save. Spot-check the
+        // mid-stream block too if available, since field shapes differ
+        // dramatically across classes.
+        foreach (var idx in new[] { 0, Math.Min(50, summary.Blocks.Count - 1) })
+        {
+            var details = loader.LoadBlockDetails(path, idx);
+            var summaryRow = summary.Blocks[idx];
+
+            Assert.Equal(summaryRow.ClassIndex, details.ClassIndex);
+            Assert.Equal(summaryRow.DataOffset, details.DataOffset);
+            Assert.Equal(summaryRow.DataSize, details.DataSize);
+
+            // mask_bytes_hex must be lowercase hex.
+            Assert.Matches("^[0-9a-f]*$", details.MaskBytesHex);
+
+            // Field count from the JSON must match the schema's field
+            // count for this class. We don't have schema visibility from
+            // here, but the summary tracks present + decoded which must
+            // hold inside the field list too.
+            var present = details.Fields.Count(f => f.Present);
+            var decoded = details.Fields.Count(f => f.Present && f.Kind != "absent" && f.Kind != "unknown");
+            Assert.Equal(summaryRow.FieldsPresent, present);
+            Assert.Equal(summaryRow.FieldsDecoded, decoded);
+
+            // Every field row carries a non-null name and kind.
+            Assert.All(details.Fields, f =>
+            {
+                Assert.False(string.IsNullOrEmpty(f.Name));
+                Assert.False(string.IsNullOrEmpty(f.Kind));
+            });
+        }
+    }
+
+    [Fact]
+    public void LoadBlockDetails_OutOfRange_ThrowsCrimsonSaveException()
+    {
+        var path = FindLiveSave();
+        if (path is null)
+        {
+            return;
+        }
+        var loader = new NativeSaveLoader();
+
+        var ex = Assert.Throws<CrimsonSaveException>(() =>
+            loader.LoadBlockDetails(path, int.MaxValue));
+
+        // -10 == OUT_OF_RANGE.
+        Assert.Equal(-10, ex.ErrorCode);
+    }
 }

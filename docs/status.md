@@ -3,7 +3,7 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-12 (end of session that landed the C ABI + wired it into the C# UI).
+> Last updated: 2026-05-12 (end of session that added field-level inspection — get_block_json on the Rust side, lazy detail pane on the C# side).
 
 ## Where we are
 
@@ -27,39 +27,54 @@
   - `crimson_save_get_block_info` → flat `CrimsonBlockInfo` per block
   - `crimson_save_get_block_class_name` → variable-length UTF-8 via the
     standard two-call (query size → fill buffer) pattern
+  - `crimson_save_get_block_json` → full per-field decode of one block
+    as a JSON document (same two-call pattern). Hand-rolled JSON
+    formatter, no serde dep. `value` is pre-formatted to mirror
+    `tools/inspect/inspect_save_section.py --pretty`.
   - `crimson_save_free`
-  - 53 tests pass (52 existing + `c_abi::tests::c_abi_smoke` end-to-end).
-- **Latest main**: `a73679b`. PRs landed this session: #14.
+  - 53 tests pass (52 existing + `c_abi::tests::c_abi_smoke` covering
+    every entry point including `get_block_json` two-call sizing,
+    NUL terminator, required keys, out-of-range).
+- **Latest main**: `a73679b` once PR #15 merges (currently CI green,
+  awaiting rebase-merge). PRs landed this session: #14. PR #15 in
+  flight for `get_block_json`.
 - **Branch model**: dev → PR → main (rebase merge, linear history).
   After merge, local + origin/dev get force-reset to match main.
 
 ### `CrimsonAtomtic` (this repo)
 
 - **Foundation** (CLAUDE.md, docs/, .gitignore, vendor/, scripts/) — done.
-- **C# / Avalonia scaffolding** — done. Builds clean, 4/4 unit tests pass:
+- **C# / Avalonia scaffolding** — done. Builds clean, 6/6 unit tests pass:
   ```
   src/CrimsonAtomtic.Core         IPlatformPaths, ISingleInstanceGuard
-  src/CrimsonAtomtic.SaveModel    SaveSummary + AOT JsonSerializerContext
+  src/CrimsonAtomtic.SaveModel    SaveSummary + BlockDetails + DecodedFieldRow
+                                  + AOT JsonSerializerContext
   src/CrimsonAtomtic.RustInterop  ISaveLoader + NativeSaveLoader
                                   (LibraryImport + SafeHandle wrapper
-                                  around crimson_save_* C ABI)
+                                  around crimson_save_* C ABI). Exposes
+                                  Load(path) + LoadBlockDetails(path, idx).
   src/CrimsonAtomtic.Ui           Avalonia 12 / .NET 10, PublishAot=true,
                                   Mutex single-instance, MainWindow with
-                                  File menu + DataGrid
-  src/CrimsonAtomtic.Tests        xUnit v3 — 4 tests against
-                                  NativeSaveLoader incl. one live-save
-                                  end-to-end (skips when no save present)
+                                  File menu + blocks DataGrid + lazy
+                                  field-detail pane (GridSplitter)
+  src/CrimsonAtomtic.Tests        xUnit v3 — 6 tests against
+                                  NativeSaveLoader incl. live-save
+                                  summary + block-details (skip cleanly
+                                  when no save present)
   ```
-  The UI now reads **real saves** via `crimson_rs.dll`. `PlaceholderSaveLoader`
-  has been retired.
+  The UI now reads **real saves** via `crimson_rs.dll`, and clicking a
+  block lazily loads its per-field decode via `LoadBlockDetails` →
+  `crimson_save_get_block_json` → System.Text.Json (source-generated,
+  AOT-safe).
 - **AOT publish verified**: `dotnet publish -c Release -r win-x64
   -p:PublishAot=true -p:PublishTrimmed=true` produces a working bundle
   in `dist/win-x64/` (CrimsonAtomtic.exe ~21 MB, crimson_rs.dll 1.2 MB,
   Avalonia native deps).
 - **Python tools** (unchanged, working): `tools/extract/extract_save.py`,
   `tools/inspect/inspect_save_body.py`, `tools/inspect/inspect_save_section.py`.
-- **Vendor**: `vendor/crimson-rs` at `a73679b`. Refresh via
-  `.\vendor\update_vendors.ps1`.
+- **Vendor**: `vendor/crimson-rs` at `7783f05` (PR #15 head). Refresh
+  via `.\vendor\update_vendors.ps1` after #15 merges to pick up the
+  rebase-merged main.
 
 ## How `crimson_rs.dll` flows into the C# build
 
@@ -76,20 +91,19 @@
 
 ## Pick up here (next concrete task)
 
-The C ABI is the foundation for **everything writable**. Next obvious
-chunk, in priority order:
+The C ABI is now read-everything. Next obvious chunk, in priority order:
 
-1. **Field-level inspection in the UI**. Click a block in the DataGrid →
-   open a detail view that mirrors `inspect_save_section.py --pretty`.
-   Needs:
-   - Extend the C ABI with per-field readers (or one bulk getter that
-     fills a buffer of `(field_index, name, kind, value)` rows).
-   - Extend `SaveSummary` / `BlockSummary` with a per-block field list,
-     and add a JSON-serializable record for the typed values.
-   - New MVVM view + view-model for the detail pane.
-   The bulk getter is preferable: ~3,099 fields per save, calling 3k
-   FFI getters individually is wasteful. Design a `CrimsonFieldRow`
-   flat struct with offset / length and a separate UTF-8 string pool.
+1. **UI polish for field inspection** (small): the detail pane works
+   but rough edges remain:
+   - Re-loading the save on every block click (LoadBlockDetails opens
+     the file fresh each time). Acceptable while saves are ~5 MB / load
+     takes ~400 ms; revisit if it gets sluggish. The fix is to keep a
+     single live `CrimsonSaveHandle` for the open save, but that means
+     teaching the loader / VM about handle lifetime, which adds shape.
+   - Inline child blocks (object locator / object list) currently show
+     only as a one-line summary in the `value` column. Drilling into
+     them needs either nested rows in the same DataGrid or a TreeView.
+   - Search / filter in the fields DataGrid.
 
 2. **Save file writing** — re-encrypt + write back. Needs:
    - Rust: body re-serializer (`Body::write_to` per-object). Header
@@ -137,7 +151,20 @@ chunk, in priority order:
   variants; never reuse a number.
 - **String getters use the two-call pattern**. First call with `buf=null`
   to get the required size (returns `BUFFER_TOO_SMALL`); second call with
-  the allocated buffer writes UTF-8 + NUL.
+  the allocated buffer writes UTF-8 + NUL. Same shape for fixed-size
+  class names and for variable-size JSON blobs.
+- **`get_block_json` is hand-rolled JSON**. No serde dep in the cdylib.
+  If the shape grows past a few dozen lines of formatter code, switch
+  to serde_json under a feature. C# parses with a source-generated
+  `JsonSerializerContext` so the deserialization stays AOT-safe.
+- **`value` is pre-formatted in Rust**. Mirrors
+  `tools/inspect/inspect_save_section.py --pretty`'s `format_field_value`,
+  so cross-tool views of a block agree. Don't reformat in C# — let the
+  Rust source-of-truth win.
+- **`LoadBlockDetails` re-opens the file**. Convenient but wasteful for
+  rapid click-through. If this becomes a UX issue, cache a live handle
+  in `NativeSaveLoader` keyed by path (and dispose on Load of a new
+  path). Not yet a problem at ~400 ms / load.
 - **`CrimsonSaveHandle` is a SafeHandle**. CA1419 requires the
   parameterless ctor at the type's visibility — kept public for the
   analyzer even though the marshaller never constructs one (LoadFromFile

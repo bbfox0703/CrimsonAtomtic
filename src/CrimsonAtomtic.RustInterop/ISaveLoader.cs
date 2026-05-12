@@ -15,4 +15,11 @@ public interface ISaveLoader
     /// summary. Throws on malformed input; never returns <c>null</c>.
     /// </summary>
     SaveSummary Load(string savePath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Load the full per-field decode of the block at <paramref name="blockIndex"/>
+    /// in <paramref name="savePath"/>. Called lazily by the UI when the
+    /// user selects a row in the blocks DataGrid.
+    /// </summary>
+    BlockDetails LoadBlockDetails(string savePath, int blockIndex, CancellationToken cancellationToken = default);
 }

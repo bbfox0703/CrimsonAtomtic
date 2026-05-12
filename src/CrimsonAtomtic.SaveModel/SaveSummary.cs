@@ -32,6 +32,40 @@ public sealed record BlockSummary(
     int FieldsDecoded);
 
 /// <summary>
+/// Full per-field decode of one block, populated lazily by
+/// <c>NativeSaveLoader.LoadBlockDetails</c> when the user selects a row.
+/// Mirrors the JSON document returned by
+/// <c>crimson_save_get_block_json</c>.
+/// </summary>
+public sealed record BlockDetails(
+    int ClassIndex,
+    long DataOffset,
+    long DataSize,
+    string MaskBytesHex,
+    string TrailingPadHex,
+    IReadOnlyList<DecodedFieldRow> Fields,
+    IReadOnlyList<long[]> UndecodedRanges);
+
+/// <summary>
+/// One field within a <see cref="BlockDetails"/>. <c>Value</c> is a
+/// pre-formatted human string emitted by the Rust side, mirroring
+/// <c>tools/inspect/inspect_save_section.py --pretty</c>.
+/// </summary>
+public sealed record DecodedFieldRow(
+    int FieldIndex,
+    string Name,
+    string TypeName,
+    int MetaKind,
+    int MetaSize,
+    long MetaAux,
+    bool Present,
+    string Kind,
+    string Value,
+    long Start,
+    long End,
+    string Note);
+
+/// <summary>
 /// Source-generated JSON context. Required for AOT — System.Text.Json
 /// uses reflection at runtime otherwise, and reflection is incompatible
 /// with the trimmed AOT build.
@@ -43,4 +77,9 @@ public sealed record BlockSummary(
 [JsonSerializable(typeof(SaveSummary))]
 [JsonSerializable(typeof(BlockSummary))]
 [JsonSerializable(typeof(IReadOnlyList<BlockSummary>))]
+[JsonSerializable(typeof(BlockDetails))]
+[JsonSerializable(typeof(DecodedFieldRow))]
+[JsonSerializable(typeof(IReadOnlyList<DecodedFieldRow>))]
+[JsonSerializable(typeof(IReadOnlyList<long[]>))]
+[JsonSerializable(typeof(long[]))]
 public sealed partial class SaveModelJsonContext : JsonSerializerContext;

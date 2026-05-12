@@ -34,4 +34,20 @@
   <sys:String x:Key="BlocksColSize">Size</sys:String>
   <sys:String x:Key="BlocksColFields">Fields</sys:String>
 
+  <!-- Field detail pane -->
+  <sys:String x:Key="FieldsHeader">Block fields</sys:String>
+  <sys:String x:Key="FieldsHint">Select a block above to inspect its fields.</sys:String>
+  <sys:String x:Key="FieldsColIndex">#</sys:String>
+  <sys:String x:Key="FieldsColName">Field</sys:String>
+  <sys:String x:Key="FieldsColType">Type</sys:String>
+  <sys:String x:Key="FieldsColKind">Kind</sys:String>
+  <sys:String x:Key="FieldsColPresent">Present</sys:String>
+  <sys:String x:Key="FieldsColValue">Value</sys:String>
+  <sys:String x:Key="FieldsColRange">Bytes</sys:String>
+  <sys:String x:Key="FieldsMask">Mask</sys:String>
+  <sys:String x:Key="FieldsTrailingPad">Trailing pad</sys:String>
+  <sys:String x:Key="FieldsUndecoded">Undecoded</sys:String>
+  <sys:String x:Key="FieldsLoading">Loading…</sys:String>
+  <sys:String x:Key="FieldsError">Could not load block details.</sys:String>
+
 </ResourceDictionary>
