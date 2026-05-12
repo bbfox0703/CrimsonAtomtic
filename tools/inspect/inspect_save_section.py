@@ -138,10 +138,12 @@ def filter_blocks(blocks: list[dict], args: argparse.Namespace) -> list[dict]:
 
 
 def print_block_pretty(b: dict) -> None:
+    pad = b.get("trailing_pad")
+    pad_str = f"  trailing_pad=0x{pad:02x}" if pad is not None else ""
     print(
         f"=== [{b['class_index']:3}] {b['class_name']}  "
         f"offset={b['data_offset']:,}  size={b['data_size']:,}  "
-        f"mask={b['mask_bytes'].hex()}"
+        f"mask={b['mask_bytes'].hex()}{pad_str}"
     )
     for f in b["fields"]:
         if not f["present"]:
