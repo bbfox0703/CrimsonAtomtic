@@ -31,10 +31,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 -----
 
-## Platform
-- Avalonia UI application (net10.0-windows)
+## Platform/packages
+- Avalonia UI 12 application (net10.0-windows)
 - .Net 10
-- AoT compile destribution
+- xUnitTest 3
+- AoT compiled for destribution
 
 -----
 
@@ -53,11 +54,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Magic words management**: All magic strings kept in one file per project with proper comments
 - **UI Strings**: English only. All UI strings in `Resources/Strings/en.axaml`, referenced via `StaticResource` bindings. However, in-game items must multi-language enabled (get from game data)
 - **AOT compatible**: All C# code must be Native AOT / trimming compatible. No reflection-based APIs — use source generators instead (e.g. `[JsonSerializable]` context for `System.Text.Json`, `[ObservableProperty]` for MVVM). The UI is published as a self-contained trimmed binary
+- **Vendor deps**: Clone into `vendor/`, NEVER use git submodules. Use a central .ps1 for updates
 
 -----
 
 ## Project Goal
 
-Develop a Cromson Desert OS-independent game save editor -- can run on Windows (must), Linux. if Avalonia UI cannot fulfill this, choose another one framework.
+Develop a Cromson Desert OS-independent game save editor -- can run on Windows (must), Linux, MacOS. if Avalonia UI cannot fulfill this, choose another one framework.
 
 -----
