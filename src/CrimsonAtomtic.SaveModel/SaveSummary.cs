@@ -39,6 +39,7 @@ public sealed record BlockSummary(
 /// </summary>
 public sealed record BlockDetails(
     int ClassIndex,
+    string ClassName,
     long DataOffset,
     long DataSize,
     string MaskBytesHex,
@@ -51,6 +52,17 @@ public sealed record BlockDetails(
 /// pre-formatted human string emitted by the Rust side, mirroring
 /// <c>tools/inspect/inspect_save_section.py --pretty</c>.
 /// </summary>
+/// <remarks>
+/// <para>
+/// For nested data, exactly one of <see cref="Child"/> and
+/// <see cref="Elements"/> is populated (or neither, for scalars):
+/// </para>
+/// <list type="bullet">
+///   <item><c>Kind == "object_locator"</c> with an inline child → <c>Child</c> set.</item>
+///   <item><c>Kind == "object_list"</c> → <c>Elements</c> set (possibly empty).</item>
+///   <item>Other kinds → both null.</item>
+/// </list>
+/// </remarks>
 public sealed record DecodedFieldRow(
     int FieldIndex,
     string Name,
@@ -63,7 +75,13 @@ public sealed record DecodedFieldRow(
     string Value,
     long Start,
     long End,
-    string Note);
+    string Note,
+    BlockDetails? Child,
+    IReadOnlyList<BlockDetails>? Elements)
+{
+    /// <summary>True when this field has nested data the UI can drill into.</summary>
+    public bool HasNested => Child is not null || (Elements is { Count: > 0 });
+}
 
 /// <summary>
 /// Source-generated JSON context. Required for AOT — System.Text.Json
@@ -80,6 +98,7 @@ public sealed record DecodedFieldRow(
 [JsonSerializable(typeof(BlockDetails))]
 [JsonSerializable(typeof(DecodedFieldRow))]
 [JsonSerializable(typeof(IReadOnlyList<DecodedFieldRow>))]
+[JsonSerializable(typeof(IReadOnlyList<BlockDetails>))]
 [JsonSerializable(typeof(IReadOnlyList<long[]>))]
 [JsonSerializable(typeof(long[]))]
 public sealed partial class SaveModelJsonContext : JsonSerializerContext;
