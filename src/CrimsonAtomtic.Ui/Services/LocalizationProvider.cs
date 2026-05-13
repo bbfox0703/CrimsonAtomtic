@@ -1,3 +1,4 @@
+using System.Globalization;
 using CrimsonAtomtic.RustInterop;
 
 namespace CrimsonAtomtic.Ui.Services;
@@ -72,6 +73,21 @@ public sealed class LocalizationProvider : IDisposable
     /// <summary>Loaded catalogs, keyed by language code.</summary>
     private readonly Dictionary<string, NativePalocCatalog> _catalogs =
         new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Pre-built <c>itemKey → name</c> map per loaded language. Built
+    /// once when a language's PALOC catalog loads by walking every
+    /// entry and keeping the type-0x70 records. PALOC's <c>string_key</c>
+    /// is a decimal-formatted u64 where bits 63..32 are the item key
+    /// and bits 7..0 are a type byte (0x70 == item name); the middle
+    /// 24 bits aren't predictable, so the only reliable lookup path
+    /// is to scan once and key the resulting dict by the upper 32 bits.
+    /// </summary>
+    private readonly Dictionary<string, Dictionary<uint, string>> _itemNamesByLang =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Type byte for the item-name flavour of a PALOC entry.</summary>
+    private const byte ItemNameTypeByte = 0x70;
 
     private NativeItemInfoCatalog? _itemInfo;
     private string? _gameRoot;
@@ -205,21 +221,14 @@ public sealed class LocalizationProvider : IDisposable
                 var fileName = $"localizationstring_{code}.paloc";
                 try
                 {
-                    // Probe by attempting the (cheap) PAMT lookup. The
-                    // first call with a zero-sized buffer returns
-                    // either BUFFER_TOO_SMALL (file exists) or
-                    // NOT_FOUND. We swallow the file's bytes when
-                    // they're returned — discovery doesn't need them
-                    // yet, the lazy load below will pay the cost.
-                    var bytes = _paz.ExtractFile(pamt, PalocDirectory, fileName);
+                    // Probe by attempting the extract — `crimson_paz_extract_file`
+                    // returns NOT_FOUND fast when the file isn't in this PAMT.
+                    // On success we *discard* the bytes here: caching all 14
+                    // language catalogs eagerly would consume ~350 MB. The
+                    // catalogs are re-extracted lazily on first request
+                    // through TryLoadCatalog below.
+                    _ = _paz.ExtractFile(pamt, PalocDirectory, fileName);
                     _languageSources[code] = (group, fileName);
-                    // We extracted the bytes; might as well cache the
-                    // catalog so the lazy load below doesn't re-extract.
-                    // Disposing the temp byte array is cheap.
-                    if (!_catalogs.ContainsKey(code))
-                    {
-                        _catalogs[code] = NativePalocCatalog.LoadFromBytes(bytes);
-                    }
                 }
                 catch (CrimsonSaveException ex) when (ex.ErrorCode == -16) // NOT_FOUND
                 {
@@ -250,7 +259,13 @@ public sealed class LocalizationProvider : IDisposable
         {
             var pamt = Path.Combine(_gameRoot, src.Group, "0.pamt");
             var bytes = _paz.ExtractFile(pamt, PalocDirectory, src.FileName);
-            _catalogs[langCode] = NativePalocCatalog.LoadFromBytes(bytes);
+            var cat = NativePalocCatalog.LoadFromBytes(bytes);
+            _catalogs[langCode] = cat;
+            // Pre-walk the catalog to build the u32 → name map for type
+            // 0x70 entries. This is a one-time per-language cost that
+            // turns every subsequent ResolveItemName into an O(1)
+            // dictionary lookup.
+            _itemNamesByLang[langCode] = BuildItemNameMap(cat);
             return true;
         }
         catch (CrimsonSaveException)
@@ -261,6 +276,41 @@ public sealed class LocalizationProvider : IDisposable
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Walk every entry in <paramref name="cat"/>, keep the ones whose
+    /// decoded <c>string_key</c> is a u64 with type-byte 0x70, and
+    /// build a <c>itemKey → value</c> map. Mirrors the Python
+    /// <c>export_for_ce.py</c> "extract paloc 0x70" loop: duplicate
+    /// item keys are resolved by last-wins. ~180k entries on the
+    /// English table; the walk costs ~1-2 s per language on SSD.
+    /// </summary>
+    private static Dictionary<uint, string> BuildItemNameMap(NativePalocCatalog cat)
+    {
+        var map = new Dictionary<uint, string>(capacity: Math.Max(1, cat.EntryCount / 16));
+        for (var i = 0; i < cat.EntryCount; i++)
+        {
+            var entry = cat.GetEntry(i);
+            if (entry is null)
+            {
+                continue;
+            }
+            if (!ulong.TryParse(entry.Value.Key, NumberStyles.Integer,
+                                CultureInfo.InvariantCulture, out var sid))
+            {
+                // Non-numeric keys exist for non-item entries (e.g. UI
+                // strings); skip silently.
+                continue;
+            }
+            if ((sid & 0xFFul) != ItemNameTypeByte)
+            {
+                continue;
+            }
+            var itemKey = (uint)(sid >> 32);
+            map[itemKey] = entry.Value.Value;
+        }
+        return map;
     }
 
     /// <summary>
@@ -279,34 +329,37 @@ public sealed class LocalizationProvider : IDisposable
         _catalogs.TryGetValue(DefaultLanguage, out var cat) ? cat.GetEntry(index) : null;
 
     /// <summary>
-    /// Pipe a save's <c>u32</c> item ID through iteminfo + PALOC to
-    /// yield the localized display name in the given language. Returns
-    /// <c>null</c> when any link in the chain breaks (iteminfo not
-    /// loaded, item key unknown, string key not in the chosen
-    /// language's PALOC).
+    /// Resolve a save's <c>u32</c> item ID to its localized display
+    /// name in the given language. Looks up against the pre-built
+    /// type-0x70 map for that language. Returns <c>null</c> when no
+    /// PALOC entry exists for that item; the caller can fall back to
+    /// iteminfo's <c>string_key</c> via <see cref="ItemInfoStringKey"/>.
     /// </summary>
-    public string? LookupItemName(uint itemId, string langCode)
-    {
-        if (_itemInfo is null)
-        {
-            return null;
-        }
-        var stringKey = _itemInfo.LookupStringKey(itemId);
-        if (string.IsNullOrEmpty(stringKey))
-        {
-            return null;
-        }
-        return _catalogs.TryGetValue(langCode, out var cat) ? cat.Lookup(stringKey) : null;
-    }
+    public string? LookupItemName(uint itemId, string langCode) =>
+        _itemNamesByLang.TryGetValue(langCode, out var map)
+        && map.TryGetValue(itemId, out var name)
+            ? name
+            : null;
+
+    /// <summary>
+    /// iteminfo's internal identifier for the item (e.g.
+    /// <c>"Pyeonjeon_Arrow"</c>). Useful as a fallback display when
+    /// no PALOC entry exists.
+    /// </summary>
+    public string? ItemInfoStringKey(uint itemId) => _itemInfo?.LookupStringKey(itemId);
 
     /// <summary>
     /// Convenience: look up the same item ID in English and (if set)
-    /// the user's secondary language. Either or both may be
-    /// <c>null</c>; the UI shows whichever non-null parts it gets.
+    /// the user's secondary language. English falls back to the
+    /// iteminfo internal name when no PALOC entry exists so users
+    /// always see *something* for known items. The secondary language
+    /// returns <c>null</c> on miss — duplicating the iteminfo string
+    /// in both columns would just be noise.
     /// </summary>
     public (string? English, string? Secondary) ResolveItemName(uint itemId)
     {
-        var english = LookupItemName(itemId, DefaultLanguage);
+        var english = LookupItemName(itemId, DefaultLanguage)
+                      ?? ItemInfoStringKey(itemId);
         var secondary = _secondaryLanguage is null
             ? null
             : LookupItemName(itemId, _secondaryLanguage);
