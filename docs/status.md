@@ -3,12 +3,16 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-13 (post-localization polish session —
-> PALOC lookup-encoding bug fixed, element-list now carries
-> ItemKey + Item Name columns with a live filter, nested locator
-> children resolve too, DataGrid columns use fixed widths +
-> horizontal scroll, window restore on multi-monitor fixed.
-> Faction-name resolution scoped + deferred to next session).
+> Last updated: 2026-05-13 (big session: name resolution covers 5
+> namespaces, language code fix, Item Picker, Set-to-max (single
+> + container) with round-up-to-next-multiple logic for small
+> stacks, ConfirmDialog modal, Mercenary false-positive fix,
+> Browse Localization secondary-language column + copy buttons,
+> window restore-from-maximized fix, save mtime preservation,
+> `build.cmd` / `build.ps1` wrapper, **Icon column with
+> external cache directory** (no extraction yet — see "Pick up
+> here" #1 for the extraction pipeline that's the next big task).
+> 68/68 C# tests + 67/67 Rust tests pass).
 
 ## Where we are
 
@@ -168,17 +172,23 @@
                                   Tools → Browse Localization… opens
                                   the separate
                                   LocalizationSearchWindow.
-  src/CrimsonAtomtic.Tests        xUnit v3 — 51 tests:
+  src/CrimsonAtomtic.Tests        xUnit v3 — 53 tests (live-save
+                                  walks count once; parameterised
+                                  tests count once per InlineData):
                                   16 NativeSaveLoaderTests + 25
                                   ScalarFieldEditingTests (as before) +
                                   3 PalocCatalogTests + 4
                                   PazExtractorTests +
-                                  3 ItemInfoCatalogTests
-                                  (live-install get_entry / lookup
-                                  round-trip, garbage bytes → BODY_PARSE,
-                                  post-Dispose throws). Live tests
-                                  skip cleanly when the game install
-                                  / save isn't present.
+                                  3 ItemInfoCatalogTests +
+                                  1 LocalizationTypeByteDiscoveryTests
+                                  (live-install: walks every PALOC
+                                  entry, prints a type-byte histogram
+                                  and the type byte each known key
+                                  sample resolves at — kept around
+                                  as the cheapest sanity check after a
+                                  game patch). Live tests skip cleanly
+                                  when the game install / save isn't
+                                  present.
   ```
   The UI reads **real saves** via `crimson_rs.dll` and now writes
   them too. Open Save defaults to `%LOCALAPPDATA%\Pearl Abyss\CD\save\<user>\`
@@ -211,6 +221,28 @@
 - **Vendor**: `vendor/crimson-rs` at `3eff882`. Refresh via
   `.\vendor\update_vendors.ps1`.
 
+## Build entry point
+
+`build.cmd` (cmd.exe) / `build.ps1` (PowerShell 7+) at the repo root —
+mirrors the UE5CEDumper command shape so the user reuses muscle
+memory. Delegates to the per-step scripts under `scripts\` so the
+old workflow still works.
+
+```
+build                 Release, all targets (Rust DLL + dotnet build)
+build debug           Debug, all targets
+build publish         AOT publish to dist\win-x64\ (same output as the old
+                      scripts\package_aot.ps1)
+build test            Build + run xUnit suite
+build dll             Rust DLL only
+build ui              C# UI only
+build clean           Wipe dist\ + bin\ + obj\ before building (combinable)
+build publish clean   Clean + AOT publish
+```
+
+`build.cmd` prefers `pwsh.exe` and warns if only Windows PowerShell 5.1
+is on PATH (the script `#requires -Version 7`).
+
 ## How `crimson_rs.dll` flows into the C# build
 
 1. `.\scripts\build_rust.ps1` runs `cargo build --release --features c_abi`
@@ -226,77 +258,198 @@
 
 ## Pick up here (next concrete task)
 
-The localization story is now visibly complete: item names show
-beside u32 IDs both in the field view (`_itemKey` rows) and the
-element list (`itemList[14]` and `EquipSlotElementSaveData → item`
-nested case), the fields filter and the element-list filter both
-match against item-name / ItemKey, and the user can pick a secondary
-language at runtime. DataGrids carry fixed column widths + a
-horizontal scrollbar so adding columns doesn't squeeze the rest.
-Window restore-from-maximize on multi-monitor setups now lands back
-on the originating monitor.
+This session shipped: name resolution for 5 schema namespaces
+(Item / Faction / Character / GimmickInfo / LevelGimmickSceneObject
++ hardcoded InventoryKey labels), Item Picker dialog (Browse
+Items…), per-edit-panel Set-to-max button, per-row Fill stack /
+Fill stacks button (with round-up-to-next-multiple math for small
+stacks), background-thread bulk fill (no UI hang), Mercenary
+false-positive fix, Browse Localization secondary-language column
++ copy buttons (K / V / V₂), window restore-from-maximized size
+fix, Save / Save As mtime preservation, `build.cmd` / `build.ps1`
+wrapper at repo root, and an **Icon column wired up but pointed at
+an external cache directory** — actual extraction-from-game-data
+is the next big task.
 
-Suggested next steps, in order of expected user value:
+### #1 — Build the icon extraction pipeline (NEW SESSION TARGET)
 
-1. **Faction (and other key namespaces) name resolution.** The user
-   asked about `FactionSaveData._ownerFactionKey = 1000063` — can it
-   resolve to a faction display name? Currently no; only `ItemKey`
-   does. Same plumbing should generalise to `FactionKey`,
-   `SkillKey`, `CharacterKey`, `GimmickInfoKey`, … but each lives at
-   a different PALOC **type byte** (item names are at `0x70`; the
-   others are unknown). Plan:
-   - **Discover** the type byte for factions by scanning the loaded
-     English PALOC for entries whose `sid >> 32` matches a known
-     faction key (e.g. 1000063) and noting `sid & 0xFF`. A throwaway
-     C# helper or a one-shot run in `crimson-rs/scripts/` works.
-   - **Generalise** `LocalizationProvider._itemNamesByLang` from
-     `Dictionary<lang, Dictionary<uint, string>>` to
-     `Dictionary<lang, Dictionary<(byte typeByte, uint key), string>>`
-     (or one map per type byte).
-   - **Add** `ResolveName(uint id, byte typeByte, lang)` +
-     per-namespace helpers (`ResolveFactionName` etc.).
-   - **Wire** `FieldRowViewModel` + `ElementRowViewModel` — switch
-     on `row.TypeName` (`ItemKey` → 0x70, `FactionKey` → ??, …).
-   ~1 hour once the type bytes are known.
+User explicitly chose this for the next session. The current Icon
+work (this session) only does the *display* half: a configurable
+external directory (`AppSettings.IconCacheDirectory`) of
+`<ItemKey>.webp` files, lazy-loaded via `IconProvider` +
+`ItemKeyToIconConverter`, shown in Item Picker + the elements
+DataGrid. **The extraction half is unbuilt** — the user currently
+has no way to populate the cache from their own game install. The
+old reference repo (`D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS\icons_local\`)
+contains a pre-extracted set of 6,011 webps the user can point at
+as a stopgap, but the long-term plan is extraction from game data
+so we don't depend on a third party's processed copy of Pearl
+Abyss's artwork.
 
-2. **Length-changing edits (PR B)**. List add / remove / reorder,
-   inline-byte resize. Needs an `ObjectBlock` re-serializer (mirror
-   of `decoder.rs`) and a body re-emit path that re-computes TOC
-   offsets. Hard but unlocks adding inventory items (not just
-   editing existing ones).
+**End-to-end data flow** (investigated this session — see "Game
+data layout" below):
 
-3. **Multi-level path tests on the C# side**. The current
-   `SetScalarField_NestedPath_RoundTripsThroughWriteToFile` test
-   exercises one descent step. Worth a two-step regression
-   (`inventoryList[N].itemList[M].count`-shaped) — the Rust c_abi
-   test already covers any one-step-reachable scalar, so the gap is
-   only on the C# side.
+```
+ItemKey                   from save schema (already have)
+   ↓ iteminfo.pabgb     ✓ already parsed in crimson-rs
+icon_path (StringInfoKey, u32)
+   ↓ stringinfo.pabgb  ✗ NEW parser needed (1.8 MB in 0008/)
+"cd_icon_xxx.dds"           (filename, conjectured shape)
+   ↓ PAZ 0012/ui/texture/icon/  ✓ extractable via IPazExtractor
+raw .dds bytes              (BC1/BC3 compressed texture)
+   ↓ DDS decoder          ✗ NEW (NuGet: Pfim or BCnEncoder.Net)
+RGBA bitmap (e.g. 256×256)
+   ↓ SkiaSharp resize     ✓ already linked via Avalonia.Skia
+64×64 RGBA bitmap
+   ↓ SKImage.Encode(Webp) ✓ already available in SkiaSharp 3
+~10 KB .webp file
+   ↓ File.WriteAllBytes
+<cache>/<ItemKey>.webp
+```
 
-4. **Asset / icon pipeline** — one-time mine icons from
-   `D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS`, run through
-   a thumbnail pipeline (32 / 64 / 128), ship as a starter
-   `IconCache/` in the AOT bundle.
+**Phased plan** (each phase shippable on its own; 3-5 sessions total):
 
-5. **Save backup management** — auto-backup on every load + on every
-   write, configurable retention. (Valuable now that the UI can
-   overwrite a save in place at any nav depth.)
+1. **Phase 1 — `stringinfo.pabgb` parser + C ABI** (1 session).
+   - In `vendor/crimson-rs/src/`, add a new module `string_info/`
+     (mirror of `item_info/` and `skill_info/`). Reverse-engineer
+     the binary layout — start with `plcli` + hexpat patterns,
+     compare against `iteminfo` records whose `icon_path`
+     StringInfoKey we already know.
+   - Add `crimson_string_info_*` C ABI (load_from_bytes / free /
+     lookup_by_key → string).
+   - C# wrapper (`NativeStringInfoCatalog`) + tests.
+   - Wire bootstrap in `LocalizationProvider`.
 
-6. **Mod awareness** — read `CDMods/cdumm.db` (SQLite) and
-   `mods/_enabled/` to surface mod-added items without crashing on
-   unknown keys.
+2. **Phase 2 — DDS decode + webp re-encode in C#** (1 session).
+   - Add `Pfim` NuGet (or `BCnEncoder.Net`) for DDS → RGBA.
+   - Use SkiaSharp resize + `SKBitmap.Encode(SKEncodedImageFormat.Webp, quality)`.
+   - Standalone test: feed one known DDS, verify output webp opens
+     in our existing Avalonia Image path.
 
-7. **Cross-platform save paths** — Wine/Proton prefix resolution on
-   Linux/macOS. Currently `IPlatformPaths` is Windows-only.
+3. **Phase 3 — Extraction action UI** (1 session).
+   - Tools menu → "Extract icons from game data…".
+   - Walks every iteminfo entry, looks up icon path via stringinfo,
+     extracts DDS via `IPazExtractor` (group 0012), runs the
+     decode/resize/encode pipeline, writes `<cache>/<ItemKey>.webp`.
+   - Progress dialog (modal with N/Total + cancel). Run on background
+     thread so UI stays responsive — same pattern as the bulk-fill
+     stacks command this session shipped.
+   - Skip items where `icon_path` is empty / unresolved / DDS missing.
+     Log to a sidecar `.log` file in the cache folder for diagnostic.
 
-8. **Avalonia.Diagnostics 12.x** — add back behind a `Debug`
+4. **Phase 4 — Polish + edge cases** (1 session).
+   - Mercenary character portraits (`icons_mercenary/` shape — keyed by
+     CharacterKey, source likely in `ui/texture/image/portraitimage/`).
+   - Skip-already-cached on subsequent runs; "Re-extract all" override.
+   - File size optimisation (quality knob? 64×64 vs 128×128?).
+   - Surface "icon coverage: N of M items" in the status bar.
+   - Update docs/data-policy.md if needed (these icons ARE derived
+     data and stay outside git — matches the rule).
+
+**Game data layout (investigated this session, snapshot for next pickup)**:
+- `0008/gamedata/binary__/client/bin/iteminfo.pabgb` (~24 MB, 6,400 items).
+- `0008/gamedata/binary__/client/bin/stringinfo.pabgb` (~1.8 MB) — **the resolver we need**.
+- `0008/gamedata/binary__/client/bin/localstringinfo.pabgb` (~2.0 MB) — localized variants (probably distinct from PALOC).
+- `0012/ui/texture/icon/` — 7,560 `.dds` files. Filename shape e.g.
+  `cd_icon_skill_07.dds`, `cd_knowledgeimage_knowledge_recipe_*.dds`
+  — descriptive, not directly ItemKey-keyed. Some other directories
+  in 0012 (`questimage/`, `challengeimage/`, `portraitimage/`,
+  `playguideimage/`, `worldmapimage_knowledge/`) hold related
+  asset categories.
+- DDS format details (BC1 / BC3 / mip levels / etc.) need
+  confirmation in Phase 2 — open one in `plcli` or a DDS viewer.
+
+**Current Icon code that needs to integrate with the pipeline**:
+- `IconProvider` already does lazy load + Bitmap cache from a
+  configured directory. Phase 3 just needs to populate that
+  directory. No refactor of the display half required.
+- `AppSettings.IconCacheDirectory` is the cache location. The
+  extraction action writes there.
+- `ItemKeyToIconConverter` is the XAML-side binding. Already wired.
+
+**Stopgap that works today (until extraction lands)**: point
+`AppSettings.IconCacheDirectory` (Tools → Set Icon Folder…) at the
+reference repo's `icons_local/`. Icons appear immediately. User
+acknowledged this is a third-party pack with copyright concerns —
+strictly local-machine use only, never bundled or shipped.
+
+### #2-N — Lower-priority deferred items
+
+Open from earlier work, none blocking the icon pipeline:
+
+2. **Remaining InventoryKey labels** (`3`, `4`, `11`, `12`, `14`,
+   `15`, `17`, `18`). Empty in slot0 so the
+   `Probe_InventoryKeyContainers` test can't infer their purpose.
+   Run the probe against a save that has those containers
+   populated, then extend `LocalizationProvider.InventoryContainerLabels`.
+
+3. **Batch `SetScalarField` C ABI**. Today every field write
+   triggers a full block re-decode. The "Fill stacks" container
+   path runs 168 of these and takes ~5 seconds (now on a
+   background thread, but still slow). A batch-mutate C ABI that
+   defers the re-decode storm to the end of the batch would cut
+   the cost to ~50 ms. Probably one Rust session + one C# session.
+
+4. **`skill_info` bridge** for SkillKey / KnowledgeKey name
+   resolution. crimson-rs already has a `skill_info/` parser used
+   internally; needs a C ABI bridge (mirror of `iteminfo` /
+   `paloc`) to surface skill names in the editor's resolved-name
+   column. Would also let us label
+   `SkillLearnElementSaveData._knowledgeKey` values like 40114
+   that today show empty.
+
+5. **`FieldGimmickSaveDataKey` / `FieldNPCSaveData._characterKey`
+   resolution.** Both probe to no-PALOC-entry today. These look
+   like spawn template IDs (structured u32, not localized
+   namespace references). Probably need a different data file
+   parsed; lower priority since most users don't care about
+   anonymous field NPCs.
+
+6. **`MissionKey` / `KnowledgeKey` / `QuestKey` proper names.**
+   These straddle multiple PALOC type bytes or live entirely
+   outside PALOC (mission text uses `{staticInfo:Mission:...}`
+   template references at 0xC1). Needs a template-resolver pass
+   to reconstruct full strings. Currently NOT in
+   `TypeNameToTypeByte` so they show blank (correct — better
+   than showing the wrong name).
+
+7. **Length-changing edits (PR B)**. List add / remove / reorder
+   + inline-byte resize. Needs an `ObjectBlock` re-serializer
+   (mirror of `decoder.rs`) and body re-emit that recomputes TOC
+   offsets. Hard but unlocks adding new inventory items (not just
+   editing existing slots). Value-prop dropped now that Item
+   Picker + slot replace + Fill stacks cover most edit needs.
+
+8. **Cross-bag item search beyond one nested level.**
+   `BuildNestedHaystack` walks one level deep. List-of-lists
+   shapes (haven't seen one yet in 1.06) wouldn't be reached.
+   Generalise to bounded recursion when needed.
+
+9. **Avalonia.Diagnostics 12.x** — add back behind a `Debug`
    condition once published.
 
-9. **Re-evaluate the DataGrid AOT warning suppression** — the
-   `<NoWarn>IL2104;IL3053</NoWarn>` in
-   `CrimsonAtomtic.Ui.csproj` is a workaround for Avalonia
-   DataGrid 12.0.0 internals. Drop it once Avalonia ships a
-   trim-safe DataGrid (12.1+?) so future internal-reflection
-   regressions in our own code can't hide under it.
+10. **Re-evaluate the DataGrid AOT warning suppression** —
+    `<NoWarn>IL2104;IL3053</NoWarn>` in `CrimsonAtomtic.Ui.csproj`
+    is a workaround for Avalonia DataGrid 12.0.0 internals. Drop
+    when 12.1+ ships a trim-safe DataGrid.
+
+11. **Save backup management** — auto-backup on every load + every
+    write, configurable retention. Less critical now that mtime is
+    preserved, but still useful.
+
+12. **Mod awareness** — read `CDMods/cdumm.db` (SQLite) and
+    `mods/_enabled/` to surface mod-added items without crashing
+    on unknown keys.
+
+13. **Cross-platform save paths** — Wine/Proton prefix resolution
+    on Linux/macOS. Currently `IPlatformPaths` is Windows-only.
+
+14. **Multi-level path tests on the C# side**. The current
+    `SetScalarField_NestedPath_RoundTripsThroughWriteToFile` test
+    exercises one descent step. Worth a two-step regression
+    (`inventoryList[N].itemList[M].count`-shaped) — the Rust
+    c_abi test already covers any one-step-reachable scalar, so
+    the gap is only on the C# side.
 
 ## Important context / gotchas (don't relearn these)
 
@@ -374,6 +527,18 @@ Suggested next steps, in order of expected user value:
   (selected block, breadcrumb, edit panel) resets. Acceptable for
   v1; the standard "Save Copy As…" alternative that keeps the
   session anchored to the original is a follow-up if anyone wants it.
+- **Save / Save As preserve the original file's last-write
+  timestamp.** Captured into `_loadedFileLastWriteTime` at load
+  time, re-applied (best-effort via `File.SetLastWriteTime`) after
+  every `WriteToFile`. Reason: Steam Cloud uses mtime to pick the
+  newer side of a sync, and the in-game save picker sorts by
+  recency — silently bumping mtime would have the game/Cloud
+  treat the edited save as "freshest" and override the user's
+  intent. After Save As, the destination's restored timestamp is
+  read back into `_loadedFileLastWriteTime` so the next plain
+  Save preserves that same value rather than drifting forward.
+  IO errors during timestamp restore are swallowed; not worth
+  failing the whole save flow over a permissions issue.
 - **Raw `gamedata/*.paloc` is encrypted/wrapped.** Reading the
   file straight off disk and handing it to PALOC parse will fail
   loudly with `BODY_PARSE` now (it used to alloc-bomb the process).
@@ -401,27 +566,285 @@ Suggested next steps, in order of expected user value:
   internal identifier, NOT a PALOC key — it's used only as a
   fallback for the ~71 dev items the game ships without a 0x70
   entry.
-- **Item-name resolution today only knows the `0x70` type byte.**
-  Faction / skill / character / gimmick keys each presumably live
-  at a different type byte that we haven't identified yet. "Pick up
-  here" #1 covers the generalisation.
-- **`ElementRowViewModel` walks one locator level.** When the
-  element directly carries an `ItemKey`-typed field
-  (e.g. `ItemSaveData._itemKey`), we use it. When it doesn't
-  (e.g. `EquipSlotElementSaveData._item` → locator into
-  `ItemSaveData`), we descend one level into inline locator
-  children. Deeper paths aren't covered — if a future schema needs
-  it, add recursion in `FindItemKeyInChildren`.
-- **PALOC discovery probes a fixed code list.** The 14 codes (eng,
-  kor, jpn, zho-tw, zho-cn, ger, fra, spa, por, rus, tur, tha, ind,
-  ara) cover every language Crimson Desert 1.06 ships. If a future
-  patch adds one, add it to `KnownLanguageCodes` in
-  `LocalizationProvider`; otherwise the picker won't surface it.
-  Discovery itself runs synchronously at app launch (probes
-  `0019..0050`); first-launch cost is ~1 s on SSD because each
-  successful probe also caches the catalog. Subsequent launches
-  re-probe — settings only persists the user's preferred secondary,
-  not the discovery result.
+- **Name resolution covers five schema TypeNames today.**
+  `LocalizationProvider.TypeNameToTypeByte` maps schema TypeNames
+  to PALOC type bytes:
+  - `ItemKey` → `0x70` (items, with iteminfo string-key fallback)
+  - `FactionKey` → `0x30`
+  - `CharacterKey` → `0x30` (same byte as factions — the numeric
+    ranges don't collide: factions are 1,000,000+, characters are
+    0..999,999; one map for both works)
+  - `GimmickInfoKey` → `0x00` (in-world scenery / interactables:
+    "Grindstone", "Anvil", "Skybridge Gate", "Painting Fragment")
+  - `LevelGimmickSceneObjectInfoKey` → `0x00` (open-world
+    discovered scene objects — same byte as GimmickInfo; e.g.
+    1000003 → "Circus Pillar", 1000109 → "Chair", 1000121 → "Oak
+    Barrel". Used by `DiscoveredLevelGimmickSceneObjectSaveData`)
+  Adding a new namespace = one row in that dict + one entry in
+  `ElementRowViewModel.IsNameKey`. The PALOC build also captures
+  the new type byte via `LocalizationProvider.NameTypeBytes`;
+  forget to add it there and lookups return empty.
+- **`MissionKey` / `KnowledgeKey` / `QuestKey` are intentionally
+  NOT in `TypeNameToTypeByte`.** Each one collides with the item
+  table at 0x70 but the values aren't really mission / knowledge /
+  quest names. Specifically:
+  - `MissionKey` values like 1003440 resolve to "Hearty Braised
+    Meat and Fish" — that's the item the mission rewards, not the
+    mission title. Verified against the user's
+    `D:\Github\crimson-rs\out\output*.txt` dumps: 0x70 is
+    unambiguously the item namespace, and missions reuse the same
+    numeric ID as their tracking item. Mission text fragments only
+    appear at 0xC1 with embedded `staticInfo:Mission:...`
+    templates that need a separate template resolver — not
+    available today.
+  - `KnowledgeKey`: small values (1, 2, 4, 7, 51) sit at 0x93 as
+    knowledge *category* names ("Various Combat Skills",
+    "Fundamentals of Cooking"), but large-numbered keys don't
+    appear at 0x93 and only hit coincidentally at 0x30/0x70.
+  - `QuestKey`: large values resolve to the quest's *associated*
+    character or item via 0x30 / 0x70, never to a quest title in
+    its own namespace.
+  Showing the wrong name (an item name labelled as a mission name)
+  is worse than showing nothing. Leave them empty until a real
+  resolver appears.
+- **`SkillKey` exists in the schema but wasn't reachable from the
+  test save.** All 15 schema occurrences in this user's save are
+  `absent` (no skills equipped / unlocked in slot0). To pin down
+  the SkillKey type byte, harvest from a save that actually has
+  populated skill data and re-run
+  `Scan_DiscoverTypeBytesFromLiveSave`. The histogram suggests 0x99
+  / 0x9A ("Skill: ..." entries, ~88 each) as likely candidates but
+  neither is confirmed.
+- **`FieldNPCSaveData._characterKey` and `SkillLearnElementSaveData._knowledgeKey`
+  aren't in PALOC.** Probed: `117_440_514` (`0x07000002`, a field
+  NPC instance) and `40_114` (a learned skill) both return no
+  PALOC entry at any type byte. Field NPCs are likely identified
+  by spawn-template ID (a structured u32, not a localized
+  character archetype); learned-skill names probably live in
+  `skill.pabgb` (a separate file with its own parser in
+  crimson-rs's `skill_info/` module, not yet bridged to the
+  editor). Resolving either needs new C ABI surface — defer
+  until the user prioritises skill / NPC name display.
+- **`FieldGimmickSaveDataKey` is save-internal, not localized.**
+  Every harvested sample (881022, 40052, 267612, 62768, …) returns
+  no PALOC entry at any type byte — these are intra-save block
+  references (similar to `StageKey`, `FactionNodeKey`,
+  `FieldNPCSaveDataKey`, `FieldInfoKey`). Anything ending in
+  `SaveDataKey` is generally an internal index, not a name
+  reference; don't try to resolve them.
+- **Empty name cells on Faction / Character / Item rows are real
+  data, not a bug.** Some keys (e.g. `FactionElementSaveData
+  key=1000131`) don't have a localized name in 1.06 PALOC — same
+  way the ~71 dev items lack a 0x70 entry. ItemKey gets the
+  iteminfo string-key fallback so items always show *something*;
+  faction / character / gimmick namespaces don't have an
+  equivalent fallback, so they show blank when PALOC has no entry.
+- **FieldRowViewModel.ApplyCommittedValue refreshes
+  ResolvedName.** Before this fix, editing `_itemKey` updated
+  the Value column but the Name column kept showing the
+  previous item's name until the user drilled out and back in.
+  The fix stashes `_localization` on the VM at construction so
+  the post-mutation refresh path can re-call
+  `ResolveByFieldTypeName(row.TypeName, new_value)` from inside
+  `ApplyCommittedValue` — every other ResolvedName driver
+  (constructor, post-language-switch refresh) was already
+  correct, only the per-edit refresh was missing.
+- **Quest titles exist in PALOC but use a non-trivial indirection.**
+  Manual check found "Where the Wind Guides You" at PALOC key
+  `15438629828055531777` — a u64 whose upper-32 bits
+  (3,595,124,794) are not the save-side QuestKey value (1000725).
+  This means quest title text is keyed by some hash/transform of
+  the quest ID, not the ID itself; resolving requires either
+  reverse-engineering the transform or walking 0xC1-and-similar
+  entries and matching by their embedded `staticInfo:Quest:…`
+  template references. Deferred — not worth doing until the user
+  prioritises quest-name display.
+- **`DiscoveredLevelGimmickSceneObjectSaveData` is a subset of
+  scene objects the player has *physically interacted with*, not
+  all of them.** So filtering for "Grindstone" / "Anvil" /
+  "Abyss Nexus" can come back empty even though the keys resolve
+  fine in PALOC — those gimmicks just aren't in *this* save's
+  discovered list yet. Cross-check via Tools → Browse
+  Localization: if the name resolves there but the filter on the
+  discovered-list view is empty, it's data, not code.
+- **Item Picker dialog joins iteminfo + PALOC.** Tools → Browse
+  Items opens `ItemPickerWindow`, backed by `ItemPickerViewModel`
+  which pre-builds one row per iteminfo entry (~6,400 in 1.06):
+  numeric ItemKey, iteminfo string id, English name (with
+  string-id fallback when PALOC has no 0x70 entry), and secondary-
+  language name when set. Filter matches all four columns (numeric
+  search "11" works too). Per-row copy buttons (K / S / N / N₂)
+  use the same Avalonia 12 clipboard dance as Browse Localization
+  — `SetTextAsync` lives on `ClipboardExtensions`, not directly
+  on `IClipboard`. The window degrades silently when the
+  iteminfo bridge isn't loaded (no install discovered at boot).
+- **Set-to-max button uses iteminfo's `max_stack_count`.** The
+  Rust iteminfo bridge stores `max_stack_by_key: HashMap<u32, u64>`
+  alongside `by_key`; `crimson_iteminfo_lookup_max_stack(handle,
+  item_key, *out_max)` exposes it through the C ABI. C# wraps it
+  via `IItemInfoCatalog.LookupMaxStackCount(uint) → ulong?` and
+  `LocalizationProvider.GetItemMaxStackCount(uint)`. The edit
+  panel's "Set to max" button finds a peer `ItemKey` on the
+  current BlockFrame's fields, looks up the cap, and pre-fills
+  the edit textbox — explicit Apply still required. CanExecute
+  gates on (a) integer-typed scalar selected, (b) peer ItemKey
+  resolves, (c) iteminfo has a max-stack entry; so the button
+  stays visible at all times but only lights up when relevant.
+  Driver: the user wanted "fill stack" without exceeding what
+  the game considers valid (stuffing 100k wood into a 50-stack
+  slot breaks the bag's dynamic slot computation). The RawText
+  assignment is deferred one dispatcher tick at Background
+  priority — without that, on Avalonia 12 the first click was a
+  no-op because the focused TextBox didn't repaint the new
+  bound value until a follow-up event prodded it.
+- **"Fill stack(s)" target calculation has two regimes.**
+  Driven by `MainWindowViewModel.TryComputeTargetStack(current,
+  max, out target)`:
+  - **max > 100** (currency / contributions / camp resources):
+    standard fill-to-max. Skip if `current ≥ max`.
+  - **max ≤ 100** (regular items — arrows, herbs, ores —
+    where partial stacks can pile up across slots):
+    round up to the next multiple of `max`. So `current=120, max=50`
+    → target=150 (already had 2 full stacks of 50 + a partial
+    stack of 20; rounds the partial up). Skip if current is
+    already an integer multiple of max.
+  Threshold = 100 sourced from the user's domain note about
+  contributions / Camp Funds. Single threshold keeps the logic
+  one-liner; if a real edge case appears later, split per-namespace.
+- **"Fill stack(s)" button covers two row shapes + a UX split.**
+  Per-row button in the elements DataGrid:
+  - **Single item**: row IS an ItemSaveData (carries `_itemKey`
+    + `_stackCount` on its own fields). Label: "Fill stack".
+    **Skips the confirm dialog** — same gesture weight as the
+    edit-panel Set-to-max button.
+  - **Container**: row has a nested ObjectList of single-item
+    rows AND the row's own key field (if any) is `InventoryKey`
+    (containers) — NOT `CharacterKey` / `FactionKey` / `ItemKey`
+    (named entities). Label: "Fill stacks". **Opens a Yes/No
+    confirm** before applying the batch.
+  The named-entity exclusion is what keeps `MercenarySaveData`
+  rows (each row is a person resolved as "Damiane" / "Oongka"
+  who happens to own gear) from getting a "Fill stacks" button —
+  a mercenary isn't a container conceptually.
+- **Bulk fill runs on a background `Task.Run`.** 168
+  `SetScalarField` calls × per-call full-block re-decode = several
+  seconds of work. Running it on the UI thread froze the
+  window mid-operation; now the loop sits on a worker thread
+  while the UI stays responsive (Avalonia 12 dispatcher
+  schedules the post-await continuation back to UI thread for
+  the `RefreshNavStack` + `RebuildFromTop` calls). `BulkOpStatus`
+  shows `Filling N stack(s)…` at start, `Filled N stack(s).`
+  at end. Future optimisation: a "batch mutate" C ABI that
+  defers the re-decode storm until the batch completes — would
+  cut the cost ~100×.
+  `ElementRowViewModel.IsSingleFillCandidate` + `IsContainerFillCandidate`
+  are the two shape flags; `IsBulkFillCandidate` is their OR.
+  `FillButtonLabel` switches the button text between "Fill
+  stack" and "Fill stacks" so the singular/plural matches.
+- **Item icons are a user-configured external folder.** Pearl
+  Abyss owns the artwork, so we deliberately don't bundle the
+  6,011-icon set. `AppSettings.IconCacheDirectory` (configurable
+  via Tools → Set Icon Folder…) points at a directory of
+  `<ItemKey>.webp` files; the reference repo
+  (`D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS\icons_local\`)
+  is the canonical source the user can re-point to. Probe order:
+  configured setting → `<exe-dir>/IconCache/` → nothing.
+  `IconProvider` (cached `Bitmap?` per ItemKey, IO + decode on
+  first hit, miss cached as null) sits on the
+  `LocalizationProvider` and is exposed to XAML via the static
+  `ItemKeyToIconConverter.Instance` (Avalonia compiled bindings
+  can't construct converters with constructor args). Avalonia
+  12's SkiaSharp backend decodes WebP natively — no extra NuGet
+  dependency. Item Picker + elements DataGrid both render the
+  icon at 40×40; element rows with non-ItemKey keys (CharacterKey
+  / InventoryKey / etc.) zero `IconItemKey` so the converter
+  short-circuits and the cell stays empty without a miss probe.
+- **InventoryKey labels are hardcoded.** InventoryKey doesn't
+  have a PALOC namespace (small u16 values collide with every
+  other table). `LocalizationProvider.InventoryContainerLabels`
+  is the manually-maintained map: `1 = Camp & Contributions`,
+  `2 = Backpack`, `5 = Quest Artifacts`, `8 = Trade Packs`,
+  `9 = Packaged Resources`, `10 = Valuables`, `13 = Power
+  Cores`, `14 = Equipped Gear`, `16 = Cooked Food`, `19 =
+  Foraged Ingredients`, `20 = Collectibles`. Sourced via
+  `Probe_InventoryKeyContainers` in the test project; re-run
+  that probe against a new save / patch and update the map if
+  the layout shifts. `CanResolveTypeName` and
+  `ResolveByFieldTypeName` are special-cased to route
+  InventoryKey through the hardcoded table instead of PALOC.
+  `FieldRowViewModel` and `ElementRowViewModel` were widened
+  from `tag == "u32"` to `tag is "u32" or "u16"` so the u16
+  InventoryKey scalars actually surface as resolvable.
+- **Type-byte discovery is automated.** Two xUnit tests in
+  `LocalizationTypeByteDiscoveryTests`:
+  - `Scan_PrintTypeByteHistogram` — walks English PALOC and prints
+    a whole-table type-byte histogram plus per-probe-key hits.
+    Use when you know a save-side key value and want to find its
+    type byte; edit the `Probes` array to add candidates.
+  - `Scan_DiscoverTypeBytesFromLiveSave` — loads the live save,
+    walks every block recursively, harvests up to 12 sample u32
+    values for each `HarvestTargetTypeNames` entry, and resolves
+    each sample against every type byte. Also prints the
+    distribution of every *Key TypeName actually present in the
+    save (so you can spot namespaces the harvest list missed).
+    Use when you don't know any key values for a namespace.
+  Both skip cleanly when the game install / save isn't present.
+- **PALOC name-map is keyed by `(typeByte, upper32)`.**
+  `LocalizationProvider._namesByLang` is per-language. Build cost is
+  one walk per first-load of a language (~1-2 s on SSD, ~6k entries
+  per captured type byte). Don't add a parallel per-namespace map;
+  the single dictionary covers every consumer through
+  `ResolveByFieldTypeName`.
+- **`ElementRowViewModel` walks one locator level for the row's
+  own key, and one list level for its children.** The row's `Key`
+  / `Name` columns come from either (a) the element's own
+  `ItemKey` / `FactionKey` / `CharacterKey` scalar, or (b) the same
+  scalar one level down through an inline locator child
+  (e.g. `EquipSlotElementSaveData._item` → `ItemSaveData._itemKey`).
+  Separately, `NestedMatchHaystack` walks every `ObjectList` field
+  one level deep and concatenates the resolved names of every
+  sub-element so the elements filter can find e.g. "Gold" inside a
+  bag without the user opening the bag. Deeper paths aren't covered
+  — if a future schema needs lists-of-lists, generalise both walks
+  to bounded recursion.
+- **Element-picker filter has cross-row reach via the nested
+  haystack.** Names in the haystack are joined by `\n` (never part
+  of a resolved name) and lower-cased. The filter lowers the needle
+  once and does an ordinal `Contains` against the haystack, plus
+  the existing case-insensitive checks against `ClassName`,
+  `KeyText`, and `ResolvedName`. Performance: 18 bags × 168 items
+  ≈ 3k dict lookups on enter — invisible.
+- **Breadcrumb back-nav remembers where you drilled from.** Each
+  `NavFrame` carries a mutable `LastDrilledIndex` (set in
+  `DrillIntoField` / `DrillIntoElement` right before pushing the
+  child). On pop (`NavigateBack` / `NavigateToDepth`),
+  `RestoreDrillSelection` looks up the index, sets
+  `SelectedField` / `SelectedElement`, and raises
+  `FieldScrollRequested` / `ElementScrollRequested`. Code-behind
+  subscribes once at `OnDataContextChanged` and calls
+  `DataGrid.ScrollIntoView` via the Avalonia dispatcher at
+  `DispatcherPriority.Loaded` — scrolling before the row has
+  materialised is a silent no-op on Avalonia 12, so the dispatcher
+  hop is load-bearing. Falls back to no-selection (rather than
+  throwing) when the saved index is out of range against the
+  re-decoded list.
+- **PALOC discovery probes a fixed code list.** The 14 codes (kor,
+  eng, jpn, rus, tur, spa-es, spa-mx, fre, ger, ita, pol, por-br,
+  zho-tw, zho-cn) are sourced authoritatively from `list_all_paloc.py`
+  against the live 1.06 install — order matches the group numbers
+  the game stores them at (0019..0032). Note the codes are NOT ISO
+  639-1: it's `fre` (not `fra`), `por-br` (not `por`), `spa-es` /
+  `spa-mx` (split, not just `spa`). If a future patch adds a
+  language, re-run `D:\Github\crimson-rs\scripts\list_all_paloc.py
+  --game-dir ... --scan-range 0:100` and update
+  `KnownLanguageCodes` in `LocalizationProvider`; otherwise the
+  picker won't surface it. Discovery itself runs synchronously at
+  app launch (probes `0019..0050`); first-launch cost is ~1 s on SSD
+  because each successful probe also caches the catalog. Subsequent
+  launches re-probe — settings only persists the user's preferred
+  secondary, not the discovery result. A stale `secondary_language`
+  in `settings.json` (e.g. `fra` from before this fix) is silently
+  rejected by the setter and falls back to English-only.
 - **`AppSettings` is a deliberately tiny JSON file.** One field
   today (`secondary_language`); source-generated
   `JsonSerializerContext` keeps it AOT-safe. Add fields by appending
@@ -435,14 +858,25 @@ Suggested next steps, in order of expected user value:
   fixed widths + scroll is the spreadsheet affordance the user
   asked for. If you add a column, give it a sensible pixel width
   that fits its typical content (and the user can still drag it).
-- **Window position/size restore is snapshot-based.** Avalonia 12
-  on Windows can land a restored-from-maximized window straddling
-  two monitors on multi-display setups. `MainWindow` snapshots
-  `Position` (via `PositionChanged` — it's not an AvaloniaProperty)
-  and `Width` / `Height` (via `OnPropertyChanged` for the standard
-  AvaloniaProperties) while in `WindowState.Normal`, then re-applies
-  them on the Maximized → Normal transition. Don't rely on the OS
-  to round-trip the window rect correctly.
+- **Window position/size restore is snapshot-based with a deferred
+  commit.** Avalonia 12 on Windows can land a restored-from-maximized
+  window straddling two monitors on multi-display setups.
+  `MainWindow` snapshots `Position` (via `PositionChanged` — it's
+  not an AvaloniaProperty) and `Width` / `Height` (via
+  `OnPropertyChanged` for the standard AvaloniaProperties) while in
+  `WindowState.Normal`, then re-applies them on the Maximized →
+  Normal transition.
+  Crucially the snapshot commit is **deferred** one dispatcher tick
+  at `Background` priority: on Win32, the property-change order
+  during a maximize is Width/Height first, WindowStateProperty
+  second, so reading `WindowState` synchronously inside the
+  Width/Height handler still sees `Normal` when the values are
+  already the maximized dimensions. Without the deferred commit,
+  the snapshot gets poisoned with the maximized rect and the next
+  restore lands at near-maximized size. `_snapshotCommitScheduled`
+  coalesces multiple Width/Height/Position changes into one
+  re-check; `CommitSnapshot` re-reads `WindowState` and abandons
+  the commit when it has flipped to non-Normal.
 - **`<NoWarn>IL2104;IL3053</NoWarn>` is a load-bearing AOT hack.**
   Without it, `dotnet publish -p:PublishAot=true` fails on the
   unchanged baseline as of ilcompiler 10.0.7 — verified by stashing

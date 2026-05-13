@@ -24,6 +24,22 @@ public sealed partial class MainWindow : Window
     private double _normalHeight;
     private WindowState _previousWindowState = WindowState.Normal;
 
+    // Deferred-commit snapshot state. On Windows + Avalonia 12 the
+    // property-change order during a maximize transition is
+    // (Width/Height first, WindowState second), so reading
+    // WindowState inside the Width/Height handler still sees Normal
+    // when the values are already the maximized dimensions. Capturing
+    // synchronously into _normalWidth/_normalHeight at that point
+    // poisons the snapshot — the next restore then lands at
+    // near-maximized size. Defer the commit one dispatcher tick at
+    // Background priority so any concurrent WindowState change in the
+    // same Win32 message has been propagated; the commit re-checks
+    // WindowState and abandons when it has flipped to non-Normal.
+    private double _pendingWidth;
+    private double _pendingHeight;
+    private PixelPoint _pendingPosition;
+    private bool _snapshotCommitScheduled;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -37,13 +53,17 @@ public sealed partial class MainWindow : Window
         // sane to fall back to.
         _normalWidth = Width;
         _normalHeight = Height;
+        _pendingWidth = Width;
+        _pendingHeight = Height;
+        _pendingPosition = Position;
     }
 
     private void OnPositionChanged(object? sender, PixelPointEventArgs e)
     {
         if (WindowState == WindowState.Normal)
         {
-            _normalPosition = Position;
+            _pendingPosition = Position;
+            ScheduleSnapshotCommit();
         }
     }
 
@@ -58,14 +78,59 @@ public sealed partial class MainWindow : Window
         }
         else if (change.Property == WidthProperty || change.Property == HeightProperty)
         {
-            // Keep the snapshot up to date while we're in Normal state
-            // so user resizes feed into the restore target.
+            // Stash, but commit later (see the field comments). Reading
+            // WindowState here is unreliable on the to-maximized
+            // transition.
             if (WindowState == WindowState.Normal)
             {
-                _normalWidth = Width;
-                _normalHeight = Height;
+                _pendingWidth = Width;
+                _pendingHeight = Height;
+                ScheduleSnapshotCommit();
             }
         }
+    }
+
+    /// <summary>
+    /// Queue a deferred snapshot commit on the dispatcher at
+    /// Background priority. Coalesced: scheduling while a commit is
+    /// already pending is a no-op.
+    /// </summary>
+    private void ScheduleSnapshotCommit()
+    {
+        if (_snapshotCommitScheduled)
+        {
+            return;
+        }
+        _snapshotCommitScheduled = true;
+        Avalonia.Threading.Dispatcher.UIThread.Post(
+            CommitSnapshot,
+            Avalonia.Threading.DispatcherPriority.Background);
+    }
+
+    /// <summary>
+    /// Apply the pending snapshot — but only if the window is still in
+    /// <see cref="WindowState.Normal"/> at the time of the commit. If
+    /// a WindowState change snuck in during the same dispatcher tick
+    /// (the bug we're guarding against), the state will have flipped
+    /// by now and the pending values are the maximized dimensions
+    /// we don't want.
+    /// </summary>
+    private void CommitSnapshot()
+    {
+        _snapshotCommitScheduled = false;
+        if (WindowState != WindowState.Normal)
+        {
+            return;
+        }
+        if (_pendingWidth > 0)
+        {
+            _normalWidth = _pendingWidth;
+        }
+        if (_pendingHeight > 0)
+        {
+            _normalHeight = _pendingHeight;
+        }
+        _normalPosition = _pendingPosition;
     }
 
     private void HandleWindowStateTransition(WindowState oldState, WindowState newState)
@@ -97,6 +162,15 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// VM reference held so we can detach scroll-event handlers when
+    /// the DataContext flips. Null until OnDataContextChanged sees the
+    /// first MainWindowViewModel; tracked here rather than rechecking
+    /// DataContext each time so the detach path uses the exact instance
+    /// we subscribed to.
+    /// </summary>
+    private MainWindowViewModel? _wiredVm;
+
+    /// <summary>
     /// Rebuild Tools → Secondary Language with the languages the
     /// LocalizationProvider discovered, plus a "checked" indicator on
     /// the currently-active one. Keeps the static "English only" entry
@@ -104,10 +178,27 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void OnDataContextChanged(object? sender, System.EventArgs e)
     {
+        // Detach from the previous VM (if any) before binding the new
+        // one — otherwise a swap leaks handlers and stale targets keep
+        // scrolling out from under the user.
+        if (_wiredVm is { } prev)
+        {
+            prev.FieldScrollRequested -= ScrollFieldIntoView;
+            prev.ElementScrollRequested -= ScrollElementIntoView;
+            prev.ConfirmRequested = null;
+            _wiredVm = null;
+        }
         if (DataContext is not MainWindowViewModel vm)
         {
             return;
         }
+        vm.FieldScrollRequested += ScrollFieldIntoView;
+        vm.ElementScrollRequested += ScrollElementIntoView;
+        // Bridge VM-side confirm requests to the actual modal dialog.
+        // Lambda captures the Window directly so the VM never sees a
+        // Window type — keeps the MVVM boundary intact.
+        vm.ConfirmRequested = (title, msg) => ConfirmDialog.ShowAsync(this, title, msg);
+        _wiredVm = vm;
         var menu = SecondaryLanguageMenu;
         // Clear any dynamic entries (everything past the static "English
         // only" placeholder at index 0).
@@ -140,6 +231,31 @@ public sealed partial class MainWindow : Window
             item.Click += OnSetSecondaryLanguageClick;
             menu.Items.Add(item);
         }
+    }
+
+    /// <summary>
+    /// Scroll <paramref name="row"/> into the viewport of the fields
+    /// DataGrid. Triggered by <see cref="MainWindowViewModel.FieldScrollRequested"/>
+    /// right after a breadcrumb pop restores the previously-drilled row.
+    /// Posted via <see cref="Avalonia.Threading.Dispatcher"/> so the
+    /// scroll happens after the binding cycle has populated the grid
+    /// — calling ScrollIntoView before the row is materialized is a
+    /// silent no-op on Avalonia 12.
+    /// </summary>
+    private void ScrollFieldIntoView(FieldRowViewModel row)
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            FieldsDataGrid.ScrollIntoView(row, null);
+        }, Avalonia.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void ScrollElementIntoView(ElementRowViewModel row)
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            ElementsDataGrid.ScrollIntoView(row, null);
+        }, Avalonia.Threading.DispatcherPriority.Loaded);
     }
 
     private async void OnOpenSaveClick(object? sender, RoutedEventArgs e)
@@ -270,6 +386,51 @@ public sealed partial class MainWindow : Window
         OnDataContextChanged(this, System.EventArgs.Empty);
     }
 
+    /// <summary>
+    /// Tools → Set Icon Folder. Opens a folder picker (starting at the
+    /// currently-configured icon path when one is set, so re-pointing
+    /// nearby folders doesn't require re-navigating from scratch);
+    /// persists the choice to settings.json on confirm; re-seeds the
+    /// IconProvider so the main window's element grid refreshes
+    /// without a restart. (Open Item Picker windows don't auto-refresh
+    /// — close + reopen to see the change.) Cancels are a no-op.
+    /// </summary>
+    private async void OnSetIconFolderClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+
+        // Start the picker at the existing icon folder (if any) so a
+        // re-point lands in the right neighbourhood. Falls back to
+        // whatever Avalonia chooses when no path is set / the saved
+        // path no longer exists.
+        IStorageFolder? startLocation = null;
+        var currentRoot = vm.Localization.Icons.Root;
+        if (!string.IsNullOrEmpty(currentRoot) && Directory.Exists(currentRoot))
+        {
+            startLocation = await StorageProvider.TryGetFolderFromPathAsync(currentRoot);
+        }
+
+        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "Pick item-icon folder (contains <ItemKey>.webp files)",
+            AllowMultiple = false,
+            SuggestedStartLocation = startLocation,
+        });
+        if (folders.Count == 0)
+        {
+            return;
+        }
+        var path = folders[0].TryGetLocalPath();
+        if (string.IsNullOrEmpty(path))
+        {
+            return;
+        }
+        vm.SetIconCacheDirectory(path);
+    }
+
     private void OnBrowseLocalizationClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel vm)
@@ -287,6 +448,30 @@ public sealed partial class MainWindow : Window
         var child = new LocalizationSearchWindow
         {
             DataContext = new LocalizationSearchViewModel(vm.Localization),
+        };
+        child.Show(this);
+    }
+
+    /// <summary>
+    /// Tools → Browse Items. Same degrade-silently rule as Browse
+    /// Localization: needs an iteminfo bridge loaded to be useful,
+    /// so skip opening when no items are available — the status
+    /// footer is the user-facing signal that bootstrap didn't find
+    /// the install.
+    /// </summary>
+    private void OnBrowseItemsClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+        if (vm.Localization.ItemCount == 0)
+        {
+            return;
+        }
+        var child = new ItemPickerWindow
+        {
+            DataContext = new ItemPickerViewModel(vm.Localization),
         };
         child.Show(this);
     }

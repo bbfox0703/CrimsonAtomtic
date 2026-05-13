@@ -17,6 +17,19 @@ public sealed record AppSettings
     /// </summary>
     [JsonPropertyName("secondary_language")]
     public string? SecondaryLanguage { get; init; }
+
+    /// <summary>
+    /// Optional directory holding item icons named <c>&lt;ItemKey&gt;.webp</c>.
+    /// When set, the Item Picker / inventory views show a small icon
+    /// next to each item. <c>null</c> falls back to the default probe
+    /// chain (<c>&lt;exe-dir&gt;/IconCache/</c> → empty). Pearl Abyss
+    /// owns the icon artwork so we deliberately don't bundle them —
+    /// users point at their own extracted folder (e.g. the
+    /// <c>icons_local/</c> directory the reference repo
+    /// <c>CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS</c> ships).
+    /// </summary>
+    [JsonPropertyName("icon_cache_directory")]
+    public string? IconCacheDirectory { get; init; }
 }
 
 /// <summary>

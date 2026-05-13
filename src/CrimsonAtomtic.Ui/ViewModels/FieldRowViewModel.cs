@@ -18,6 +18,15 @@ public sealed partial class FieldRowViewModel : ObservableObject
     private readonly DecodedFieldRow _row;
     private readonly string _typeTag;
     private string _committedRawText;
+    /// <summary>
+    /// Held so <see cref="ApplyCommittedValue"/> can refresh
+    /// <see cref="ResolvedName"/> when the underlying raw value
+    /// changes — otherwise editing e.g. <c>_itemKey</c> updates the
+    /// Value column but leaves the Name column showing the
+    /// *previous* item's name until the user navigates away and
+    /// back.
+    /// </summary>
+    private readonly LocalizationProvider? _localization;
 
     /// <summary>
     /// Descent path from the top-level TOC block to this row's enclosing
@@ -34,6 +43,7 @@ public sealed partial class FieldRowViewModel : ObservableObject
     {
         _row = row;
         _displayValue = row.Value;
+        _localization = localization;
         EnclosingPath = enclosingPath;
 
         // For scalar rows, split the pre-formatted value ("123 <u32>") into
@@ -49,20 +59,22 @@ public sealed partial class FieldRowViewModel : ObservableObject
             _rawText = raw;
             IsEditable = true;
 
-            // Item-name resolution. Restricted to ItemKey-typed u32
-            // fields to avoid false positives — every save has dozens
-            // of u32 scalars (slot counts, inventory keys, etc.) that
-            // would coincidentally collide with item-table IDs and
-            // surface confusing "name" strings. ItemKey is the schema
-            // type used everywhere a real item ID appears, so this
-            // filter cleanly separates "actual item reference" from
-            // "happens to be a small integer".
+            // Name resolution. Restricted to schema-typed key fields
+            // (ItemKey / FactionKey / CharacterKey / GimmickInfoKey /
+            // LevelGimmickSceneObjectInfoKey are u32; InventoryKey is
+            // u16 — see LocalizationProvider.TypeNameToTypeByte +
+            // InventoryContainerLabels) to avoid false positives:
+            // every save has dozens of small-integer scalars (slot
+            // counts, raw indices, etc.) that would coincidentally
+            // collide with name-table IDs. The schema TypeName is the
+            // only reliable signal that a number *means* a reference
+            // into a name table.
             if (localization is not null
-                && tag == "u32"
-                && row.TypeName == "ItemKey"
-                && uint.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var itemId))
+                && (tag == "u32" || tag == "u16")
+                && LocalizationProvider.CanResolveTypeName(row.TypeName)
+                && uint.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var nameKey))
             {
-                _resolvedName = localization.ResolveItemNameFormatted(itemId);
+                _resolvedName = localization.ResolveByFieldTypeName(row.TypeName, nameKey);
             }
         }
         else
@@ -140,6 +152,20 @@ public sealed partial class FieldRowViewModel : ObservableObject
         {
             _committedRawText = raw;
             RawText = raw;
+            // Re-resolve the name column when the underlying raw value
+            // changed. Without this, editing _itemKey leaves the Name
+            // column showing the *previous* item's name until the user
+            // navigates away and back. Same TypeName-gated path the
+            // constructor uses, so the rules stay consistent (only
+            // ItemKey / FactionKey / CharacterKey / GimmickInfoKey-
+            // typed u32 fields get a name).
+            if (_localization is not null
+                && (tag == "u32" || tag == "u16")
+                && LocalizationProvider.CanResolveTypeName(_row.TypeName)
+                && uint.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var nameKey))
+            {
+                ResolvedName = _localization.ResolveByFieldTypeName(_row.TypeName, nameKey);
+            }
         }
         EditError = null;
     }

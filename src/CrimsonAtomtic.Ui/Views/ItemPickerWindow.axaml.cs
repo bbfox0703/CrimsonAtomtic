@@ -1,26 +1,27 @@
 using Avalonia.Controls;
-// SetTextAsync moved to ClipboardExtensions in Avalonia 12 — the raw
-// IClipboard interface only exposes the generic SetDataAsync now.
+// Same Avalonia 12 dance as LocalizationSearchWindow — SetTextAsync
+// lives on ClipboardExtensions, not directly on IClipboard.
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 
 namespace CrimsonAtomtic.Ui.Views;
 
-public sealed partial class LocalizationSearchWindow : Window
+public sealed partial class ItemPickerWindow : Window
 {
-    public LocalizationSearchWindow()
+    public ItemPickerWindow()
     {
         InitializeComponent();
     }
 
     /// <summary>
     /// Copies the value stashed in <c>Tag</c> on the clicked button to
-    /// the system clipboard. The XAML wires each per-row K / V / V₂
-    /// button to this handler with its target string bound into Tag,
-    /// so the handler stays content-agnostic. Best-effort: a null /
-    /// empty Tag, or an environment without a clipboard available
-    /// (e.g. running headless), is treated as a no-op rather than
-    /// surfacing as an unhandled exception.
+    /// the system clipboard. Mirrors
+    /// <c>LocalizationSearchWindow.OnCopyButtonClick</c> — kept as a
+    /// per-window handler rather than a shared static so each window
+    /// is self-contained and can swap its copy semantics
+    /// independently if a future feature needs it. Best-effort: a
+    /// null / empty Tag or a missing clipboard implementation is a
+    /// silent no-op.
     /// </summary>
     private async void OnCopyButtonClick(object? sender, RoutedEventArgs e)
     {

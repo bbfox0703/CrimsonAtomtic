@@ -13,14 +13,33 @@
   <sys:String x:Key="MenuExit">E_xit</sys:String>
   <sys:String x:Key="MenuTools">_Tools</sys:String>
   <sys:String x:Key="MenuBrowseLocalization">_Browse Localization…</sys:String>
+  <sys:String x:Key="MenuBrowseItems">Browse _Items…</sys:String>
+  <sys:String x:Key="MenuSetIconFolder">Set _Icon Folder…</sys:String>
   <sys:String x:Key="MenuLanguage">_Secondary Language</sys:String>
   <sys:String x:Key="MenuLanguageOff">English only (no secondary)</sys:String>
+
+  <!-- Item-picker dialog -->
+  <sys:String x:Key="ItemPickerWindowTitle">Browse items</sys:String>
+  <sys:String x:Key="ItemPickerSearchPlaceholder">Filter by ItemKey, string id, or localized name…</sys:String>
+  <sys:String x:Key="ItemPickerColIcon">Icon</sys:String>
+  <sys:String x:Key="ItemPickerColKey">ItemKey</sys:String>
+  <sys:String x:Key="ItemPickerColStringKey">String ID</sys:String>
+  <sys:String x:Key="ItemPickerColNameEnglish">Name (eng)</sys:String>
+  <sys:String x:Key="ItemPickerColCopy">Copy</sys:String>
+  <sys:String x:Key="ItemPickerCopyKeyTip">Copy the numeric ItemKey to the clipboard</sys:String>
+  <sys:String x:Key="ItemPickerCopyStringKeyTip">Copy iteminfo's internal string id to the clipboard</sys:String>
+  <sys:String x:Key="ItemPickerCopyNameTip">Copy the English name to the clipboard</sys:String>
+  <sys:String x:Key="ItemPickerCopyNameSecondaryTip">Copy the secondary-language name to the clipboard</sys:String>
 
   <!-- Browse-localization dialog -->
   <sys:String x:Key="LocalizationWindowTitle">Browse localization</sys:String>
   <sys:String x:Key="LocalizationSearchPlaceholder">Filter by key or value…</sys:String>
   <sys:String x:Key="LocalizationColKey">Key</sys:String>
   <sys:String x:Key="LocalizationColValue">Value</sys:String>
+  <sys:String x:Key="LocalizationColCopy">Copy</sys:String>
+  <sys:String x:Key="LocalizationCopyKeyTip">Copy the raw key to the clipboard</sys:String>
+  <sys:String x:Key="LocalizationCopyValueTip">Copy the English value to the clipboard</sys:String>
+  <sys:String x:Key="LocalizationCopyValue2Tip">Copy the secondary-language value to the clipboard</sys:String>
 
   <!-- Empty workspace -->
   <sys:String x:Key="EmptyTitle">No save loaded</sys:String>
@@ -40,6 +59,7 @@
 
   <!-- Blocks pane -->
   <sys:String x:Key="BlocksHeader">Top-level blocks</sys:String>
+  <sys:String x:Key="BlocksFilterPlaceholder">Filter blocks by class or index…</sys:String>
   <sys:String x:Key="BlocksColIndex">#</sys:String>
   <sys:String x:Key="BlocksColClass">Class</sys:String>
   <sys:String x:Key="BlocksColOffset">Offset</sys:String>
@@ -55,7 +75,7 @@
   <sys:String x:Key="FieldsColKind">Kind</sys:String>
   <sys:String x:Key="FieldsColPresent">Present</sys:String>
   <sys:String x:Key="FieldsColValue">Value</sys:String>
-  <sys:String x:Key="FieldsColResolvedName">Item name</sys:String>
+  <sys:String x:Key="FieldsColResolvedName">Name</sys:String>
   <sys:String x:Key="FieldsColRange">Bytes</sys:String>
   <sys:String x:Key="FieldsMask">Mask</sys:String>
   <sys:String x:Key="FieldsTrailingPad">Trailing pad</sys:String>
@@ -76,7 +96,16 @@
   <sys:String x:Key="EditPanelValueLabel">New value</sys:String>
   <sys:String x:Key="EditPanelApply">Apply</sys:String>
   <sys:String x:Key="EditPanelRevert">Revert</sys:String>
+  <sys:String x:Key="EditPanelFillMaxStack">Set to max</sys:String>
+  <sys:String x:Key="EditPanelFillMaxStackTip">Fill this field with the item's max_stack_count (from iteminfo). Pre-fills the textbox — review then click Apply.</sys:String>
+  <sys:String x:Key="ConfirmDialogYes">Yes</sys:String>
+  <sys:String x:Key="ConfirmDialogNo">No</sys:String>
+  <sys:String x:Key="ElementsColBulkFill">Bulk</sys:String>
+  <sys:String x:Key="ElementsBulkFillButton">Fill stacks</sys:String>
+  <sys:String x:Key="ElementsBulkFillTip">Set every item in this container's _stackCount to its iteminfo max_stack_count.</sys:String>
+  <sys:String x:Key="ElementsBulkFillConfirmTitle">Fill stacks to max?</sys:String>
   <sys:String x:Key="EditPanelNestedReadOnly">Editing nested fields is not yet supported. Use Back to return to the top-level block.</sys:String>
+  <sys:String x:Key="ElementsColIcon">Icon</sys:String>
   <sys:String x:Key="ElementsColIndex">#</sys:String>
   <sys:String x:Key="ElementsColClass">Class</sys:String>
   <sys:String x:Key="ElementsColOffset">Offset</sys:String>
@@ -84,9 +113,9 @@
   <sys:String x:Key="ElementsColFields">Fields</sys:String>
   <sys:String x:Key="ElementsColOpen">Open</sys:String>
   <sys:String x:Key="ElementsOpenButton">▸</sys:String>
-  <sys:String x:Key="ElementsColItemKey">ItemKey</sys:String>
-  <sys:String x:Key="ElementsColItemName">Item name</sys:String>
-  <sys:String x:Key="ElementsFilterPlaceholder">Filter by ItemKey, item name, or class…</sys:String>
+  <sys:String x:Key="ElementsColItemKey">Key</sys:String>
+  <sys:String x:Key="ElementsColItemName">Name</sys:String>
+  <sys:String x:Key="ElementsFilterPlaceholder">Filter by key, name, or class…</sys:String>
   <sys:String x:Key="NavigationBack">← Back</sys:String>
 
 </ResourceDictionary>

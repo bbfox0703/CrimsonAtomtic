@@ -70,6 +70,16 @@ public sealed class ItemInfoCatalogTests
 
         // NOT_FOUND on an obviously-invalid item key.
         Assert.Null(cat.LookupStringKey(uint.MaxValue));
+
+        // Max-stack lookup must succeed for any real key. We don't
+        // assert a specific value — the contract is "the schema's
+        // value is returned"; pinning a number would lock the test
+        // to a particular item's stack cap which is irrelevant to
+        // the binding.
+        var maxStack = cat.LookupMaxStackCount(first.Value.ItemKey);
+        Assert.NotNull(maxStack);
+        // NOT_FOUND on a definitely-invalid key.
+        Assert.Null(cat.LookupMaxStackCount(uint.MaxValue));
     }
 
     [Fact]

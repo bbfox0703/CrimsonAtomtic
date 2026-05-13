@@ -31,4 +31,15 @@ public interface IItemInfoCatalog : IDisposable
     /// out of range.
     /// </summary>
     (uint ItemKey, string StringKey)? GetEntry(int index);
+
+    /// <summary>
+    /// Resolve <paramref name="itemKey"/> to the game-defined
+    /// <c>max_stack_count</c> (u64). Returns <c>null</c> when the
+    /// key isn't in the loaded table. The editor uses this to drive a
+    /// "Set to max stack" action: if the user wants to top up an item
+    /// slot's count, this is the value the game itself considers
+    /// valid (so the save stays consistent — exceeding this can break
+    /// the bag's dynamic slot computation).
+    /// </summary>
+    ulong? LookupMaxStackCount(uint itemKey);
 }

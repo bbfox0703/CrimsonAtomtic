@@ -1,0 +1,117 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        xmlns:svc="using:CrimsonAtomtic.Ui.Services"
+        mc:Ignorable="d"
+        d:DesignWidth="1100"
+        d:DesignHeight="600"
+        x:Class="CrimsonAtomtic.Ui.Views.ItemPickerWindow"
+        x:DataType="vm:ItemPickerViewModel"
+        Title="{StaticResource ItemPickerWindowTitle}"
+        Icon="/Assets/MainIcon.ico"
+        Width="1080" Height="600"
+        MinWidth="600" MinHeight="320">
+
+  <Grid RowDefinitions="Auto,Auto,*"
+        Margin="12">
+
+    <TextBox Grid.Row="0"
+             Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+             PlaceholderText="{StaticResource ItemPickerSearchPlaceholder}" />
+
+    <TextBlock Grid.Row="1"
+               Text="{Binding ResultsCountText}"
+               Opacity="0.6"
+               Margin="2,6,0,8" />
+
+    <DataGrid Grid.Row="2"
+              ItemsSource="{Binding Results}"
+              IsReadOnly="True"
+              CanUserResizeColumns="True"
+              CanUserSortColumns="True"
+              GridLinesVisibility="Horizontal"
+              HeadersVisibility="Column"
+              AutoGenerateColumns="False">
+      <DataGrid.Columns>
+        <!-- Icon column. Image source resolves lazily through the
+             ItemKeyToIconConverter singleton (binds value to the
+             active IconProvider's cache). Width = 48 + a couple of
+             px padding; icons are 64×64 in the reference repo but we
+             render them at 40×40 so the row stays compact. Empty
+             when no icon directory is configured / file missing —
+             Image.Source = null hides the bitmap and the StackPanel
+             leaves a placeholder gap. -->
+        <DataGridTemplateColumn Header="{StaticResource ItemPickerColIcon}" Width="56">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:ItemPickerRow">
+              <Image Source="{Binding ItemKey, Converter={x:Static svc:ItemKeyToIconConverter.Instance}}"
+                     Width="40" Height="40"
+                     Stretch="Uniform"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTextColumn Header="{StaticResource ItemPickerColKey}"
+                            Binding="{Binding ItemKey}"
+                            Width="100" />
+        <DataGridTextColumn Header="{StaticResource ItemPickerColStringKey}"
+                            Binding="{Binding StringKey}"
+                            Width="280" />
+        <DataGridTextColumn Header="{StaticResource ItemPickerColNameEnglish}"
+                            Binding="{Binding NameEnglish}"
+                            Width="*" />
+        <!-- Secondary name column: only visible when the user has
+             picked a secondary language. Header includes the lang
+             code so it's obvious which translation this is. -->
+        <DataGridTextColumn Header="{Binding $parent[Window].((vm:ItemPickerViewModel)DataContext).SecondaryNameHeader}"
+                            Binding="{Binding NameSecondary}"
+                            Width="*"
+                            IsVisible="{Binding $parent[Window].((vm:ItemPickerViewModel)DataContext).HasSecondary}" />
+        <!-- Per-row copy buttons. K = ItemKey (the u32 the save schema
+             stores), S = string_key (iteminfo's internal id), N =
+             English name, N₂ = secondary name. V₂ is hidden when no
+             secondary language is loaded. -->
+        <DataGridTemplateColumn Header="{StaticResource ItemPickerColCopy}"
+                                Width="160">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:ItemPickerRow">
+              <StackPanel Orientation="Horizontal"
+                          Spacing="2"
+                          VerticalAlignment="Center"
+                          HorizontalAlignment="Left">
+                <Button Content="K"
+                        ToolTip.Tip="{StaticResource ItemPickerCopyKeyTip}"
+                        Padding="6,2"
+                        MinHeight="0"
+                        Tag="{Binding ItemKeyText}"
+                        Click="OnCopyButtonClick" />
+                <Button Content="S"
+                        ToolTip.Tip="{StaticResource ItemPickerCopyStringKeyTip}"
+                        Padding="6,2"
+                        MinHeight="0"
+                        Tag="{Binding StringKey}"
+                        Click="OnCopyButtonClick" />
+                <Button Content="N"
+                        ToolTip.Tip="{StaticResource ItemPickerCopyNameTip}"
+                        Padding="6,2"
+                        MinHeight="0"
+                        Tag="{Binding NameEnglish}"
+                        Click="OnCopyButtonClick" />
+                <Button Content="N₂"
+                        ToolTip.Tip="{StaticResource ItemPickerCopyNameSecondaryTip}"
+                        Padding="6,2"
+                        MinHeight="0"
+                        Tag="{Binding NameSecondary}"
+                        Click="OnCopyButtonClick"
+                        IsVisible="{Binding $parent[Window].((vm:ItemPickerViewModel)DataContext).HasSecondary}" />
+              </StackPanel>
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+      </DataGrid.Columns>
+    </DataGrid>
+  </Grid>
+</Window>
