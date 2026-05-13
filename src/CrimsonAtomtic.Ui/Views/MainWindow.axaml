@@ -13,7 +13,8 @@
         Title="{Binding WindowTitle, FallbackValue={StaticResource WindowTitle}}"
         Icon="/Assets/MainIcon.ico"
         Width="960" Height="640"
-        MinWidth="600" MinHeight="400">
+        MinWidth="600" MinHeight="400"
+        FontSize="{Binding FontSize, FallbackValue=14}">
 
   <!-- Layered root: a faded Logo.jpg sits behind the whole window,
        slightly more prominent on the empty splash state and dropping
@@ -51,6 +52,21 @@
                   Click="OnSetIconFolderClick" />
         <MenuItem Header="{StaticResource MenuExtractIcons}"
                   Click="OnExtractIconsClick" />
+        <Separator />
+        <!-- Font size submenu. Each entry sets the Window's FontSize
+             via the VM, which cascades to every child control. The
+             tag carries the numeric value so the handler doesn't
+             have to parse the header text. -->
+        <MenuItem Header="{StaticResource MenuFontSize}"
+                  Name="FontSizeMenu">
+          <MenuItem Header="10" Click="OnSetFontSizeClick" Tag="10" />
+          <MenuItem Header="12" Click="OnSetFontSizeClick" Tag="12" />
+          <MenuItem Header="13" Click="OnSetFontSizeClick" Tag="13" />
+          <MenuItem Header="14 (default)" Click="OnSetFontSizeClick" Tag="14" />
+          <MenuItem Header="16" Click="OnSetFontSizeClick" Tag="16" />
+          <MenuItem Header="18" Click="OnSetFontSizeClick" Tag="18" />
+          <MenuItem Header="20" Click="OnSetFontSizeClick" Tag="20" />
+        </MenuItem>
         <MenuItem Header="{StaticResource MenuLanguage}"
                   Name="SecondaryLanguageMenu">
           <MenuItem Header="{StaticResource MenuLanguageOff}"
@@ -105,25 +121,45 @@
                  HorizontalAlignment="Center" />
     </StackPanel>
 
-    <!-- Loaded state -->
+    <!-- Loaded state. Summary column width binds to the VM so the
+         user can collapse it to a narrow rail and reclaim ~280 px of
+         horizontal space for the main DataGrids. -->
     <Grid IsVisible="{Binding HasSave}"
-          ColumnDefinitions="320,*"
           Margin="12">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="{Binding SummaryColumnWidth}" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
 
-      <!-- Left: summary -->
+      <!-- Left: summary. Header row carries the toggle button + title;
+           the data Grid below hides when collapsed so the column can
+           shrink to a thin rail showing just the toggle. -->
       <Border Grid.Column="0"
-              Padding="12"
+              Padding="6,12,12,12"
               BorderThickness="0,0,1,0"
               BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
         <StackPanel Spacing="8">
-          <TextBlock Text="{StaticResource SummaryHeader}"
-                     FontSize="16"
-                     FontWeight="SemiBold" />
+          <Grid ColumnDefinitions="Auto,*"
+                ColumnSpacing="6">
+            <Button Grid.Column="0"
+                    Content="{Binding SummaryToggleGlyph}"
+                    Command="{Binding ToggleSummaryCollapsedCommand}"
+                    ToolTip.Tip="{StaticResource SummaryToggleTip}"
+                    Padding="6,0"
+                    MinHeight="24"
+                    VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1"
+                       Text="{StaticResource SummaryHeader}"
+                       FontWeight="SemiBold"
+                       VerticalAlignment="Center"
+                       IsVisible="{Binding IsSummaryExpanded}" />
+          </Grid>
 
           <Grid ColumnDefinitions="Auto,*"
                 RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto"
                 ColumnSpacing="12"
-                RowSpacing="4">
+                RowSpacing="4"
+                IsVisible="{Binding IsSummaryExpanded}">
 
             <TextBlock Grid.Row="0" Grid.Column="0" Text="{StaticResource SummarySlot}" Opacity="0.6" />
             <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Summary.SlotName}" />

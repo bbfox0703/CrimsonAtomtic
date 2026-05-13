@@ -231,6 +231,51 @@ public sealed partial class MainWindow : Window
             item.Click += OnSetSecondaryLanguageClick;
             menu.Items.Add(item);
         }
+
+        // Refresh the Font Size submenu's check marks. Each static
+        // menu item carries a Tag with its size value; the entry
+        // whose Tag matches FontSize gets the ✓ icon.
+        RefreshFontSizeCheckmarks(vm.FontSize);
+    }
+
+    /// <summary>
+    /// Walk the Font Size submenu and set ✓ next to the entry whose
+    /// numeric tag matches <paramref name="active"/>. Tolerant of
+    /// non-preset values: nothing is checked when no preset is within
+    /// 0.01 of the active size. Called once from
+    /// <see cref="OnDataContextChanged"/> at startup and again from
+    /// <see cref="OnSetFontSizeClick"/> after each menu pick so the
+    /// check mark tracks the live state.
+    /// </summary>
+    private void RefreshFontSizeCheckmarks(double active)
+    {
+        foreach (var item in FontSizeMenu.Items)
+        {
+            if (item is not MenuItem mi || mi.Tag is not string tagText)
+            {
+                continue;
+            }
+            if (!double.TryParse(tagText, System.Globalization.CultureInfo.InvariantCulture, out var size))
+            {
+                continue;
+            }
+            mi.Icon = System.Math.Abs(size - active) < 0.01
+                ? new TextBlock { Text = "✓" }
+                : null;
+        }
+    }
+
+    private void OnSetFontSizeClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm
+            || sender is not MenuItem mi
+            || mi.Tag is not string tagText
+            || !double.TryParse(tagText, System.Globalization.CultureInfo.InvariantCulture, out var size))
+        {
+            return;
+        }
+        vm.SetFontSize(size);
+        RefreshFontSizeCheckmarks(vm.FontSize);
     }
 
     /// <summary>

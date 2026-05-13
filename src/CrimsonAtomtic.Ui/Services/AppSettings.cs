@@ -30,6 +30,36 @@ public sealed record AppSettings
     /// </summary>
     [JsonPropertyName("icon_cache_directory")]
     public string? IconCacheDirectory { get; init; }
+
+    /// <summary>
+    /// True when the left-side Save Summary panel is collapsed to a
+    /// narrow rail (so the main DataGrid claims the freed horizontal
+    /// space). Toggled via the chevron button in the summary header.
+    /// <c>null</c> / missing means "expanded" — the default state.
+    /// </summary>
+    [JsonPropertyName("summary_collapsed")]
+    public bool? SummaryCollapsed { get; init; }
+
+    /// <summary>
+    /// User-picked base font size for the main window (point units).
+    /// Avalonia cascades the Window's <c>FontSize</c> through the
+    /// visual tree so this affects every label / DataGrid cell /
+    /// menu in one shot. Clamped to <see cref="MinFontSize"/>..
+    /// <see cref="MaxFontSize"/> on read so a hand-edited
+    /// settings.json can't push values that make the UI unusable.
+    /// <c>null</c> / missing means <see cref="DefaultFontSize"/>.
+    /// </summary>
+    [JsonPropertyName("font_size")]
+    public double? FontSize { get; init; }
+
+    /// <summary>Default font size when the settings field is unset.</summary>
+    public const double DefaultFontSize = 14.0;
+
+    /// <summary>Smallest font size we accept (anything smaller is hard to read on hi-DPI).</summary>
+    public const double MinFontSize = 10.0;
+
+    /// <summary>Largest font size we accept (beyond this, DataGrids start truncating columns).</summary>
+    public const double MaxFontSize = 22.0;
 }
 
 /// <summary>
