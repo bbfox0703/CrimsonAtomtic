@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
@@ -9,10 +10,90 @@ namespace CrimsonAtomtic.Ui.Views;
 
 public sealed partial class MainWindow : Window
 {
+    /// <summary>
+    /// Position + size of the window the last time it was in
+    /// <see cref="WindowState.Normal"/>. When the OS reports a
+    /// transition Normal → Maximized → Normal, Avalonia 12 on Windows
+    /// can land the restored window stretched across multiple monitors
+    /// (especially common on dual-monitor setups). Snapshotting before
+    /// the maximize and re-applying on restore puts the window back on
+    /// the monitor it started from at its original size.
+    /// </summary>
+    private PixelPoint? _normalPosition;
+    private double _normalWidth;
+    private double _normalHeight;
+    private WindowState _previousWindowState = WindowState.Normal;
+
     public MainWindow()
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
+        // Position isn't an AvaloniaProperty in 12 — listen via the
+        // explicit event instead. Width / Height are AvaloniaProperty
+        // and flow through OnPropertyChanged.
+        PositionChanged += OnPositionChanged;
+        // Seed the snapshot with the XAML-declared default so the very
+        // first restore (without a prior maximize) still has something
+        // sane to fall back to.
+        _normalWidth = Width;
+        _normalHeight = Height;
+    }
+
+    private void OnPositionChanged(object? sender, PixelPointEventArgs e)
+    {
+        if (WindowState == WindowState.Normal)
+        {
+            _normalPosition = Position;
+        }
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == WindowStateProperty)
+        {
+            var newState = change.GetNewValue<WindowState>();
+            HandleWindowStateTransition(_previousWindowState, newState);
+            _previousWindowState = newState;
+        }
+        else if (change.Property == WidthProperty || change.Property == HeightProperty)
+        {
+            // Keep the snapshot up to date while we're in Normal state
+            // so user resizes feed into the restore target.
+            if (WindowState == WindowState.Normal)
+            {
+                _normalWidth = Width;
+                _normalHeight = Height;
+            }
+        }
+    }
+
+    private void HandleWindowStateTransition(WindowState oldState, WindowState newState)
+    {
+        // Leaving Normal: snapshot was already kept fresh by the
+        // property-change branch above. Nothing to do here.
+        if (oldState == WindowState.Normal && newState != WindowState.Normal)
+        {
+            return;
+        }
+        // Returning to Normal: re-apply the snapshot. Without this,
+        // restoring from Maximized on a multi-monitor setup can land
+        // the window straddling both screens.
+        if (newState == WindowState.Normal && oldState != WindowState.Normal)
+        {
+            if (_normalPosition is { } pos)
+            {
+                Position = pos;
+            }
+            if (_normalWidth > 0)
+            {
+                Width = _normalWidth;
+            }
+            if (_normalHeight > 0)
+            {
+                Height = _normalHeight;
+            }
+        }
     }
 
     /// <summary>
