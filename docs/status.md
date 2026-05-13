@@ -4,8 +4,14 @@
 > of every session so the next pickup is seamless.
 >
 > Last updated: 2026-05-13 (icon-extraction pipeline **complete —
-> Phases 1 through 3**: end-to-end from `ItemKey` to
-> `<cache>/<ItemKey>.webp`. Phase 1 (stringinfo bridge) and Phase 2
+> Phases 1 through 3**, plus two UX polish items: a collapsible
+> Save Summary panel (toggle button in the header, persisted in
+> `AppSettings.SummaryCollapsed`) and a Tools → Font Size submenu
+> (presets 10..20 pt, persisted in `AppSettings.FontSize`, clamped
+> via `AppSettings.MinFontSize`/`MaxFontSize`). Also fixes a quiet
+> bug where `SetSecondaryLanguage` was clobbering every other
+> field in `settings.json` — now uses the `with` pattern. End-to-end
+> from `ItemKey` to `<cache>/<ItemKey>.webp`. Phase 1 (stringinfo bridge) and Phase 2
 > (`IconImageEncoder`: hand-rolled BC1/BC3 decoder + SkiaSharp resize
 > + WebP encode) shipped earlier. **Phase 3 (Tools menu →
 > "Extract Icons from Game Data…") now lands** with a new

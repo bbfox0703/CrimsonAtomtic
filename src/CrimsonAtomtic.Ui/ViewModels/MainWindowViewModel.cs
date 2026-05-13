@@ -134,10 +134,12 @@ public sealed partial class MainWindowViewModel(
     public void SetSecondaryLanguage(string? langCode)
     {
         localization.SecondaryLanguage = langCode;
-        AppSettingsStore.TrySave(paths.LocalAppDataDirectory, new AppSettings
-        {
-            SecondaryLanguage = localization.SecondaryLanguage,
-        });
+        // Preserve every other field — re-creating AppSettings from
+        // scratch would otherwise drop the user's icon path, font
+        // size, summary state, etc.
+        var existing = AppSettingsStore.Load(paths.LocalAppDataDirectory);
+        AppSettingsStore.TrySave(paths.LocalAppDataDirectory,
+            existing with { SecondaryLanguage = localization.SecondaryLanguage });
         // Rebuild the currently-visible field wrappers so their
         // ResolvedName picks up the new secondary text. Same surgical
         // refresh path the post-commit code uses.
@@ -311,6 +313,89 @@ public sealed partial class MainWindowViewModel(
     /// </summary>
     [ObservableProperty]
     private string? _bulkOpStatus;
+
+    /// <summary>
+    /// True when the left-side Save Summary panel is collapsed to a
+    /// narrow rail. Toggled via <see cref="ToggleSummaryCollapsed"/>;
+    /// the View binds the summary <c>ColumnDefinition</c>'s
+    /// <c>Width</c> through <see cref="SummaryColumnWidth"/> and the
+    /// inner content's <c>IsVisible</c> to
+    /// <see cref="IsSummaryExpanded"/>. State persists in
+    /// <see cref="AppSettings.SummaryCollapsed"/>.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SummaryColumnWidth))]
+    [NotifyPropertyChangedFor(nameof(IsSummaryExpanded))]
+    [NotifyPropertyChangedFor(nameof(SummaryToggleGlyph))]
+    private bool _isSummaryCollapsed
+        = AppSettingsStore.Load(paths.LocalAppDataDirectory).SummaryCollapsed ?? false;
+
+    /// <summary>Inverse of <see cref="IsSummaryCollapsed"/> — easier to bind for visibility.</summary>
+    public bool IsSummaryExpanded => !IsSummaryCollapsed;
+
+    /// <summary>
+    /// Grid column width for the summary panel: a fixed 36px rail
+    /// when collapsed, 320px when expanded. The narrow-rail width is
+    /// just enough for the toggle button plus a comfortable margin —
+    /// users get back ~280px of horizontal room for the main grids.
+    /// </summary>
+    public Avalonia.Controls.GridLength SummaryColumnWidth =>
+        IsSummaryCollapsed
+            ? new Avalonia.Controls.GridLength(36)
+            : new Avalonia.Controls.GridLength(320);
+
+    /// <summary>Chevron glyph shown on the toggle button — direction matches the action.</summary>
+    public string SummaryToggleGlyph => IsSummaryCollapsed ? "»" : "«";
+
+    /// <summary>
+    /// Toggle the summary panel between expanded and collapsed.
+    /// Persists the new state to <c>settings.json</c> so the next
+    /// launch picks up the user's preference.
+    /// </summary>
+    [RelayCommand]
+    public void ToggleSummaryCollapsed()
+    {
+        IsSummaryCollapsed = !IsSummaryCollapsed;
+        var existing = AppSettingsStore.Load(paths.LocalAppDataDirectory);
+        AppSettingsStore.TrySave(paths.LocalAppDataDirectory,
+            existing with { SummaryCollapsed = IsSummaryCollapsed });
+    }
+
+    /// <summary>
+    /// Base font size for the main window, in points. Avalonia
+    /// cascades the Window's <c>FontSize</c> through the visual
+    /// tree, so this affects every label / DataGrid cell / menu item
+    /// in one shot. Driven through <see cref="SetFontSize"/> which
+    /// clamps to <see cref="AppSettings.MinFontSize"/>..
+    /// <see cref="AppSettings.MaxFontSize"/> and persists.
+    /// </summary>
+    [ObservableProperty]
+    private double _fontSize = Math.Clamp(
+        AppSettingsStore.Load(paths.LocalAppDataDirectory).FontSize ?? AppSettings.DefaultFontSize,
+        AppSettings.MinFontSize, AppSettings.MaxFontSize);
+
+    /// <summary>Discrete font-size presets exposed by the Tools menu.</summary>
+    public static IReadOnlyList<double> FontSizePresets { get; } =
+        new[] { 10.0, 12.0, 13.0, 14.0, 16.0, 18.0, 20.0 };
+
+    /// <summary>
+    /// Apply a new font size and persist it. Values outside the
+    /// supported range are clamped silently — protects against a
+    /// hand-edited settings.json that would otherwise leave the UI
+    /// unusable.
+    /// </summary>
+    public void SetFontSize(double size)
+    {
+        var clamped = Math.Clamp(size, AppSettings.MinFontSize, AppSettings.MaxFontSize);
+        if (Math.Abs(FontSize - clamped) < 0.01)
+        {
+            return;
+        }
+        FontSize = clamped;
+        var existing = AppSettingsStore.Load(paths.LocalAppDataDirectory);
+        AppSettingsStore.TrySave(paths.LocalAppDataDirectory,
+            existing with { FontSize = clamped });
+    }
 
     /// <summary>
     /// Backing store for every TOC block loaded from the save. The
