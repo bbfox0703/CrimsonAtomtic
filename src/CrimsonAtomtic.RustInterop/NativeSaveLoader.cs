@@ -569,4 +569,34 @@ internal static partial class NativeMethods
         string fileName,
         byte* outBuf, nuint outBufLen,
         out nuint outRequired);
+
+    // ── ItemInfo bridge (iteminfo.pabgb) ────────────────────────────────────
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_iteminfo_load_from_file",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int ItemInfoLoadFromFile(string path, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_iteminfo_load_from_bytes")]
+    public static unsafe partial int ItemInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_iteminfo_free")]
+    public static partial void ItemInfoFree(IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_iteminfo_entry_count")]
+    public static partial int ItemInfoEntryCount(CrimsonItemInfoHandle handle, out uint count);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_iteminfo_lookup_string_key")]
+    public static unsafe partial int ItemInfoLookupStringKey(
+        CrimsonItemInfoHandle handle,
+        uint itemKey,
+        byte* buf, nuint bufLen,
+        out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_iteminfo_get_entry")]
+    public static unsafe partial int ItemInfoGetEntry(
+        CrimsonItemInfoHandle handle,
+        uint idx,
+        out uint outKey,
+        byte* buf, nuint bufLen,
+        out nuint required);
 }
