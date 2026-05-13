@@ -45,6 +45,15 @@ public sealed class App : Application
             // functions, just without localized name resolution.
             localization.TryBootstrapFromGameRoot(paths.GameInstallRoot);
 
+            // Apply the user's previously-saved secondary-language pick
+            // (if any). The provider silently rejects unknown codes so a
+            // stale settings file from a pre-discovery build degrades.
+            var settings = AppSettingsStore.Load(paths.LocalAppDataDirectory);
+            if (!string.IsNullOrEmpty(settings.SecondaryLanguage))
+            {
+                localization.SecondaryLanguage = settings.SecondaryLanguage;
+            }
+
             desktop.MainWindow = new MainWindow
             {
                 DataContext = new MainWindowViewModel(loader, paths, localization),
