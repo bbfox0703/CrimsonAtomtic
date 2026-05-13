@@ -3,18 +3,26 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-13 (icon-extraction pipeline **Phases 1 + 2**:
-> Phase 1 (`stringinfo.pabgb` parser + C ABI + C# wrapper +
-> LocalizationProvider wiring) landed via crimson-rs
-> [#24](https://github.com/bbfox0703/crimson-rs/pull/24);
-> Phase 2 (`IconImageEncoder`: hand-rolled BC1/BC3 decoder +
-> SkiaSharp resize + WebP encode) landed on this side. The
-> editor can now resolve an `icon_path` → texture name AND
-> turn a raw `.dds` into a 64×64 `.webp` — both halves of the
-> pipeline. Phase 3 (the orchestrating UI action) is blocked
-> on crimson-rs partial-compression PAZ support (97% of
-> `0012/ui/texture/icon/` is partial-compressed).
-> 79/79 C# tests + 80/80 Rust tests pass).
+> Last updated: 2026-05-13 (icon-extraction pipeline **Phases 1 + 2 +
+> partial-PAZ unblock**: Phase 1 (`stringinfo.pabgb` parser + C ABI +
+> C# wrapper + LocalizationProvider wiring) landed via crimson-rs
+> [#24](https://github.com/bbfox0703/crimson-rs/pull/24); Phase 2
+> (`IconImageEncoder`: hand-rolled BC1/BC3 decoder + SkiaSharp resize
+> + WebP encode) landed on this side. The Phase-3 blocker is now
+> **resolved**: crimson-rs `binary::paz::decompress_partial` covers
+> three sub-formats for `raw_compression == 1` entries — identity
+> (`c == u`), header(128)+LZ4-with-prefix-dict, and DDS per-mip table
+> (mip sizes packed into the DDS reserved area at offset 0x20). The
+> per-mip strategy is a port of NattKh's CrimsonForge
+> `_decompress_type1_dds_per_mip_sizes`; it extends coverage past
+> icons (which already worked via header+LZ4) to the worldmap SDF
+> tiles and most large diffuse textures that the simpler rule missed.
+> The existing `IPazExtractor.ExtractFile` C# binding works
+> unchanged. 81/81 C# tests + 88/88 Rust tests (incl. c_abi) pass;
+> clippy clean. Phase 3 (the orchestrating UI action) is the next
+> concrete step. PAR-container layout used by `.pam` / `.pamlod` /
+> `.pac` meshes in 0009/0015 is still out of scope here — see
+> CrimsonForge `_decompress_type1_par` for the recipe when needed.
 
 ## Where we are
 
@@ -79,7 +87,24 @@
     output: extracted bytes via the standard two-call pattern.
     Wraps `binary::paz::extract_file` (ChaCha20 + LZ4 + manifest
     lookup). Errors map to `NOT_FOUND`, `IO`, `BODY_PARSE`,
-    `NULL_ARG`, `INVALID_PATH`.
+    `NULL_ARG`, `INVALID_PATH`. **Partial-compression entries
+    (`raw_compression == 1`) are supported** via
+    `binary::paz::decompress_partial`, which tries three
+    sub-formats in order: (a) identity when `c == u`; (b) 128-byte
+    verbatim header + LZ4 over the rest with the header as a prefix
+    dictionary; (c) DDS per-mip layout — up to 11 u32 slots at
+    DDS-reserved offset 0x20 giving each mip's on-disk size, with
+    `0` meaning "remaining mips are stored raw, sequentially". The
+    per-mip variant is a Rust port of NattKh's CrimsonForge
+    `_decompress_type1_dds_per_mip_sizes` (see
+    `D:\Github\crimsonforge\core\compression_engine.py`). DX10 BC1..BC7
+    + R10G10B10A2 / R16F / R32F / R8 + DXT1/3/5 + ATI1/2 + plain
+    RGB(A)/LUMINANCE pixel formats are all recognised for mip-size
+    math. Out of scope: the PAR-container layout used by `.pam` /
+    `.pamlod` / `.pac` meshes in 0009/0015 (per-section LZ4 blocks
+    indexed by an 8-slot table at offset 0x10; recipe in
+    CrimsonForge `_decompress_type1_par`). Those still return
+    `BODY_PARSE`.
   - **iteminfo bridge C ABI** (`crimson_iteminfo_*`): `load_from_file`
     / `load_from_bytes` / `free` / `entry_count` /
     `lookup_string_key(u32)` (two-call) / `get_entry(idx, *out_key, …)`
@@ -367,9 +392,11 @@ RGBA bitmap (32×32 to 256×256)
    - AOT publish verified: bundle size unchanged (23.9 MB exe);
      SkiaSharp + the encoder add zero trim warnings.
 
-3. **Phase 3 — Extraction action UI** (BLOCKED on partial-compression
-   support in crimson-rs; see "Game data layout" note below).
-   When the PAZ side is unblocked:
+3. **Phase 3 — Extraction action UI** (UNBLOCKED — partial-compression
+   PAZ extraction now works for every DDS under
+   `0012/ui/texture/icon/`; see [paz.rs decompress_partial](../vendor/crimson-rs/src/binary/paz.rs)
+   and `PazExtractorTests.ExtractFile_LiveInstall_PartialCompressedIconExtractsAsValidDds`).
+   Concrete work for the next session:
    - Tools menu → "Extract icons from game data…".
    - Walks every iteminfo entry, looks up icon path via stringinfo,
      extracts DDS via `IPazExtractor` (group 0012), runs the
@@ -403,14 +430,23 @@ RGBA bitmap (32×32 to 256×256)
 - DDS format confirmed in Phase 2: BC3 (DXT5) is the dominant format
   for item icons; 32×32 base size with mips=1 is typical. BC1 also
   used for some opaque textures. BC4/5/7 absent.
-- **Partial-compression blocker**: 17,975 of 18,565 (97%) of DDS
-  files under `0012/` have PAZ flag `raw_compression == 1`, which
-  crimson-rs rejects with `partial compression extraction not yet
-  implemented` (`src/binary/paz.rs:394`). The 590 non-partial files
-  (all under `ui/texture/image/worldmap/` plus 11 misc) are
-  extractable today — that's how we got the Phase 2 test fixture
-  `sample_bc3_32x32.dds`. Phase 3 needs partial-compression support
-  added to `vendor/crimson-rs` first; pre-Phase-3 PR target.
+- **Partial-compression status**: 17,975 of 18,565 (97%) DDS files
+  under `0012/` have PAZ flag `raw_compression == 1`.
+  `binary::paz::decompress_partial` covers three sub-formats:
+  (a) identity (`c == u`), (b) header(128)+LZ4-with-prefix-dict,
+  (c) DDS per-mip table. (a)+(b) cover every file under
+  `0012/ui/texture/icon/`; (c) — ported from CrimsonForge's
+  `_decompress_type1_dds_per_mip_sizes` — covers the
+  `0012/ui/texture/image/worldmap/` SDF tiles plus most large
+  textures elsewhere. The investigation harness that derived these
+  rules (5 `probe_partial_*` `#[ignore]`d tests) was deleted after
+  landing; git history retains them. **Still unrecognised**: the
+  PAR-container layout for `.pam` / `.pamlod` / `.pac` mesh assets
+  in 0009/0015 (~93k entries). CrimsonForge's
+  `_decompress_type1_par` decodes those via an 8-slot table at
+  offset 0x10 — port whenever mesh extraction is on the roadmap.
+  Unrecognised entries return `BODY_PARSE` (distinct from PAZ
+  corruption) so callers can tell what failed.
 
 **Current Icon code that needs to integrate with the pipeline**:
 - `IconProvider` already does lazy load + Bitmap cache from a
