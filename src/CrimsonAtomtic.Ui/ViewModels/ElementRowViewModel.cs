@@ -30,19 +30,16 @@ public sealed class ElementRowViewModel
     public ElementRowViewModel(BlockDetails block, LocalizationProvider? localization)
     {
         Block = block;
-        // Find a present, fixed-size ItemKey scalar. Most elements have
-        // one (e.g. ItemSaveData._itemKey); those that don't (NPC slots,
-        // event records, …) just get blank cells.
-        DecodedFieldRow? keyField = null;
-        foreach (var field in block.Fields)
-        {
-            if (field.TypeName == "ItemKey"
-                && (field.Kind == "fixed_prefix" || field.Kind == "fixed_suffix"))
-            {
-                keyField = field;
-                break;
-            }
-        }
+        // Locate the ItemKey scalar. Two depths covered:
+        //   1. Directly on this element's Fields (e.g. ItemSaveData._itemKey).
+        //   2. One level down through any inline locator child
+        //      (e.g. EquipSlotElementSaveData._item → ItemSaveData._itemKey).
+        // Without (2) the EquipmentSaveData → list[18] view shows blank
+        // ItemKey/Item-name columns even though every slot wraps a real
+        // item one level deeper. Anything that doesn't yield an ItemKey
+        // at either depth falls through to empty cells.
+        var keyField = FindItemKeyField(block)
+                       ?? FindItemKeyInChildren(block);
 
         if (keyField is not null
             && ScalarFieldEditing.TryParse(keyField.Value, out var raw, out var tag)
@@ -59,6 +56,35 @@ public sealed class ElementRowViewModel
             ItemKeyText = string.Empty;
             ResolvedName = string.Empty;
         }
+    }
+
+    private static DecodedFieldRow? FindItemKeyField(BlockDetails block)
+    {
+        foreach (var field in block.Fields)
+        {
+            if (field.TypeName == "ItemKey"
+                && (field.Kind == "fixed_prefix" || field.Kind == "fixed_suffix"))
+            {
+                return field;
+            }
+        }
+        return null;
+    }
+
+    private static DecodedFieldRow? FindItemKeyInChildren(BlockDetails block)
+    {
+        foreach (var field in block.Fields)
+        {
+            if (field.Child is { } child)
+            {
+                var nested = FindItemKeyField(child);
+                if (nested is not null)
+                {
+                    return nested;
+                }
+            }
+        }
+        return null;
     }
 
     // Proxy properties mirroring the existing DataGrid bindings that
