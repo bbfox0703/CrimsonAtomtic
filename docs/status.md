@@ -3,9 +3,10 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-12 (end of long session that closed out
-> read-side UI polish AND landed the first save-write hop — scalar
-> field mutation + write-to-file across the full stack).
+> Last updated: 2026-05-13 (session that wired the UI editing surface
+> for scalar fields — inline edit panel, Save/Save As, dirty
+> indicator — and unstuck the AOT publish from a pre-existing
+> ilcompiler 10.0.7 regression).
 
 ## Where we are
 
@@ -58,12 +59,16 @@
 ### `CrimsonAtomtic` (this repo)
 
 - **Foundation** (CLAUDE.md, docs/, .gitignore, vendor/, scripts/) — done.
-- **C# / Avalonia scaffolding** — done. Builds clean, 13/13 unit tests pass:
+- **C# / Avalonia scaffolding** — done. Builds clean, 39/39 unit tests pass:
   ```
   src/CrimsonAtomtic.Core         IPlatformPaths, ISingleInstanceGuard
   src/CrimsonAtomtic.SaveModel    SaveSummary, BlockSummary,
                                   BlockDetails, DecodedFieldRow +
-                                  AOT JsonSerializerContext
+                                  AOT JsonSerializerContext +
+                                  ScalarFieldEditing static helper
+                                  (parse `"123 <u32>"` ↔ raw + tag;
+                                  TryEncode for bool / u8..u64 /
+                                  i8..i64 / f32 / f64 to LE bytes).
   src/CrimsonAtomtic.Ui/Platform  WindowsPlatformPaths
                                   (resolves %LOCALAPPDATA%-based paths)
   src/CrimsonAtomtic.RustInterop  ISaveLoader + NativeSaveLoader
@@ -73,40 +78,60 @@
                                   the currently-open save. Exposes
                                   Load / LoadBlockDetails (read) +
                                   SetScalarField / WriteToFile (write).
+                                  + SaveLoaderScalarExtensions: typed
+                                  SetScalarBool / SetScalarUInt32 /
+                                  SetScalarSingle / … wrappers over
+                                  SetScalarField(ReadOnlySpan<byte>).
   src/CrimsonAtomtic.Ui           Avalonia 12 / .NET 10, PublishAot=true,
                                   Mutex single-instance, MainWindow with
-                                  File menu + blocks DataGrid + lazy
+                                  File menu (Open / Save / Save As /
+                                  Exit) + blocks DataGrid + lazy
                                   field-detail pane (GridSplitter) +
                                   fields filter + breadcrumb-based
-                                  drill-down into locator children and
-                                  list elements. All DataGrids have
-                                  resizable columns. No in-place
-                                  editing yet — see "Pick up here" #1.
-  src/CrimsonAtomtic.Tests        xUnit v3 — 13 tests against
-                                  NativeSaveLoader incl. live-save
+                                  drill-down + inline scalar-edit
+                                  panel under the fields DataGrid +
+                                  dirty title indicator. All DataGrids
+                                  have resizable columns.
+                                  FieldRowViewModel wraps each
+                                  DecodedFieldRow; IsEditable gates on
+                                  scalar kind + supported type tag +
+                                  top-level block (depth 1).
+  src/CrimsonAtomtic.Tests        xUnit v3 — 39 tests:
+                                  14 NativeSaveLoaderTests (live-save
                                   summary, block-details, cache reuse,
                                   Dispose lifecycle, nested data
-                                  reachability, mutation round-trip
-                                  (load → set → write → reload →
-                                  assert), mutation error paths
-                                  (skip cleanly when no save present)
+                                  reachability, mutation round-trip,
+                                  mutation error paths, typed
+                                  SetScalarUInt32 extension) +
+                                  25 ScalarFieldEditingTests (pure-CPU
+                                  parse / encode / IsTextEditable
+                                  matrix across every supported tag).
+                                  Live-save tests skip cleanly when
+                                  no save is present.
   ```
-  The UI reads **real saves** via `crimson_rs.dll`. Open Save defaults
-  to `%LOCALAPPDATA%\Pearl Abyss\CD\save\<user>\` when there's a single
-  user; clicking a row in the blocks DataGrid lazily loads its
-  per-field decode via `LoadBlockDetails` →
+  The UI reads **real saves** via `crimson_rs.dll` and now writes
+  them too. Open Save defaults to `%LOCALAPPDATA%\Pearl Abyss\CD\save\<user>\`
+  when there's a single user; clicking a row in the blocks DataGrid
+  lazily loads its per-field decode via `LoadBlockDetails` →
   `crimson_save_get_block_json` → System.Text.Json (source-generated,
   AOT-safe). Drill-down composes recursively
   (`InventorySaveData › inventorylist[18] › [14]:
   InventoryElementSaveData › itemList[40] › …`).
-  The mutation pipeline is reachable from any `ISaveLoader` consumer
-  but is not wired into the UI yet — the next task picks that up.
+  Selecting a scalar field on the **root frame** (depth 1) reveals
+  an inline edit panel below the fields DataGrid; Apply (or Enter)
+  validates via `ScalarFieldEditing.TryEncode`, pushes the bytes
+  through `SetScalarField`, re-fetches the block, and rebases every
+  field's display value. The window title gains a leading `*` while
+  there are uncommitted edits; Save (Ctrl-style menu) writes back to
+  the open path, Save As… re-anchors to a fresh path.
 - **AOT publish verified**: `dotnet publish -c Release -r win-x64
-  -p:PublishAot=true` (csproj pins `TrimMode=full`; we don't pass
-  `-p:PublishTrimmed=true` because it upgrades Avalonia DataGrid 12.0.0
-  trim warnings into ilc-blocking errors) produces a working bundle in
-  `dist/win-x64/` (CrimsonAtomtic.exe ~21 MB, crimson_rs.dll 1.2 MB,
-  Avalonia native deps).
+  -p:PublishAot=true` (csproj pins `TrimMode=full` and now suppresses
+  the two roll-up codes `IL2104` + `IL3053` against Avalonia DataGrid
+  12.0.0; `microsoft.dotnet.ilcompiler` 10.0.7 started promoting those
+  to errors under our repo-wide `TreatWarningsAsErrors=true`, so the
+  csproj's `<NoWarn>` scopes the exception to where it belongs).
+  Produces a working bundle in `dist/win-x64/`: CrimsonAtomtic.exe
+  21.7 MB, crimson_rs.dll 1.3 MB, plus Avalonia native deps and PDBs.
 - **Python tools** (unchanged, working): `tools/extract/extract_save.py`,
   `tools/inspect/inspect_save_body.py`, `tools/inspect/inspect_save_section.py`.
 - **Vendor**: `vendor/crimson-rs` at `3eff882`. Refresh via
@@ -127,43 +152,38 @@
 
 ## Pick up here (next concrete task)
 
-The C ABI is now read-and-write at the scalar level. The mutation
-pipeline is reachable through `ISaveLoader.SetScalarField` /
-`WriteToFile` and covered by 13 xUnit tests + 2 Rust c_abi smokes,
-but **the UI doesn't expose editing yet** — that's the immediate next
-step.
+Top-level scalar editing is now end-to-end: load → click a field →
+type → Apply → Save / Save As. The Rust + C# + UI surfaces are
+covered by 39 xUnit tests and the AOT publish is green again.
+**The clearest next gap is nested-field editing** — drill-down views
+are read-only because the C ABI's `SetScalarField` only addresses
+top-level TOC blocks, and the UI silently disables editing at depth
+> 1.
 
-1. **UI editing surface for scalar fields**. The plumbing is done;
-   what's missing is interaction. Concrete sub-tasks:
-   - DataGrid cell editing on the fields pane. The Value column needs
-     to switch to a TextBox on click/Enter and commit on blur/Enter.
-     Avalonia DataGrid supports cell-level editing via
-     `DataGridTextColumn` + `IsReadOnly="False"`, but the cell
-     template currently shows `value` as a pre-formatted string
-     ("1650 <u64>") emitted by Rust — we want the user to edit only
-     the numeric part. Two approaches:
-       - Strip the `<…>` type tag in C# (split on the last space) and
-         show the raw number, parse back on commit.
-       - Add a parallel `value_raw` field to the JSON so we don't
-         have to round-trip through the display string.
-   - Per-scalar typed setters in NativeSaveLoader (or extension
-     methods): `SetScalarUInt32`, `SetScalarInt64`, etc., converting
-     the typed value to LE bytes via `BitConverter` + length check
-     against the field's recorded type. Saves the UI from doing
-     byte-fiddling.
-   - "Save" / "Save As…" commands on the File menu. Save reuses the
-     loaded path; Save As… opens a SaveFilePicker. Both call
-     `ISaveLoader.WriteToFile`.
-   - "Dirty" indicator in the title bar / window when there are
-     uncommitted edits. Tracked in the VM.
-   - Validation feedback when SetScalarField throws CrimsonSaveException
-     (e.g. user typed a non-numeric value, or a value that doesn't
-     fit the field's byte range).
+1. **Nested-field editing path**. Two layers need to lift in
+   lockstep:
+   - **C ABI**: add a path-addressed setter. Either
+     (a) introduce a `crimson_save_set_scalar_field_path` that takes
+     `(block_idx, field_path[])` and walks locator children / list
+     elements in-place, OR
+     (b) expose nested children as their own handle indices and
+     reuse the existing setter. (a) is less surface, (b) is more
+     uniform — both need an ObjectBlock re-encoder for the
+     in-memory body.
+   - **C# / UI**: drop the `topLevel` gate in
+     `MainWindowViewModel.RebuildFromTop` once the C ABI supports
+     deep mutation, and teach `FieldRowViewModel` to carry the path
+     to its enclosing block instead of just the field index.
+   - Tests: roundtrip a mutation through 2+ levels of nesting
+     (e.g. inventory item count) and assert the on-disk save
+     re-decodes with the new value.
 
 2. **PR B — Length-changing edits**. List add / remove / reorder,
    inline-byte resize. Needs an ObjectBlock re-serializer (mirror of
    `decoder.rs`) and a body re-emit path that re-computes TOC
-   offsets. Hard; defer until the editing UX actually demands it.
+   offsets. Hard; the work toward (1) above already builds half of
+   the re-encoder, so doing the two together may be cheaper than
+   queuing them separately.
 
 3. **Asset / icon pipeline** — one-time mine icons from
    `D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS`, run through
@@ -175,7 +195,8 @@ step.
    language (independent of UI shell language).
 
 5. **Save backup management** — auto-backup on every load + on every
-   write, configurable retention.
+   write, configurable retention. (Especially valuable now that the
+   UI can overwrite a save in place.)
 
 6. **Mod awareness** — read `CDMods/cdumm.db` (SQLite) and
    `mods/_enabled/` to surface mod-added items without crashing on
@@ -186,6 +207,13 @@ step.
 
 8. **Avalonia.Diagnostics 12.x** — add back behind a `Debug`
    condition once published.
+
+9. **Re-evaluate the DataGrid AOT warning suppression** — the
+   `<NoWarn>IL2104;IL3053</NoWarn>` in
+   `CrimsonAtomtic.Ui.csproj` is a workaround for Avalonia
+   DataGrid 12.0.0 internals. Drop it once Avalonia ships a
+   trim-safe DataGrid (12.1+?) so future internal-reflection
+   regressions in our own code can't hide under it.
 
 ## Important context / gotchas (don't relearn these)
 
@@ -230,6 +258,31 @@ step.
   byte resize, and anything else that changes block length needs an
   ObjectBlock re-serializer (PR B on the roadmap) — defer until the
   UX actually demands it.
+- **UI editing is gated to top-level blocks (nav depth 1).** The C
+  ABI addresses blocks by TOC index; nested children inlined under
+  locators / lists aren't in the TOC. `FieldRowViewModel` is
+  constructed with `topLevelBlock=true` only for the root frame, so
+  drill-down views silently fall back to read-only. Lift this gate
+  in lockstep with a deep-mutation C ABI (see "Pick up here" #1).
+- **`format_field_value`'s shape is the editing contract**.
+  `ScalarFieldEditing.TryParse` splits the pre-formatted value on the
+  last space and validates the trailing `<…>` tag — if Rust ever
+  changes how `format_scalar` emits scalars (e.g. drops the type
+  tag), C# editing breaks silently. The `ScalarFieldEditingTests`
+  cover the current shape; bump them when the Rust formatter moves.
+- **Save As re-anchors the working document.** `MainWindowViewModel.SaveAs`
+  writes via `WriteToFile(newPath)` and then calls `Load(newPath)` so
+  the cached handle keys to the new path. Side effect: nav state
+  (selected block, breadcrumb, edit panel) resets. Acceptable for
+  v1; the standard "Save Copy As…" alternative that keeps the
+  session anchored to the original is a follow-up if anyone wants it.
+- **`<NoWarn>IL2104;IL3053</NoWarn>` is a load-bearing AOT hack.**
+  Without it, `dotnet publish -p:PublishAot=true` fails on the
+  unchanged baseline as of ilcompiler 10.0.7 — verified by stashing
+  this session's changes and re-running. The two codes are roll-up
+  warnings on Avalonia.Controls.DataGrid 12.0.0; suppressing them at
+  the csproj level keeps our own code under the original
+  TreatWarningsAsErrors safety net.
 - **`scripts/package_aot.ps1` no longer pre-deletes dist/<rid>/**.
   Pre-cleaning races with file handles held by a prior `dotnet test`
   (mmap on the freshly-published exe); ilc's first invocation fails
