@@ -3,10 +3,10 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-13 (session that wired the UI editing surface
-> for scalar fields — inline edit panel, Save/Save As, dirty
-> indicator — and unstuck the AOT publish from a pre-existing
-> ilcompiler 10.0.7 regression).
+> Last updated: 2026-05-13 (session that landed nested-field editing
+> end-to-end — crimson-rs PR #18 merged, vendor refreshed, C# C ABI
+> binding switched to the path API, UI editing surface lifted to any
+> nav depth).
 
 ## Where we are
 
@@ -39,27 +39,39 @@
     pre-formatted to mirror
     `tools/inspect/inspect_save_section.py --pretty`.
   - `crimson_save_set_scalar_field(handle, block, field, bytes, len)` →
-    in-place byte patch over `fixed_prefix` / `fixed_suffix` fields,
-    validated by byte length. Re-decodes all blocks on success so the
-    next `get_block_json` reflects the new value. Errors:
-    `NOT_SCALAR (-12)`, `LENGTH_MISMATCH (-13)`, `OUT_OF_RANGE (-10)`.
+    in-place byte patch over `fixed_prefix` / `fixed_suffix` fields of a
+    top-level TOC block. Validated by byte length. Errors: `NOT_SCALAR (-12)`,
+    `LENGTH_MISMATCH (-13)`, `OUT_OF_RANGE (-10)`. Still exported for
+    backward compat; C# now reaches this surface only through the path
+    variant (empty path).
+  - `crimson_save_set_scalar_field_path(handle, block, path[], path_len, field, bytes, len)`
+    → path-addressed scalar mutation. Each `CrimsonPathStep { field_idx, element_idx }`
+    descends one level: through a Locator's inline child (element_idx ignored)
+    or through ObjectList element `element_idx`. With `path_len == 0`,
+    semantics match the top-level setter. New error `NOT_NAVIGABLE (-15)`
+    fires when a mid-path step lands on anything other than a locator-with-child
+    or list. Re-decodes all blocks on success so the next `get_block_json`
+    reflects the new value.
   - `crimson_save_write_to_file(handle, path)` → re-serializes the
     save with the original nonce (HMAC + ChaCha20 + LZ4 rebuilt
     against the modified body) and writes to disk. Error:
     `WRITE_FAILED (-14)`.
   - `crimson_save_free`
-  - 54 tests pass (52 existing + 2 c_abi smokes:
-    `c_abi_smoke` covering every read entry point, and
-    `c_abi_mutate_and_write_roundtrip` covering mutate → write →
-    reload → assert + every mutation error path).
-- **Latest main**: `3eff882`. PRs landed this session: #14, #15, #16, #17.
+  - 55 tests pass (52 base + 3 c_abi smokes: `c_abi_smoke` covering every
+    read entry point, `c_abi_mutate_and_write_roundtrip` covering top-level
+    mutate → write → reload → assert + every error path, and
+    `c_abi_set_scalar_field_path` covering empty-path parity, one-step
+    nested mutation, write/reload roundtrip, NOT_NAVIGABLE, OUT_OF_RANGE
+    on a path step, and three NULL_ARG variants).
+- **Latest main**: `d4de625`. PRs landed across recent sessions:
+  #14, #15, #16, #17, #18 (path-addressed scalar mutation).
 - **Branch model**: dev → PR → main (rebase merge, linear history).
   After merge, local + origin/dev get force-reset to match main.
 
 ### `CrimsonAtomtic` (this repo)
 
 - **Foundation** (CLAUDE.md, docs/, .gitignore, vendor/, scripts/) — done.
-- **C# / Avalonia scaffolding** — done. Builds clean, 39/39 unit tests pass:
+- **C# / Avalonia scaffolding** — done. Builds clean, 41/41 unit tests pass:
   ```
   src/CrimsonAtomtic.Core         IPlatformPaths, ISingleInstanceGuard
   src/CrimsonAtomtic.SaveModel    SaveSummary, BlockSummary,
@@ -77,11 +89,16 @@
                                   IDisposable; caches a live handle for
                                   the currently-open save. Exposes
                                   Load / LoadBlockDetails (read) +
-                                  SetScalarField / WriteToFile (write).
+                                  SetScalarField (no-path + path
+                                  overload) / WriteToFile (write).
+                                  PathStep is the public FFI-layout
+                                  struct callers build descents from.
                                   + SaveLoaderScalarExtensions: typed
                                   SetScalarBool / SetScalarUInt32 /
-                                  SetScalarSingle / … wrappers over
-                                  SetScalarField(ReadOnlySpan<byte>).
+                                  SetScalarSingle / … wrappers — each
+                                  has a no-path and a path-aware
+                                  overload that share the same byte
+                                  encoding.
   src/CrimsonAtomtic.Ui           Avalonia 12 / .NET 10, PublishAot=true,
                                   Mutex single-instance, MainWindow with
                                   File menu (Open / Save / Save As /
@@ -94,16 +111,21 @@
                                   have resizable columns.
                                   FieldRowViewModel wraps each
                                   DecodedFieldRow; IsEditable gates on
-                                  scalar kind + supported type tag +
-                                  top-level block (depth 1).
-  src/CrimsonAtomtic.Tests        xUnit v3 — 39 tests:
-                                  14 NativeSaveLoaderTests (live-save
+                                  scalar kind + supported type tag.
+                                  Each wrapper carries the descent
+                                  path to its enclosing block so deep
+                                  mutations are addressable.
+  src/CrimsonAtomtic.Tests        xUnit v3 — 41 tests:
+                                  16 NativeSaveLoaderTests (live-save
                                   summary, block-details, cache reuse,
                                   Dispose lifecycle, nested data
-                                  reachability, mutation round-trip,
-                                  mutation error paths, typed
-                                  SetScalarUInt32 extension) +
-                                  25 ScalarFieldEditingTests (pure-CPU
+                                  reachability, top-level mutation
+                                  round-trip, nested-path mutation
+                                  round-trip, NOT_NAVIGABLE on a
+                                  scalar mid-path, mutation error
+                                  paths, typed SetScalarUInt32
+                                  extension) + 25
+                                  ScalarFieldEditingTests (pure-CPU
                                   parse / encode / IsTextEditable
                                   matrix across every supported tag).
                                   Live-save tests skip cleanly when
@@ -117,13 +139,16 @@
   AOT-safe). Drill-down composes recursively
   (`InventorySaveData › inventorylist[18] › [14]:
   InventoryElementSaveData › itemList[40] › …`).
-  Selecting a scalar field on the **root frame** (depth 1) reveals
-  an inline edit panel below the fields DataGrid; Apply (or Enter)
-  validates via `ScalarFieldEditing.TryEncode`, pushes the bytes
-  through `SetScalarField`, re-fetches the block, and rebases every
-  field's display value. The window title gains a leading `*` while
-  there are uncommitted edits; Save (Ctrl-style menu) writes back to
-  the open path, Save As… re-anchors to a fresh path.
+  Selecting a scalar field at **any nav depth** reveals an inline
+  edit panel below the fields DataGrid; Apply (or Enter) validates
+  via `ScalarFieldEditing.TryEncode`, pushes the bytes through the
+  path-addressed `SetScalarField(blockIdx, path, fieldIdx, bytes)`,
+  re-fetches the top-level block, walks every nav frame down its
+  stored path to rebase the entire chain, and stamps fresh display
+  values onto each existing `FieldRowViewModel` so the DataGrid keeps
+  its scroll / selection state. The window title gains a leading `*`
+  while there are uncommitted edits; Save (Ctrl-style menu) writes
+  back to the open path, Save As… re-anchors to a fresh path.
 - **AOT publish verified**: `dotnet publish -c Release -r win-x64
   -p:PublishAot=true` (csproj pins `TrimMode=full` and now suppresses
   the two roll-up codes `IL2104` + `IL3053` against Avalonia DataGrid
@@ -152,38 +177,27 @@
 
 ## Pick up here (next concrete task)
 
-Top-level scalar editing is now end-to-end: load → click a field →
-type → Apply → Save / Save As. The Rust + C# + UI surfaces are
-covered by 39 xUnit tests and the AOT publish is green again.
-**The clearest next gap is nested-field editing** — drill-down views
-are read-only because the C ABI's `SetScalarField` only addresses
-top-level TOC blocks, and the UI silently disables editing at depth
-> 1.
+Scalar editing now works **at any nav depth** — top-level fields,
+fields inside locator children, fields inside object-list elements.
+The Rust + C# + UI surfaces are covered by 41 xUnit C# tests + 55
+Rust tests, and the AOT publish remains green.
 
-1. **Nested-field editing path**. Two layers need to lift in
-   lockstep:
-   - **C ABI**: add a path-addressed setter. Either
-     (a) introduce a `crimson_save_set_scalar_field_path` that takes
-     `(block_idx, field_path[])` and walks locator children / list
-     elements in-place, OR
-     (b) expose nested children as their own handle indices and
-     reuse the existing setter. (a) is less surface, (b) is more
-     uniform — both need an ObjectBlock re-encoder for the
-     in-memory body.
-   - **C# / UI**: drop the `topLevel` gate in
-     `MainWindowViewModel.RebuildFromTop` once the C ABI supports
-     deep mutation, and teach `FieldRowViewModel` to carry the path
-     to its enclosing block instead of just the field index.
-   - Tests: roundtrip a mutation through 2+ levels of nesting
-     (e.g. inventory item count) and assert the on-disk save
-     re-decodes with the new value.
+The next gap depends on which capability you want to unlock first:
 
-2. **PR B — Length-changing edits**. List add / remove / reorder,
-   inline-byte resize. Needs an ObjectBlock re-serializer (mirror of
-   `decoder.rs`) and a body re-emit path that re-computes TOC
-   offsets. Hard; the work toward (1) above already builds half of
-   the re-encoder, so doing the two together may be cheaper than
-   queuing them separately.
+1. **Length-changing edits (PR B)**. List add / remove / reorder,
+   inline-byte resize. Needs an `ObjectBlock` re-serializer (mirror
+   of `decoder.rs`) and a body re-emit path that re-computes TOC
+   offsets. Hard; the value is being able to add inventory items,
+   not just edit existing ones. The path API from this session
+   doesn't directly help here — different code path entirely.
+
+2. **Multi-level path tests on the C# side**. The current
+   `SetScalarField_NestedPath_RoundTripsThroughWriteToFile` test
+   exercises one descent step. Worth adding a two-step test
+   (`inventoryList[N].itemList[M].count`-shaped) to lock in the
+   recursive walker on both sides. The Rust c_abi test already
+   covers any one-step-reachable scalar; the C# coverage on
+   multi-step paths is the gap.
 
 3. **Asset / icon pipeline** — one-time mine icons from
    `D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS`, run through
@@ -196,7 +210,7 @@ top-level TOC blocks, and the UI silently disables editing at depth
 
 5. **Save backup management** — auto-backup on every load + on every
    write, configurable retention. (Especially valuable now that the
-   UI can overwrite a save in place.)
+   UI can overwrite a save in place at any nav depth.)
 
 6. **Mod awareness** — read `CDMods/cdumm.db` (SQLite) and
    `mods/_enabled/` to surface mod-added items without crashing on
@@ -258,12 +272,27 @@ top-level TOC blocks, and the UI silently disables editing at depth
   byte resize, and anything else that changes block length needs an
   ObjectBlock re-serializer (PR B on the roadmap) — defer until the
   UX actually demands it.
-- **UI editing is gated to top-level blocks (nav depth 1).** The C
-  ABI addresses blocks by TOC index; nested children inlined under
-  locators / lists aren't in the TOC. `FieldRowViewModel` is
-  constructed with `topLevelBlock=true` only for the root frame, so
-  drill-down views silently fall back to read-only. Lift this gate
-  in lockstep with a deep-mutation C ABI (see "Pick up here" #1).
+- **Nested editing addresses scalars by path.** Each
+  `FieldRowViewModel` carries an `EnclosingPath: IReadOnlyList<PathStep>`
+  — the descent from the top-level TOC block to its containing block.
+  Top-level rows hold an empty path. The VM passes that path through
+  to `ISaveLoader.SetScalarField(blockIdx, path, fieldIdx, bytes)`,
+  which marshals it across the FFI to
+  `crimson_save_set_scalar_field_path`. After commit, the VM walks the
+  freshly-decoded top-level block down each nav frame's stored path
+  to rebuild every frame's `BlockDetails` reference, so popping back
+  via the breadcrumb shows fresh values.
+- **`PathStep` is FFI-layout.** Public struct in
+  `CrimsonAtomtic.RustInterop`, `[StructLayout(LayoutKind.Sequential)]`,
+  matches the Rust `CrimsonPathStep` byte-for-byte. The C# span
+  passes straight to the native function via `fixed (PathStep* …)`
+  — no per-element marshalling. Indices are `uint` to keep the layout
+  exact; convert from `int` at the call site.
+- **`NOT_NAVIGABLE (-15)` ≠ `NOT_SCALAR (-12)`.** The first fires
+  when a mid-path step targets a field whose kind isn't
+  ObjectLocator(child=Some) / ObjectList. The second only fires on
+  the leaf. If you see `NOT_NAVIGABLE` from C# you almost certainly
+  built the path against the wrong block in the nav stack.
 - **`format_field_value`'s shape is the editing contract**.
   `ScalarFieldEditing.TryParse` splits the pre-formatted value on the
   last space and validates the trailing `<…>` tag — if Rust ever
