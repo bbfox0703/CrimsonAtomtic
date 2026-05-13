@@ -49,13 +49,17 @@ public sealed partial class FieldRowViewModel : ObservableObject
             _rawText = raw;
             IsEditable = true;
 
-            // Best-effort item-name resolution: any u32-tagged scalar
-            // could be an item key. Look it up through iteminfo + PALOC;
-            // null when the catalogs aren't loaded or this u32 isn't a
-            // recognised item ID. Stored on the wrapper so the
-            // DataGrid binding stays a flat property read.
+            // Item-name resolution. Restricted to ItemKey-typed u32
+            // fields to avoid false positives — every save has dozens
+            // of u32 scalars (slot counts, inventory keys, etc.) that
+            // would coincidentally collide with item-table IDs and
+            // surface confusing "name" strings. ItemKey is the schema
+            // type used everywhere a real item ID appears, so this
+            // filter cleanly separates "actual item reference" from
+            // "happens to be a small integer".
             if (localization is not null
                 && tag == "u32"
+                && row.TypeName == "ItemKey"
                 && uint.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var itemId))
             {
                 var (english, secondary) = localization.ResolveItemName(itemId);
