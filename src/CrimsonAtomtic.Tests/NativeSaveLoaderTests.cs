@@ -327,6 +327,27 @@ public sealed class NativeSaveLoaderTests
     }
 
     [Fact]
+    public void SetScalarUInt32_TypedExtension_MatchesRawByteSet()
+    {
+        // The typed setter must produce the same byte order as the raw
+        // byte path. Use SetScalarUInt32, reload, and confirm the formatted
+        // value matches the one the byte-level test exercises.
+        var path = FindLiveSave();
+        if (path is null)
+        {
+            return;
+        }
+
+        using var loader = new NativeSaveLoader();
+        loader.Load(path);
+
+        loader.SetScalarUInt32(0, 0, 32_492_971u);   // 0x01EFCDAB
+
+        var after = loader.LoadBlockDetails(path, 0);
+        Assert.Equal("32492971 <u32>", after.Fields[0].Value);
+    }
+
+    [Fact]
     public void LoadBlockDetails_NestedDataReachable()
     {
         // Find any block whose decode contains an object_list or

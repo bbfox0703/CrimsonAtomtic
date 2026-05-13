@@ -9,8 +9,8 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 
 /// <summary>
 /// View-model for the main window. Holds the optional loaded save plus
-/// the file-open command. AOT-safe: every observable comes from a
-/// CommunityToolkit.Mvvm source generator, no reflection.
+/// the file-open / save / edit commands. AOT-safe: every observable
+/// comes from a CommunityToolkit.Mvvm source generator, no reflection.
 /// </summary>
 public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPaths paths) : ObservableObject
 {
@@ -38,6 +38,9 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
 
     private string? _loadedPath;
 
+    /// <summary>Currently loaded save's on-disk path, or null when no save is loaded.</summary>
+    public string? LoadedPath => _loadedPath;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSave))]
     [NotifyPropertyChangedFor(nameof(SchemaTypeCountText))]
@@ -45,6 +48,7 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
     [NotifyPropertyChangedFor(nameof(HmacStatusText))]
     [NotifyPropertyChangedFor(nameof(PayloadSizeText))]
     [NotifyPropertyChangedFor(nameof(UncompressedSizeText))]
+    [NotifyPropertyChangedFor(nameof(WindowTitle))]
     private SaveSummary? _summary;
 
     /// <summary>Currently selected row in the blocks DataGrid.</summary>
@@ -56,12 +60,31 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
     private string? _detailsError;
 
     /// <summary>
+    /// True when there are uncommitted in-memory edits — set whenever a
+    /// successful <see cref="CommitFieldEditCommand"/> mutates a scalar
+    /// field, cleared by Save / Save As.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WindowTitle))]
+    private bool _isDirty;
+
+    /// <summary>
     /// Live text filter for <see cref="VisibleFields"/>. Empty / null
     /// shows everything. Applies only when <see cref="IsShowingFields"/>.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FieldsFilterCountText))]
     private string? _fieldsFilter;
+
+    /// <summary>
+    /// Field selected in the field-detail DataGrid. The View binds the
+    /// inline edit panel below the DataGrid to this row, so users edit by
+    /// click-to-select + type, not via DataGrid cell-edit mode.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsEditPanelVisible))]
+    [NotifyPropertyChangedFor(nameof(SelectedFieldTypeHint))]
+    private FieldRowViewModel? _selectedField;
 
     public ObservableCollection<BlockSummary> Blocks { get; } = [];
 
@@ -74,6 +97,22 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
     public string PayloadSizeText => Summary is null ? "" : $"{Summary.PayloadSize:N0} bytes";
     public string UncompressedSizeText => Summary is null ? "" : $"{Summary.UncompressedSize:N0} bytes";
 
+    /// <summary>Window title — appends a "*" marker when the save has unsaved edits.</summary>
+    public string WindowTitle
+    {
+        get
+        {
+            const string app = "CrimsonAtomtic";
+            if (_loadedPath is null)
+            {
+                return app;
+            }
+            var name = Path.GetFileName(_loadedPath);
+            var prefix = IsDirty ? "*" : "";
+            return $"{prefix}{name} — {app}";
+        }
+    }
+
     // ── Navigation ──────────────────────────────────────────────────────────
     //
     // Field-level inspection supports drilling into nested data:
@@ -85,11 +124,17 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
     //
     // The Breadcrumb collection mirrors the stack, root → leaf. Clicking a
     // breadcrumb entry pops back to that depth.
+    //
+    // Scalar editing is permitted only at depth == 1 (the root frame of a
+    // top-level block): the C ABI's SetScalarField addresses blocks by TOC
+    // index, and nested children inlined under locators / lists aren't part
+    // of the TOC. FieldRowViewModel.IsEditable is forced false on deeper
+    // frames.
 
     private readonly Stack<NavFrame> _navStack = new();
 
-    private readonly List<DecodedFieldRow> _allFields = [];
-    public ObservableCollection<DecodedFieldRow> VisibleFields { get; } = [];
+    private readonly List<FieldRowViewModel> _allFields = [];
+    public ObservableCollection<FieldRowViewModel> VisibleFields { get; } = [];
     public ObservableCollection<BlockDetails> VisibleElements { get; } = [];
     public ObservableCollection<BreadcrumbItem> Breadcrumb { get; } = [];
 
@@ -123,6 +168,12 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
         !IsShowingElements ? string.Empty
         : $"{VisibleElements.Count:N0} element{(VisibleElements.Count == 1 ? "" : "s")}";
 
+    /// <summary>Edit panel is shown when the user has selected an editable scalar field.</summary>
+    public bool IsEditPanelVisible => SelectedField is { IsEditable: true };
+
+    /// <summary>Type-tag hint shown in the edit panel, e.g. "u32" or "f64".</summary>
+    public string SelectedFieldTypeHint => SelectedField?.TypeTag ?? string.Empty;
+
     /// <summary>
     /// Called from the View when the user picks a file via the
     /// platform's file dialog. Kept on the VM (not the View) so the
@@ -137,6 +188,7 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
         }
         Summary = loader.Load(path);
         _loadedPath = path;
+        IsDirty = false;
         Blocks.Clear();
         SelectedBlock = null;
         ClearNavigation();
@@ -147,6 +199,9 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
                 Blocks.Add(block);
             }
         }
+        SaveCommand.NotifyCanExecuteChanged();
+        SaveAsCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(WindowTitle));
     }
 
     partial void OnSelectedBlockChanged(BlockSummary? value)
@@ -168,6 +223,11 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
     }
 
     partial void OnFieldsFilterChanged(string? value) => ApplyFieldsFilter();
+
+    partial void OnIsDirtyChanged(bool value)
+    {
+        SaveCommand.NotifyCanExecuteChanged();
+    }
 
     /// <summary>
     /// Drill into a field's nested data. No-op when the field is a scalar
@@ -242,6 +302,113 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
         RebuildFromTop();
     }
 
+    /// <summary>
+    /// Apply the edit currently sitting in <paramref name="row"/>'s
+    /// <see cref="FieldRowViewModel.RawText"/>. Encodes per type tag,
+    /// pushes the bytes through <see cref="ISaveLoader.SetScalarField"/>,
+    /// and on success re-reads the block to refresh every field's display
+    /// value (a single mutation can ripple into peer fields via the schema).
+    /// On failure, leaves the raw text intact and stamps
+    /// <see cref="FieldRowViewModel.EditError"/>.
+    /// </summary>
+    [RelayCommand]
+    private void CommitFieldEdit(FieldRowViewModel? row)
+    {
+        var block = SelectedBlock;
+        if (row is null || !row.IsEditable || _loadedPath is null || block is null)
+        {
+            return;
+        }
+        if (!ScalarFieldEditing.TryEncode(row.TypeTag, row.RawText, out var bytes, out var err))
+        {
+            row.EditError = err;
+            return;
+        }
+        try
+        {
+            loader.SetScalarField(block.Index, row.FieldIndex, bytes);
+        }
+        catch (CrimsonSaveException ex)
+        {
+            row.EditError = $"{ex.Message} (code {ex.ErrorCode})";
+            return;
+        }
+
+        // Re-fetch the block: the mutation may ripple (e.g. masks). Reuse
+        // the existing FieldRowViewModel instances so the DataGrid keeps
+        // its scroll / selection state.
+        var fresh = loader.LoadBlockDetails(_loadedPath, block.Index);
+        for (var i = 0; i < _allFields.Count && i < fresh.Fields.Count; i++)
+        {
+            _allFields[i].ApplyCommittedValue(fresh.Fields[i]);
+        }
+        IsDirty = true;
+        OnPropertyChanged(nameof(WindowTitle));
+    }
+
+    /// <summary>Revert the in-progress edit on a row to its last committed value.</summary>
+    [RelayCommand]
+    private void RevertFieldEdit(FieldRowViewModel? row)
+    {
+        // Touch instance state so the RelayCommand source generator can
+        // bind without CA1822 firing on a pure-delegate wrapper.
+        DetailsError = null;
+        row?.RevertEdit();
+    }
+
+    /// <summary>
+    /// Save back to the originally-loaded path. CanExecute gates on
+    /// <see cref="IsDirty"/> so the menu item disables when there's nothing
+    /// to write.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanSave))]
+    private void Save()
+    {
+        if (_loadedPath is null)
+        {
+            return;
+        }
+        loader.WriteToFile(_loadedPath);
+        IsDirty = false;
+        OnPropertyChanged(nameof(WindowTitle));
+    }
+
+    private bool CanSave() => HasSave && IsDirty && _loadedPath is not null;
+
+    /// <summary>
+    /// Save to a user-chosen path. The View invokes this after running
+    /// the SaveFilePicker. Re-anchors the working document to the new
+    /// path (subsequent Saves go there), matching standard "Save As"
+    /// semantics.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(HasSave))]
+    private void SaveAs(string? destinationPath)
+    {
+        if (string.IsNullOrWhiteSpace(destinationPath) || _loadedPath is null)
+        {
+            return;
+        }
+        loader.WriteToFile(destinationPath);
+        // Re-anchor: load the freshly-written file so the cached handle
+        // matches the new path, then clear nav state. Re-reading also
+        // proves the file round-trips (HMAC + LZ4 + ChaCha20 all good).
+        Summary = loader.Load(destinationPath);
+        _loadedPath = destinationPath;
+        IsDirty = false;
+        Blocks.Clear();
+        SelectedBlock = null;
+        ClearNavigation();
+        if (Summary is not null)
+        {
+            foreach (var block in Summary.Blocks)
+            {
+                Blocks.Add(block);
+            }
+        }
+        SaveCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(WindowTitle));
+    }
+
     private void PushFrame(NavFrame frame)
     {
         _navStack.Push(frame);
@@ -262,6 +429,7 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
         _allFields.Clear();
         VisibleFields.Clear();
         VisibleElements.Clear();
+        SelectedField = null;
         FieldsFilter = null;
 
         if (_navStack.Count > 0)
@@ -269,7 +437,14 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
             switch (_navStack.Peek())
             {
                 case BlockFrame bf:
-                    _allFields.AddRange(bf.Block.Fields);
+                    // Editing is gated on depth == 1: only top-level blocks
+                    // are addressable by the C ABI's TOC index. Children
+                    // get read-only wrappers.
+                    var topLevel = _navStack.Count == 1;
+                    foreach (var field in bf.Block.Fields)
+                    {
+                        _allFields.Add(new FieldRowViewModel(field, topLevel));
+                    }
                     ApplyFieldsFilter();
                     break;
                 case ElementsFrame ef:
@@ -307,7 +482,7 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
             {
                 if (f.Name.Contains(needle, StringComparison.OrdinalIgnoreCase)
                     || f.TypeName.Contains(needle, StringComparison.OrdinalIgnoreCase)
-                    || f.Value.Contains(needle, StringComparison.OrdinalIgnoreCase))
+                    || f.DisplayValue.Contains(needle, StringComparison.OrdinalIgnoreCase))
                 {
                     VisibleFields.Add(f);
                 }
@@ -323,6 +498,7 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
         _allFields.Clear();
         VisibleFields.Clear();
         VisibleElements.Clear();
+        SelectedField = null;
         FieldsFilter = null;
         DetailsError = null;
         NotifyNavigationChanged();

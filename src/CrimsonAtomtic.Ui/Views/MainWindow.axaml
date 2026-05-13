@@ -9,7 +9,7 @@
         d:DesignHeight="600"
         x:Class="CrimsonAtomtic.Ui.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="{StaticResource WindowTitle}"
+        Title="{Binding WindowTitle, FallbackValue={StaticResource WindowTitle}}"
         Width="960" Height="640"
         MinWidth="600" MinHeight="400">
 
@@ -18,6 +18,11 @@
     <Menu DockPanel.Dock="Top">
       <MenuItem Header="{StaticResource MenuFile}">
         <MenuItem Header="{StaticResource MenuOpenSave}" Click="OnOpenSaveClick" />
+        <MenuItem Header="{StaticResource MenuSave}"
+                  Command="{Binding SaveCommand}" />
+        <MenuItem Header="{StaticResource MenuSaveAs}"
+                  Click="OnSaveAsClick"
+                  IsEnabled="{Binding HasSave}" />
         <Separator />
         <MenuItem Header="{StaticResource MenuExit}" Click="OnExitClick" />
       </MenuItem>
@@ -83,7 +88,7 @@
       <!-- Right: blocks list (top) + field detail pane (bottom),
            split by a draggable GridSplitter. -->
       <Grid Grid.Column="1"
-            RowDefinitions="Auto,*,Auto,260"
+            RowDefinitions="Auto,*,Auto,320"
             Margin="12,0,0,0">
 
         <TextBlock Grid.Row="0"
@@ -117,7 +122,7 @@
                       ResizeDirection="Rows" />
 
         <Grid Grid.Row="3"
-              RowDefinitions="Auto,Auto,Auto,Auto,*"
+              RowDefinitions="Auto,Auto,Auto,Auto,*,Auto"
               Margin="0,8,0,0">
 
           <Grid Grid.Row="0"
@@ -197,34 +202,85 @@
           <!-- Fields DataGrid (visible when a block is on top). -->
           <DataGrid Grid.Row="4"
                     ItemsSource="{Binding VisibleFields}"
+                    SelectedItem="{Binding SelectedField, Mode=TwoWay}"
                     IsVisible="{Binding IsShowingFields}"
                     IsReadOnly="True"
                     CanUserResizeColumns="True"
+                    SelectionMode="Single"
                     GridLinesVisibility="Horizontal"
                     HeadersVisibility="Column"
                     AutoGenerateColumns="False">
             <DataGrid.Columns>
-              <DataGridTextColumn Header="{StaticResource FieldsColIndex}"   Binding="{Binding FieldIndex}" Width="50" />
-              <DataGridTextColumn Header="{StaticResource FieldsColName}"    Binding="{Binding Name}"       Width="280" />
-              <DataGridTextColumn Header="{StaticResource FieldsColType}"    Binding="{Binding TypeName}"   Width="160" />
-              <DataGridTextColumn Header="{StaticResource FieldsColKind}"    Binding="{Binding Kind}"       Width="120" />
-              <DataGridTextColumn Header="{StaticResource FieldsColPresent}" Binding="{Binding Present}"    Width="70" />
-              <DataGridTextColumn Header="{StaticResource FieldsColValue}"   Binding="{Binding Value}"      Width="*" />
+              <DataGridTextColumn Header="{StaticResource FieldsColIndex}"   Binding="{Binding FieldIndex}"   Width="50" />
+              <DataGridTextColumn Header="{StaticResource FieldsColName}"    Binding="{Binding Name}"         Width="280" />
+              <DataGridTextColumn Header="{StaticResource FieldsColType}"    Binding="{Binding TypeName}"     Width="160" />
+              <DataGridTextColumn Header="{StaticResource FieldsColKind}"    Binding="{Binding Kind}"         Width="120" />
+              <DataGridTextColumn Header="{StaticResource FieldsColPresent}" Binding="{Binding Present}"      Width="70" />
+              <DataGridTextColumn Header="{StaticResource FieldsColValue}"   Binding="{Binding DisplayValue}" Width="*" />
               <DataGridTemplateColumn Header="{StaticResource FieldsColDrill}" Width="80">
                 <DataGridTemplateColumn.CellTemplate>
-                  <DataTemplate x:DataType="model:DecodedFieldRow">
+                  <DataTemplate x:DataType="vm:FieldRowViewModel">
                     <Button Content="{StaticResource FieldsDrillButton}"
                             IsVisible="{Binding HasNested}"
                             HorizontalAlignment="Center"
                             Padding="8,2"
                             MinHeight="0"
                             Command="{Binding $parent[DataGrid].((vm:MainWindowViewModel)DataContext).DrillIntoFieldCommand}"
-                            CommandParameter="{Binding}" />
+                            CommandParameter="{Binding Row}" />
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
             </DataGrid.Columns>
           </DataGrid>
+
+          <!-- Inline edit panel: visible when the selected field is an
+               editable top-level scalar. Clicking Apply pushes the bytes
+               through SetScalarField; the DataGrid refreshes from the
+               freshly re-decoded block. -->
+          <Border Grid.Row="5"
+                  IsVisible="{Binding IsEditPanelVisible}"
+                  BorderThickness="0,1,0,0"
+                  BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                  Padding="0,8,0,0"
+                  Margin="0,8,0,0">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto"
+                  RowDefinitions="Auto,Auto,Auto"
+                  ColumnSpacing="8"
+                  RowSpacing="4">
+              <TextBlock Grid.Row="0" Grid.Column="0"
+                         Text="{StaticResource EditPanelHeader}"
+                         FontWeight="SemiBold" />
+              <TextBlock Grid.Row="0" Grid.Column="1"
+                         Text="{Binding SelectedField.Name}"
+                         Opacity="0.8"
+                         FontFamily="Cascadia Code,Consolas,monospace"
+                         Margin="8,0,0,0" />
+              <TextBlock Grid.Row="0" Grid.Column="2"
+                         Text="{Binding SelectedFieldTypeHint}"
+                         Opacity="0.6"
+                         FontFamily="Cascadia Code,Consolas,monospace" />
+
+              <TextBox Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                       Text="{Binding SelectedField.RawText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                       KeyDown="OnEditValueKeyDown"
+                       PlaceholderText="{Binding SelectedFieldTypeHint}" />
+              <Button Grid.Row="1" Grid.Column="2"
+                      Content="{StaticResource EditPanelApply}"
+                      Command="{Binding CommitFieldEditCommand}"
+                      CommandParameter="{Binding SelectedField}"
+                      IsDefault="True" />
+              <Button Grid.Row="1" Grid.Column="3"
+                      Content="{StaticResource EditPanelRevert}"
+                      Command="{Binding RevertFieldEditCommand}"
+                      CommandParameter="{Binding SelectedField}" />
+
+              <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="4"
+                         Text="{Binding SelectedField.EditError}"
+                         Foreground="IndianRed"
+                         TextWrapping="Wrap"
+                         IsVisible="{Binding SelectedField.EditError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </Grid>
+          </Border>
 
           <!-- Elements DataGrid (visible when an ObjectList is on top:
                lets the user pick which element to drill into). -->

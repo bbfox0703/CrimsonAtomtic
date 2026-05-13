@@ -8,6 +8,8 @@
   <!-- Menu -->
   <sys:String x:Key="MenuFile">_File</sys:String>
   <sys:String x:Key="MenuOpenSave">_Open Save…</sys:String>
+  <sys:String x:Key="MenuSave">_Save</sys:String>
+  <sys:String x:Key="MenuSaveAs">Save _As…</sys:String>
   <sys:String x:Key="MenuExit">E_xit</sys:String>
 
   <!-- Empty workspace -->
@@ -55,6 +57,15 @@
   <!-- Drill-down + navigation -->
   <sys:String x:Key="FieldsColDrill">Drill</sys:String>
   <sys:String x:Key="FieldsDrillButton">▸</sys:String>
+
+  <!-- Edit panel -->
+  <sys:String x:Key="EditPanelHeader">Edit field</sys:String>
+  <sys:String x:Key="EditPanelNameLabel">Field</sys:String>
+  <sys:String x:Key="EditPanelTypeLabel">Type</sys:String>
+  <sys:String x:Key="EditPanelValueLabel">New value</sys:String>
+  <sys:String x:Key="EditPanelApply">Apply</sys:String>
+  <sys:String x:Key="EditPanelRevert">Revert</sys:String>
+  <sys:String x:Key="EditPanelNestedReadOnly">Editing nested fields is not yet supported. Use Back to return to the top-level block.</sys:String>
   <sys:String x:Key="ElementsColIndex">#</sys:String>
   <sys:String x:Key="ElementsColClass">Class</sys:String>
   <sys:String x:Key="ElementsColOffset">Offset</sys:String>
