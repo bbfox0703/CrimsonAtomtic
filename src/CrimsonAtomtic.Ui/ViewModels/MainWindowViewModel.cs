@@ -49,6 +49,7 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
     [NotifyPropertyChangedFor(nameof(PayloadSizeText))]
     [NotifyPropertyChangedFor(nameof(UncompressedSizeText))]
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
+    [NotifyPropertyChangedFor(nameof(BackgroundOpacity))]
     private SaveSummary? _summary;
 
     /// <summary>Currently selected row in the blocks DataGrid.</summary>
@@ -96,6 +97,14 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
     public string HmacStatusText => Summary is null ? "" : Summary.HmacOk ? "verified" : "FAILED";
     public string PayloadSizeText => Summary is null ? "" : $"{Summary.PayloadSize:N0} bytes";
     public string UncompressedSizeText => Summary is null ? "" : $"{Summary.UncompressedSize:N0} bytes";
+
+    /// <summary>
+    /// Opacity for the Logo.jpg watermark behind the window. Prominent
+    /// on the empty splash state (~50 %) so it reads as the app's
+    /// landing image, drops to a faint watermark (~7 %) once a save is
+    /// loaded so the DataGrid content stays readable.
+    /// </summary>
+    public double BackgroundOpacity => HasSave ? 0.07 : 0.50;
 
     /// <summary>Window title — appends a "*" marker when the save has unsaved edits.</summary>
     public string WindowTitle

@@ -10,10 +10,24 @@
         x:Class="CrimsonAtomtic.Ui.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding WindowTitle, FallbackValue={StaticResource WindowTitle}}"
+        Icon="/Assets/MainIcon.ico"
         Width="960" Height="640"
         MinWidth="600" MinHeight="400">
 
-  <DockPanel LastChildFill="True">
+  <!-- Layered root: a faded Logo.jpg sits behind the whole window,
+       slightly more prominent on the empty splash state and dropping
+       to a faint watermark once a save is loaded (so the DataGrids
+       stay legible). Children render in declaration order; the menu
+       and content panels keep their theme backgrounds where they need
+       to, and the image only shows through the transparent gaps. -->
+  <Grid>
+    <Image Source="/Assets/Logo.jpg"
+           Stretch="UniformToFill"
+           IsHitTestVisible="False"
+           Opacity="{Binding BackgroundOpacity}" />
+
+    <DockPanel LastChildFill="True"
+               Background="Transparent">
 
     <Menu DockPanel.Dock="Top">
       <MenuItem Header="{StaticResource MenuFile}">
@@ -105,7 +119,9 @@
                   CanUserResizeColumns="True"
                   GridLinesVisibility="Horizontal"
                   HeadersVisibility="Column"
-                  AutoGenerateColumns="False">
+                  AutoGenerateColumns="False"
+                  Background="Transparent"
+                  RowBackground="Transparent">
           <DataGrid.Columns>
             <DataGridTextColumn Header="{StaticResource BlocksColIndex}"   Binding="{Binding Index}"      Width="60" />
             <DataGridTextColumn Header="{StaticResource BlocksColClass}"   Binding="{Binding ClassName}"  Width="*" />
@@ -209,7 +225,9 @@
                     SelectionMode="Single"
                     GridLinesVisibility="Horizontal"
                     HeadersVisibility="Column"
-                    AutoGenerateColumns="False">
+                    AutoGenerateColumns="False"
+                    Background="Transparent"
+                    RowBackground="Transparent">
             <DataGrid.Columns>
               <DataGridTextColumn Header="{StaticResource FieldsColIndex}"   Binding="{Binding FieldIndex}"   Width="50" />
               <DataGridTextColumn Header="{StaticResource FieldsColName}"    Binding="{Binding Name}"         Width="280" />
@@ -291,7 +309,9 @@
                     CanUserResizeColumns="True"
                     GridLinesVisibility="Horizontal"
                     HeadersVisibility="Column"
-                    AutoGenerateColumns="False">
+                    AutoGenerateColumns="False"
+                    Background="Transparent"
+                    RowBackground="Transparent">
             <DataGrid.Columns>
               <DataGridTextColumn Header="{StaticResource ElementsColIndex}"  Binding="{Binding ClassIndex}" Width="60" />
               <DataGridTextColumn Header="{StaticResource ElementsColClass}"  Binding="{Binding ClassName}"  Width="*" />
@@ -315,5 +335,6 @@
       </Grid>
     </Grid>
 
-  </DockPanel>
+    </DockPanel>
+  </Grid>
 </Window>

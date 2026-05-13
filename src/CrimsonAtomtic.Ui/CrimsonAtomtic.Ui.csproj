@@ -12,6 +12,7 @@
     <PublishAot>true</PublishAot>
     <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\MainIcon.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
 
     <!-- Trim XAML resources we don't reference. -->
@@ -28,6 +29,15 @@
          removal when Avalonia ships a trim-safe DataGrid. -->
     <NoWarn>$(NoWarn);IL2104;IL3053</NoWarn>
   </PropertyGroup>
+
+  <!-- Bundle the window icon and the logo background as Avalonia
+       resources so MainWindow.axaml can resolve them at runtime via
+       avares:// URIs (compatible with AOT — no runtime reflection,
+       resources are baked into the assembly at compile time). -->
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\MainIcon.ico" />
+    <AvaloniaResource Include="Assets\Logo.jpg" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" />
