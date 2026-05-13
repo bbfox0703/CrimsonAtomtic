@@ -366,6 +366,31 @@ public sealed class LocalizationProvider : IDisposable
         return (english, secondary);
     }
 
+    /// <summary>
+    /// Same as <see cref="ResolveItemName"/> but pre-formatted as a
+    /// single display string. Returns the empty string when neither
+    /// language resolves. Shape:
+    /// <list type="bullet">
+    ///   <item>English only: <c>"Gold"</c></item>
+    ///   <item>English + secondary: <c>"Gold / 黃金"</c></item>
+    ///   <item>Secondary only (rare): <c>"黃金"</c></item>
+    ///   <item>Neither: empty string.</item>
+    /// </list>
+    /// Both the per-field DataGrid wrapper and the per-element
+    /// DataGrid wrapper route through this so the column formatting
+    /// stays consistent.
+    /// </summary>
+    public string ResolveItemNameFormatted(uint itemId)
+    {
+        var (english, secondary) = ResolveItemName(itemId);
+        var hasEn = !string.IsNullOrEmpty(english);
+        var hasSec = !string.IsNullOrEmpty(secondary);
+        if (!hasEn && !hasSec) return string.Empty;
+        if (!hasSec) return english!;
+        if (!hasEn) return secondary!;
+        return $"{english} / {secondary}";
+    }
+
     public void Dispose()
     {
         _itemInfo?.Dispose();

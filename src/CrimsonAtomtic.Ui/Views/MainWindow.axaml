@@ -323,7 +323,10 @@
           </Border>
 
           <!-- Elements DataGrid (visible when an ObjectList is on top:
-               lets the user pick which element to drill into). -->
+               lets the user pick which element to drill into).
+               ItemKey + Item name columns surface the row's identity
+               so users can tell what each slot holds at a glance
+               instead of seeing 14 identical "ItemSaveData" rows. -->
           <DataGrid Grid.Row="4"
                     ItemsSource="{Binding VisibleElements}"
                     IsVisible="{Binding IsShowingElements}"
@@ -335,19 +338,21 @@
                     Background="Transparent"
                     RowBackground="Transparent">
             <DataGrid.Columns>
-              <DataGridTextColumn Header="{StaticResource ElementsColIndex}"  Binding="{Binding ClassIndex}" Width="60" />
-              <DataGridTextColumn Header="{StaticResource ElementsColClass}"  Binding="{Binding ClassName}"  Width="*" />
-              <DataGridTextColumn Header="{StaticResource ElementsColOffset}" Binding="{Binding DataOffset}" Width="120" />
-              <DataGridTextColumn Header="{StaticResource ElementsColSize}"   Binding="{Binding DataSize}"   Width="120" />
+              <DataGridTextColumn Header="{StaticResource ElementsColIndex}"    Binding="{Binding ClassIndex}"   Width="60" />
+              <DataGridTextColumn Header="{StaticResource ElementsColClass}"    Binding="{Binding ClassName}"    Width="220" />
+              <DataGridTextColumn Header="{StaticResource ElementsColItemKey}"  Binding="{Binding ItemKeyText}"  Width="80" />
+              <DataGridTextColumn Header="{StaticResource ElementsColItemName}" Binding="{Binding ResolvedName}" Width="*" />
+              <DataGridTextColumn Header="{StaticResource ElementsColOffset}"   Binding="{Binding DataOffset}"   Width="120" />
+              <DataGridTextColumn Header="{StaticResource ElementsColSize}"     Binding="{Binding DataSize}"     Width="120" />
               <DataGridTemplateColumn Header="{StaticResource ElementsColOpen}" Width="80">
                 <DataGridTemplateColumn.CellTemplate>
-                  <DataTemplate x:DataType="model:BlockDetails">
+                  <DataTemplate x:DataType="vm:ElementRowViewModel">
                     <Button Content="{StaticResource ElementsOpenButton}"
                             HorizontalAlignment="Center"
                             Padding="8,2"
                             MinHeight="0"
                             Command="{Binding $parent[DataGrid].((vm:MainWindowViewModel)DataContext).DrillIntoElementCommand}"
-                            CommandParameter="{Binding}" />
+                            CommandParameter="{Binding Block}" />
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
