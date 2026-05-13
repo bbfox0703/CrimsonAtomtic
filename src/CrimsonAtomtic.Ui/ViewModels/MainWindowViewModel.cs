@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using CrimsonAtomtic.Core;
 using CrimsonAtomtic.RustInterop;
 using CrimsonAtomtic.SaveModel;
+using CrimsonAtomtic.Ui.Services;
 
 namespace CrimsonAtomtic.Ui.ViewModels;
 
@@ -12,8 +13,27 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 /// the file-open / save / edit commands. AOT-safe: every observable
 /// comes from a CommunityToolkit.Mvvm source generator, no reflection.
 /// </summary>
-public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPaths paths) : ObservableObject
+public sealed partial class MainWindowViewModel(
+    ISaveLoader loader,
+    IPlatformPaths paths,
+    LocalizationProvider localization) : ObservableObject
 {
+    /// <summary>
+    /// Localization service exposed for child view-models (e.g. the
+    /// browse-localization dialog opened from the Tools menu).
+    /// </summary>
+    public LocalizationProvider Localization => localization;
+
+    /// <summary>
+    /// Status string for the footer: "Localization: 102,300 entries" or
+    /// "Localization: not loaded" when no game install was detected at
+    /// startup.
+    /// </summary>
+    public string LocalizationStatus =>
+        localization.IsLoaded
+            ? $"Localization: {localization.EntryCount:N0} entries"
+            : "Localization: not loaded";
+
     /// <summary>
     /// Best initial folder for the Open Save dialog. Drills into the
     /// single user-id subfolder (e.g. <c>save\102190433\</c>) when

@@ -11,6 +11,14 @@
   <sys:String x:Key="MenuSave">_Save</sys:String>
   <sys:String x:Key="MenuSaveAs">Save _As…</sys:String>
   <sys:String x:Key="MenuExit">E_xit</sys:String>
+  <sys:String x:Key="MenuTools">_Tools</sys:String>
+  <sys:String x:Key="MenuBrowseLocalization">_Browse Localization…</sys:String>
+
+  <!-- Browse-localization dialog -->
+  <sys:String x:Key="LocalizationWindowTitle">Browse localization</sys:String>
+  <sys:String x:Key="LocalizationSearchPlaceholder">Filter by key or value…</sys:String>
+  <sys:String x:Key="LocalizationColKey">Key</sys:String>
+  <sys:String x:Key="LocalizationColValue">Value</sys:String>
 
   <!-- Empty workspace -->
   <sys:String x:Key="EmptyTitle">No save loaded</sys:String>
