@@ -91,7 +91,10 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         return ReadBlockDetails(handle, (uint)blockIndex);
     }
 
-    public void SetScalarField(int blockIndex, int fieldIndex, ReadOnlySpan<byte> bytes)
+    public void SetScalarField(int blockIndex, int fieldIndex, ReadOnlySpan<byte> bytes) =>
+        SetScalarField(blockIndex, ReadOnlySpan<PathStep>.Empty, fieldIndex, bytes);
+
+    public void SetScalarField(int blockIndex, ReadOnlySpan<PathStep> path, int fieldIndex, ReadOnlySpan<byte> bytes)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
@@ -109,15 +112,22 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
 
         unsafe
         {
-            fixed (byte* p = bytes)
+            fixed (byte* pBytes = bytes)
+            fixed (PathStep* pPath = path)
             {
-                var rc = NativeMethods.SetScalarField(cached, (uint)blockIndex, (uint)fieldIndex,
-                    p, (nuint)bytes.Length);
+                var rc = NativeMethods.SetScalarFieldPath(
+                    cached,
+                    (uint)blockIndex,
+                    pPath,
+                    (nuint)path.Length,
+                    (uint)fieldIndex,
+                    pBytes,
+                    (nuint)bytes.Length);
                 if (rc != NativeMethods.OK)
                 {
                     throw new CrimsonSaveException(rc,
-                        $"crimson_save_set_scalar_field(block={blockIndex}, field={fieldIndex}, " +
-                        $"bytes={bytes.Length}) failed: {ErrorName(rc)}");
+                        $"crimson_save_set_scalar_field_path(block={blockIndex}, path_len={path.Length}, " +
+                        $"field={fieldIndex}, bytes={bytes.Length}) failed: {ErrorName(rc)}");
                 }
             }
         }
@@ -376,6 +386,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         NativeMethods.NOT_SCALAR            => "NOT_SCALAR",
         NativeMethods.LENGTH_MISMATCH       => "LENGTH_MISMATCH",
         NativeMethods.WRITE_FAILED          => "WRITE_FAILED",
+        NativeMethods.NOT_NAVIGABLE         => "NOT_NAVIGABLE",
         NativeMethods.PANIC                 => "PANIC",
         _                                   => $"UNKNOWN({code})",
     };
@@ -449,6 +460,7 @@ internal static partial class NativeMethods
     public const int NOT_SCALAR            = -12;
     public const int LENGTH_MISMATCH       = -13;
     public const int WRITE_FAILED          = -14;
+    public const int NOT_NAVIGABLE         = -15;
     public const int PANIC                 = -99;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -503,9 +515,15 @@ internal static partial class NativeMethods
     public static unsafe partial int GetBlockJson(
         CrimsonSaveHandle handle, uint index, byte* buf, nuint bufLen, out nuint required);
 
-    [LibraryImport(LibraryName, EntryPoint = "crimson_save_set_scalar_field")]
-    public static unsafe partial int SetScalarField(
-        CrimsonSaveHandle handle, uint blockIdx, uint fieldIdx, byte* bytes, nuint bytesLen);
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_set_scalar_field_path")]
+    public static unsafe partial int SetScalarFieldPath(
+        CrimsonSaveHandle handle,
+        uint blockIdx,
+        PathStep* path,
+        nuint pathLen,
+        uint fieldIdx,
+        byte* bytes,
+        nuint bytesLen);
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_save_write_to_file",
                    StringMarshalling = StringMarshalling.Utf8)]
