@@ -133,6 +133,129 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         }
     }
 
+    public void SetScalarFieldsBatch(IReadOnlyList<ScalarBatchOp> ops)
+    {
+        ArgumentNullException.ThrowIfNull(ops);
+        var count = ops.Count;
+        if (count == 0)
+        {
+            // The Rust ABI also treats op_count == 0 as a no-op.
+            return;
+        }
+
+        CrimsonSaveHandle? cached;
+        lock (_cacheLock)
+        {
+            cached = _cachedHandle;
+        }
+        if (cached is null || cached.IsInvalid)
+        {
+            throw new InvalidOperationException(
+                "No save is currently loaded. Call Load(savePath) before SetScalarFieldsBatch.");
+        }
+
+        // Per-op input checks (block/field non-negative). These mirror
+        // the ArgumentOutOfRangeException pattern the single-op setter
+        // uses for its top-level args, so a bad input is caught with
+        // the same exception shape regardless of which entry point the
+        // caller picked.
+        for (var i = 0; i < count; i++)
+        {
+            var op = ops[i];
+            if (op.BlockIndex < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(ops),
+                    $"ops[{i}].BlockIndex must be non-negative, was {op.BlockIndex}.");
+            }
+            if (op.FieldIndex < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(ops),
+                    $"ops[{i}].FieldIndex must be non-negative, was {op.FieldIndex}.");
+            }
+        }
+
+        // Pack all paths into one PathStep[] arena and all bytes into
+        // one byte[] arena, recording each op's offset. This gives us
+        // 3 GC pins regardless of `count` instead of 2 × count via
+        // per-op GCHandle.Alloc — much cheaper at the ~168-op scale
+        // the production "Fill stacks" path runs.
+        var pathOffsets = new int[count];
+        var bytesOffsets = new int[count];
+        var totalPathSteps = 0;
+        var totalBytes = 0;
+        for (var i = 0; i < count; i++)
+        {
+            var op = ops[i];
+            pathOffsets[i] = totalPathSteps;
+            bytesOffsets[i] = totalBytes;
+            totalPathSteps += op.Path?.Length ?? 0;
+            totalBytes += op.Bytes?.Length ?? 0;
+        }
+
+        var pathArena = totalPathSteps == 0 ? Array.Empty<PathStep>() : new PathStep[totalPathSteps];
+        var bytesArena = totalBytes == 0 ? Array.Empty<byte>() : new byte[totalBytes];
+        for (var i = 0; i < count; i++)
+        {
+            var op = ops[i];
+            if (op.Path is { Length: > 0 } path)
+            {
+                Array.Copy(path, 0, pathArena, pathOffsets[i], path.Length);
+            }
+            if (op.Bytes is { Length: > 0 } bytes)
+            {
+                Array.Copy(bytes, 0, bytesArena, bytesOffsets[i], bytes.Length);
+            }
+        }
+
+        var cOps = new NativeMethods.CrimsonScalarBatchOp[count];
+        unsafe
+        {
+            fixed (PathStep* pPath = pathArena)
+            fixed (byte* pBytes = bytesArena)
+            {
+                for (var i = 0; i < count; i++)
+                {
+                    var op = ops[i];
+                    var pathLen = op.Path?.Length ?? 0;
+                    var bytesLen = op.Bytes?.Length ?? 0;
+                    cOps[i] = new NativeMethods.CrimsonScalarBatchOp
+                    {
+                        BlockIdx = (uint)op.BlockIndex,
+                        FieldIdx = (uint)op.FieldIndex,
+                        // Empty-slice ops carry a null pointer with
+                        // matching zero length; Rust gates the deref
+                        // on the length, but we keep things tidy.
+                        Path     = pathLen == 0 ? null : pPath + pathOffsets[i],
+                        PathLen  = (nuint)pathLen,
+                        Bytes    = bytesLen == 0 ? null : pBytes + bytesOffsets[i],
+                        BytesLen = (nuint)bytesLen,
+                    };
+                }
+
+                fixed (NativeMethods.CrimsonScalarBatchOp* pOps = cOps)
+                {
+                    var rc = NativeMethods.SetScalarFieldsBatch(
+                        cached, pOps, (nuint)count, out var failedIdx);
+                    if (rc != NativeMethods.OK)
+                    {
+                        // usize::MAX (~unsigned -1) is the success
+                        // sentinel — never written on error, but
+                        // guard against a defensive Rust write anyway.
+                        int? failedOpIdx = failedIdx == nuint.MaxValue
+                            ? null
+                            : checked((int)failedIdx);
+                        throw new CrimsonSaveException(
+                            rc,
+                            failedOpIdx is { } fi
+                                ? $"crimson_save_set_scalar_fields_batch failed at op {fi}/{count}: {ErrorName(rc)}"
+                                : $"crimson_save_set_scalar_fields_batch failed: {ErrorName(rc)}",
+                            failedOpIdx);
+                    }
+                }
+            }
+        }
+    }
+
     public void WriteToFile(string destinationPath)
     {
         ArgumentException.ThrowIfNullOrEmpty(destinationPath);
@@ -433,7 +556,22 @@ public sealed class CrimsonSaveException : Exception
         ErrorCode = errorCode;
     }
 
+    public CrimsonSaveException(int errorCode, string message, int? failedOpIndex) : base(message)
+    {
+        ErrorCode = errorCode;
+        FailedOpIndex = failedOpIndex;
+    }
+
     public int ErrorCode { get; }
+
+    /// <summary>
+    /// When set, identifies which op in a
+    /// <see cref="ISaveLoader.SetScalarFieldsBatch(System.Collections.Generic.IReadOnlyList{ScalarBatchOp})"/>
+    /// call failed validation (zero-based index into the input list).
+    /// <c>null</c> on errors from single-op entry points or when the
+    /// batch ABI couldn't pinpoint a specific op (e.g. NULL handle).
+    /// </summary>
+    public int? FailedOpIndex { get; }
 }
 
 /// <summary>
@@ -525,6 +663,30 @@ internal static partial class NativeMethods
         uint fieldIdx,
         byte* bytes,
         nuint bytesLen);
+
+    /// <summary>
+    /// Mirror of <c>CrimsonScalarBatchOp</c> in
+    /// <c>vendor/crimson-rs/src/c_abi/mod.rs</c>. Layout-compatible
+    /// repr(C) — passed across the FFI by pointer + length pair to
+    /// <see cref="SetScalarFieldsBatch"/>.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public unsafe struct CrimsonScalarBatchOp
+    {
+        public uint BlockIdx;
+        public uint FieldIdx;
+        public PathStep* Path;
+        public nuint PathLen;
+        public byte* Bytes;
+        public nuint BytesLen;
+    }
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_set_scalar_fields_batch")]
+    public static unsafe partial int SetScalarFieldsBatch(
+        CrimsonSaveHandle handle,
+        CrimsonScalarBatchOp* ops,
+        nuint opCount,
+        out nuint failedOpIndex);
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_save_write_to_file",
                    StringMarshalling = StringMarshalling.Utf8)]
