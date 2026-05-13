@@ -23,6 +23,11 @@
     <ProjectReference Include="..\CrimsonAtomtic.Core\CrimsonAtomtic.Core.csproj" />
     <ProjectReference Include="..\CrimsonAtomtic.SaveModel\CrimsonAtomtic.SaveModel.csproj" />
     <ProjectReference Include="..\CrimsonAtomtic.RustInterop\CrimsonAtomtic.RustInterop.csproj" />
+    <!-- IconImageEncoder lives in the Ui project; it pulls SkiaSharp
+         transitively via Avalonia.Skia. The test runner only touches
+         IconImageEncoder (pure logic) so no Avalonia application
+         bootstrap is required at test time. -->
+    <ProjectReference Include="..\CrimsonAtomtic.Ui\CrimsonAtomtic.Ui.csproj" />
   </ItemGroup>
 
   <!-- Smoke tests in NativeSaveLoaderTests P/Invoke into crimson_rs.dll
@@ -32,6 +37,13 @@
     <Content Include="..\..\vendor\crimson-rs\target\release\crimson_rs.dll"
              Condition="Exists('..\..\vendor\crimson-rs\target\release\crimson_rs.dll')">
       <Link>crimson_rs.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!-- Fixture: a real BC3-encoded DDS extracted from group 0012.
+         Used by IconImageEncoderTests to validate the decoder against
+         non-synthetic input. -->
+    <Content Include="fixtures\sample_bc3_32x32.dds">
+      <Link>fixtures\sample_bc3_32x32.dds</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

@@ -3,14 +3,18 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-13 (icon-extraction pipeline **Phase 1**:
-> `stringinfo.pabgb` parser + C ABI bridge landed in crimson-rs
-> [#24](https://github.com/bbfox0703/crimson-rs/pull/24); C# wrapper
-> + LocalizationProvider wiring on this side. Resolves the
-> `StringInfoKey` hashes harvested from iteminfo's `icon_path` /
-> `map_icon_path` to texture filenames like `cd_icon_arrow_basic.dds`
-> — the resolver Phases 2-4 need.
-> 73/73 C# tests + 80/80 Rust tests pass).
+> Last updated: 2026-05-13 (icon-extraction pipeline **Phases 1 + 2**:
+> Phase 1 (`stringinfo.pabgb` parser + C ABI + C# wrapper +
+> LocalizationProvider wiring) landed via crimson-rs
+> [#24](https://github.com/bbfox0703/crimson-rs/pull/24);
+> Phase 2 (`IconImageEncoder`: hand-rolled BC1/BC3 decoder +
+> SkiaSharp resize + WebP encode) landed on this side. The
+> editor can now resolve an `icon_path` → texture name AND
+> turn a raw `.dds` into a 64×64 `.webp` — both halves of the
+> pipeline. Phase 3 (the orchestrating UI action) is blocked
+> on crimson-rs partial-compression PAZ support (97% of
+> `0012/ui/texture/icon/` is partial-compressed).
+> 79/79 C# tests + 80/80 Rust tests pass).
 
 ## Where we are
 
@@ -293,23 +297,25 @@ as a stopgap, but the long-term plan is extraction from game data
 so we don't depend on a third party's processed copy of Pearl
 Abyss's artwork.
 
-**End-to-end data flow** (investigated this session — see "Game
-data layout" below):
+**End-to-end data flow** (updated after Phase 1 + 2):
 
 ```
 ItemKey                   from save schema (already have)
-   ↓ iteminfo.pabgb     ✓ already parsed in crimson-rs
+   ↓ iteminfo.pabgb     ✓ parsed in crimson-rs
 icon_path (StringInfoKey, u32)
-   ↓ stringinfo.pabgb  ✗ NEW parser needed (1.8 MB in 0008/)
-"cd_icon_xxx.dds"           (filename, conjectured shape)
-   ↓ PAZ 0012/ui/texture/icon/  ✓ extractable via IPazExtractor
-raw .dds bytes              (BC1/BC3 compressed texture)
-   ↓ DDS decoder          ✗ NEW (NuGet: Pfim or BCnEncoder.Net)
-RGBA bitmap (e.g. 256×256)
-   ↓ SkiaSharp resize     ✓ already linked via Avalonia.Skia
+   ↓ stringinfo.pabgb  ✓ Phase 1 — NativeStringInfoCatalog +
+                           LocalizationProvider.ResolveStringInfoHash
+"cd_icon_xxx.dds"           (resolved filename, confirmed shape)
+   ↓ PAZ 0012/ui/texture/icon/  ⚠ partial-compression — blocks
+                                  Phase 3 until crimson-rs adds it
+raw .dds bytes              (BC1/BC3 compressed texture, mip 0 only)
+   ↓ DDS decoder          ✓ Phase 2 — IconImageEncoder (hand-rolled
+                              BC1 + BC3, no NuGet)
+RGBA bitmap (32×32 to 256×256)
+   ↓ SkiaSharp resize     ✓ Phase 2 — SKImage.ScalePixels
 64×64 RGBA bitmap
-   ↓ SKImage.Encode(Webp) ✓ already available in SkiaSharp 3
-~10 KB .webp file
+   ↓ SKImage.Encode(Webp) ✓ Phase 2 — SkiaSharp 3.119
+~few-KB .webp file
    ↓ File.WriteAllBytes
 <cache>/<ItemKey>.webp
 ```
@@ -337,13 +343,33 @@ RGBA bitmap (e.g. 256×256)
    - Status footer + name-resolution code paths unchanged — the
      bridge degrades silently when no install is found.
 
-2. **Phase 2 — DDS decode + webp re-encode in C#** (1 session; NEXT).
-   - Add `Pfim` NuGet (or `BCnEncoder.Net`) for DDS → RGBA.
-   - Use SkiaSharp resize + `SKBitmap.Encode(SKEncodedImageFormat.Webp, quality)`.
-   - Standalone test: feed one known DDS, verify output webp opens
-     in our existing Avalonia Image path.
+2. ~~**Phase 2 — DDS decode + webp re-encode in C#**~~ ✅ **Landed.**
+   What shipped:
+   - `IconImageEncoder.EncodeDdsToWebp(ReadOnlySpan<byte>, int targetSize, int quality)`
+     in `src/CrimsonAtomtic.Ui/Services/`.
+   - **Hand-rolled BC1 (DXT1) + BC3 (DXT5) block decoders** instead
+     of adding `Pfim` / `BCnEncoder.Net` — keeps the dependency
+     surface minimal (project rule 8) and AOT-safe by construction
+     (only 200 LOC of pure C#). BC4/5/7 unsupported — not used by
+     any item icon in 1.06 (verified against extracted samples).
+   - **SkiaSharp 3.119.4** for the resize + WebP encode step — pulled
+     transitively via `Avalonia.Skia` 12.0.3, no new explicit NuGet.
+     Pipeline: DDS header parse → 4×4 BC block decode → RGBA8888 →
+     `SKBitmap` → `SKImage.ScalePixels(SKSamplingOptions(Linear))`
+     → `SKImage.Encode(SKEncodedImageFormat.Webp, quality)`.
+   - 6 new C# tests in `IconImageEncoderTests`: live BC3 fixture
+     produces valid WebP at varying target sizes, synthetic
+     solid-red BC1 round-trips, garbage / truncated / unsupported-
+     FourCC inputs throw `InvalidDataException`.
+   - Test fixture: real `cd_icon_map_enemy_die_1.dds` (32×32 DXT5)
+     extracted from 0012; copied next to the test runner via
+     `Content Include` in the Tests csproj.
+   - AOT publish verified: bundle size unchanged (23.9 MB exe);
+     SkiaSharp + the encoder add zero trim warnings.
 
-3. **Phase 3 — Extraction action UI** (1 session).
+3. **Phase 3 — Extraction action UI** (BLOCKED on partial-compression
+   support in crimson-rs; see "Game data layout" note below).
+   When the PAZ side is unblocked:
    - Tools menu → "Extract icons from game data…".
    - Walks every iteminfo entry, looks up icon path via stringinfo,
      extracts DDS via `IPazExtractor` (group 0012), runs the
@@ -363,18 +389,28 @@ RGBA bitmap (e.g. 256×256)
    - Update docs/data-policy.md if needed (these icons ARE derived
      data and stay outside git — matches the rule).
 
-**Game data layout (snapshot from the Phase 1 investigation)**:
+**Game data layout (snapshot from Phase 1 + 2 investigation)**:
 - `0008/gamedata/binary__/client/bin/iteminfo.pabgb` (~24 MB, 6,400 items).
-- `0008/gamedata/binary__/client/bin/stringinfo.pabgb` (~1.8 MB) — **the resolver we need**.
+- `0008/gamedata/binary__/client/bin/stringinfo.pabgb` (~1.8 MB) — ✅
+  the resolver, parsed and wired in Phase 1.
 - `0008/gamedata/binary__/client/bin/localstringinfo.pabgb` (~2.0 MB) — localized variants (probably distinct from PALOC).
-- `0012/ui/texture/icon/` — 7,560 `.dds` files. Filename shape e.g.
-  `cd_icon_skill_07.dds`, `cd_knowledgeimage_knowledge_recipe_*.dds`
-  — descriptive, not directly ItemKey-keyed. Some other directories
-  in 0012 (`questimage/`, `challengeimage/`, `portraitimage/`,
-  `playguideimage/`, `worldmapimage_knowledge/`) hold related
-  asset categories.
-- DDS format details (BC1 / BC3 / mip levels / etc.) need
-  confirmation in Phase 2 — open one in `plcli` or a DDS viewer.
+- `0012/ui/texture/icon/` — 7,560 `.dds` files; another 11,000+ DDS
+  across other `0012` subdirs. Filename shape e.g.
+  `cd_icon_skill_07.dds`, `cd_knowledgeimage_knowledge_recipe_*.dds`.
+  Some other directories in 0012 (`questimage/`, `challengeimage/`,
+  `portraitimage/`, `playguideimage/`, `worldmapimage_knowledge/`)
+  hold related asset categories.
+- DDS format confirmed in Phase 2: BC3 (DXT5) is the dominant format
+  for item icons; 32×32 base size with mips=1 is typical. BC1 also
+  used for some opaque textures. BC4/5/7 absent.
+- **Partial-compression blocker**: 17,975 of 18,565 (97%) of DDS
+  files under `0012/` have PAZ flag `raw_compression == 1`, which
+  crimson-rs rejects with `partial compression extraction not yet
+  implemented` (`src/binary/paz.rs:394`). The 590 non-partial files
+  (all under `ui/texture/image/worldmap/` plus 11 misc) are
+  extractable today — that's how we got the Phase 2 test fixture
+  `sample_bc3_32x32.dds`. Phase 3 needs partial-compression support
+  added to `vendor/crimson-rs` first; pre-Phase-3 PR target.
 
 **Current Icon code that needs to integrate with the pipeline**:
 - `IconProvider` already does lazy load + Bitmap cache from a
