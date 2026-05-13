@@ -3,26 +3,23 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-13 (icon-extraction pipeline **Phases 1 + 2 +
-> partial-PAZ unblock**: Phase 1 (`stringinfo.pabgb` parser + C ABI +
-> C# wrapper + LocalizationProvider wiring) landed via crimson-rs
-> [#24](https://github.com/bbfox0703/crimson-rs/pull/24); Phase 2
+> Last updated: 2026-05-13 (icon-extraction pipeline **complete —
+> Phases 1 through 3**: end-to-end from `ItemKey` to
+> `<cache>/<ItemKey>.webp`. Phase 1 (stringinfo bridge) and Phase 2
 > (`IconImageEncoder`: hand-rolled BC1/BC3 decoder + SkiaSharp resize
-> + WebP encode) landed on this side. The Phase-3 blocker is now
-> **resolved**: crimson-rs `binary::paz::decompress_partial` covers
-> three sub-formats for `raw_compression == 1` entries — identity
-> (`c == u`), header(128)+LZ4-with-prefix-dict, and DDS per-mip table
-> (mip sizes packed into the DDS reserved area at offset 0x20). The
-> per-mip strategy is a port of NattKh's CrimsonForge
-> `_decompress_type1_dds_per_mip_sizes`; it extends coverage past
-> icons (which already worked via header+LZ4) to the worldmap SDF
-> tiles and most large diffuse textures that the simpler rule missed.
-> The existing `IPazExtractor.ExtractFile` C# binding works
-> unchanged. 81/81 C# tests + 88/88 Rust tests (incl. c_abi) pass;
-> clippy clean. Phase 3 (the orchestrating UI action) is the next
-> concrete step. PAR-container layout used by `.pam` / `.pamlod` /
-> `.pac` meshes in 0009/0015 is still out of scope here — see
-> CrimsonForge `_decompress_type1_par` for the recipe when needed.
+> + WebP encode) shipped earlier. **Phase 3 (Tools menu →
+> "Extract Icons from Game Data…") now lands** with a new
+> `crimson_iteminfo_lookup_icon_path_hash` C ABI getter
+> ([crimson-rs #26](https://github.com/bbfox0703/crimson-rs/pull/26))
+> exposing `item_icon_list[0].icon_path`, plus
+> `IconExtractionService` (the orchestrator) + a modal
+> `IconExtractionProgressDialog` (progress bar + cooperative cancel).
+> One end-to-end run takes ~3 min and writes ~6,200 webps; the
+> on-disk cache size is ~5 MB. 82/82 C# tests + 88/88 Rust tests
+> (incl. c_abi) pass; clippy clean. PAR-container layout used by
+> `.pam` / `.pamlod` / `.pac` meshes in 0009/0015 remains out of
+> scope — see CrimsonForge `_decompress_type1_par` for the recipe
+> when needed.
 
 ## Where we are
 
@@ -121,12 +118,19 @@
     byte-identical Rust-side round-trip; the C ABI consumes only the
     pabgb side because every entry is self-describing
     (`[u32 hash][u32 zero][u8 flag][u32 slen][N bytes utf-8]`).
-  - 80 tests pass (60 base + 20 c_abi tests across save, paloc, paz,
+  - **iteminfo icon_path getter** (`crimson_iteminfo_lookup_icon_path_hash`):
+    returns the `StringInfoKey` (u32) of `item_icon_list[0].icon_path`
+    for a given `ItemKey`. `NOT_FOUND` when the item has no icon
+    entry or the entry's hash is 0 (the explicit "no icon"
+    sentinel). One extra ~50 KB `HashMap<u32, u32>` on the existing
+    handle — total iteminfo memory still under 1 MB.
+  - 88 tests pass (60 base + 28 c_abi tests across save, paloc, paz,
     iteminfo, string_info).
 - **Latest main**: `e335870`. PRs landed across recent sessions:
   #14, #15, #16, #17, #18 (path-addressed scalar mutation),
   #19 (PALOC C ABI), #20 (one-shot PAZ extraction),
-  #21 (iteminfo bridge), #24 (stringinfo bridge — icon pipeline P1).
+  #21 (iteminfo bridge), #24 (stringinfo bridge — icon pipeline P1),
+  #25 (partial-PAZ unblock), #26 (iteminfo icon_path getter — P3).
 - **Branch model**: dev → PR → main (rebase merge, linear history).
   After merge, local + origin/dev get force-reset to match main.
 
@@ -392,22 +396,53 @@ RGBA bitmap (32×32 to 256×256)
    - AOT publish verified: bundle size unchanged (23.9 MB exe);
      SkiaSharp + the encoder add zero trim warnings.
 
-3. **Phase 3 — Extraction action UI** (UNBLOCKED — partial-compression
-   PAZ extraction now works for every DDS under
-   `0012/ui/texture/icon/`; see [paz.rs decompress_partial](../vendor/crimson-rs/src/binary/paz.rs)
-   and `PazExtractorTests.ExtractFile_LiveInstall_PartialCompressedIconExtractsAsValidDds`).
-   Concrete work for the next session:
-   - Tools menu → "Extract icons from game data…".
-   - Walks every iteminfo entry, looks up icon path via stringinfo,
-     extracts DDS via `IPazExtractor` (group 0012), runs the
-     decode/resize/encode pipeline, writes `<cache>/<ItemKey>.webp`.
-   - Progress dialog (modal with N/Total + cancel). Run on background
-     thread so UI stays responsive — same pattern as the bulk-fill
-     stacks command this session shipped.
-   - Skip items where `icon_path` is empty / unresolved / DDS missing.
-     Log to a sidecar `.log` file in the cache folder for diagnostic.
+3. ~~**Phase 3 — Extraction action UI**~~ ✅ **Landed.** What shipped:
+   - `crimson_iteminfo_lookup_icon_path_hash` C ABI getter
+     ([crimson-rs #26](https://github.com/bbfox0703/crimson-rs/pull/26))
+     exposing `item_icon_list[0].icon_path` per ItemKey.
+   - C# wrapper additions: `IItemInfoCatalog.LookupIconPathHash`,
+     `NativeItemInfoCatalog.LookupIconPathHash`,
+     `LocalizationProvider.GetItemIconPathHash`. Also exposed
+     `LocalizationProvider.Paz` and `LocalizationProvider.GameRoot`
+     for downstream services to reuse the bootstrap state.
+   - `IconExtractionService` in
+     `src/CrimsonAtomtic.Ui/Services/`: pure async orchestrator
+     taking `LocalizationProvider`, `IPazExtractor`, gameRoot,
+     cacheDir, overwriteExisting, optional `IProgress<IconExtractionProgress>`,
+     and a `CancellationToken`. Walks `ItemCount` entries, for each
+     one: resolve icon hash → resolve stringinfo → lowercase name +
+     ".dds" → PAZ-extract from `0012/ui/texture/icon/` → encode
+     via `IconImageEncoder` → `File.WriteAllBytesAsync`. Counts
+     written / already-cached / no-icon / no-string /
+     not-in-archive / failed; keeps the first 10 failure messages
+     for the summary. Progress sink is throttled to every 25 items.
+     Per-item exceptions are caught and counted — one bad item
+     never aborts the run.
+   - `IconExtractionProgressDialog` modal: progress bar +
+     running-counts text + Cancel-then-Close button. Cooperative
+     cancellation via the dialog's `CancellationTokenSource`;
+     window-close fires cancel too, then waits for the worker to
+     honour it before allowing the close. Disposes the CTS on the
+     window's `Closed` event. CA1001 explicitly suppressed
+     (Avalonia owns the window lifetime).
+   - Tools menu entry "_Extract Icons from Game Data…" in
+     `MainWindow.axaml`; click handler in `MainWindow.axaml.cs`
+     resolves the target directory (configured > `<exe-dir>/IconCache/`),
+     runs the dialog, and on success re-seeds `IconProvider`
+     through `MainWindowViewModel.SetIconCacheDirectory` so the
+     freshly-written icons appear in already-rendered DataGrids
+     without restarting.
+   - End-to-end test `IconExtractionServiceTests.RunAsync_LiveInstall_WritesIcons`
+     gated on `CRIMSON_RUN_EXTRACTION_TEST=1`. Takes ~3 min against
+     the live 1.06 install; writes ~6,200 icons. An optional
+     `CRIMSON_EXTRACTION_TARGET=<path>` env var redirects the
+     output and skips cleanup — used to populate the user's actual
+     cache directory from CLI.
+   - Live run summary (1.06 install, default settings):
+     6,400 items processed; ~6,200 written; ~200 skipped (no icon
+     entry / dev items / stale prefab references); 0 failed.
 
-4. **Phase 4 — Polish + edge cases** (1 session).
+4. **Phase 4 — Polish + edge cases** (future, low priority now).
    - Mercenary character portraits (`icons_mercenary/` shape — keyed by
      CharacterKey, source likely in `ui/texture/image/portraitimage/`).
    - Skip-already-cached on subsequent runs; "Re-extract all" override.

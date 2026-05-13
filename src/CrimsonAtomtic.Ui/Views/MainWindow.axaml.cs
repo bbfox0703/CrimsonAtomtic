@@ -476,6 +476,59 @@ public sealed partial class MainWindow : Window
         child.Show(this);
     }
 
+    /// <summary>
+    /// Tools → Extract Icons from Game Data. Drives
+    /// <see cref="IconExtractionProgressDialog"/> against the loaded
+    /// LocalizationProvider, then — if anything was written — re-seeds
+    /// the IconProvider at the same path so the new icons show up in
+    /// the elements grid + Item Picker on the next render pass.
+    ///
+    /// Degrades silently when stringinfo isn't loaded (no game install
+    /// found at bootstrap), or when no icon-cache target can be
+    /// resolved. The status footer is the user-facing signal for
+    /// those cases.
+    /// </summary>
+    private async void OnExtractIconsClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+        var loc = vm.Localization;
+        if (!loc.HasStringInfo || string.IsNullOrEmpty(loc.GameRoot))
+        {
+            // Bootstrap didn't find the install — nothing to extract from.
+            return;
+        }
+
+        // Target directory probe order matches IconProvider's: configured
+        // path (Tools → Set Icon Folder) wins, else fall back to
+        // <exe-dir>/IconCache. Either way we ensure the directory
+        // exists before the extractor opens it.
+        var configured = loc.Icons.Root;
+        var cacheDir = !string.IsNullOrEmpty(configured)
+            ? configured
+            : Path.Combine(AppContext.BaseDirectory, "IconCache");
+
+        var result = await IconExtractionProgressDialog.RunAsync(
+            owner: this,
+            localization: loc,
+            paz: loc.Paz,
+            gameRoot: loc.GameRoot!,
+            cacheDirectory: cacheDir,
+            overwriteExisting: false);
+
+        // Re-seed the icon provider so newly-written .webp files
+        // appear immediately in already-rendered DataGrids. Same code
+        // path as the user picking the folder manually via Tools →
+        // Set Icon Folder, so all the same cache-invalidation work
+        // (drop the per-key Bitmap dict, repaint visible rows) fires.
+        if (result is not null && result.Written > 0)
+        {
+            vm.SetIconCacheDirectory(cacheDir);
+        }
+    }
+
     private void OnExitClick(object? sender, RoutedEventArgs e)
     {
         if (Avalonia.Application.Current?.ApplicationLifetime

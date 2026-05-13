@@ -234,6 +234,21 @@ public sealed class LocalizationProvider : IDisposable
     /// <summary>True when the iteminfo bridge AND the English PALOC are loaded.</summary>
     public bool IsLoaded => _itemInfo is not null && _catalogs.ContainsKey(DefaultLanguage);
 
+    /// <summary>
+    /// Crimson Desert install root the provider was bootstrapped against,
+    /// or <c>null</c> when bootstrap didn't find one. Exposed so the
+    /// icon-extraction action can resolve <c>0012/0.pamt</c> without
+    /// re-running platform-path discovery.
+    /// </summary>
+    public string? GameRoot => _gameRoot;
+
+    /// <summary>
+    /// PAZ extractor the provider was constructed with. Exposed so
+    /// downstream actions (icon extraction, future asset operations)
+    /// can reuse the same instance instead of allocating a new one.
+    /// </summary>
+    public IPazExtractor Paz => _paz;
+
     /// <summary>Number of entries in the English PALOC, or 0 when not loaded.</summary>
     public int EntryCount =>
         _catalogs.TryGetValue(DefaultLanguage, out var cat) ? cat.EntryCount : 0;
@@ -559,6 +574,16 @@ public sealed class LocalizationProvider : IDisposable
     /// </summary>
     public ulong? GetItemMaxStackCount(uint itemKey) =>
         _itemInfo?.LookupMaxStackCount(itemKey);
+
+    /// <summary>
+    /// <c>StringInfoKey</c> (u32 hash) of an item's primary icon —
+    /// the first entry of <c>item_icon_list[0].icon_path</c>. Pair
+    /// with <see cref="ResolveStringInfoHash(uint)"/> to get the
+    /// underlying texture filename. Returns <c>null</c> when the
+    /// iteminfo bridge isn't loaded or the item has no icon.
+    /// </summary>
+    public uint? GetItemIconPathHash(uint itemKey) =>
+        _itemInfo?.LookupIconPathHash(itemKey);
 
     /// <summary>
     /// True when the stringinfo bridge is loaded. Lets the icon-extraction

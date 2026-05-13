@@ -141,6 +141,22 @@ public sealed class NativeItemInfoCatalog : IItemInfoCatalog
         return max;
     }
 
+    public uint? LookupIconPathHash(uint itemKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var rc = NativeMethods.ItemInfoLookupIconPathHash(_handle, itemKey, out var hash);
+        if (rc == NativeMethods.NOT_FOUND)
+        {
+            return null;
+        }
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_iteminfo_lookup_icon_path_hash({itemKey}) failed: {ErrorName(rc)}");
+        }
+        return hash;
+    }
+
     public (uint ItemKey, string StringKey)? GetEntry(int index)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
