@@ -34,4 +34,35 @@ public sealed class WindowsPlatformPaths : IPlatformPaths
             "Pearl Abyss",
             "CD",
             "save");
+
+    /// <summary>
+    /// Probe a handful of well-known Steam library roots for a Crimson
+    /// Desert install. Not exhaustive — a future iteration should parse
+    /// <c>libraryfolders.vdf</c> for the user's actual library list.
+    /// Returns the first directory that contains a <c>0020/0.pamt</c>
+    /// (the PAMT we extract the English PALOC from).
+    /// </summary>
+    public string? GameInstallRoot
+    {
+        get
+        {
+            string[] candidates =
+            [
+                @"D:\SteamLibrary\steamapps\common\Crimson Desert",
+                @"C:\Program Files (x86)\Steam\steamapps\common\Crimson Desert",
+                @"C:\Program Files\Steam\steamapps\common\Crimson Desert",
+                @"E:\SteamLibrary\steamapps\common\Crimson Desert",
+                @"F:\SteamLibrary\steamapps\common\Crimson Desert",
+            ];
+            foreach (var candidate in candidates)
+            {
+                var probe = Path.Combine(candidate, "0020", "0.pamt");
+                if (File.Exists(probe))
+                {
+                    return candidate;
+                }
+            }
+            return null;
+        }
+    }
 }

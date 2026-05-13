@@ -15,4 +15,12 @@ public interface IPlatformPaths
 
     /// <summary>Where the user's Crimson Desert save files live (game-specific, not app-specific).</summary>
     string GameSaveRoot { get; }
+
+    /// <summary>
+    /// Best-effort path to a Crimson Desert game install (the directory
+    /// containing the <c>0000/</c>, <c>0020/</c>, … pack groups). Used
+    /// to bootstrap localization tables. Returns <c>null</c> when no
+    /// install can be detected; consumers should degrade gracefully.
+    /// </summary>
+    string? GameInstallRoot { get; }
 }
