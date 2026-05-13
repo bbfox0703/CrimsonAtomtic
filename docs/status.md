@@ -611,6 +611,80 @@ Open from earlier work, none blocking the icon pipeline:
     c_abi test already covers any one-step-reachable scalar, so
     the gap is only on the C# side.
 
+## Key resolvers we still need — C# consumption expectations (forward-looking note)
+
+This section is for whoever picks up the next crimson-rs session to
+investigate / add parsers for the **Key types still showing blank in
+the save editor's resolved-name column**. CrimsonAtomtic already has
+all the C#-side infrastructure to consume them — see
+[`LocalizationProvider`](../src/CrimsonAtomtic.Ui/Services/LocalizationProvider.cs),
+which today bootstraps `iteminfo`, `paloc`, and `stringinfo` from a
+Crimson Desert install and surfaces typed `Resolve*` methods to the
+ResolvedNameColumn in the fields DataGrid. So the only **non-trivial
+choice for the upstream PR is the C ABI shape** — this note exists so
+the crimson-rs author can shape that ABI to minimize C#-side
+ceremony, rather than discovering the impedance mismatch in a
+follow-up.
+
+### Known Key gaps (observed against live 1.06 saves)
+
+| Key | Status | Likely data source | crimson-rs scope |
+|---|---|---|---|
+| `SkillKey` / `KnowledgeKey` | parser exists | `skill_info/` (already in crimson-rs, internal) | **small** — just expose a C ABI bridge mirroring iteminfo / paloc |
+| `MissionKey` / `QuestKey` | parser absent | likely `missioninfo.pabgb` / `questinfo.pabgb` under `0008/gamedata/binary__/client/bin/`; names may use `{staticInfo:Mission:KEY}` template references | **medium** — investigate, write parser, design template-expansion ABI |
+| `FieldNPCSaveData._characterKey` / `FieldGimmickSaveDataKey` | unknown source | spawn-template IDs (structured u32, not paloc-shaped) — probably a shared spawn/character table | **medium** — investigate, new parser, bridge |
+| `SubLevelKey` | unknown source | level / world data, possibly under `0010` / `0011`, or a paloc type byte not yet enumerated | **unknown** — `plcli` probe first |
+
+### Established bridge pattern (iteminfo / paloc / stringinfo)
+
+All three existing bridges follow the same shape:
+
+- `crimson_<name>_load_from_bytes(byte*, len, out IntPtr handle)` — preferred entry. C# owns PAZ extraction via `crimson_paz_extract_file` and feeds bytes in. Keeps gameRoot bootstrap centralized in `LocalizationProvider.TryBootstrap*`.
+- `crimson_<name>_load_from_file(string path, out IntPtr handle)` — convenience for direct-on-disk consumers.
+- `crimson_<name>_free(IntPtr)`.
+- `crimson_<name>_entry_count(handle, out uint)`.
+- `crimson_<name>_lookup_by_<key>(handle, <key-args>, byte* buf, nuint bufLen, out nuint required)` — two-call buffer pattern.
+- `crimson_<name>_get_entry(handle, uint idx, …)` — same pattern for enumeration.
+- Errors map to existing codes (`NOT_FOUND`, `BODY_PARSE`, `IO`, `BUFFER_TOO_SMALL`). Add a new negative number only when no existing category fits.
+
+The C# side wraps each bridge with a ~50-LOC `Native<Name>Catalog : I<Name>Catalog` + a `LocalizationProvider.Resolve<Key>(uint)` method that chains through stringinfo / paloc.
+
+### Per-key ABI recommendations
+
+**SkillKey / KnowledgeKey** ([#4](#2-n--lower-priority-deferred-items))
+- Recommended: `crimson_skill_info_lookup_string_key(u32 key) → u32?` returning the stringinfo hash, mirror of `crimson_iteminfo_lookup_string_key`.
+- C# becomes: `LocalizationProvider.ResolveSkillKey(uint) → _skillInfo.LookupStringKey(key) → _stringInfo.LookupByHash(hash)`.
+- Open question for the crimson-rs author: does the underlying `skill_info` entry distinguish "skill" from "knowledge"? If yes, splitting into `lookup_skill_string_key` / `lookup_knowledge_string_key` is cleaner than one polymorphic getter; C# is happy either way.
+
+**MissionKey / QuestKey** ([#6](#2-n--lower-priority-deferred-items))
+- Two ABI shapes worth weighing:
+  - **A (Rust expands templates)**: `crimson_mission_info_lookup_display_name(handle, paloc_handle, u32 key, byte* buf, …) → string`. Rust gets a paloc handle alongside its own, does the `{staticInfo:Mission:KEY}` walk internally, returns a fully-resolved localized string. C# stays simple.
+  - **B (segmented)**: returns a typed segment list `[literal | paloc_ref | string_ref | ...]` that C# concatenates by chaining existing lookups. More flexible but spreads template syntax knowledge across the FFI.
+- **C# side prefers A.** Template expansion is a fact about the data format and belongs in the parser. C# only knows "this is the resolved-name column — render the string".
+- If mission and quest live in separate `.pabgb` files, two parsers + two bridges is fine; if they share format, one parser with a discriminator is fine too.
+
+**FieldNPC CharacterKey / FieldGimmickSaveDataKey** ([#5](#2-n--lower-priority-deferred-items))
+- These resolve in two hops: spawn-template ID → CharacterKey/GimmickKey → display name. Whether crimson-rs exposes one or two hops depends on the underlying data layout.
+- Expected: `crimson_<source>_lookup_character_key(u32 spawnId, out u32 characterKey, out u32 stringInfoHash) → i32`, two outputs in one call. C# then either trusts the stringinfo hash directly or chains through a future `characterinfo` bridge.
+- Combine FieldNPC + FieldGimmick under one bridge if they share the same source file.
+
+**SubLevelKey** (new — not previously enumerated)
+- No assumption — `plcli`-driven hexpat probe first to confirm the data source. Once located, follow the standard bridge shape.
+- Could turn out to live in PALOC under a yet-unknown type byte, in which case no new parser is needed; just extend `LocalizationProvider.TypeNameToTypeByte`.
+
+### C# wiring points (cross-reference for the consumer PR)
+
+When the C ABI lands, the C# integration touches a small fixed set of files:
+
+- [`NativeSaveLoader.cs`](../src/CrimsonAtomtic.RustInterop/NativeSaveLoader.cs) `NativeMethods` block — add `[LibraryImport]` declarations for the new entry points.
+- New files under [`src/CrimsonAtomtic.RustInterop/`](../src/CrimsonAtomtic.RustInterop/):
+  - `I<NewCatalog>Catalog.cs` (interface, mirroring `IItemInfoCatalog`).
+  - `Native<NewCatalog>Catalog.cs` (implementation, mirroring `NativeItemInfoCatalog`).
+- [`LocalizationProvider.cs`](../src/CrimsonAtomtic.Ui/Services/LocalizationProvider.cs) — `TryBootstrap<NewCatalog>` extraction + a `Resolve<Key>(uint)` method.
+- The `TypeNameToTypeByte` / type-routing dispatch — add an entry so the ResolvedNameColumn renders the new resolver for the right field-class names.
+
+No public API breakage on the existing surface; the new code only adds wrappers.
+
 ## Important context / gotchas (don't relearn these)
 
 - **Old saves are the same format**. Empirically verified this session:
