@@ -1,0 +1,50 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        d:DesignWidth="480"
+        d:DesignHeight="220"
+        x:Class="CrimsonAtomtic.Ui.Views.IconExtractionProgressDialog"
+        Title="Extract icons from game data"
+        Width="480" Height="220"
+        MinWidth="380" MinHeight="180"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Icon="/Assets/MainIcon.ico">
+
+  <Grid Margin="16" RowDefinitions="Auto,Auto,*,Auto">
+    <TextBlock Grid.Row="0"
+               Name="HeaderText"
+               FontWeight="Bold"
+               Text="Extracting item icons from game data…"
+               Margin="0,0,0,12" />
+
+    <ProgressBar Grid.Row="1"
+                 Name="Progress"
+                 Minimum="0"
+                 Maximum="1"
+                 Value="0"
+                 Height="16" />
+
+    <TextBlock Grid.Row="2"
+               Name="StatusText"
+               Text="Initializing…"
+               TextWrapping="Wrap"
+               Margin="0,12,0,0"
+               VerticalAlignment="Top" />
+
+    <StackPanel Grid.Row="3"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="8"
+                Margin="0,12,0,0">
+      <Button Name="ActionButton"
+              Content="Cancel"
+              Click="OnActionClick"
+              MinWidth="96"
+              IsDefault="True" />
+    </StackPanel>
+  </Grid>
+</Window>

@@ -15,6 +15,7 @@
   <sys:String x:Key="MenuBrowseLocalization">_Browse Localization…</sys:String>
   <sys:String x:Key="MenuBrowseItems">Browse _Items…</sys:String>
   <sys:String x:Key="MenuSetIconFolder">Set _Icon Folder…</sys:String>
+  <sys:String x:Key="MenuExtractIcons">_Extract Icons from Game Data…</sys:String>
   <sys:String x:Key="MenuLanguage">_Secondary Language</sys:String>
   <sys:String x:Key="MenuLanguageOff">English only (no secondary)</sys:String>
 

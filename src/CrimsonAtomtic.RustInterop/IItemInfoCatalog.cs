@@ -42,4 +42,16 @@ public interface IItemInfoCatalog : IDisposable
     /// the bag's dynamic slot computation).
     /// </summary>
     ulong? LookupMaxStackCount(uint itemKey);
+
+    /// <summary>
+    /// Resolve <paramref name="itemKey"/> to the <c>StringInfoKey</c>
+    /// (u32 hash) of the item's first <c>item_icon_list[0].icon_path</c>.
+    /// Returns <c>null</c> when the key isn't in the loaded table OR
+    /// the item ships without an icon entry. The icon-extraction
+    /// pipeline pipes the returned hash through the stringinfo bridge
+    /// to obtain the underlying texture filename
+    /// (e.g. <c>"ItemIcon_Prefab_cd_phm_04_arw_0020"</c>), lowercases
+    /// it, appends <c>.dds</c>, and PAZ-extracts it.
+    /// </summary>
+    uint? LookupIconPathHash(uint itemKey);
 }

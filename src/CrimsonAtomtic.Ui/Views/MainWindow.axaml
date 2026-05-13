@@ -49,6 +49,8 @@
         <Separator />
         <MenuItem Header="{StaticResource MenuSetIconFolder}"
                   Click="OnSetIconFolderClick" />
+        <MenuItem Header="{StaticResource MenuExtractIcons}"
+                  Click="OnExtractIconsClick" />
         <MenuItem Header="{StaticResource MenuLanguage}"
                   Name="SecondaryLanguageMenu">
           <MenuItem Header="{StaticResource MenuLanguageOff}"

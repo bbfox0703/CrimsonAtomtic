@@ -606,6 +606,12 @@ internal static partial class NativeMethods
         uint itemKey,
         out ulong outMaxStack);
 
+    [LibraryImport(LibraryName, EntryPoint = "crimson_iteminfo_lookup_icon_path_hash")]
+    public static partial int ItemInfoLookupIconPathHash(
+        CrimsonItemInfoHandle handle,
+        uint itemKey,
+        out uint outHash);
+
     // ── StringInfo bridge (stringinfo.pabgb) ────────────────────────────────
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_string_info_load_from_file",
