@@ -1,13 +1,15 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CrimsonAtomtic.RustInterop;
 using CrimsonAtomtic.SaveModel;
 
 namespace CrimsonAtomtic.Ui.ViewModels;
 
 /// <summary>
 /// Mutable wrapper around an immutable <see cref="DecodedFieldRow"/> for
-/// the field-detail DataGrid. Holds the in-progress edit text and the
-/// validation error (if any) so cell editing can stay reactive without
-/// rebuilding the row record.
+/// the field-detail DataGrid. Holds the in-progress edit text, the
+/// validation error (if any), and — for nested scalars — the descent
+/// path from the top-level block, so cell editing can stay reactive
+/// without rebuilding the row record.
 /// </summary>
 public sealed partial class FieldRowViewModel : ObservableObject
 {
@@ -15,17 +17,25 @@ public sealed partial class FieldRowViewModel : ObservableObject
     private readonly string _typeTag;
     private string _committedRawText;
 
-    public FieldRowViewModel(DecodedFieldRow row, bool topLevelBlock)
+    /// <summary>
+    /// Descent path from the top-level TOC block to this row's enclosing
+    /// block. Empty for top-level rows; non-empty when the row sits
+    /// inside a locator child or list element. Mutations push this path
+    /// through the C ABI's <c>set_scalar_field_path</c>.
+    /// </summary>
+    public IReadOnlyList<PathStep> EnclosingPath { get; }
+
+    public FieldRowViewModel(DecodedFieldRow row, IReadOnlyList<PathStep> enclosingPath)
     {
         _row = row;
         _displayValue = row.Value;
+        EnclosingPath = enclosingPath;
 
         // For scalar rows, split the pre-formatted value ("123 <u32>") into
         // raw + tag once so the editor can show the bare number. Anything
         // that doesn't parse (locator strings, "(absent)", etc.) leaves
         // both fields empty and IsEditable = false.
-        if (topLevelBlock
-            && ScalarFieldEditing.IsScalarKind(row.Kind)
+        if (ScalarFieldEditing.IsScalarKind(row.Kind)
             && ScalarFieldEditing.TryParse(row.Value, out var raw, out var tag)
             && ScalarFieldEditing.SupportedTypeTags.Contains(tag))
         {
