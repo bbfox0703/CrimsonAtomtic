@@ -16,6 +16,22 @@
         MinWidth="600" MinHeight="400"
         FontSize="{Binding FontSize, FallbackValue=14}">
 
+  <!-- Avalonia 12 Fluent pins DataGridCell + DataGridColumnHeader's
+       FontSize via its default theme styles, so the Window-level
+       FontSize cascade (above) doesn't reach individual rows /
+       header cells. These two style setters reach down through the
+       visual tree and explicitly bind both back to the Window — so
+       picking Tools → Font Size now scales the whole grid, not just
+       the surrounding chrome. -->
+  <Window.Styles>
+    <Style Selector="DataGridCell">
+      <Setter Property="FontSize" Value="{Binding $parent[Window].FontSize}" />
+    </Style>
+    <Style Selector="DataGridColumnHeader">
+      <Setter Property="FontSize" Value="{Binding $parent[Window].FontSize}" />
+    </Style>
+  </Window.Styles>
+
   <!-- Layered root: a faded Logo.jpg sits behind the whole window,
        slightly more prominent on the empty splash state and dropping
        to a faint watermark once a save is loaded (so the DataGrids
@@ -92,18 +108,18 @@
         <TextBlock Grid.Column="0"
                    Text="{Binding LocalizationStatus}"
                    Opacity="0.6"
-                   FontSize="12"
+                   FontSize="{Binding StatusBarFontSize}"
                    TextTrimming="CharacterEllipsis" />
         <TextBlock Grid.Column="1"
                    Text="{Binding IconStatus}"
                    Opacity="0.6"
-                   FontSize="12"
+                   FontSize="{Binding StatusBarFontSize}"
                    TextTrimming="CharacterEllipsis" />
         <TextBlock Grid.Column="2"
                    Text="{Binding BulkOpStatus}"
                    Opacity="0.9"
                    Foreground="Goldenrod"
-                   FontSize="12"
+                   FontSize="{Binding StatusBarFontSize}"
                    IsVisible="{Binding BulkOpStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
       </Grid>
     </Border>
