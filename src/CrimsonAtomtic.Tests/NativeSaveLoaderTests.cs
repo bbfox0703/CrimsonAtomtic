@@ -348,6 +348,171 @@ public sealed class NativeSaveLoaderTests
     }
 
     [Fact]
+    public void SetScalarField_NestedPath_RoundTripsThroughWriteToFile()
+    {
+        // End-to-end nested editing: find a live block whose decode
+        // contains a one-step-reachable u32 scalar (via either a
+        // Locator child or the first element of an ObjectList), mutate
+        // it through the path API, write + reload, confirm the new
+        // value sticks at the same path.
+        var path = FindLiveSave();
+        if (path is null)
+        {
+            return;
+        }
+
+        using var loader = new NativeSaveLoader();
+        loader.Load(path);
+
+        var target = FindNestedU32Target(loader, path);
+        Assert.True(target is not null,
+            "expected a one-step-reachable u32 scalar in a live save; schema or fixture drifted");
+        var t = target!.Value;
+
+        // Sentinel guaranteed to differ from the original value.
+        var sentinel = t.OriginalValue + 0x0BADF00Du;
+        PathStep[] steps = [t.Step];
+        loader.SetScalarUInt32(t.BlockIndex, steps, t.LeafFieldIndex, sentinel);
+
+        // Verify the in-memory mutation surfaces at the same nested path.
+        var afterBlock = loader.LoadBlockDetails(path, t.BlockIndex);
+        var afterValue = ReadNestedU32At(afterBlock, t.Step, t.LeafFieldIndex);
+        Assert.Equal(sentinel, afterValue);
+
+        // Roundtrip through the encrypted on-disk format.
+        var tempPath = Path.Combine(Path.GetTempPath(),
+            $"crimsonatomtic_nested_{Guid.NewGuid():N}.save");
+        try
+        {
+            loader.WriteToFile(tempPath);
+            using var fresh = new NativeSaveLoader();
+            var reloadedSummary = fresh.Load(tempPath);
+            Assert.True(reloadedSummary.HmacOk, "reloaded save must verify HMAC");
+            var reloadedBlock = fresh.LoadBlockDetails(tempPath, t.BlockIndex);
+            var reloadedValue = ReadNestedU32At(reloadedBlock, t.Step, t.LeafFieldIndex);
+            Assert.Equal(sentinel, reloadedValue);
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+        }
+    }
+
+    [Fact]
+    public void SetScalarField_PathStep_AtScalarMidpath_ThrowsNotNavigable()
+    {
+        var path = FindLiveSave();
+        if (path is null)
+        {
+            return;
+        }
+        using var loader = new NativeSaveLoader();
+        loader.Load(path);
+
+        // Block 0 field 0 is the fixed_suffix u32 _characterKey — a scalar,
+        // not navigable. Targeting it as a mid-path step must surface as
+        // NOT_NAVIGABLE (-15), distinct from NOT_SCALAR which fires only
+        // on the leaf.
+        PathStep[] badSteps = [new PathStep(0, 0)];
+        var bytes = new byte[] { 0, 0, 0, 0 };
+        var ex = Assert.Throws<CrimsonSaveException>(() =>
+            loader.SetScalarField(0, badSteps, 0, bytes));
+        Assert.Equal(-15, ex.ErrorCode);
+    }
+
+    /// <summary>
+    /// Find any (top-level block, one-step path, leaf field, original u32
+    /// value) reachable through either a Locator's inline child or the
+    /// first element of an ObjectList. Robust to schema drift: pick the
+    /// first such target encountered.
+    /// </summary>
+    private static NestedU32Target? FindNestedU32Target(NativeSaveLoader loader, string path)
+    {
+        var summary = loader.Load(path);
+        for (var b = 0; b < summary.Blocks.Count; b++)
+        {
+            var block = loader.LoadBlockDetails(path, b);
+            for (var f = 0; f < block.Fields.Count; f++)
+            {
+                var parent = block.Fields[f];
+                if (parent.Child is { } child)
+                {
+                    var leaf = FindU32Scalar(child);
+                    if (leaf is not null)
+                    {
+                        return new NestedU32Target(
+                            BlockIndex: b,
+                            Step: new PathStep((uint)f, 0),
+                            LeafFieldIndex: leaf.Value.FieldIndex,
+                            OriginalValue: leaf.Value.Value);
+                    }
+                }
+                if (parent.Elements is { Count: > 0 } els)
+                {
+                    var leaf = FindU32Scalar(els[0]);
+                    if (leaf is not null)
+                    {
+                        return new NestedU32Target(
+                            BlockIndex: b,
+                            Step: new PathStep((uint)f, 0),
+                            LeafFieldIndex: leaf.Value.FieldIndex,
+                            OriginalValue: leaf.Value.Value);
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private static (int FieldIndex, uint Value)? FindU32Scalar(BlockDetails block)
+    {
+        foreach (var row in block.Fields)
+        {
+            if (row.Kind is not ("fixed_prefix" or "fixed_suffix"))
+            {
+                continue;
+            }
+            if (!ScalarFieldEditing.TryParse(row.Value, out var raw, out var tag))
+            {
+                continue;
+            }
+            if (tag == "u32" && uint.TryParse(raw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var v))
+            {
+                return (row.FieldIndex, v);
+            }
+        }
+        return null;
+    }
+
+    private static uint ReadNestedU32At(BlockDetails parent, PathStep step, int leafFieldIndex)
+    {
+        var parentField = parent.Fields[(int)step.FieldIndex];
+        var nested = parentField.Child
+                     ?? (parentField.Elements is { Count: > 0 } els
+                         ? els[(int)step.ElementIndex]
+                         : throw new InvalidOperationException("path step doesn't resolve"));
+        var leaf = nested.Fields[leafFieldIndex];
+        if (!ScalarFieldEditing.TryParse(leaf.Value, out var raw, out var tag))
+        {
+            throw new InvalidOperationException($"leaf value not parseable: {leaf.Value}");
+        }
+        if (tag != "u32")
+        {
+            throw new InvalidOperationException($"expected u32 leaf, got {tag}");
+        }
+        return uint.Parse(raw, System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private readonly record struct NestedU32Target(
+        int BlockIndex,
+        PathStep Step,
+        int LeafFieldIndex,
+        uint OriginalValue);
+
+    [Fact]
     public void LoadBlockDetails_NestedDataReachable()
     {
         // Find any block whose decode contains an object_list or
