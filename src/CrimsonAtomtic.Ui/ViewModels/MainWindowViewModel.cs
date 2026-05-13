@@ -370,9 +370,19 @@ public sealed partial class MainWindowViewModel(
     /// <see cref="AppSettings.MaxFontSize"/> and persists.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusBarFontSize))]
     private double _fontSize = Math.Clamp(
         AppSettingsStore.Load(paths.LocalAppDataDirectory).FontSize ?? AppSettings.DefaultFontSize,
         AppSettings.MinFontSize, AppSettings.MaxFontSize);
+
+    /// <summary>
+    /// Derived font size for the bottom status footer. Kept ~15%
+    /// smaller than the body so the footer stays visually secondary
+    /// (it carries lower-priority info — localization stats, icon
+    /// cache state, transient bulk-op messages) but still scales
+    /// when the user picks a larger base size.
+    /// </summary>
+    public double StatusBarFontSize => Math.Round(FontSize * 0.85, 1);
 
     /// <summary>Discrete font-size presets exposed by the Tools menu.</summary>
     public static IReadOnlyList<double> FontSizePresets { get; } =
