@@ -33,6 +33,70 @@ public sealed class PazExtractorTests
         return null;
     }
 
+    private static string? FindIconsPamt()
+    {
+        // 0012 ships every icon DDS — including the partial-compressed ones
+        // (~97% of the directory) the new decompressor unblocks.
+        string[] candidates =
+        [
+            @"D:\SteamLibrary\steamapps\common\Crimson Desert",
+            @"C:\Program Files (x86)\Steam\steamapps\common\Crimson Desert",
+            @"C:\Program Files\Steam\steamapps\common\Crimson Desert",
+            @"E:\SteamLibrary\steamapps\common\Crimson Desert",
+            @"F:\SteamLibrary\steamapps\common\Crimson Desert",
+        ];
+        foreach (var root in candidates)
+        {
+            var p = Path.Combine(root, "0012", "0.pamt");
+            if (File.Exists(p))
+            {
+                return p;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// End-to-end check that the C# binding now extracts partial-compressed
+    /// icon DDS files (PAZ flag <c>raw_compression == 1</c>). Picks two
+    /// well-known icons from <c>0012/ui/texture/icon/</c> — pre-Phase 3 these
+    /// would have surfaced as <c>BODY_PARSE</c> from the Rust side. Skips
+    /// cleanly when no install / dll is present.
+    /// </summary>
+    [Theory]
+    // LZ4-compressed: exercises the header(128)+lz4(prefix-dict) decoder.
+    [InlineData("ui/texture/icon", "cd_icon_skill_07.dds")]
+    // Identity-stored: exercises the c==u fast path.
+    [InlineData("ui/texture/icon", "icon_item_collection_prop_statue_0001.dds")]
+    public void ExtractFile_LiveInstall_PartialCompressedIconExtractsAsValidDds(
+        string directory, string fileName)
+    {
+        if (!File.Exists("crimson_rs.dll"))
+        {
+            return;
+        }
+        var pamt = FindIconsPamt();
+        if (pamt is null)
+        {
+            return;
+        }
+
+        var extractor = new NativePazExtractor();
+        var bytes = extractor.ExtractFile(pamt, directory, fileName);
+
+        Assert.NotEmpty(bytes);
+        // DDS magic: 'D' 'D' 'S' ' ' (0x20534444 LE).
+        Assert.True(
+            bytes.Length >= 4 && bytes[0] == 0x44 && bytes[1] == 0x44
+                && bytes[2] == 0x53 && bytes[3] == 0x20,
+            $"expected DDS magic at start of {directory}/{fileName}, got " +
+                $"[{bytes[0]:x2} {bytes[1]:x2} {bytes[2]:x2} {bytes[3]:x2}]");
+        // DDS header itself is 124 bytes after the 4-byte magic, so any
+        // valid texture is at least 128 bytes long.
+        Assert.True(bytes.Length >= 128,
+            $"{directory}/{fileName} truncated: only {bytes.Length} bytes");
+    }
+
     [Fact]
     public void ExtractFile_LiveInstall_ExtractsEnglishPaloc()
     {

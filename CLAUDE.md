@@ -67,5 +67,6 @@ Cross-platform goal: Windows (must), Linux, macOS.
 - Decompressed save body (schema + TOC + decoder, Python ↔ Rust naming map): [docs/save-body-format.md](docs/save-body-format.md)
 - PABGB format family (iteminfo, skill, store, field, …): [docs/pabgb-formats.md](docs/pabgb-formats.md)
 - Asset containers (PAZ, PAMT, PAPGT, PALOC): [docs/paz-containers.md](docs/paz-containers.md)
+- CrimsonForge coverage gaps (the canonical RE-reference repo for CD formats): [docs/crimsonforge-coverage-gaps.md](docs/crimsonforge-coverage-gaps.md)
 - Python toolchain conventions: [tools/CLAUDE.md](tools/CLAUDE.md)
 - Rust core (our fork): [vendor/crimson-rs/README.md](vendor/crimson-rs/README.md) (after first vendor refresh)
