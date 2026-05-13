@@ -125,6 +125,27 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void OnBrowseLocalizationClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+        // Don't open the dialog when there's no PALOC loaded — the empty
+        // grid would just confuse the user. The status footer already
+        // explains why; we keep the menu item enabled so the affordance
+        // stays discoverable.
+        if (!vm.Localization.IsLoaded)
+        {
+            return;
+        }
+        var child = new LocalizationSearchWindow
+        {
+            DataContext = new LocalizationSearchViewModel(vm.Localization),
+        };
+        child.Show(this);
+    }
+
     private void OnExitClick(object? sender, RoutedEventArgs e)
     {
         if (Avalonia.Application.Current?.ApplicationLifetime

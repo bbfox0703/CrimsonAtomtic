@@ -40,7 +40,22 @@
         <Separator />
         <MenuItem Header="{StaticResource MenuExit}" Click="OnExitClick" />
       </MenuItem>
+      <MenuItem Header="{StaticResource MenuTools}">
+        <MenuItem Header="{StaticResource MenuBrowseLocalization}"
+                  Click="OnBrowseLocalizationClick" />
+      </MenuItem>
     </Menu>
+
+    <!-- Status footer: shows localization load state so the user can
+         tell at a glance whether the PAZ → PALOC bootstrap succeeded. -->
+    <Border DockPanel.Dock="Bottom"
+            BorderThickness="0,1,0,0"
+            BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+            Padding="12,4">
+      <TextBlock Text="{Binding LocalizationStatus}"
+                 Opacity="0.6"
+                 FontSize="12" />
+    </Border>
 
     <!-- Empty state -->
     <StackPanel IsVisible="{Binding !HasSave}"

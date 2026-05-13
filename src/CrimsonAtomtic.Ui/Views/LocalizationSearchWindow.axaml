@@ -1,0 +1,41 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        mc:Ignorable="d"
+        d:DesignWidth="800"
+        d:DesignHeight="600"
+        x:Class="CrimsonAtomtic.Ui.Views.LocalizationSearchWindow"
+        x:DataType="vm:LocalizationSearchViewModel"
+        Title="{StaticResource LocalizationWindowTitle}"
+        Icon="/Assets/MainIcon.ico"
+        Width="780" Height="560"
+        MinWidth="480" MinHeight="320">
+
+  <Grid RowDefinitions="Auto,Auto,*"
+        Margin="12">
+
+    <TextBox Grid.Row="0"
+             Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+             PlaceholderText="{StaticResource LocalizationSearchPlaceholder}" />
+
+    <TextBlock Grid.Row="1"
+               Text="{Binding ResultsCountText}"
+               Opacity="0.6"
+               Margin="2,6,0,8" />
+
+    <DataGrid Grid.Row="2"
+              ItemsSource="{Binding Results}"
+              IsReadOnly="True"
+              CanUserResizeColumns="True"
+              GridLinesVisibility="Horizontal"
+              HeadersVisibility="Column"
+              AutoGenerateColumns="False">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="{StaticResource LocalizationColKey}"   Binding="{Binding Key}"   Width="320" />
+        <DataGridTextColumn Header="{StaticResource LocalizationColValue}" Binding="{Binding Value}" Width="*" />
+      </DataGrid.Columns>
+    </DataGrid>
+  </Grid>
+</Window>

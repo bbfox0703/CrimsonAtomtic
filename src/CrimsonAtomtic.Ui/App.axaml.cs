@@ -3,6 +3,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using CrimsonAtomtic.RustInterop;
 using CrimsonAtomtic.Ui.Platform;
+using CrimsonAtomtic.Ui.Services;
 using CrimsonAtomtic.Ui.ViewModels;
 using CrimsonAtomtic.Ui.Views;
 
@@ -19,21 +20,34 @@ public sealed class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // Composition root for the UI. NativeSaveLoader P/Invokes
-            // into vendor/crimson-rs/target/release/crimson_rs.dll, which
+            // Composition root for the UI. NativeSaveLoader / PazExtractor /
+            // PalocCatalog all P/Invoke into
+            // vendor/crimson-rs/target/release/crimson_rs.dll, which
             // .\scripts\build_rust.ps1 produces and the Ui csproj copies
             // next to CrimsonAtomtic.exe.
             var loader = new NativeSaveLoader();
-            // Free the cached native handle on app exit. Without this the
-            // OS still reclaims the process memory, but a clean Dispose
-            // keeps the SafeHandle's finalizer book-keeping honest.
-            desktop.Exit += (_, _) => loader.Dispose();
+            var paz = new NativePazExtractor();
+            var localization = new LocalizationProvider(paz);
+            // Free native handles on app exit. The OS reclaims the
+            // process memory regardless, but a clean Dispose keeps the
+            // SafeHandle finalizer bookkeeping honest.
+            desktop.Exit += (_, _) =>
+            {
+                loader.Dispose();
+                localization.Dispose();
+            };
 
             var paths = new WindowsPlatformPaths();
 
+            // Best-effort localization bootstrap. Failure (no game install
+            // detected, PAZ extraction error, PALOC parse error) leaves
+            // the provider in a "not loaded" state — the editor still
+            // functions, just without localized name resolution.
+            localization.TryBootstrapFromGameRoot(paths.GameInstallRoot);
+
             desktop.MainWindow = new MainWindow
             {
-                DataContext = new MainWindowViewModel(loader, paths),
+                DataContext = new MainWindowViewModel(loader, paths, localization),
             };
         }
 
