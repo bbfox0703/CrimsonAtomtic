@@ -45,7 +45,7 @@ Cross-platform goal: Windows (must), Linux, macOS.
 5. **AOT-safe C#**: no reflection-based APIs. Source generators only (`[JsonSerializable]`, `[ObservableProperty]`, etc.).
 6. **Logs**: `%LOCALAPPDATA%\CrimsonAtomtic\Logs\<category>\<process>\`. 4-file rotation, 8 MB max each. Root `Logs/` has only subfolders, no loose files.
 7. **Magic strings**: one centralised file per project, well-commented.
-8. **Vendor deps**: cloned into [`vendor/`](vendor/), never git submodules. Refresh via [`vendor/update_vendors.ps1`](vendor/update_vendors.ps1).
+8. **Vendor deps**: cloned into [`vendor/`](vendor/), never git submodules. `vendor/<name>/` is **read-only** — any change to `crimson-rs` is committed at the source repo `D:\Github\crimson-rs` first, then mirrored in via [`vendor/update_vendors.ps1`](vendor/update_vendors.ps1) (which does `reset --hard origin/dev` and silently wipes any local edits). See [`vendor/README.md`](vendor/README.md).
 9. **Python tools**: every `.py` prints usage + exits with code 2 when called with no args. No side effects at import time. See [tools/CLAUDE.md](tools/CLAUDE.md).
 10. **No derived data committed**: if file B is generated from A, only A is committed. B is in `.gitignore` and the generator is documented in the relevant `README.md`. See [docs/data-policy.md](docs/data-policy.md).
 11. **Old reference repo is one-time-mining only**: `D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS` may be mined once for images / parser ideas; the new project must not depend on it going forward. The only ongoing external dependency is `vendor/crimson-rs`.
