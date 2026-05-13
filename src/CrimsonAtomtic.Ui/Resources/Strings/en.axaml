@@ -84,6 +84,8 @@
   <sys:String x:Key="ElementsColFields">Fields</sys:String>
   <sys:String x:Key="ElementsColOpen">Open</sys:String>
   <sys:String x:Key="ElementsOpenButton">▸</sys:String>
+  <sys:String x:Key="ElementsColItemKey">ItemKey</sys:String>
+  <sys:String x:Key="ElementsColItemName">Item name</sys:String>
   <sys:String x:Key="NavigationBack">← Back</sys:String>
 
 </ResourceDictionary>

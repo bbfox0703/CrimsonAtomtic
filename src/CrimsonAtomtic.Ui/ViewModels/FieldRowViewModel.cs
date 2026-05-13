@@ -62,8 +62,7 @@ public sealed partial class FieldRowViewModel : ObservableObject
                 && row.TypeName == "ItemKey"
                 && uint.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var itemId))
             {
-                var (english, secondary) = localization.ResolveItemName(itemId);
-                _resolvedName = FormatResolvedName(english, secondary);
+                _resolvedName = localization.ResolveItemNameFormatted(itemId);
             }
         }
         else
@@ -73,16 +72,6 @@ public sealed partial class FieldRowViewModel : ObservableObject
             _rawText = string.Empty;
             IsEditable = false;
         }
-    }
-
-    private static string FormatResolvedName(string? english, string? secondary)
-    {
-        var hasEnglish = !string.IsNullOrEmpty(english);
-        var hasSecondary = !string.IsNullOrEmpty(secondary);
-        if (!hasEnglish && !hasSecondary) return string.Empty;
-        if (!hasSecondary) return english!;
-        if (!hasEnglish) return secondary!;
-        return $"{english} / {secondary}";
     }
 
     public DecodedFieldRow Row => _row;

@@ -222,7 +222,7 @@ public sealed partial class MainWindowViewModel(
 
     private readonly List<FieldRowViewModel> _allFields = [];
     public ObservableCollection<FieldRowViewModel> VisibleFields { get; } = [];
-    public ObservableCollection<BlockDetails> VisibleElements { get; } = [];
+    public ObservableCollection<ElementRowViewModel> VisibleElements { get; } = [];
     public ObservableCollection<BreadcrumbItem> Breadcrumb { get; } = [];
 
     public bool IsShowingFields => _navStack.Count > 0 && _navStack.Peek() is BlockFrame;
@@ -646,7 +646,7 @@ public sealed partial class MainWindowViewModel(
                 case ElementsFrame ef:
                     foreach (var el in ef.Elements)
                     {
-                        VisibleElements.Add(el);
+                        VisibleElements.Add(new ElementRowViewModel(el, localization));
                     }
                     break;
             }
