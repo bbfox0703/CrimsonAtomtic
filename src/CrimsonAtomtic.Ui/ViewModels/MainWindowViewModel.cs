@@ -223,7 +223,8 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
         try
         {
             var details = loader.LoadBlockDetails(_loadedPath, value.Index);
-            PushFrame(new BlockFrame(details.ClassName, details));
+            // Root frame: empty path — this block is at the TOC level.
+            PushFrame(new BlockFrame(details.ClassName, details, Array.Empty<PathStep>()));
         }
         catch (CrimsonSaveException ex)
         {
@@ -245,17 +246,26 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
     [RelayCommand]
     private void DrillIntoField(DecodedFieldRow? row)
     {
-        if (row is null)
+        if (row is null || _navStack.Count == 0 || _navStack.Peek() is not BlockFrame parent)
         {
             return;
         }
         if (row.Child is { } child)
         {
-            PushFrame(new BlockFrame($"{row.Name}: {child.ClassName}", child));
+            // Locator descent: append (fieldIdx, 0). The C ABI ignores
+            // ElementIndex on locator steps.
+            var newPath = ExtendPath(parent.Path, new PathStep((uint)row.FieldIndex, 0));
+            PushFrame(new BlockFrame($"{row.Name}: {child.ClassName}", child, newPath));
         }
         else if (row.Elements is { Count: > 0 } elements)
         {
-            PushFrame(new ElementsFrame($"{row.Name}[{elements.Count}]", elements));
+            // List descent is two-stage: enter the element picker first;
+            // the path step gets built when the user picks an element.
+            PushFrame(new ElementsFrame(
+                $"{row.Name}[{elements.Count}]",
+                elements,
+                parent.Path,
+                (uint)row.FieldIndex));
         }
     }
 
@@ -277,7 +287,20 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
             }
         }
         var label = idx >= 0 ? $"[{idx}]: {element.ClassName}" : element.ClassName;
-        PushFrame(new BlockFrame(label, element));
+        // List descent: append (listFieldIdx, elementIdx).
+        var newPath = ExtendPath(parent.PathToList, new PathStep(parent.ListFieldIndex, (uint)Math.Max(idx, 0)));
+        PushFrame(new BlockFrame(label, element, newPath));
+    }
+
+    private static PathStep[] ExtendPath(IReadOnlyList<PathStep> parent, PathStep step)
+    {
+        var arr = new PathStep[parent.Count + 1];
+        for (var i = 0; i < parent.Count; i++)
+        {
+            arr[i] = parent[i];
+        }
+        arr[^1] = step;
+        return arr;
     }
 
     /// <summary>
@@ -335,7 +358,10 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
         }
         try
         {
-            loader.SetScalarField(block.Index, row.FieldIndex, bytes);
+            // Path-addressed FFI: empty path collapses to a top-level mutation,
+            // non-empty walks into locator children / list elements.
+            var pathArr = row.EnclosingPath is PathStep[] a ? a : row.EnclosingPath.ToArray();
+            loader.SetScalarField(block.Index, pathArr, row.FieldIndex, bytes);
         }
         catch (CrimsonSaveException ex)
         {
@@ -343,16 +369,99 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
             return;
         }
 
-        // Re-fetch the block: the mutation may ripple (e.g. masks). Reuse
-        // the existing FieldRowViewModel instances so the DataGrid keeps
-        // its scroll / selection state.
-        var fresh = loader.LoadBlockDetails(_loadedPath, block.Index);
-        for (var i = 0; i < _allFields.Count && i < fresh.Fields.Count; i++)
-        {
-            _allFields[i].ApplyCommittedValue(fresh.Fields[i]);
-        }
+        // Re-fetch the top-level block; refresh every nav frame so popping
+        // back via breadcrumb shows fresh values (the mutation may ripple
+        // across peer fields via the schema). Each existing FieldRowViewModel
+        // gets its DisplayValue updated in place so the DataGrid keeps its
+        // scroll position and the user's selection.
+        var freshTop = loader.LoadBlockDetails(_loadedPath, block.Index);
+        RefreshNavStack(freshTop);
         IsDirty = true;
         OnPropertyChanged(nameof(WindowTitle));
+    }
+
+    /// <summary>
+    /// Walk a top-level <see cref="BlockDetails"/> down a descent path.
+    /// Returns the deep block reached at the end, or <c>null</c> when the
+    /// path is malformed (out-of-range index, scalar mid-path, etc.).
+    /// </summary>
+    private static BlockDetails? WalkPath(BlockDetails top, IReadOnlyList<PathStep> path)
+    {
+        var current = top;
+        foreach (var step in path)
+        {
+            if ((int)step.FieldIndex >= current.Fields.Count)
+            {
+                return null;
+            }
+            var field = current.Fields[(int)step.FieldIndex];
+            if (field.Child is { } child)
+            {
+                current = child;
+            }
+            else if (field.Elements is { } elements
+                     && (int)step.ElementIndex < elements.Count)
+            {
+                current = elements[(int)step.ElementIndex];
+            }
+            else
+            {
+                return null;
+            }
+        }
+        return current;
+    }
+
+    /// <summary>
+    /// Rebuild every frame in <see cref="_navStack"/> by re-walking the
+    /// stored paths against the freshly-decoded top-level block. Then
+    /// stamp the top frame's data into the existing FieldRowViewModels
+    /// (preserves DataGrid selection / scroll).
+    /// </summary>
+    private void RefreshNavStack(BlockDetails freshTop)
+    {
+        var rebuilt = new List<NavFrame>(_navStack.Count);
+        foreach (var frame in _navStack.Reverse())
+        {
+            switch (frame)
+            {
+                case BlockFrame bf:
+                    var fresh = WalkPath(freshTop, bf.Path) ?? bf.Block;
+                    rebuilt.Add(bf with { Block = fresh });
+                    break;
+                case ElementsFrame ef:
+                    var listOwner = WalkPath(freshTop, ef.PathToList);
+                    if (listOwner is not null
+                        && (int)ef.ListFieldIndex < listOwner.Fields.Count
+                        && listOwner.Fields[(int)ef.ListFieldIndex].Elements is { } els)
+                    {
+                        rebuilt.Add(ef with { Elements = els });
+                    }
+                    else
+                    {
+                        rebuilt.Add(ef);
+                    }
+                    break;
+                default:
+                    rebuilt.Add(frame);
+                    break;
+            }
+        }
+        _navStack.Clear();
+        foreach (var f in rebuilt)
+        {
+            _navStack.Push(f);
+        }
+
+        // Stamp fresh field values onto the existing FieldRowViewModels so
+        // the DataGrid doesn't lose scroll position / selection.
+        if (_navStack.Count > 0 && _navStack.Peek() is BlockFrame top)
+        {
+            for (var i = 0; i < _allFields.Count && i < top.Block.Fields.Count; i++)
+            {
+                _allFields[i].ApplyCommittedValue(top.Block.Fields[i]);
+            }
+        }
     }
 
     /// <summary>Revert the in-progress edit on a row to its last committed value.</summary>
@@ -446,13 +555,12 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
             switch (_navStack.Peek())
             {
                 case BlockFrame bf:
-                    // Editing is gated on depth == 1: only top-level blocks
-                    // are addressable by the C ABI's TOC index. Children
-                    // get read-only wrappers.
-                    var topLevel = _navStack.Count == 1;
+                    // Every scalar is editable at any depth — the path the
+                    // VM tracks on the frame disambiguates which body
+                    // region the FFI patches.
                     foreach (var field in bf.Block.Fields)
                     {
-                        _allFields.Add(new FieldRowViewModel(field, topLevel));
+                        _allFields.Add(new FieldRowViewModel(field, bf.Path));
                     }
                     ApplyFieldsFilter();
                     break;
@@ -529,8 +637,29 @@ public sealed partial class MainWindowViewModel(ISaveLoader loader, IPlatformPat
     // ── Navigation frame types ──────────────────────────────────────────────
 
     private abstract record NavFrame(string Label);
-    private sealed record BlockFrame(string Label, BlockDetails Block) : NavFrame(Label);
-    private sealed record ElementsFrame(string Label, IReadOnlyList<BlockDetails> Elements) : NavFrame(Label);
+
+    /// <summary>
+    /// A view onto an <see cref="BlockDetails"/>. <see cref="Path"/> is the
+    /// descent from the top-level TOC block to this block; root frames
+    /// carry an empty path. Used by edits + by post-mutation refresh.
+    /// </summary>
+    private sealed record BlockFrame(
+        string Label,
+        BlockDetails Block,
+        IReadOnlyList<PathStep> Path) : NavFrame(Label);
+
+    /// <summary>
+    /// A picker view onto the elements of an <c>ObjectList</c> field. Not
+    /// itself addressable as a block; <see cref="PathToList"/> is the path
+    /// to the *enclosing* block and <see cref="ListFieldIndex"/> is which
+    /// field of that block is the list. Picking element N synthesises the
+    /// next step <c>PathStep(ListFieldIndex, N)</c>.
+    /// </summary>
+    private sealed record ElementsFrame(
+        string Label,
+        IReadOnlyList<BlockDetails> Elements,
+        IReadOnlyList<PathStep> PathToList,
+        uint ListFieldIndex) : NavFrame(Label);
 }
 
 /// <summary>
