@@ -25,14 +25,72 @@ public sealed partial class MainWindowViewModel(
     public LocalizationProvider Localization => localization;
 
     /// <summary>
-    /// Status string for the footer: "Localization: 102,300 entries" or
-    /// "Localization: not loaded" when no game install was detected at
-    /// startup.
+    /// Status string for the footer: "Localization: 102,300 entries / 6,400 items"
+    /// when both layers loaded, dropping pieces when bits are missing.
     /// </summary>
-    public string LocalizationStatus =>
-        localization.IsLoaded
-            ? $"Localization: {localization.EntryCount:N0} entries"
-            : "Localization: not loaded";
+    public string LocalizationStatus
+    {
+        get
+        {
+            if (!localization.IsLoaded && localization.ItemCount == 0)
+            {
+                return "Localization: not loaded";
+            }
+            var parts = new List<string>(3);
+            parts.Add(localization.IsLoaded
+                ? $"{localization.EntryCount:N0} entries"
+                : "PALOC missing");
+            if (localization.ItemCount > 0)
+            {
+                parts.Add($"{localization.ItemCount:N0} items");
+            }
+            if (!string.IsNullOrEmpty(localization.SecondaryLanguage))
+            {
+                parts.Add($"+ {localization.SecondaryLanguage}");
+            }
+            return $"Localization: {string.Join(" / ", parts)}";
+        }
+    }
+
+    /// <summary>Available secondary-language codes (per-language picker).</summary>
+    public IReadOnlyList<string> AvailableLanguages =>
+        localization.AvailableLanguages.OrderBy(c => c, StringComparer.Ordinal).ToList();
+
+    /// <summary>Currently-active secondary language (null = English only).</summary>
+    public string? SecondaryLanguage => localization.SecondaryLanguage;
+
+    /// <summary>
+    /// Pick a secondary language by code, or pass null to revert to
+    /// English-only. Persists the choice via <see cref="AppSettingsStore"/>
+    /// so the next launch reloads it. After the swap, refreshes the
+    /// currently-displayed fields so their resolved names update in place.
+    /// </summary>
+    public void SetSecondaryLanguage(string? langCode)
+    {
+        localization.SecondaryLanguage = langCode;
+        AppSettingsStore.TrySave(paths.LocalAppDataDirectory, new AppSettings
+        {
+            SecondaryLanguage = localization.SecondaryLanguage,
+        });
+        // Rebuild the currently-visible field wrappers so their
+        // ResolvedName picks up the new secondary text. Same surgical
+        // refresh path the post-commit code uses.
+        if (SelectedBlock is { } sel && _loadedPath is not null && _navStack.Count > 0)
+        {
+            try
+            {
+                var fresh = loader.LoadBlockDetails(_loadedPath, sel.Index);
+                RefreshNavStack(fresh);
+                RebuildFromTop();
+            }
+            catch (CrimsonSaveException)
+            {
+                // Block re-fetch failed — leave the stale view in place.
+            }
+        }
+        OnPropertyChanged(nameof(SecondaryLanguage));
+        OnPropertyChanged(nameof(LocalizationStatus));
+    }
 
     /// <summary>
     /// Best initial folder for the Open Save dialog. Drills into the
@@ -577,10 +635,11 @@ public sealed partial class MainWindowViewModel(
                 case BlockFrame bf:
                     // Every scalar is editable at any depth — the path the
                     // VM tracks on the frame disambiguates which body
-                    // region the FFI patches.
+                    // region the FFI patches. Localization is passed
+                    // through so u32 fields can pre-resolve item names.
                     foreach (var field in bf.Block.Fields)
                     {
-                        _allFields.Add(new FieldRowViewModel(field, bf.Path));
+                        _allFields.Add(new FieldRowViewModel(field, bf.Path, localization));
                     }
                     ApplyFieldsFilter();
                     break;

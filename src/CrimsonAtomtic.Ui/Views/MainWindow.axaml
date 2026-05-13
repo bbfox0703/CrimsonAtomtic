@@ -43,6 +43,12 @@
       <MenuItem Header="{StaticResource MenuTools}">
         <MenuItem Header="{StaticResource MenuBrowseLocalization}"
                   Click="OnBrowseLocalizationClick" />
+        <MenuItem Header="{StaticResource MenuLanguage}"
+                  Name="SecondaryLanguageMenu">
+          <MenuItem Header="{StaticResource MenuLanguageOff}"
+                    Click="OnSetSecondaryLanguageClick"
+                    Tag="" />
+        </MenuItem>
       </MenuItem>
     </Menu>
 
@@ -250,6 +256,7 @@
               <DataGridTextColumn Header="{StaticResource FieldsColKind}"    Binding="{Binding Kind}"         Width="120" />
               <DataGridTextColumn Header="{StaticResource FieldsColPresent}" Binding="{Binding Present}"      Width="70" />
               <DataGridTextColumn Header="{StaticResource FieldsColValue}"   Binding="{Binding DisplayValue}" Width="*" />
+              <DataGridTextColumn Header="{StaticResource FieldsColResolvedName}" Binding="{Binding ResolvedName}" Width="220" />
               <DataGridTemplateColumn Header="{StaticResource FieldsColDrill}" Width="80">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:FieldRowViewModel">

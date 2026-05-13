@@ -12,6 +12,53 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        DataContextChanged += OnDataContextChanged;
+    }
+
+    /// <summary>
+    /// Rebuild Tools → Secondary Language with the languages the
+    /// LocalizationProvider discovered, plus a "checked" indicator on
+    /// the currently-active one. Keeps the static "English only" entry
+    /// at index 0 (Tag = "").
+    /// </summary>
+    private void OnDataContextChanged(object? sender, System.EventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+        var menu = SecondaryLanguageMenu;
+        // Clear any dynamic entries (everything past the static "English
+        // only" placeholder at index 0).
+        while (menu.Items.Count > 1)
+        {
+            menu.Items.RemoveAt(menu.Items.Count - 1);
+        }
+        var current = vm.SecondaryLanguage ?? string.Empty;
+        // Update the static "English only" toggle state.
+        if (menu.Items[0] is MenuItem englishOnly)
+        {
+            englishOnly.Icon = string.IsNullOrEmpty(current)
+                ? new TextBlock { Text = "✓" }
+                : null;
+        }
+        foreach (var code in vm.AvailableLanguages)
+        {
+            if (string.Equals(code, "eng", System.StringComparison.OrdinalIgnoreCase))
+            {
+                continue; // "English only" is the no-secondary path
+            }
+            var item = new MenuItem
+            {
+                Header = code,
+                Tag = code,
+                Icon = string.Equals(code, current, System.StringComparison.OrdinalIgnoreCase)
+                    ? new TextBlock { Text = "✓" }
+                    : null,
+            };
+            item.Click += OnSetSecondaryLanguageClick;
+            menu.Items.Add(item);
+        }
     }
 
     private async void OnOpenSaveClick(object? sender, RoutedEventArgs e)
@@ -123,6 +170,23 @@ public sealed partial class MainWindow : Window
             vm.RevertFieldEditCommand.Execute(row);
             e.Handled = true;
         }
+    }
+
+    private void OnSetSecondaryLanguageClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+        if (sender is not MenuItem mi)
+        {
+            return;
+        }
+        // Tag carries the language code ("" = English only).
+        var code = mi.Tag as string;
+        vm.SetSecondaryLanguage(string.IsNullOrEmpty(code) ? null : code);
+        // Re-paint the check marks.
+        OnDataContextChanged(this, System.EventArgs.Empty);
     }
 
     private void OnBrowseLocalizationClick(object? sender, RoutedEventArgs e)
