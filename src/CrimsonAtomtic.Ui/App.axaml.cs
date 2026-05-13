@@ -54,6 +54,18 @@ public sealed class App : Application
                 localization.SecondaryLanguage = settings.SecondaryLanguage;
             }
 
+            // Icon cache wiring. Configured path (settings.json) wins;
+            // falls back to <exe-dir>/IconCache/. Pearl Abyss owns the
+            // artwork — we don't bundle them, the user points at their
+            // own extracted folder.
+            var exeDir = System.IO.Path.GetDirectoryName(
+                System.AppContext.BaseDirectory.TrimEnd(System.IO.Path.DirectorySeparatorChar));
+            localization.ConfigureIconProvider(settings.IconCacheDirectory, exeDir);
+            // Wire the static converter singleton so XAML icon-column
+            // bindings can resolve immediately. Updated whenever the
+            // user re-points the icon path through Tools menu.
+            CrimsonAtomtic.Ui.Services.ItemKeyToIconConverter.Provider = localization.Icons;
+
             desktop.MainWindow = new MainWindow
             {
                 DataContext = new MainWindowViewModel(loader, paths, localization),

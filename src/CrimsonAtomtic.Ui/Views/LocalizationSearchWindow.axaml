@@ -4,14 +4,14 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
         mc:Ignorable="d"
-        d:DesignWidth="800"
+        d:DesignWidth="1000"
         d:DesignHeight="600"
         x:Class="CrimsonAtomtic.Ui.Views.LocalizationSearchWindow"
         x:DataType="vm:LocalizationSearchViewModel"
         Title="{StaticResource LocalizationWindowTitle}"
         Icon="/Assets/MainIcon.ico"
-        Width="780" Height="560"
-        MinWidth="480" MinHeight="320">
+        Width="980" Height="560"
+        MinWidth="540" MinHeight="320">
 
   <Grid RowDefinitions="Auto,Auto,*"
         Margin="12">
@@ -33,8 +33,55 @@
               HeadersVisibility="Column"
               AutoGenerateColumns="False">
       <DataGrid.Columns>
-        <DataGridTextColumn Header="{StaticResource LocalizationColKey}"   Binding="{Binding Key}"   Width="320" />
-        <DataGridTextColumn Header="{StaticResource LocalizationColValue}" Binding="{Binding Value}" Width="*" />
+        <DataGridTextColumn Header="{StaticResource LocalizationColKey}"
+                            Binding="{Binding Key}"
+                            Width="220" />
+        <DataGridTextColumn Header="{StaticResource LocalizationColValue}"
+                            Binding="{Binding Value}"
+                            Width="*" />
+        <!-- Secondary-language column: only visible when the user
+             has picked a secondary in the main window. Header includes
+             the lang code so it's obvious which translation this is. -->
+        <DataGridTextColumn Header="{Binding $parent[Window].((vm:LocalizationSearchViewModel)DataContext).SecondaryValueHeader}"
+                            Binding="{Binding Value2}"
+                            Width="*"
+                            IsVisible="{Binding $parent[Window].((vm:LocalizationSearchViewModel)DataContext).HasSecondary}" />
+        <!-- Per-row copy column. Three single-letter buttons (K / V /
+             V₂) so the user can grab any one of the cells to the
+             clipboard without selecting + Ctrl+C. Buttons stash the
+             text to copy in Tag; the click handler reads it and pushes
+             to TopLevel.Clipboard. V₂ is hidden when no secondary. -->
+        <DataGridTemplateColumn Header="{StaticResource LocalizationColCopy}"
+                                Width="140">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:LocalizationRow">
+              <StackPanel Orientation="Horizontal"
+                          Spacing="2"
+                          VerticalAlignment="Center"
+                          HorizontalAlignment="Left">
+                <Button Content="K"
+                        ToolTip.Tip="{StaticResource LocalizationCopyKeyTip}"
+                        Padding="6,2"
+                        MinHeight="0"
+                        Tag="{Binding Key}"
+                        Click="OnCopyButtonClick" />
+                <Button Content="V"
+                        ToolTip.Tip="{StaticResource LocalizationCopyValueTip}"
+                        Padding="6,2"
+                        MinHeight="0"
+                        Tag="{Binding Value}"
+                        Click="OnCopyButtonClick" />
+                <Button Content="V₂"
+                        ToolTip.Tip="{StaticResource LocalizationCopyValue2Tip}"
+                        Padding="6,2"
+                        MinHeight="0"
+                        Tag="{Binding Value2}"
+                        Click="OnCopyButtonClick"
+                        IsVisible="{Binding $parent[Window].((vm:LocalizationSearchViewModel)DataContext).HasSecondary}" />
+              </StackPanel>
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
       </DataGrid.Columns>
     </DataGrid>
   </Grid>

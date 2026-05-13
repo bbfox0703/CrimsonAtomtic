@@ -33,33 +33,38 @@ public sealed class LocalizationProvider : IDisposable
     private const string ItemInfoFileName = "iteminfo.pabgb";
 
     /// <summary>
-    /// Known PALOC language codes the game ships. Order matches the
-    /// crimson-rs README + community references. Discovery probes each
-    /// of these against every group in <see cref="PalocGroupRange"/>;
-    /// codes that resolve are surfaced via <see cref="AvailableLanguages"/>.
+    /// Known PALOC language codes the game ships. Sourced authoritatively
+    /// from <c>list_all_paloc.py</c> against the 1.06 install — every
+    /// entry below was verified to extract from the corresponding
+    /// <c>localizationstring_&lt;code&gt;.paloc</c>. Order is by group
+    /// number so the probe's first-pass discovery hits in the order the
+    /// game stores them. Discovery probes each of these against every
+    /// group in <see cref="PalocGroupRange"/>; codes that resolve are
+    /// surfaced via <see cref="AvailableLanguages"/>.
     /// </summary>
     private static readonly string[] KnownLanguageCodes =
     [
-        "eng",     // English
-        "kor",     // Korean
-        "jpn",     // Japanese
-        "zho-tw",  // Chinese (Traditional)
-        "zho-cn",  // Chinese (Simplified)
-        "ger",     // German
-        "fra",     // French
-        "spa",     // Spanish
-        "por",     // Portuguese
-        "rus",     // Russian
-        "tur",     // Turkish
-        "tha",     // Thai
-        "ind",     // Indonesian
-        "ara",     // Arabic
+        "kor",      // group 0019 — Korean
+        "eng",      // group 0020 — English (the default)
+        "jpn",      // group 0021 — Japanese
+        "rus",      // group 0022 — Russian
+        "tur",      // group 0023 — Turkish
+        "spa-es",   // group 0024 — Spanish (Spain)
+        "spa-mx",   // group 0025 — Spanish (Mexico, Latin America)
+        "fre",      // group 0026 — French (note: "fre", NOT "fra")
+        "ger",      // group 0027 — German
+        "ita",      // group 0028 — Italian
+        "pol",      // group 0029 — Polish
+        "por-br",   // group 0030 — Portuguese (Brazil)
+        "zho-tw",   // group 0031 — Chinese (Traditional)
+        "zho-cn",   // group 0032 — Chinese (Simplified)
     ];
 
     /// <summary>
-    /// Inclusive group range to probe for PALOC files. 0019 hosts the
-    /// Korean PALOC, 0020 hosts English; later groups host the other
-    /// languages. Higher bound is empirical.
+    /// Inclusive group range to probe for PALOC files. As of 1.06 the
+    /// highest-numbered language is at group 0032 (zho-cn); we probe up
+    /// to 0050 to leave headroom for future patches without missing a
+    /// newly-added language.
     /// </summary>
     private static readonly (int Lo, int Hi) PalocGroupRange = (19, 50);
 
@@ -75,28 +80,150 @@ public sealed class LocalizationProvider : IDisposable
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Pre-built <c>itemKey → name</c> map per loaded language. Built
-    /// once when a language's PALOC catalog loads by walking every
-    /// entry and keeping the type-0x70 records. PALOC's <c>string_key</c>
-    /// is a decimal-formatted u64 where bits 63..32 are the item key
-    /// and bits 7..0 are a type byte (0x70 == item name); the middle
-    /// 24 bits aren't predictable, so the only reliable lookup path
-    /// is to scan once and key the resulting dict by the upper 32 bits.
+    /// Pre-built <c>(typeByte, key) → name</c> map per loaded language.
+    /// Built once when a language's PALOC catalog loads by walking every
+    /// entry and keeping the records whose type byte sits in
+    /// <see cref="NameTypeBytes"/>. PALOC's <c>string_key</c> is a
+    /// decimal-formatted u64 where bits 63..32 are the namespace key and
+    /// bits 7..0 are a type byte (0x70 == item, 0x30 == character /
+    /// faction). The middle 24 bits aren't predictable, so the only
+    /// reliable lookup path is to scan once and key the resulting dict
+    /// by (typeByte, upper32).
     /// </summary>
-    private readonly Dictionary<string, Dictionary<uint, string>> _itemNamesByLang =
+    private readonly Dictionary<string, Dictionary<(byte TypeByte, uint Key), string>> _namesByLang =
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Type byte for the item-name flavour of a PALOC entry.</summary>
     private const byte ItemNameTypeByte = 0x70;
 
+    /// <summary>
+    /// Type byte shared by character and faction names. Empirically
+    /// confirmed against 1.06: <c>CharacterKey 704 → "Carl"</c>,
+    /// <c>CharacterKey 51306 → "Greymane"</c>,
+    /// <c>FactionKey 1000063 → "Dusksong"</c> all sit at this byte.
+    /// The numeric ranges don't collide (factions are 1,000,000+,
+    /// characters are 0..999,999), so one map for both works.
+    /// </summary>
+    private const byte CharacterNameTypeByte = 0x30;
+
+    /// <summary>
+    /// Type byte for in-world interactable / scenery names — the home
+    /// of <c>GimmickInfoKey</c>. Confirmed against 1.06: every
+    /// harvested GimmickInfo key value (1002143 → "Grindstone", 1004966
+    /// → "Anvil", 1007815 → "Skybridge Gate", 1003226 → "Abyss Nexus",
+    /// …) resolves cleanly here, and high-numbered keys only have
+    /// 0x00 entries (no namespace collision).
+    /// </summary>
+    private const byte GimmickNameTypeByte = 0x00;
+
+    /// <summary>Type bytes captured by <see cref="BuildNameMap"/>.</summary>
+    private static readonly HashSet<byte> NameTypeBytes =
+    [
+        ItemNameTypeByte,
+        CharacterNameTypeByte,
+        GimmickNameTypeByte,
+    ];
+
+    /// <summary>
+    /// Maps a save-schema <c>TypeName</c> (the string the Rust decoder
+    /// emits on each field, e.g. "ItemKey") to the PALOC type byte that
+    /// holds the localized name for that namespace. Add a row here to
+    /// extend coverage — no other code changes required.
+    ///
+    /// <para>
+    /// Deliberately omitted:
+    /// </para>
+    /// <list type="bullet">
+    ///   <item><c>MissionKey</c> — the values do hit 0x70 cleanly, but
+    ///   those are <i>item</i> entries: the game stores missions and
+    ///   their tracking items in the same numeric ID space, so
+    ///   `MissionKey 1003440` resolves to "Hearty Braised Meat and
+    ///   Fish" (the dish the mission rewards), not a mission title.
+    ///   Verified against the user's <c>out/output*.txt</c> dumps —
+    ///   PALOC has no per-key mission-name namespace; mission text
+    ///   only appears at 0xC1 with embedded <c>staticInfo:Mission:</c>
+    ///   templates that need a separate resolver. Better to show the
+    ///   raw key than mislead with an item name.</item>
+    ///   <item><c>KnowledgeKey</c> / <c>QuestKey</c> — straddle
+    ///   multiple type bytes; large values just coincidentally hit
+    ///   the item / character tables (see "gotchas" in docs/status.md).</item>
+    /// </list>
+    /// </summary>
+    private static readonly Dictionary<string, byte> TypeNameToTypeByte =
+        new(StringComparer.Ordinal)
+        {
+            ["ItemKey"]                        = ItemNameTypeByte,
+            ["FactionKey"]                     = CharacterNameTypeByte,
+            ["CharacterKey"]                   = CharacterNameTypeByte,
+            ["GimmickInfoKey"]                 = GimmickNameTypeByte,
+            // Scene-object gimmicks (discovered interactables in the
+            // open world) live at the same 0x00 byte as GimmickInfo.
+            // Confirmed against 1.06: every harvested
+            // LevelGimmickSceneObjectInfoKey (1000003 → "Circus Pillar",
+            // 1000043 → "Skybridge Gate", 1000109 → "Chair",
+            // 1000121 → "Oak Barrel", …) cleanly resolves here.
+            ["LevelGimmickSceneObjectInfoKey"] = GimmickNameTypeByte,
+        };
+
+    /// <summary>
+    /// Hardcoded labels for the 18 <c>InventoryKey</c> containers the
+    /// game ships. InventoryKey doesn't have a PALOC namespace — the
+    /// small u16 values (1, 2, …, 20) collide with every other table
+    /// that uses small integers — so the only honest resolution is a
+    /// manually-maintained table.
+    ///
+    /// First-pass guesses (named by container content) were corrected
+    /// by the user based on in-game knowledge: several "X items"
+    /// containers are actually named after the camp upgrade / chest
+    /// that holds them (Kuku Pot, Enhanced Kuku Cooler, Gatherables
+    /// Chest, etc.). Run <c>Probe_InventoryKeyContainers</c> in the
+    /// test project against a new save / patch to surface new keys;
+    /// the *labels* themselves need an in-game check to get right.
+    /// </summary>
+    private static readonly Dictionary<uint, string> InventoryContainerLabels =
+        new()
+        {
+            [1]  = "Camp & Contributions",
+            [2]  = "Backpack",
+            [5]  = "Quest Artifacts",
+            [8]  = "Private Storage",
+            [9]  = "Camp Trading Goods",
+            [10] = "Valuables",
+            [13] = "Kuku Pot",
+            // 14 — observed to hold "Ordinary Gloves" in slot0; user
+            // confirms it is NOT an equipment container (their gear
+            // lives elsewhere). Leave un-labelled until identified.
+            [16] = "Enhanced Kuku Cooler",
+            [19] = "Gatherables Chest",
+            [20] = "Collectibles",
+        };
+
     private NativeItemInfoCatalog? _itemInfo;
     private string? _gameRoot;
     private string? _secondaryLanguage;
+
+    /// <summary>
+    /// Item-icon resolver. Always non-null; <see cref="IconProvider.IsAvailable"/>
+    /// tells the UI whether to bother rendering the icon column at all.
+    /// </summary>
+    public IconProvider Icons { get; private set; } = new(configuredPath: null, exeDirectory: null);
 
     public LocalizationProvider(IPazExtractor paz)
     {
         ArgumentNullException.ThrowIfNull(paz);
         _paz = paz;
+    }
+
+    /// <summary>
+    /// Re-seed the icon provider with a fresh configured path. Called
+    /// once during bootstrap and again whenever the user edits the
+    /// path through the Tools menu. The previously-loaded Bitmap
+    /// cache is dropped — different folder, potentially different
+    /// icons keyed by the same ItemKey.
+    /// </summary>
+    public void ConfigureIconProvider(string? configuredPath, string? exeDirectory)
+    {
+        Icons = new IconProvider(configuredPath, exeDirectory);
     }
 
     /// <summary>True when the iteminfo bridge AND the English PALOC are loaded.</summary>
@@ -261,11 +388,11 @@ public sealed class LocalizationProvider : IDisposable
             var bytes = _paz.ExtractFile(pamt, PalocDirectory, src.FileName);
             var cat = NativePalocCatalog.LoadFromBytes(bytes);
             _catalogs[langCode] = cat;
-            // Pre-walk the catalog to build the u32 → name map for type
-            // 0x70 entries. This is a one-time per-language cost that
-            // turns every subsequent ResolveItemName into an O(1)
+            // Pre-walk the catalog to build the (typeByte, key) → name
+            // map for the type bytes we care about. One-time per-language
+            // cost; turns every subsequent name resolution into an O(1)
             // dictionary lookup.
-            _itemNamesByLang[langCode] = BuildItemNameMap(cat);
+            _namesByLang[langCode] = BuildNameMap(cat);
             return true;
         }
         catch (CrimsonSaveException)
@@ -280,15 +407,19 @@ public sealed class LocalizationProvider : IDisposable
 
     /// <summary>
     /// Walk every entry in <paramref name="cat"/>, keep the ones whose
-    /// decoded <c>string_key</c> is a u64 with type-byte 0x70, and
-    /// build a <c>itemKey → value</c> map. Mirrors the Python
-    /// <c>export_for_ce.py</c> "extract paloc 0x70" loop: duplicate
-    /// item keys are resolved by last-wins. ~180k entries on the
-    /// English table; the walk costs ~1-2 s per language on SSD.
+    /// decoded <c>string_key</c> is a u64 with a type byte in
+    /// <see cref="NameTypeBytes"/>, and build a <c>(typeByte, key) → value</c>
+    /// map. Duplicate (typeByte, key) pairs resolve by last-wins. ~180k
+    /// entries on the English table; the walk costs ~1-2 s per language
+    /// on SSD.
     /// </summary>
-    private static Dictionary<uint, string> BuildItemNameMap(NativePalocCatalog cat)
+    private static Dictionary<(byte, uint), string> BuildNameMap(NativePalocCatalog cat)
     {
-        var map = new Dictionary<uint, string>(capacity: Math.Max(1, cat.EntryCount / 16));
+        // Each captured type byte contributes ~6k entries in 1.06's
+        // English table; capacity hint stays generous to avoid rehash
+        // during the walk.
+        var map = new Dictionary<(byte, uint), string>(
+            capacity: Math.Max(1, cat.EntryCount / 8));
         for (var i = 0; i < cat.EntryCount; i++)
         {
             var entry = cat.GetEntry(i);
@@ -303,43 +434,71 @@ public sealed class LocalizationProvider : IDisposable
                 // strings); skip silently.
                 continue;
             }
-            if ((sid & 0xFFul) != ItemNameTypeByte)
+            var typeByte = (byte)(sid & 0xFFul);
+            if (!NameTypeBytes.Contains(typeByte))
             {
                 continue;
             }
-            var itemKey = (uint)(sid >> 32);
-            map[itemKey] = entry.Value.Value;
+            var upper = (uint)(sid >> 32);
+            map[(typeByte, upper)] = entry.Value.Value;
         }
         return map;
     }
 
     /// <summary>
-    /// Resolve <paramref name="key"/> against the English (default)
-    /// catalog. Returns <c>null</c> when no PALOC is loaded or when the
-    /// key is absent. Kept for backward compat with the Browse
-    /// Localization dialog.
+    /// Resolve <paramref name="key"/> against a specific loaded catalog,
+    /// defaulting to <see cref="DefaultLanguage"/> when
+    /// <paramref name="langCode"/> is null. Returns <c>null</c> when the
+    /// requested catalog isn't loaded or the key is absent.
     /// </summary>
-    public string? Lookup(string? key) =>
-        string.IsNullOrEmpty(key) ? null
-        : _catalogs.TryGetValue(DefaultLanguage, out var cat) ? cat.Lookup(key)
-        : null;
-
-    /// <summary>Browse-localization helper.</summary>
-    public (string Key, string Value)? GetEntry(int index) =>
-        _catalogs.TryGetValue(DefaultLanguage, out var cat) ? cat.GetEntry(index) : null;
+    public string? Lookup(string? key, string? langCode = null)
+    {
+        if (string.IsNullOrEmpty(key))
+        {
+            return null;
+        }
+        var code = langCode ?? DefaultLanguage;
+        return _catalogs.TryGetValue(code, out var cat) ? cat.Lookup(key) : null;
+    }
 
     /// <summary>
-    /// Resolve a save's <c>u32</c> item ID to its localized display
-    /// name in the given language. Looks up against the pre-built
-    /// type-0x70 map for that language. Returns <c>null</c> when no
-    /// PALOC entry exists for that item; the caller can fall back to
-    /// iteminfo's <c>string_key</c> via <see cref="ItemInfoStringKey"/>.
+    /// Browse-localization helper — returns the <paramref name="index"/>th
+    /// entry of a specific catalog (English by default). Lets the
+    /// Browse Localization dialog enumerate the secondary catalog
+    /// without poking at the raw native handle.
     /// </summary>
-    public string? LookupItemName(uint itemId, string langCode) =>
-        _itemNamesByLang.TryGetValue(langCode, out var map)
-        && map.TryGetValue(itemId, out var name)
+    public (string Key, string Value)? GetEntry(int index, string? langCode = null)
+    {
+        var code = langCode ?? DefaultLanguage;
+        return _catalogs.TryGetValue(code, out var cat) ? cat.GetEntry(index) : null;
+    }
+
+    /// <summary>
+    /// Number of entries in a given catalog (English by default).
+    /// 0 when the catalog isn't loaded.
+    /// </summary>
+    public int EntryCountFor(string? langCode = null) =>
+        _catalogs.TryGetValue(langCode ?? DefaultLanguage, out var cat) ? cat.EntryCount : 0;
+
+    /// <summary>
+    /// Low-level lookup: resolve <paramref name="key"/> at a specific
+    /// PALOC <paramref name="typeByte"/> in the given language. Returns
+    /// <c>null</c> when no entry exists. Callers usually want
+    /// <see cref="ResolveByFieldTypeName"/> instead.
+    /// </summary>
+    public string? LookupName(byte typeByte, uint key, string langCode) =>
+        _namesByLang.TryGetValue(langCode, out var map)
+        && map.TryGetValue((typeByte, key), out var name)
             ? name
             : null;
+
+    /// <summary>
+    /// Item-name lookup. Kept for callers that already know they're
+    /// dealing with an item ID. Forwards to <see cref="LookupName"/>
+    /// at type byte 0x70.
+    /// </summary>
+    public string? LookupItemName(uint itemId, string langCode) =>
+        LookupName(ItemNameTypeByte, itemId, langCode);
 
     /// <summary>
     /// iteminfo's internal identifier for the item (e.g.
@@ -349,22 +508,44 @@ public sealed class LocalizationProvider : IDisposable
     public string? ItemInfoStringKey(uint itemId) => _itemInfo?.LookupStringKey(itemId);
 
     /// <summary>
-    /// Convenience: look up the same item ID in English and (if set)
-    /// the user's secondary language. English falls back to the
-    /// iteminfo internal name when no PALOC entry exists so users
-    /// always see *something* for known items. The secondary language
-    /// returns <c>null</c> on miss — duplicating the iteminfo string
-    /// in both columns would just be noise.
+    /// Enumerate one entry of the loaded iteminfo bridge by index.
+    /// Returns <c>null</c> when the bridge isn't loaded or the index
+    /// is out of range. Used by the Item Picker dialog to walk every
+    /// known item without re-extracting iteminfo.pabgb.
     /// </summary>
-    public (string? English, string? Secondary) ResolveItemName(uint itemId)
-    {
-        var english = LookupItemName(itemId, DefaultLanguage)
-                      ?? ItemInfoStringKey(itemId);
-        var secondary = _secondaryLanguage is null
-            ? null
-            : LookupItemName(itemId, _secondaryLanguage);
-        return (english, secondary);
-    }
+    public (uint ItemKey, string StringKey)? GetItem(int index) =>
+        _itemInfo?.GetEntry(index);
+
+    /// <summary>
+    /// Game-defined max_stack_count for an item. Returns <c>null</c>
+    /// when the iteminfo bridge isn't loaded or the key isn't known.
+    /// Drives the "Set to max stack" UX in the edit panel.
+    /// </summary>
+    public ulong? GetItemMaxStackCount(uint itemKey) =>
+        _itemInfo?.LookupMaxStackCount(itemKey);
+
+    /// <summary>
+    /// True when the given save-schema field <c>TypeName</c> has a
+    /// name-resolution path — either PALOC-backed (item / faction /
+    /// character / gimmick) or hardcoded (InventoryKey). Lets callers
+    /// cheaply gate UI work without trying a lookup that's bound to
+    /// come back empty.
+    /// </summary>
+    public static bool CanResolveTypeName(string? typeName) =>
+        typeName is not null
+        && (TypeNameToTypeByte.ContainsKey(typeName) || typeName == "InventoryKey");
+
+    /// <summary>
+    /// Convenience: look up the same key in English and (if set) the
+    /// user's secondary language. English-side ItemKey lookups fall
+    /// back to the iteminfo internal name so users always see
+    /// *something* for known items. The secondary language returns
+    /// <c>null</c> on miss — duplicating the iteminfo string in both
+    /// columns would just be noise. For non-item type bytes (faction,
+    /// character) there's no equivalent fallback.
+    /// </summary>
+    public (string? English, string? Secondary) ResolveItemName(uint itemId) =>
+        ResolveAt(ItemNameTypeByte, itemId);
 
     /// <summary>
     /// Same as <see cref="ResolveItemName"/> but pre-formatted as a
@@ -380,15 +561,61 @@ public sealed class LocalizationProvider : IDisposable
     /// DataGrid wrapper route through this so the column formatting
     /// stays consistent.
     /// </summary>
-    public string ResolveItemNameFormatted(uint itemId)
+    public string ResolveItemNameFormatted(uint itemId) =>
+        FormatPair(ResolveAt(ItemNameTypeByte, itemId));
+
+    /// <summary>
+    /// Resolve a key whose schema TypeName indicates a known name
+    /// namespace (<c>ItemKey</c> / <c>FactionKey</c> / <c>CharacterKey</c>
+    /// / gimmick / <c>InventoryKey</c>, see <see cref="TypeNameToTypeByte"/>
+    /// and <see cref="InventoryContainerLabels"/>). Returns the empty
+    /// string when <paramref name="typeName"/> isn't a resolvable
+    /// namespace, or when the key has no entry. The VM-side wrappers
+    /// route every name column through this single entry point.
+    /// </summary>
+    public string ResolveByFieldTypeName(string? typeName, uint key)
     {
-        var (english, secondary) = ResolveItemName(itemId);
-        var hasEn = !string.IsNullOrEmpty(english);
-        var hasSec = !string.IsNullOrEmpty(secondary);
+        if (typeName == "InventoryKey")
+        {
+            // InventoryKey lives outside PALOC entirely — labels are
+            // a hardcoded table sourced from inspecting live saves.
+            return InventoryContainerLabels.GetValueOrDefault(key, string.Empty);
+        }
+        if (typeName is null
+            || !TypeNameToTypeByte.TryGetValue(typeName, out var typeByte))
+        {
+            return string.Empty;
+        }
+        return FormatPair(ResolveAt(typeByte, key));
+    }
+
+    /// <summary>
+    /// Shared lookup core: returns (english, secondary) for one
+    /// (typeByte, key) pair. The iteminfo fallback only kicks in for
+    /// the item-name byte — there's no equivalent table for characters
+    /// or factions.
+    /// </summary>
+    private (string? English, string? Secondary) ResolveAt(byte typeByte, uint key)
+    {
+        var english = LookupName(typeByte, key, DefaultLanguage);
+        if (string.IsNullOrEmpty(english) && typeByte == ItemNameTypeByte)
+        {
+            english = ItemInfoStringKey(key);
+        }
+        var secondary = _secondaryLanguage is null
+            ? null
+            : LookupName(typeByte, key, _secondaryLanguage);
+        return (english, secondary);
+    }
+
+    private static string FormatPair((string? English, string? Secondary) pair)
+    {
+        var hasEn = !string.IsNullOrEmpty(pair.English);
+        var hasSec = !string.IsNullOrEmpty(pair.Secondary);
         if (!hasEn && !hasSec) return string.Empty;
-        if (!hasSec) return english!;
-        if (!hasEn) return secondary!;
-        return $"{english} / {secondary}";
+        if (!hasSec) return pair.English!;
+        if (!hasEn) return pair.Secondary!;
+        return $"{pair.English} / {pair.Secondary}";
     }
 
     public void Dispose()

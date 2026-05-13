@@ -4,6 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
         xmlns:model="using:CrimsonAtomtic.SaveModel"
+        xmlns:svc="using:CrimsonAtomtic.Ui.Services"
         mc:Ignorable="d"
         d:DesignWidth="900"
         d:DesignHeight="600"
@@ -41,8 +42,13 @@
         <MenuItem Header="{StaticResource MenuExit}" Click="OnExitClick" />
       </MenuItem>
       <MenuItem Header="{StaticResource MenuTools}">
+        <MenuItem Header="{StaticResource MenuBrowseItems}"
+                  Click="OnBrowseItemsClick" />
         <MenuItem Header="{StaticResource MenuBrowseLocalization}"
                   Click="OnBrowseLocalizationClick" />
+        <Separator />
+        <MenuItem Header="{StaticResource MenuSetIconFolder}"
+                  Click="OnSetIconFolderClick" />
         <MenuItem Header="{StaticResource MenuLanguage}"
                   Name="SecondaryLanguageMenu">
           <MenuItem Header="{StaticResource MenuLanguageOff}"
@@ -52,15 +58,36 @@
       </MenuItem>
     </Menu>
 
-    <!-- Status footer: shows localization load state so the user can
-         tell at a glance whether the PAZ → PALOC bootstrap succeeded. -->
+    <!-- Status footer:
+         - Left: localization (PALOC entries / iteminfo items / secondary lang).
+         - Middle: icon cache state (path + file count, or error).
+         - Right: transient bulk-op status messages.
+         The 3-column layout means changing icon folder gives the user
+         immediate visual confirmation ("Icons: icons_local (6,011 files)")
+         without needing to open Tools menu to verify the change. -->
     <Border DockPanel.Dock="Bottom"
             BorderThickness="0,1,0,0"
             BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
             Padding="12,4">
-      <TextBlock Text="{Binding LocalizationStatus}"
-                 Opacity="0.6"
-                 FontSize="12" />
+      <Grid ColumnDefinitions="*,Auto,Auto"
+            ColumnSpacing="16">
+        <TextBlock Grid.Column="0"
+                   Text="{Binding LocalizationStatus}"
+                   Opacity="0.6"
+                   FontSize="12"
+                   TextTrimming="CharacterEllipsis" />
+        <TextBlock Grid.Column="1"
+                   Text="{Binding IconStatus}"
+                   Opacity="0.6"
+                   FontSize="12"
+                   TextTrimming="CharacterEllipsis" />
+        <TextBlock Grid.Column="2"
+                   Text="{Binding BulkOpStatus}"
+                   Opacity="0.9"
+                   Foreground="Goldenrod"
+                   FontSize="12"
+                   IsVisible="{Binding BulkOpStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </Grid>
     </Border>
 
     <!-- Empty state -->
@@ -121,16 +148,34 @@
       </Border>
 
       <!-- Right: blocks list (top) + field detail pane (bottom),
-           split by a draggable GridSplitter. -->
+           split by a draggable GridSplitter. The blocks list itself
+           has its own header row (title + count) and a filter box
+           directly below it, mirroring the fields/elements panes. -->
       <Grid Grid.Column="1"
-            RowDefinitions="Auto,*,Auto,320"
+            RowDefinitions="Auto,Auto,*,Auto,320"
             Margin="12,0,0,0">
 
-        <TextBlock Grid.Row="0"
-                   Text="{StaticResource BlocksHeader}"
-                   FontSize="16"
-                   FontWeight="SemiBold"
-                   Margin="0,0,0,8" />
+        <Grid Grid.Row="0"
+              ColumnDefinitions="*,Auto"
+              Margin="0,0,0,4">
+          <TextBlock Grid.Column="0"
+                     Text="{StaticResource BlocksHeader}"
+                     FontSize="16"
+                     FontWeight="SemiBold" />
+          <TextBlock Grid.Column="1"
+                     Text="{Binding BlocksFilterCountText}"
+                     Opacity="0.6"
+                     VerticalAlignment="Center" />
+        </Grid>
+
+        <!-- Blocks filter: matches case-insensitively against class
+             name and the TOC index, so "Inventory" jumps to all the
+             inventory-shaped blocks while "1106" jumps straight to
+             row 1106. -->
+        <TextBox Grid.Row="1"
+                 Text="{Binding BlocksFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                 PlaceholderText="{StaticResource BlocksFilterPlaceholder}"
+                 Margin="0,0,0,4" />
 
         <!-- Column widths are deliberately fixed (no Width="*") so the
              grid's total width exceeds the viewport and a horizontal
@@ -138,8 +183,8 @@
              made every column-resize a "shuffle everything else first"
              chore; fixed widths + scroll is the standard "spreadsheet"
              affordance the user asked for. -->
-        <DataGrid Grid.Row="1"
-                  ItemsSource="{Binding Blocks}"
+        <DataGrid Grid.Row="2"
+                  ItemsSource="{Binding VisibleBlocks}"
                   SelectedItem="{Binding SelectedBlock, Mode=TwoWay}"
                   IsReadOnly="True"
                   SelectionMode="Single"
@@ -158,13 +203,13 @@
           </DataGrid.Columns>
         </DataGrid>
 
-        <GridSplitter Grid.Row="2"
+        <GridSplitter Grid.Row="3"
                       Height="4"
                       HorizontalAlignment="Stretch"
                       Background="{DynamicResource SystemControlForegroundBaseLowBrush}"
                       ResizeDirection="Rows" />
 
-        <Grid Grid.Row="3"
+        <Grid Grid.Row="4"
               RowDefinitions="Auto,Auto,Auto,Auto,*,Auto"
               Margin="0,8,0,0">
 
@@ -254,6 +299,7 @@
 
           <!-- Fields DataGrid (visible when a block is on top). -->
           <DataGrid Grid.Row="4"
+                    x:Name="FieldsDataGrid"
                     ItemsSource="{Binding VisibleFields}"
                     SelectedItem="{Binding SelectedField, Mode=TwoWay}"
                     IsVisible="{Binding IsShowingFields}"
@@ -299,7 +345,7 @@
                   BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
                   Padding="0,8,0,0"
                   Margin="0,8,0,0">
-            <Grid ColumnDefinitions="Auto,*,Auto,Auto"
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto"
                   RowDefinitions="Auto,Auto,Auto"
                   ColumnSpacing="8"
                   RowSpacing="4">
@@ -311,7 +357,17 @@
                          Opacity="0.8"
                          FontFamily="Cascadia Code,Consolas,monospace"
                          Margin="8,0,0,0" />
+              <!-- max-stack hint sits to the right of the type tag,
+                   only when a peer ItemKey exists and the iteminfo
+                   bridge knows that key. Doubles as the affordance
+                   for the Set-to-max button immediately below — same
+                   row's right side. -->
               <TextBlock Grid.Row="0" Grid.Column="2"
+                         Text="{Binding SelectedFieldMaxStackHintText}"
+                         Opacity="0.6"
+                         FontFamily="Cascadia Code,Consolas,monospace"
+                         Margin="8,0,0,0" />
+              <TextBlock Grid.Row="0" Grid.Column="3"
                          Text="{Binding SelectedFieldTypeHint}"
                          Opacity="0.6"
                          FontFamily="Cascadia Code,Consolas,monospace" />
@@ -320,17 +376,27 @@
                        Text="{Binding SelectedField.RawText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                        KeyDown="OnEditValueKeyDown"
                        PlaceholderText="{Binding SelectedFieldTypeHint}" />
-              <Button Grid.Row="1" Grid.Column="2"
+              <!-- Set-to-max: pre-fills RawText with the item's
+                   max_stack_count. CanExecute keeps the button
+                   disabled when there's no peer ItemKey or no
+                   max-stack entry — so the user can leave it
+                   visible at all times and it just lights up when
+                   relevant. -->
+              <Button Grid.Row="1" Grid.Column="3"
+                      Content="{StaticResource EditPanelFillMaxStack}"
+                      ToolTip.Tip="{StaticResource EditPanelFillMaxStackTip}"
+                      Command="{Binding FillSelectedFieldToMaxStackCommand}" />
+              <Button Grid.Row="1" Grid.Column="4"
                       Content="{StaticResource EditPanelApply}"
                       Command="{Binding CommitFieldEditCommand}"
                       CommandParameter="{Binding SelectedField}"
                       IsDefault="True" />
-              <Button Grid.Row="1" Grid.Column="3"
+              <Button Grid.Row="1" Grid.Column="5"
                       Content="{StaticResource EditPanelRevert}"
                       Command="{Binding RevertFieldEditCommand}"
                       CommandParameter="{Binding SelectedField}" />
 
-              <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="4"
+              <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="6"
                          Text="{Binding SelectedField.EditError}"
                          Foreground="IndianRed"
                          TextWrapping="Wrap"
@@ -340,14 +406,20 @@
 
           <!-- Elements DataGrid (visible when an ObjectList is on top:
                lets the user pick which element to drill into).
-               ItemKey + Item name columns surface the row's identity
-               so users can tell what each slot holds at a glance
-               instead of seeing 14 identical "ItemSaveData" rows. -->
+               Key + Name columns surface the row's identity so users
+               can tell what each slot holds at a glance instead of
+               seeing 14 identical "ItemSaveData" rows. SelectedElement
+               is two-way so a breadcrumb back-pop can re-highlight
+               (and scroll into view via x:Name) the row the user
+               previously drilled from. -->
           <DataGrid Grid.Row="4"
+                    x:Name="ElementsDataGrid"
                     ItemsSource="{Binding VisibleElements}"
+                    SelectedItem="{Binding SelectedElement, Mode=TwoWay}"
                     IsVisible="{Binding IsShowingElements}"
                     IsReadOnly="True"
                     CanUserResizeColumns="True"
+                    SelectionMode="Single"
                     GridLinesVisibility="Horizontal"
                     HeadersVisibility="Column"
                     AutoGenerateColumns="False"
@@ -355,8 +427,25 @@
                     RowBackground="Transparent">
             <DataGrid.Columns>
               <DataGridTextColumn Header="{StaticResource ElementsColIndex}"    Binding="{Binding ClassIndex}"   Width="60" />
+              <!-- Icon column — only meaningful for ItemKey-typed rows
+                   (ItemSaveData inside an itemList). The VM zeroes
+                   IconItemKey on rows whose key field is a different
+                   kind, so the converter returns null and the cell
+                   stays empty for character / faction / container
+                   pickers. -->
+              <DataGridTemplateColumn Header="{StaticResource ElementsColIcon}" Width="56">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:ElementRowViewModel">
+                    <Image Source="{Binding IconItemKey, Converter={x:Static svc:ItemKeyToIconConverter.Instance}}"
+                           Width="40" Height="40"
+                           Stretch="Uniform"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
               <DataGridTextColumn Header="{StaticResource ElementsColClass}"    Binding="{Binding ClassName}"    Width="280" />
-              <DataGridTextColumn Header="{StaticResource ElementsColItemKey}"  Binding="{Binding ItemKeyText}"  Width="90" />
+              <DataGridTextColumn Header="{StaticResource ElementsColItemKey}"  Binding="{Binding KeyText}"      Width="90" />
               <DataGridTextColumn Header="{StaticResource ElementsColItemName}" Binding="{Binding ResolvedName}" Width="360" />
               <DataGridTextColumn Header="{StaticResource ElementsColOffset}"   Binding="{Binding DataOffset}"   Width="120" />
               <DataGridTextColumn Header="{StaticResource ElementsColSize}"     Binding="{Binding DataSize}"     Width="120" />
@@ -369,6 +458,33 @@
                             MinHeight="0"
                             Command="{Binding $parent[DataGrid].((vm:MainWindowViewModel)DataContext).DrillIntoElementCommand}"
                             CommandParameter="{Binding Block}" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <!-- "Fill stack(s) to max" button — visible on two
+                   row shapes:
+                     (a) Single item: this row IS an ItemSaveData
+                         (has _itemKey + _stackCount on its own
+                         fields). Label: "Fill stack". Fills just
+                         this row's count.
+                     (b) Container: this row has a nested ItemList of
+                         stackable items AND its own key is
+                         InventoryKey-ish (excludes MercenarySaveData
+                         et al. whose row resolves to a named entity).
+                         Label: "Fill stacks". Fills every nested
+                         item.
+                   Both routes go through the same command which
+                   prompts for confirmation before applying. -->
+              <DataGridTemplateColumn Header="{StaticResource ElementsColBulkFill}" Width="120">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:ElementRowViewModel">
+                    <Button Content="{Binding FillButtonLabel}"
+                            ToolTip.Tip="{StaticResource ElementsBulkFillTip}"
+                            IsVisible="{Binding IsBulkFillCandidate}"
+                            Padding="8,2"
+                            MinHeight="0"
+                            Command="{Binding $parent[DataGrid].((vm:MainWindowViewModel)DataContext).BulkFillItemListMaxStackCommand}"
+                            CommandParameter="{Binding}" />
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>

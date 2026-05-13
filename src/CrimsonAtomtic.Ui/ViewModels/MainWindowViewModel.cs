@@ -25,6 +25,33 @@ public sealed partial class MainWindowViewModel(
     public LocalizationProvider Localization => localization;
 
     /// <summary>
+    /// Status string for the icon-cache slot of the footer.
+    /// Shape:
+    /// - "Icons: not set" → no path configured.
+    /// - "Icons: <basename> (6,011 files)" → path resolved with N webp files.
+    /// - "Icons: <basename> (0 files)" → path exists but empty / wrong subfolder.
+    /// - "Icons: decode failed — <last error>" → at least one file failed
+    ///   to decode; surfaces the codec / IO error so the user can act.
+    /// </summary>
+    public string IconStatus
+    {
+        get
+        {
+            var icons = localization.Icons;
+            if (!icons.IsAvailable)
+            {
+                return "Icons: not set (Tools → Set Icon Folder…)";
+            }
+            var basename = Path.GetFileName(icons.Root!.TrimEnd(Path.DirectorySeparatorChar));
+            if (icons.DecodeFailures > 0 && !string.IsNullOrEmpty(icons.LastError))
+            {
+                return $"Icons: {basename} — {icons.DecodeFailures} decode fail(s); {icons.LastError}";
+            }
+            return $"Icons: {basename} ({icons.FileCount:N0} files)";
+        }
+    }
+
+    /// <summary>
     /// Status string for the footer: "Localization: 102,300 entries / 6,400 items"
     /// when both layers loaded, dropping pieces when bits are missing.
     /// </summary>
@@ -65,6 +92,45 @@ public sealed partial class MainWindowViewModel(
     /// so the next launch reloads it. After the swap, refreshes the
     /// currently-displayed fields so their resolved names update in place.
     /// </summary>
+    /// <summary>
+    /// Update the active icon-cache directory and persist the choice
+    /// to settings.json. Re-seeds the IconProvider AND the static
+    /// converter singleton so already-rendered cells repaint with
+    /// the new icons (or with blanks if the new path has no match).
+    /// Empty path clears the configured value — falls back to the
+    /// exe-dir probe.
+    /// </summary>
+    public void SetIconCacheDirectory(string? path)
+    {
+        var normalized = string.IsNullOrWhiteSpace(path) ? null : path;
+        // Persist first so a crash mid-refresh doesn't drop the user's
+        // choice. The previously-loaded language pref is preserved
+        // through the record-with copy.
+        var existing = AppSettingsStore.Load(paths.LocalAppDataDirectory);
+        AppSettingsStore.TrySave(paths.LocalAppDataDirectory,
+            existing with { IconCacheDirectory = normalized });
+
+        // Re-seed the provider. The exe directory is the same as on
+        // first boot — passing it again keeps the
+        // <exe-dir>/IconCache/ fallback consistent.
+        var exeDir = Path.GetDirectoryName(
+            AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar));
+        localization.ConfigureIconProvider(normalized, exeDir);
+        ItemKeyToIconConverter.Provider = localization.Icons;
+
+        // Force every currently-rendered icon binding to re-query the
+        // converter by rebuilding the visible row collections. The
+        // converter doesn't have a "cache invalidated, re-query"
+        // signal otherwise. Open Item Picker windows aren't refreshed
+        // here — they hold their own VMs and need a close + reopen
+        // for the new icons to surface.
+        if (_navStack.Count > 0)
+        {
+            RebuildFromTop();
+        }
+        OnPropertyChanged(nameof(IconStatus));
+    }
+
     public void SetSecondaryLanguage(string? langCode)
     {
         localization.SecondaryLanguage = langCode;
@@ -116,6 +182,17 @@ public sealed partial class MainWindowViewModel(
 
     private string? _loadedPath;
 
+    /// <summary>
+    /// Last-write timestamp of the file we loaded from. Captured once
+    /// at load time and re-applied to every subsequent <c>WriteToFile</c>
+    /// destination, so the on-disk mtime never advances past the
+    /// original save. Steam Cloud uses mtime to decide which side of a
+    /// sync is newer — silently bumping it would have Cloud pick the
+    /// edited save over whatever the user actually wants to keep. Same
+    /// reasoning for the in-game save picker, which sorts by recency.
+    /// </summary>
+    private DateTime? _loadedFileLastWriteTime;
+
     /// <summary>Currently loaded save's on-disk path, or null when no save is loaded.</summary>
     public string? LoadedPath => _loadedPath;
 
@@ -148,6 +225,17 @@ public sealed partial class MainWindowViewModel(
     private bool _isDirty;
 
     /// <summary>
+    /// Live text filter for <see cref="VisibleBlocks"/>. Empty / null
+    /// shows everything. Matches against the block's class name and
+    /// its TOC index — covers both "I know the type of block I'm
+    /// looking for" (typing "Inventory" jumps to InventorySaveData)
+    /// and "I know the row number" (typing "1106" jumps directly).
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BlocksFilterCountText))]
+    private string? _blocksFilter;
+
+    /// <summary>
     /// Live text filter for <see cref="VisibleFields"/>. Empty / null
     /// shows everything. Applies only when <see cref="IsShowingFields"/>.
     /// Matches against field name, type name, raw display value, and
@@ -177,9 +265,62 @@ public sealed partial class MainWindowViewModel(
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsEditPanelVisible))]
     [NotifyPropertyChangedFor(nameof(SelectedFieldTypeHint))]
+    [NotifyPropertyChangedFor(nameof(CanFillSelectedFieldToMaxStack))]
+    [NotifyPropertyChangedFor(nameof(SelectedFieldMaxStackHintText))]
+    [NotifyCanExecuteChangedFor(nameof(FillSelectedFieldToMaxStackCommand))]
     private FieldRowViewModel? _selectedField;
 
-    public ObservableCollection<BlockSummary> Blocks { get; } = [];
+    /// <summary>
+    /// Element selected in the element-picker DataGrid. Two-way binding
+    /// lets the View highlight the row the user clicks AND lets the VM
+    /// restore the previously-drilled element when popping back through
+    /// the breadcrumb.
+    /// </summary>
+    [ObservableProperty]
+    private ElementRowViewModel? _selectedElement;
+
+    /// <summary>
+    /// Raised after a pop-back when the VM has restored selection but
+    /// the View still needs to scroll the row into the viewport.
+    /// Subscribed once by <c>MainWindow</c>'s code-behind, which calls
+    /// <c>DataGrid.ScrollIntoView</c> on the appropriate grid. Stays
+    /// outside the observable-property machinery because Avalonia
+    /// DataGrid doesn't expose ScrollIntoView as a bindable property.
+    /// </summary>
+    public event Action<FieldRowViewModel>? FieldScrollRequested;
+
+    /// <summary>Counterpart of <see cref="FieldScrollRequested"/> for the elements DataGrid.</summary>
+    public event Action<ElementRowViewModel>? ElementScrollRequested;
+
+    /// <summary>
+    /// Async confirmation callback (title, message) → user-said-yes.
+    /// Provided by <c>MainWindow</c>'s code-behind via
+    /// <see cref="ConfirmDialog.ShowAsync"/> so the VM doesn't depend
+    /// on Avalonia Window types. Null when no view is attached
+    /// (headless test scenarios), in which case any flow that
+    /// requires confirmation aborts safely. Property (not field) so
+    /// CA1051 stays happy.
+    /// </summary>
+    public Func<string, string, Task<bool>>? ConfirmRequested { get; set; }
+
+    /// <summary>
+    /// Status footer text for the most recent bulk operation —
+    /// "Filled 168 stacks." / "Bulk fill cancelled." etc. Lives in
+    /// <see cref="DetailsError"/>'s sibling slot so it doesn't fight
+    /// for screen real estate. Cleared on the next navigation.
+    /// </summary>
+    [ObservableProperty]
+    private string? _bulkOpStatus;
+
+    /// <summary>
+    /// Backing store for every TOC block loaded from the save. The
+    /// blocks DataGrid binds to <see cref="VisibleBlocks"/>, which is
+    /// the filtered projection. Mutating <see cref="BlocksFilter"/>
+    /// re-derives the visible set without touching this list.
+    /// </summary>
+    private readonly List<BlockSummary> _allBlocks = [];
+
+    public ObservableCollection<BlockSummary> VisibleBlocks { get; } = [];
 
     public bool HasSave => Summary is not null;
     public bool HasSelectedBlock => SelectedBlock is not null;
@@ -290,6 +431,117 @@ public sealed partial class MainWindowViewModel(
     public string SelectedFieldTypeHint => SelectedField?.TypeTag ?? string.Empty;
 
     /// <summary>
+    /// True when the currently-selected scalar field can be filled
+    /// with its item's <c>max_stack_count</c>. Requires:
+    /// <list type="number">
+    ///   <item>An editable scalar selected.</item>
+    ///   <item>An integer-shaped tag (u8/u16/u32/u64) so the result
+    ///         fits — max_stack values can hit 6+ digits.</item>
+    ///   <item>A peer <c>ItemKey</c> field on the same block.</item>
+    ///   <item>The iteminfo bridge has a <c>max_stack_count</c> entry
+    ///         for that item key.</item>
+    /// </list>
+    /// </summary>
+    public bool CanFillSelectedFieldToMaxStack => TryGetSelectedFieldMaxStack(out _);
+
+    /// <summary>
+    /// Right-aligned hint shown next to the Set-to-max button, e.g.
+    /// <c>"Backpack stack: 999"</c>. Empty when no max-stack is
+    /// available for the current selection.
+    /// </summary>
+    public string SelectedFieldMaxStackHintText =>
+        TryGetSelectedFieldMaxStack(out var max)
+            ? $"max stack: {max:N0}"
+            : string.Empty;
+
+    /// <summary>
+    /// Find the max_stack_count value for the currently-selected
+    /// field by locating its peer ItemKey on the same BlockFrame.
+    /// Returns false when any link in the chain is missing.
+    /// </summary>
+    private bool TryGetSelectedFieldMaxStack(out ulong maxStack)
+    {
+        maxStack = 0;
+        if (SelectedField is not { IsEditable: true } sel)
+        {
+            return false;
+        }
+        // Only sensible for integer-shaped scalars. f32/f64/bool/bytes
+        // don't have a "fill to stack count" interpretation.
+        if (sel.TypeTag is not ("u8" or "u16" or "u32" or "u64"
+                                or "i8" or "i16" or "i32" or "i64"))
+        {
+            return false;
+        }
+        if (_navStack.Count == 0 || _navStack.Peek() is not BlockFrame top)
+        {
+            return false;
+        }
+        // Find a peer ItemKey on the same block. The conventional
+        // shape is ItemSaveData with _itemKey + _stackCount as
+        // sibling scalars.
+        uint? itemKey = null;
+        foreach (var f in top.Block.Fields)
+        {
+            if (f.TypeName != "ItemKey"
+                || (f.Kind != "fixed_prefix" && f.Kind != "fixed_suffix"))
+            {
+                continue;
+            }
+            if (!ScalarFieldEditing.TryParse(f.Value, out var raw, out var tag)
+                || tag != "u32"
+                || !uint.TryParse(raw, System.Globalization.NumberStyles.Integer,
+                                  System.Globalization.CultureInfo.InvariantCulture, out var k))
+            {
+                continue;
+            }
+            itemKey = k;
+            break;
+        }
+        if (itemKey is not { } id)
+        {
+            return false;
+        }
+        var resolved = localization.GetItemMaxStackCount(id);
+        if (resolved is not { } v || v == 0)
+        {
+            return false;
+        }
+        maxStack = v;
+        return true;
+    }
+
+    /// <summary>
+    /// Pre-fills the selected field's edit textbox with the peer
+    /// ItemKey's <c>max_stack_count</c>. Deliberately doesn't auto-
+    /// commit — the user reviews the value (and the resulting Apply
+    /// is the single explicit "yes, write this" gesture).
+    /// <para>
+    /// The RawText assignment is deferred one dispatcher tick because
+    /// Avalonia 12 has a "first click is a no-op" pattern when a
+    /// focused TextBox is bound to the property being mutated: the
+    /// VM-side property *does* change on the first click, but the
+    /// focused TextBox doesn't repaint until something else (a second
+    /// click, a focus loss) prods it. Posting to the dispatcher at
+    /// Background priority lets the focus / binding events from the
+    /// button click settle before the value lands, so the redraw
+    /// fires on the next layout pass without needing a second click.
+    /// </para>
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanFillSelectedFieldToMaxStack))]
+    private void FillSelectedFieldToMaxStack()
+    {
+        if (SelectedField is not { } sel || !TryGetSelectedFieldMaxStack(out var max))
+        {
+            return;
+        }
+        var newText = max.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        Avalonia.Threading.Dispatcher.UIThread.Post(
+            () => sel.RawText = newText,
+            Avalonia.Threading.DispatcherPriority.Background);
+    }
+
+    /// <summary>
     /// Called from the View when the user picks a file via the
     /// platform's file dialog. Kept on the VM (not the View) so the
     /// load behavior is testable.
@@ -303,20 +555,67 @@ public sealed partial class MainWindowViewModel(
         }
         Summary = loader.Load(path);
         _loadedPath = path;
+        _loadedFileLastWriteTime = TryReadLastWriteTime(path);
         IsDirty = false;
-        Blocks.Clear();
+        ReplaceBlocks(Summary?.Blocks);
         SelectedBlock = null;
         ClearNavigation();
-        if (Summary is not null)
-        {
-            foreach (var block in Summary.Blocks)
-            {
-                Blocks.Add(block);
-            }
-        }
         SaveCommand.NotifyCanExecuteChanged();
         SaveAsCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(WindowTitle));
+    }
+
+    /// <summary>
+    /// Read the file's last-write timestamp, swallowing IO errors so a
+    /// missing / locked file doesn't take down Load. Returns null when
+    /// the read fails — callers should treat that as "don't try to
+    /// preserve a timestamp we never captured".
+    /// </summary>
+    private static DateTime? TryReadLastWriteTime(string path)
+    {
+        try
+        {
+            return File.GetLastWriteTime(path);
+        }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
+    }
+
+    /// <summary>
+    /// Re-apply the captured load-time timestamp onto a freshly-written
+    /// file. Best-effort: if the FS rejects the write (read-only, perm
+    /// issue, file disappeared between WriteToFile and here), leave the
+    /// natural "now" timestamp rather than failing the Save operation.
+    /// </summary>
+    private void PreserveOriginalTimestamp(string path)
+    {
+        if (_loadedFileLastWriteTime is not { } t)
+        {
+            return;
+        }
+        try
+        {
+            File.SetLastWriteTime(path, t);
+        }
+        catch (IOException) { /* best-effort */ }
+        catch (UnauthorizedAccessException) { /* best-effort */ }
+    }
+
+    /// <summary>
+    /// Replace the loaded block set: stashes the full list in
+    /// <see cref="_allBlocks"/>, resets the filter, and re-derives
+    /// <see cref="VisibleBlocks"/>. Both Load and Save As path through
+    /// here so the two flows can't drift.
+    /// </summary>
+    private void ReplaceBlocks(IReadOnlyList<BlockSummary>? blocks)
+    {
+        _allBlocks.Clear();
+        if (blocks is not null)
+        {
+            _allBlocks.AddRange(blocks);
+        }
+        BlocksFilter = null;
+        ApplyBlocksFilter();
     }
 
     partial void OnSelectedBlockChanged(BlockSummary? value)
@@ -342,6 +641,8 @@ public sealed partial class MainWindowViewModel(
 
     partial void OnElementsFilterChanged(string? value) => ApplyElementsFilter();
 
+    partial void OnBlocksFilterChanged(string? value) => ApplyBlocksFilter();
+
     partial void OnIsDirtyChanged(bool value)
     {
         SaveCommand.NotifyCanExecuteChanged();
@@ -358,6 +659,10 @@ public sealed partial class MainWindowViewModel(
         {
             return;
         }
+        // Record which row in _allFields the user drilled from, so a
+        // later pop-back can restore that selection + scroll. _allFields
+        // is in original field order, so IndexOf is the cheapest match.
+        parent.LastDrilledIndex = FindAllFieldsIndex(row);
         if (row.Child is { } child)
         {
             // Locator descent: append (fieldIdx, 0). The C ABI ignores
@@ -394,10 +699,25 @@ public sealed partial class MainWindowViewModel(
                 break;
             }
         }
+        // Stash the source index on the parent ElementsFrame so a pop-back
+        // can re-highlight (and scroll to) the element row the user picked.
+        parent.LastDrilledIndex = idx >= 0 ? idx : null;
         var label = idx >= 0 ? $"[{idx}]: {element.ClassName}" : element.ClassName;
         // List descent: append (listFieldIdx, elementIdx).
         var newPath = ExtendPath(parent.PathToList, new PathStep(parent.ListFieldIndex, (uint)Math.Max(idx, 0)));
         PushFrame(new BlockFrame(label, element, newPath));
+    }
+
+    private int? FindAllFieldsIndex(DecodedFieldRow row)
+    {
+        for (var i = 0; i < _allFields.Count; i++)
+        {
+            if (ReferenceEquals(_allFields[i].Row, row))
+            {
+                return i;
+            }
+        }
+        return null;
     }
 
     private static PathStep[] ExtendPath(IReadOnlyList<PathStep> parent, PathStep step)
@@ -429,6 +749,7 @@ public sealed partial class MainWindowViewModel(
             _navStack.Pop();
         }
         RebuildFromTop();
+        RestoreDrillSelection();
     }
 
     [RelayCommand]
@@ -440,6 +761,40 @@ public sealed partial class MainWindowViewModel(
         }
         _navStack.Pop();
         RebuildFromTop();
+        RestoreDrillSelection();
+    }
+
+    /// <summary>
+    /// After popping the stack, re-select the row the user drilled from
+    /// (stashed on each frame as <see cref="NavFrame.LastDrilledIndex"/>)
+    /// and ask the View to scroll it into the viewport. Bounds-checks
+    /// the index — a deeper edit that shrank the list silently falls
+    /// through to no selection rather than crashing.
+    /// </summary>
+    private void RestoreDrillSelection()
+    {
+        if (_navStack.Count == 0)
+        {
+            return;
+        }
+        var top = _navStack.Peek();
+        if (top.LastDrilledIndex is not { } idx)
+        {
+            return;
+        }
+        switch (top)
+        {
+            case BlockFrame when idx >= 0 && idx < _allFields.Count:
+                var fieldVm = _allFields[idx];
+                SelectedField = fieldVm;
+                FieldScrollRequested?.Invoke(fieldVm);
+                break;
+            case ElementsFrame when idx >= 0 && idx < _allElements.Count:
+                var elementVm = _allElements[idx];
+                SelectedElement = elementVm;
+                ElementScrollRequested?.Invoke(elementVm);
+                break;
+        }
     }
 
     /// <summary>
@@ -572,6 +927,341 @@ public sealed partial class MainWindowViewModel(
         }
     }
 
+    /// <summary>
+    /// Fill <c>_stackCount</c> to <c>max_stack_count</c> for either a
+    /// single ItemSaveData row or every item inside a container row.
+    /// Confirmation is mandatory: even single-item fills mutate the
+    /// save and the user explicitly asked for a Yes/No gate. Items
+    /// already at max are skipped (no-op write).
+    /// </summary>
+    [RelayCommand]
+    private async Task BulkFillItemListMaxStackAsync(ElementRowViewModel? row)
+    {
+        BulkOpStatus = null;
+        if (row is null
+            || !row.IsBulkFillCandidate
+            || _loadedPath is null
+            || SelectedBlock is not { } topBlock
+            || _navStack.Count == 0
+            || _navStack.Peek() is not ElementsFrame parent)
+        {
+            return;
+        }
+
+        // Find this row's element index inside the parent ElementsFrame.
+        // We need it to build the path step that descends into THIS
+        // row (vs whichever other one is also in the picker).
+        var elementIdx = -1;
+        for (var i = 0; i < parent.Elements.Count; i++)
+        {
+            if (ReferenceEquals(parent.Elements[i], row.Block))
+            {
+                elementIdx = i;
+                break;
+            }
+        }
+        if (elementIdx < 0)
+        {
+            return;
+        }
+
+        var rowPath = ExtendPath(parent.PathToList,
+                                  new PathStep(parent.ListFieldIndex, (uint)elementIdx));
+
+        // Single-item vs container case. The single case is just the
+        // container case applied to a one-element synthetic "list"
+        // containing the row itself, so we route through the same
+        // candidate collector.
+        List<StackFillCandidate> candidates;
+        if (row.IsSingleFillCandidate)
+        {
+            candidates = new List<StackFillCandidate>(1);
+            if (TryBuildSingleCandidate(row.Block, rowPath, out var c))
+            {
+                candidates.Add(c);
+            }
+        }
+        else
+        {
+            candidates = CollectStackFillCandidates(row.Block, rowPath);
+        }
+
+        if (candidates.Count == 0)
+        {
+            BulkOpStatus = "Nothing to fill — already at target, or no max_stack data.";
+            return;
+        }
+
+        // Confirm only for the batch (container) case. Single-item
+        // fills go straight through — the user explicitly asked to
+        // skip the modal for one-row clicks since it's the same gesture
+        // as clicking Set-to-max in the edit panel.
+        if (row.IsContainerFillCandidate)
+        {
+            if (ConfirmRequested is not { } ask)
+            {
+                return;
+            }
+            var msg = $"Set _stackCount for {candidates.Count} item(s) in this container?\n\n"
+                      + "Items with max_stack_count > 100 fill to max.\n"
+                      + "Items with max_stack_count ≤ 100 round up to the next full stack "
+                      + "(e.g. count 120, max 50 → 150). Items already at a stack-boundary are skipped.\n\n"
+                      + "Reversible by reloading the save without writing.";
+            var ok = await ask("Fill stacks?", msg);
+            if (!ok)
+            {
+                BulkOpStatus = "Fill cancelled.";
+                return;
+            }
+        }
+
+        // Show a "working" message and yield to the UI before the
+        // long-running loop. Without this and the Task.Run below, 168
+        // SetScalarField calls + their per-call full-block re-decodes
+        // hold the UI thread for several seconds — the user can't
+        // even see the modal close cleanly.
+        BulkOpStatus = $"Filling {candidates.Count} stack(s)…";
+        var blockIdx = topBlock.Index;
+
+        // SetScalarField is thread-safe via NativeSaveLoader's
+        // internal _cacheLock; running the loop on a worker thread
+        // keeps the UI responsive during the long re-decode storm.
+        var (applied, firstError) = await Task.Run(() =>
+        {
+            var count = 0;
+            CrimsonSaveException? err = null;
+            foreach (var c in candidates)
+            {
+                try
+                {
+                    loader.SetScalarField(blockIdx, c.Path, c.FieldIndex, c.Bytes);
+                    count++;
+                }
+                catch (CrimsonSaveException ex)
+                {
+                    err = ex;
+                    break;
+                }
+            }
+            return (count, err);
+        });
+
+        // Refresh nav stack so the picker's KeyText / ResolvedName
+        // and the field-detail view (if open) reflect the new state.
+        try
+        {
+            var freshTop = loader.LoadBlockDetails(_loadedPath, blockIdx);
+            RefreshNavStack(freshTop);
+            RebuildFromTop();
+        }
+        catch (CrimsonSaveException)
+        {
+            // Stale view is better than a crash — the next nav will
+            // re-fetch cleanly.
+        }
+
+        if (applied > 0)
+        {
+            IsDirty = true;
+            OnPropertyChanged(nameof(WindowTitle));
+        }
+        BulkOpStatus = firstError is null
+            ? $"Filled {applied} stack(s)."
+            : $"Failed after {applied}/{candidates.Count}: {firstError.Message}";
+    }
+
+    /// <summary>
+    /// One scalar mutation to apply: the descent path from the top
+    /// block to the leaf block, the leaf field's index inside that
+    /// block, and the encoded bytes to write.
+    /// </summary>
+    private readonly record struct StackFillCandidate(
+        PathStep[] Path,
+        int FieldIndex,
+        byte[] Bytes);
+
+    /// <summary>
+    /// Walk every <c>ObjectList</c> field on <paramref name="container"/>
+    /// (the row's InventoryElementSaveData-shaped block); for each
+    /// sub-element with both an ItemKey peer and a <c>_stackCount</c>
+    /// scalar, look up the iteminfo max_stack_count and produce a
+    /// candidate edit. Items already at-or-above max are skipped (no
+    /// point round-tripping a no-op through SetScalarField).
+    /// </summary>
+    private List<StackFillCandidate> CollectStackFillCandidates(
+        BlockDetails container,
+        IReadOnlyList<PathStep> parentPath)
+    {
+        var list = new List<StackFillCandidate>();
+        foreach (var listField in container.Fields)
+        {
+            if (listField.Elements is not { Count: > 0 } items)
+            {
+                continue;
+            }
+            for (var itemIdx = 0; itemIdx < items.Count; itemIdx++)
+            {
+                var itemPath = ExtendPath(parentPath,
+                                          new PathStep((uint)listField.FieldIndex, (uint)itemIdx));
+                if (TryBuildSingleCandidate(items[itemIdx], itemPath, out var candidate))
+                {
+                    list.Add(candidate);
+                }
+            }
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// Build a single fill-to-max candidate from one ItemSaveData-
+    /// shaped block reachable at <paramref name="itemPath"/>. Returns
+    /// <c>false</c> when the block doesn't carry both <c>ItemKey</c>
+    /// and <c>_stackCount</c>, when iteminfo has no max-stack entry
+    /// for the key, when the current value already meets-or-exceeds
+    /// max (no-op skip), or when byte encoding fails.
+    /// </summary>
+    private bool TryBuildSingleCandidate(
+        BlockDetails item,
+        IReadOnlyList<PathStep> itemPath,
+        out StackFillCandidate candidate)
+    {
+        candidate = default;
+
+        // Locate _itemKey + _stackCount on this element.
+        DecodedFieldRow? itemKeyField = null;
+        DecodedFieldRow? stackField = null;
+        foreach (var inner in item.Fields)
+        {
+            if (itemKeyField is null
+                && inner.TypeName == "ItemKey"
+                && (inner.Kind == "fixed_prefix" || inner.Kind == "fixed_suffix"))
+            {
+                itemKeyField = inner;
+            }
+            else if (stackField is null
+                     && inner.Name == "_stackCount"
+                     && (inner.Kind == "fixed_prefix" || inner.Kind == "fixed_suffix"))
+            {
+                stackField = inner;
+            }
+        }
+        if (itemKeyField is null || stackField is null)
+        {
+            return false;
+        }
+
+        if (!ScalarFieldEditing.TryParse(itemKeyField.Value, out var ikRaw, out var ikTag)
+            || ikTag != "u32"
+            || !uint.TryParse(ikRaw, System.Globalization.NumberStyles.Integer,
+                              System.Globalization.CultureInfo.InvariantCulture,
+                              out var itemKey))
+        {
+            return false;
+        }
+        var maxStack = localization.GetItemMaxStackCount(itemKey);
+        if (maxStack is not { } maxVal || maxVal == 0)
+        {
+            return false;
+        }
+
+        // Parse the current count. We need it for the target calculation
+        // (and to skip no-op writes).
+        if (!ScalarFieldEditing.TryParse(stackField.Value, out var scRaw, out var scTag)
+            || !ulong.TryParse(scRaw, System.Globalization.NumberStyles.Integer,
+                               System.Globalization.CultureInfo.InvariantCulture,
+                               out var current))
+        {
+            return false;
+        }
+        if (!TryComputeTargetStack(current, maxVal, out var target))
+        {
+            return false;
+        }
+
+        // Encode target as bytes. ScalarFieldEditing.TryEncode is the
+        // single source of truth for type-tag → bytes; reuse it here
+        // so a future tweak (e.g. endianness or precision) doesn't
+        // need to be mirrored in two places.
+        if (!ScalarFieldEditing.TryEncode(
+                scTag ?? string.Empty,
+                target.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                out var bytes,
+                out _))
+        {
+            return false;
+        }
+
+        candidate = new StackFillCandidate(
+            itemPath is PathStep[] arr ? arr : itemPath.ToArray(),
+            stackField.FieldIndex,
+            bytes);
+        return true;
+    }
+
+    /// <summary>
+    /// Decide what value to write for a fill-to-max operation given
+    /// the current count and the iteminfo max_stack_count. Returns
+    /// false (skip the write) when the target would equal the current
+    /// value or when the inputs are invalid.
+    /// <para>
+    /// Two regimes, based on whether max_stack_count is "small" (≤100,
+    /// the threshold where partial-stack accumulation matters) or
+    /// "large" (currency, contributions, etc. — fill to max and move on):
+    /// </para>
+    /// <list type="bullet">
+    ///   <item><b>max &gt; 100</b>: target = max. Skip when current ≥ max.</item>
+    ///   <item><b>max ≤ 100</b>:
+    ///     <list type="bullet">
+    ///       <item>current &lt; max → target = max (top up a partial single stack).</item>
+    ///       <item>current is an integer multiple of max → skip (already a clean N-stack pile).</item>
+    ///       <item>current &gt; max with remainder &gt; 0 → round up to the next multiple.
+    ///         Example: max=50, current=120 → 120 mod 50 = 20, target = 150.</item>
+    ///     </list>
+    ///   </item>
+    /// </list>
+    /// </summary>
+    private static bool TryComputeTargetStack(ulong current, ulong max, out ulong target)
+    {
+        target = 0;
+        if (max == 0)
+        {
+            return false;
+        }
+        // Threshold sourced from the user's domain note: items with
+        // max_stack_count ≤ 100 (most regular items: arrows, herbs,
+        // ores) benefit from partial-stack round-up. Items with bigger
+        // caps (Camp Funds 6+ digits, contributions at 100k, etc.) just
+        // want "fill to max".
+        const ulong SmallStackThreshold = 100UL;
+
+        if (max > SmallStackThreshold)
+        {
+            if (current >= max)
+            {
+                return false;
+            }
+            target = max;
+            return true;
+        }
+
+        // max ≤ 100 branch.
+        if (current < max)
+        {
+            target = max;
+            return true;
+        }
+        var remainder = current % max;
+        if (remainder == 0)
+        {
+            return false;
+        }
+        // Round current up to the next multiple of max. The add is
+        // safe against overflow at this scale (max ≤ 100, current is
+        // a u64 game count — sum stays well below u64::MAX).
+        target = current + (max - remainder);
+        return true;
+    }
+
     /// <summary>Revert the in-progress edit on a row to its last committed value.</summary>
     [RelayCommand]
     private void RevertFieldEdit(FieldRowViewModel? row)
@@ -595,6 +1285,7 @@ public sealed partial class MainWindowViewModel(
             return;
         }
         loader.WriteToFile(_loadedPath);
+        PreserveOriginalTimestamp(_loadedPath);
         IsDirty = false;
         OnPropertyChanged(nameof(WindowTitle));
     }
@@ -615,22 +1306,21 @@ public sealed partial class MainWindowViewModel(
             return;
         }
         loader.WriteToFile(destinationPath);
+        // Stamp the destination with the original save's mtime BEFORE
+        // re-loading. SaveAs re-anchors `_loadedFileLastWriteTime` to
+        // the destination's now-restored timestamp below, so the next
+        // Save preserves the same value rather than drifting forward.
+        PreserveOriginalTimestamp(destinationPath);
         // Re-anchor: load the freshly-written file so the cached handle
         // matches the new path, then clear nav state. Re-reading also
         // proves the file round-trips (HMAC + LZ4 + ChaCha20 all good).
         Summary = loader.Load(destinationPath);
         _loadedPath = destinationPath;
+        _loadedFileLastWriteTime = TryReadLastWriteTime(destinationPath);
         IsDirty = false;
-        Blocks.Clear();
+        ReplaceBlocks(Summary?.Blocks);
         SelectedBlock = null;
         ClearNavigation();
-        if (Summary is not null)
-        {
-            foreach (var block in Summary.Blocks)
-            {
-                Blocks.Add(block);
-            }
-        }
         SaveCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(WindowTitle));
     }
@@ -657,6 +1347,7 @@ public sealed partial class MainWindowViewModel(
         VisibleFields.Clear();
         VisibleElements.Clear();
         SelectedField = null;
+        SelectedElement = null;
         FieldsFilter = null;
         ElementsFilter = null;
 
@@ -686,6 +1377,60 @@ public sealed partial class MainWindowViewModel(
         }
 
         NotifyNavigationChanged();
+    }
+
+    /// <summary>
+    /// Recompute <see cref="VisibleBlocks"/> from <see cref="_allBlocks"/>
+    /// using <see cref="BlocksFilter"/>. Matches case-insensitively
+    /// against <c>ClassName</c> and the decimal <c>Index</c> string —
+    /// the only two columns the user can reasonably search by (Offset
+    /// and Size are byte coordinates, not human-recognisable).
+    /// Preserves <see cref="SelectedBlock"/> when it survives the
+    /// filter; clears it otherwise.
+    /// </summary>
+    private void ApplyBlocksFilter()
+    {
+        VisibleBlocks.Clear();
+        var needle = BlocksFilter;
+        if (string.IsNullOrWhiteSpace(needle))
+        {
+            foreach (var b in _allBlocks)
+            {
+                VisibleBlocks.Add(b);
+            }
+        }
+        else
+        {
+            foreach (var b in _allBlocks)
+            {
+                if (b.ClassName.Contains(needle, StringComparison.OrdinalIgnoreCase)
+                    || b.Index.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                        .Contains(needle, StringComparison.Ordinal))
+                {
+                    VisibleBlocks.Add(b);
+                }
+            }
+        }
+        // Drop the selection if the previously-selected block was
+        // filtered out — leaving it set would point at a row the user
+        // can't see, with the field-detail pane stuck on a stale view.
+        if (SelectedBlock is { } sel && !VisibleBlocks.Contains(sel))
+        {
+            SelectedBlock = null;
+        }
+        OnPropertyChanged(nameof(BlocksFilterCountText));
+    }
+
+    /// <summary>Footer-style count: "10 of 1,112" / "1,112" when unfiltered.</summary>
+    public string BlocksFilterCountText
+    {
+        get
+        {
+            if (_allBlocks.Count == 0) return string.Empty;
+            return string.IsNullOrEmpty(BlocksFilter)
+                ? $"{_allBlocks.Count:N0}"
+                : $"{VisibleBlocks.Count:N0} of {_allBlocks.Count:N0}";
+        }
     }
 
     private void ApplyFieldsFilter()
@@ -743,16 +1488,22 @@ public sealed partial class MainWindowViewModel(
         else
         {
             // Match against class name (for non-item lists), the raw
-            // ItemKey string, and the resolved item name. Covers both
-            // "I know the key, just show me row" and "I know the name,
-            // find me the slot" workflows.
+            // key string, the directly-resolved name, AND the names of
+            // nested ObjectList children (so "Gold" filters the
+            // _inventorylist[18] picker down to the bag(s) holding gold
+            // without the user drilling into each bag first). The
+            // nested haystack is pre-lowered, so we lower the needle
+            // once and search case-sensitively against it.
+            var nestedNeedle = needle.ToLowerInvariant();
             foreach (var e in _allElements)
             {
                 if (e.ClassName.Contains(needle, StringComparison.OrdinalIgnoreCase)
-                    || (!string.IsNullOrEmpty(e.ItemKeyText)
-                        && e.ItemKeyText.Contains(needle, StringComparison.OrdinalIgnoreCase))
+                    || (!string.IsNullOrEmpty(e.KeyText)
+                        && e.KeyText.Contains(needle, StringComparison.OrdinalIgnoreCase))
                     || (!string.IsNullOrEmpty(e.ResolvedName)
-                        && e.ResolvedName.Contains(needle, StringComparison.OrdinalIgnoreCase)))
+                        && e.ResolvedName.Contains(needle, StringComparison.OrdinalIgnoreCase))
+                    || (!string.IsNullOrEmpty(e.NestedMatchHaystack)
+                        && e.NestedMatchHaystack.Contains(nestedNeedle, StringComparison.Ordinal)))
                 {
                     VisibleElements.Add(e);
                 }
@@ -770,9 +1521,11 @@ public sealed partial class MainWindowViewModel(
         VisibleFields.Clear();
         VisibleElements.Clear();
         SelectedField = null;
+        SelectedElement = null;
         FieldsFilter = null;
         ElementsFilter = null;
         DetailsError = null;
+        BulkOpStatus = null;
         NotifyNavigationChanged();
     }
 
@@ -791,7 +1544,20 @@ public sealed partial class MainWindowViewModel(
 
     // ── Navigation frame types ──────────────────────────────────────────────
 
-    private abstract record NavFrame(string Label);
+    private abstract record NavFrame(string Label)
+    {
+        /// <summary>
+        /// Row index this frame's user most recently drilled from. Set
+        /// in <see cref="MainWindowViewModel.DrillIntoField"/> /
+        /// <see cref="MainWindowViewModel.DrillIntoElement"/> right
+        /// before pushing the child frame, restored on pop-back as
+        /// the selected row (+ scrolled into view) so the user
+        /// doesn't lose their place in a 200-row list. Settable on
+        /// the abstract base so frame-agnostic code can read it
+        /// without a downcast.
+        /// </summary>
+        public int? LastDrilledIndex { get; set; }
+    }
 
     /// <summary>
     /// A view onto an <see cref="BlockDetails"/>. <see cref="Path"/> is the

@@ -1,0 +1,36 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        d:DesignWidth="440"
+        d:DesignHeight="200"
+        x:Class="CrimsonAtomtic.Ui.Views.ConfirmDialog"
+        Width="440" Height="200"
+        MinWidth="320" MinHeight="140"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Icon="/Assets/MainIcon.ico">
+
+  <Grid Margin="16" RowDefinitions="*,Auto">
+    <TextBlock Grid.Row="0"
+               Name="MessageText"
+               TextWrapping="Wrap"
+               VerticalAlignment="Center" />
+
+    <StackPanel Grid.Row="1"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="8"
+                Margin="0,16,0,0">
+      <Button Content="{StaticResource ConfirmDialogNo}"
+              Click="OnNoClick"
+              MinWidth="80" />
+      <Button Content="{StaticResource ConfirmDialogYes}"
+              Click="OnYesClick"
+              MinWidth="80"
+              IsDefault="True" />
+    </StackPanel>
+  </Grid>
+</Window>

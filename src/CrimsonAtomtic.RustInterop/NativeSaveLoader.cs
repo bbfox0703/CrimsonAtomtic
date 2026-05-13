@@ -599,4 +599,10 @@ internal static partial class NativeMethods
         out uint outKey,
         byte* buf, nuint bufLen,
         out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_iteminfo_lookup_max_stack")]
+    public static partial int ItemInfoLookupMaxStack(
+        CrimsonItemInfoHandle handle,
+        uint itemKey,
+        out ulong outMaxStack);
 }

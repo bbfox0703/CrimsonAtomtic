@@ -125,6 +125,22 @@ public sealed class NativeItemInfoCatalog : IItemInfoCatalog
         }
     }
 
+    public ulong? LookupMaxStackCount(uint itemKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var rc = NativeMethods.ItemInfoLookupMaxStack(_handle, itemKey, out var max);
+        if (rc == NativeMethods.NOT_FOUND)
+        {
+            return null;
+        }
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_iteminfo_lookup_max_stack({itemKey}) failed: {ErrorName(rc)}");
+        }
+        return max;
+    }
+
     public (uint ItemKey, string StringKey)? GetEntry(int index)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
