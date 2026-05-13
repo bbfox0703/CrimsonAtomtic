@@ -150,10 +150,24 @@ public sealed partial class MainWindowViewModel(
     /// <summary>
     /// Live text filter for <see cref="VisibleFields"/>. Empty / null
     /// shows everything. Applies only when <see cref="IsShowingFields"/>.
+    /// Matches against field name, type name, raw display value, and
+    /// the resolved item name (so typing "gold" in a block with item
+    /// references highlights the row showing "Gold").
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FieldsFilterCountText))]
     private string? _fieldsFilter;
+
+    /// <summary>
+    /// Live text filter for <see cref="VisibleElements"/>. Empty /
+    /// null shows everything. Applies only when
+    /// <see cref="IsShowingElements"/>. Matches against class name,
+    /// raw ItemKey, and resolved item name — covers both "I know
+    /// the key" and "I know the name" workflows.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ElementsCountText))]
+    private string? _elementsFilter;
 
     /// <summary>
     /// Field selected in the field-detail DataGrid. The View binds the
@@ -221,6 +235,7 @@ public sealed partial class MainWindowViewModel(
     private readonly Stack<NavFrame> _navStack = new();
 
     private readonly List<FieldRowViewModel> _allFields = [];
+    private readonly List<ElementRowViewModel> _allElements = [];
     public ObservableCollection<FieldRowViewModel> VisibleFields { get; } = [];
     public ObservableCollection<ElementRowViewModel> VisibleElements { get; } = [];
     public ObservableCollection<BreadcrumbItem> Breadcrumb { get; } = [];
@@ -251,9 +266,22 @@ public sealed partial class MainWindowViewModel(
         !IsShowingFields || _allFields.Count == 0 ? string.Empty
         : $"{VisibleFields.Count:N0} of {_allFields.Count:N0}";
 
-    public string ElementsCountText =>
-        !IsShowingElements ? string.Empty
-        : $"{VisibleElements.Count:N0} element{(VisibleElements.Count == 1 ? "" : "s")}";
+    public string ElementsCountText
+    {
+        get
+        {
+            if (!IsShowingElements)
+            {
+                return string.Empty;
+            }
+            var total = _allElements.Count;
+            var visible = VisibleElements.Count;
+            var word = total == 1 ? "element" : "elements";
+            return string.IsNullOrEmpty(ElementsFilter)
+                ? $"{total:N0} {word}"
+                : $"{visible:N0} of {total:N0} {word}";
+        }
+    }
 
     /// <summary>Edit panel is shown when the user has selected an editable scalar field.</summary>
     public bool IsEditPanelVisible => SelectedField is { IsEditable: true };
@@ -311,6 +339,8 @@ public sealed partial class MainWindowViewModel(
     }
 
     partial void OnFieldsFilterChanged(string? value) => ApplyFieldsFilter();
+
+    partial void OnElementsFilterChanged(string? value) => ApplyElementsFilter();
 
     partial void OnIsDirtyChanged(bool value)
     {
@@ -623,10 +653,12 @@ public sealed partial class MainWindowViewModel(
         }
 
         _allFields.Clear();
+        _allElements.Clear();
         VisibleFields.Clear();
         VisibleElements.Clear();
         SelectedField = null;
         FieldsFilter = null;
+        ElementsFilter = null;
 
         if (_navStack.Count > 0)
         {
@@ -646,8 +678,9 @@ public sealed partial class MainWindowViewModel(
                 case ElementsFrame ef:
                     foreach (var el in ef.Elements)
                     {
-                        VisibleElements.Add(new ElementRowViewModel(el, localization));
+                        _allElements.Add(new ElementRowViewModel(el, localization));
                     }
+                    ApplyElementsFilter();
                     break;
             }
         }
@@ -672,13 +705,18 @@ public sealed partial class MainWindowViewModel(
         }
         else
         {
-            // Case-insensitive substring match across the three columns
-            // a human is most likely to search by.
+            // Case-insensitive substring match across every column the
+            // human is likely to search by: field name, type name, raw
+            // display value, and the resolved item name (so typing
+            // "gold" lights up the row even though the raw value is
+            // a hash like "11 <u32>").
             foreach (var f in _allFields)
             {
                 if (f.Name.Contains(needle, StringComparison.OrdinalIgnoreCase)
                     || f.TypeName.Contains(needle, StringComparison.OrdinalIgnoreCase)
-                    || f.DisplayValue.Contains(needle, StringComparison.OrdinalIgnoreCase))
+                    || f.DisplayValue.Contains(needle, StringComparison.OrdinalIgnoreCase)
+                    || (!string.IsNullOrEmpty(f.ResolvedName)
+                        && f.ResolvedName.Contains(needle, StringComparison.OrdinalIgnoreCase)))
                 {
                     VisibleFields.Add(f);
                 }
@@ -687,15 +725,53 @@ public sealed partial class MainWindowViewModel(
         OnPropertyChanged(nameof(FieldsFilterCountText));
     }
 
+    private void ApplyElementsFilter()
+    {
+        if (!IsShowingElements)
+        {
+            return;
+        }
+        VisibleElements.Clear();
+        var needle = ElementsFilter;
+        if (string.IsNullOrWhiteSpace(needle))
+        {
+            foreach (var e in _allElements)
+            {
+                VisibleElements.Add(e);
+            }
+        }
+        else
+        {
+            // Match against class name (for non-item lists), the raw
+            // ItemKey string, and the resolved item name. Covers both
+            // "I know the key, just show me row" and "I know the name,
+            // find me the slot" workflows.
+            foreach (var e in _allElements)
+            {
+                if (e.ClassName.Contains(needle, StringComparison.OrdinalIgnoreCase)
+                    || (!string.IsNullOrEmpty(e.ItemKeyText)
+                        && e.ItemKeyText.Contains(needle, StringComparison.OrdinalIgnoreCase))
+                    || (!string.IsNullOrEmpty(e.ResolvedName)
+                        && e.ResolvedName.Contains(needle, StringComparison.OrdinalIgnoreCase)))
+                {
+                    VisibleElements.Add(e);
+                }
+            }
+        }
+        OnPropertyChanged(nameof(ElementsCountText));
+    }
+
     private void ClearNavigation()
     {
         _navStack.Clear();
         Breadcrumb.Clear();
         _allFields.Clear();
+        _allElements.Clear();
         VisibleFields.Clear();
         VisibleElements.Clear();
         SelectedField = null;
         FieldsFilter = null;
+        ElementsFilter = null;
         DetailsError = null;
         NotifyNavigationChanged();
     }

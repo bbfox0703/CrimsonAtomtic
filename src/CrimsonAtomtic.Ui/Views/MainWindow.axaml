@@ -236,6 +236,16 @@
                    IsVisible="{Binding IsShowingFields}"
                    Margin="0,0,0,4" />
 
+          <!-- Search box for the element-list view (e.g. itemList[14]):
+               filter by ItemKey, resolved item name, or class. Same
+               Grid.Row as the fields filter — they're mutually
+               exclusive via IsVisible. -->
+          <TextBox Grid.Row="3"
+                   Text="{Binding ElementsFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                   PlaceholderText="{StaticResource ElementsFilterPlaceholder}"
+                   IsVisible="{Binding IsShowingElements}"
+                   Margin="0,0,0,4" />
+
           <!-- Fields DataGrid (visible when a block is on top). -->
           <DataGrid Grid.Row="4"
                     ItemsSource="{Binding VisibleFields}"
