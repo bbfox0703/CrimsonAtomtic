@@ -31,11 +31,35 @@ public interface ISaveLoader
     /// with a precise error code.
     /// </summary>
     /// <remarks>
-    /// Requires a prior <see cref="Load"/> call: this acts on the
+    /// Equivalent to calling the path-addressed overload with an empty
+    /// path. Requires a prior <see cref="Load"/> call: this acts on the
     /// in-memory handle, not on a transient open. Throws
     /// <see cref="InvalidOperationException"/> when no save is loaded.
     /// </remarks>
     void SetScalarField(int blockIndex, int fieldIndex, ReadOnlySpan<byte> bytes);
+
+    /// <summary>
+    /// Path-addressed scalar setter — mutates a scalar reachable through a
+    /// chain of inline locators and/or list elements descending from a
+    /// top-level TOC block. <paramref name="path"/> is the descent
+    /// sequence; <paramref name="fieldIndex"/> picks the leaf scalar in
+    /// the block reached at the end. An empty <paramref name="path"/> is
+    /// identical to the no-path overload.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Mid-path steps that don't resolve to <c>ObjectLocator</c> (with a
+    /// resolved inline child) or <c>ObjectList</c> fail with
+    /// <c>NOT_NAVIGABLE (-15)</c>. Leaf-side checks are the same as the
+    /// no-path version (<c>NOT_SCALAR</c> / <c>LENGTH_MISMATCH</c> /
+    /// <c>OUT_OF_RANGE</c>).
+    /// </para>
+    /// <para>
+    /// Requires a prior <see cref="Load"/> call. Throws
+    /// <see cref="InvalidOperationException"/> when no save is loaded.
+    /// </para>
+    /// </remarks>
+    void SetScalarField(int blockIndex, ReadOnlySpan<PathStep> path, int fieldIndex, ReadOnlySpan<byte> bytes);
 
     /// <summary>
     /// Write the currently-loaded save (with any in-memory edits) to
