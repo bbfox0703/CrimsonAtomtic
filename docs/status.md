@@ -3,29 +3,32 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-13 (icon-extraction pipeline **complete —
-> Phases 1 through 3**, plus two UX polish items: a collapsible
-> Save Summary panel (toggle button in the header, persisted in
-> `AppSettings.SummaryCollapsed`) and a Tools → Font Size submenu
-> (presets 10..20 pt, persisted in `AppSettings.FontSize`, clamped
-> via `AppSettings.MinFontSize`/`MaxFontSize`). Also fixes a quiet
-> bug where `SetSecondaryLanguage` was clobbering every other
-> field in `settings.json` — now uses the `with` pattern. End-to-end
-> from `ItemKey` to `<cache>/<ItemKey>.webp`. Phase 1 (stringinfo bridge) and Phase 2
-> (`IconImageEncoder`: hand-rolled BC1/BC3 decoder + SkiaSharp resize
-> + WebP encode) shipped earlier. **Phase 3 (Tools menu →
-> "Extract Icons from Game Data…") now lands** with a new
-> `crimson_iteminfo_lookup_icon_path_hash` C ABI getter
-> ([crimson-rs #26](https://github.com/bbfox0703/crimson-rs/pull/26))
-> exposing `item_icon_list[0].icon_path`, plus
-> `IconExtractionService` (the orchestrator) + a modal
-> `IconExtractionProgressDialog` (progress bar + cooperative cancel).
-> One end-to-end run takes ~3 min and writes ~6,200 webps; the
-> on-disk cache size is ~5 MB. 82/82 C# tests + 88/88 Rust tests
-> (incl. c_abi) pass; clippy clean. PAR-container layout used by
-> `.pam` / `.pamlod` / `.pac` meshes in 0009/0015 remains out of
-> scope — see CrimsonForge `_decompress_type1_par` for the recipe
-> when needed.
+> Last updated: 2026-05-13.
+>
+> **Icon-extraction pipeline is complete (Phases 1–3).** Tools →
+> Extract Icons from Game Data… walks every item, resolves each
+> `icon_path` hash through stringinfo, PAZ-extracts the DDS from
+> `0012/ui/texture/icon/`, decodes BC1/BC3 + resizes + WebP-encodes,
+> and writes `<cache>/<ItemKey>.webp`. One run ≈ 3 min, ~6,200 icons,
+> ~5 MB on disk. Built on crimson-rs PRs #24 (stringinfo bridge),
+> #25 (partial-PAZ unblock), #26 (icon_path_hash getter).
+>
+> **UI polish landed**: collapsible Save Summary panel (« / » toggle
+> in the header), Tools → Font Size submenu (10–20 pt presets,
+> persisted + clamped), DataGrid cells + status footer follow the
+> font-size pick. Quiet `SetSecondaryLanguage` settings-clobber bug
+> fixed at the same time (`new AppSettings { … }` → `existing with { … }`).
+>
+> **Health**: 82/82 C# tests + 88/88 Rust tests (incl. `c_abi`); clippy
+> clean. AOT publish 24.1 MB exe + 1.3 MB Rust DLL.
+>
+> **Next session targets**: pick from the lower-priority deferred list
+> below — none of them are blocked. `skill_info` C ABI bridge (#4) and
+> the `MissionKey`/`QuestKey` name resolution (#6) both have concrete
+> recipes in [`docs/crimsonforge-coverage-gaps.md`](crimsonforge-coverage-gaps.md).
+> PAR-container partial compression for `.pam`/`.pamlod`/`.pac` meshes
+> in 0009/0015 stays out of scope until mesh extraction is on the
+> roadmap.
 
 ## Where we are
 
@@ -310,29 +313,24 @@ is on PATH (the script `#requires -Version 7`).
 
 ## Pick up here (next concrete task)
 
-This session shipped the **first phase** of the icon-extraction
-pipeline: a `stringinfo.pabgb` parser, its C ABI bridge, the C#
-wrapper, and `LocalizationProvider` bootstrap. End to end, the
-editor can now resolve a `StringInfoKey` (u32 hash from iteminfo's
-`icon_path` / `map_icon_path`) to its underlying string (typically
-a `.dds` filename like `cd_icon_arrow_basic.dds`) at runtime.
+The icon-extraction pipeline (item #1 below) **is complete** — kept
+in this doc as historical context + a reference for the data-flow,
+file layout, and per-phase decisions. **The actual next tasks live
+in the deferred-items list (#2–#14)**; pick whichever matches your
+appetite. `skill_info` bridge (#4) and `Mission/Quest` name
+resolution (#6) are the most user-visible follow-ons; the batch
+`SetScalarField` C ABI (#3) is the highest-impact perf win.
 
-### #1 — Build the icon extraction pipeline (CONTINUING)
+### #1 — Icon extraction pipeline (DONE — kept as reference)
 
-User explicitly chose this for the next session. The current Icon
-work (this session) only does the *display* half: a configurable
-external directory (`AppSettings.IconCacheDirectory`) of
-`<ItemKey>.webp` files, lazy-loaded via `IconProvider` +
-`ItemKeyToIconConverter`, shown in Item Picker + the elements
-DataGrid. **The extraction half is unbuilt** — the user currently
-has no way to populate the cache from their own game install. The
-old reference repo (`D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS\icons_local\`)
-contains a pre-extracted set of 6,011 webps the user can point at
-as a stopgap, but the long-term plan is extraction from game data
-so we don't depend on a third party's processed copy of Pearl
-Abyss's artwork.
+The display half ships an external icon directory
+(`AppSettings.IconCacheDirectory`) of `<ItemKey>.webp` files,
+lazy-loaded via `IconProvider` + `ItemKeyToIconConverter`, surfaced
+in Item Picker + the elements DataGrid. **The populator half** —
+Tools → Extract Icons from Game Data… — walks every iteminfo entry
+and writes the cache in ~3 minutes against a Crimson Desert install.
 
-**End-to-end data flow** (updated after Phase 1 + 2):
+**End-to-end data flow** (built across Phases 1–3):
 
 ```
 ItemKey                   from save schema (already have)
@@ -489,19 +487,13 @@ RGBA bitmap (32×32 to 256×256)
   Unrecognised entries return `BODY_PARSE` (distinct from PAZ
   corruption) so callers can tell what failed.
 
-**Current Icon code that needs to integrate with the pipeline**:
-- `IconProvider` already does lazy load + Bitmap cache from a
-  configured directory. Phase 3 just needs to populate that
-  directory. No refactor of the display half required.
-- `AppSettings.IconCacheDirectory` is the cache location. The
-  extraction action writes there.
-- `ItemKeyToIconConverter` is the XAML-side binding. Already wired.
-
-**Stopgap that works today (until extraction lands)**: point
-`AppSettings.IconCacheDirectory` (Tools → Set Icon Folder…) at the
-reference repo's `icons_local/`. Icons appear immediately. User
-acknowledged this is a third-party pack with copyright concerns —
-strictly local-machine use only, never bundled or shipped.
+**Current icon-display code** (unchanged across all three phases):
+- `IconProvider` lazy-loads + Bitmap-caches from a configured root.
+- `AppSettings.IconCacheDirectory` is the cache location. Both
+  Tools → Set Icon Folder… and Tools → Extract Icons… write through
+  `MainWindowViewModel.SetIconCacheDirectory` so changes propagate
+  to already-rendered cells without restart.
+- `ItemKeyToIconConverter` is the XAML-side binding glue.
 
 ### #2-N — Lower-priority deferred items
 
