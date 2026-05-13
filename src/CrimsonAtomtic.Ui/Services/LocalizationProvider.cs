@@ -13,6 +13,9 @@ namespace CrimsonAtomtic.Ui.Services;
 ///   <item>locate a Crimson Desert install via <c>IPlatformPaths.GameInstallRoot</c>;</item>
 ///   <item>PAZ-extract <c>iteminfo.pabgb</c> from group <c>0008</c> →
 ///         <c>NativeItemInfoCatalog</c>;</item>
+///   <item>PAZ-extract <c>stringinfo.pabgb</c> (same group) →
+///         <c>NativeStringInfoCatalog</c> for resolving icon-path
+///         hashes harvested from iteminfo;</item>
 ///   <item>discover every available localization language by probing
 ///         <c>localizationstring_&lt;code&gt;.paloc</c> across the
 ///         well-known group range <c>0019..0050</c>;</item>
@@ -31,6 +34,7 @@ public sealed class LocalizationProvider : IDisposable
     private const string PalocDirectory = "gamedata/stringtable/binary__";
     private const string ItemInfoDirectory = "gamedata/binary__/client/bin";
     private const string ItemInfoFileName = "iteminfo.pabgb";
+    private const string StringInfoFileName = "stringinfo.pabgb";
 
     /// <summary>
     /// Known PALOC language codes the game ships. Sourced authoritatively
@@ -199,6 +203,7 @@ public sealed class LocalizationProvider : IDisposable
         };
 
     private NativeItemInfoCatalog? _itemInfo;
+    private NativeStringInfoCatalog? _stringInfo;
     private string? _gameRoot;
     private string? _secondaryLanguage;
 
@@ -293,6 +298,13 @@ public sealed class LocalizationProvider : IDisposable
         // returns null everywhere.
         TryBootstrapItemInfo(gameRoot);
 
+        // ── stringinfo bridge (also group 0008). Resolves
+        // StringInfoKey hashes harvested from iteminfo's icon_path /
+        // map_icon_path fields. Optional: when missing, the
+        // icon-extraction pipeline degrades but the editor keeps
+        // working (the existing IconProvider cache path is unaffected).
+        TryBootstrapStringInfo(gameRoot);
+
         // ── Discover available PALOC languages by probing the well-known
         // group range. PAMT parses are fast (a few ms each); the probe
         // exits early on NOT_FOUND so the total cost stays under a
@@ -322,6 +334,30 @@ public sealed class LocalizationProvider : IDisposable
         catch (CrimsonSaveException)
         {
             // ItemInfo missing or malformed — degrade gracefully.
+        }
+        catch (IOException)
+        {
+        }
+    }
+
+    private void TryBootstrapStringInfo(string gameRoot)
+    {
+        var pamt = Path.Combine(gameRoot, "0008", "0.pamt");
+        if (!File.Exists(pamt))
+        {
+            return;
+        }
+        try
+        {
+            var bytes = _paz.ExtractFile(pamt, ItemInfoDirectory, StringInfoFileName);
+            _stringInfo?.Dispose();
+            _stringInfo = NativeStringInfoCatalog.LoadFromBytes(bytes);
+        }
+        catch (CrimsonSaveException)
+        {
+            // StringInfo missing or malformed — the icon pipeline
+            // degrades to "no extraction" but everything else still
+            // works.
         }
         catch (IOException)
         {
@@ -525,6 +561,25 @@ public sealed class LocalizationProvider : IDisposable
         _itemInfo?.LookupMaxStackCount(itemKey);
 
     /// <summary>
+    /// True when the stringinfo bridge is loaded. Lets the icon-extraction
+    /// pipeline gate its action UI cheaply — without this, the only
+    /// signal would be a null return from <see cref="ResolveStringInfoHash"/>
+    /// for every probe.
+    /// </summary>
+    public bool HasStringInfo => _stringInfo is not null;
+
+    /// <summary>
+    /// Resolve a <c>StringInfoKey</c> hash (u32) to its underlying string
+    /// value — most often a texture filename like
+    /// <c>cd_icon_arrow_basic.dds</c> referenced from iteminfo's
+    /// <c>icon_path</c> field. Returns <c>null</c> when the bridge
+    /// isn't loaded or the hash doesn't appear in
+    /// <c>stringinfo.pabgb</c>.
+    /// </summary>
+    public string? ResolveStringInfoHash(uint hash) =>
+        _stringInfo?.LookupByHash(hash);
+
+    /// <summary>
     /// True when the given save-schema field <c>TypeName</c> has a
     /// name-resolution path — either PALOC-backed (item / faction /
     /// character / gimmick) or hardcoded (InventoryKey). Lets callers
@@ -622,6 +677,8 @@ public sealed class LocalizationProvider : IDisposable
     {
         _itemInfo?.Dispose();
         _itemInfo = null;
+        _stringInfo?.Dispose();
+        _stringInfo = null;
         foreach (var cat in _catalogs.Values)
         {
             cat.Dispose();

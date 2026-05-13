@@ -605,4 +605,34 @@ internal static partial class NativeMethods
         CrimsonItemInfoHandle handle,
         uint itemKey,
         out ulong outMaxStack);
+
+    // ── StringInfo bridge (stringinfo.pabgb) ────────────────────────────────
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_string_info_load_from_file",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int StringInfoLoadFromFile(string path, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_string_info_load_from_bytes")]
+    public static unsafe partial int StringInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_string_info_free")]
+    public static partial void StringInfoFree(IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_string_info_entry_count")]
+    public static partial int StringInfoEntryCount(CrimsonStringInfoHandle handle, out uint count);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_string_info_lookup_by_hash")]
+    public static unsafe partial int StringInfoLookupByHash(
+        CrimsonStringInfoHandle handle,
+        uint hash,
+        byte* buf, nuint bufLen,
+        out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_string_info_get_entry")]
+    public static unsafe partial int StringInfoGetEntry(
+        CrimsonStringInfoHandle handle,
+        uint idx,
+        out uint outHash,
+        byte* buf, nuint bufLen,
+        out nuint required);
 }

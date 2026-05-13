@@ -3,16 +3,14 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-13 (big session: name resolution covers 5
-> namespaces, language code fix, Item Picker, Set-to-max (single
-> + container) with round-up-to-next-multiple logic for small
-> stacks, ConfirmDialog modal, Mercenary false-positive fix,
-> Browse Localization secondary-language column + copy buttons,
-> window restore-from-maximized fix, save mtime preservation,
-> `build.cmd` / `build.ps1` wrapper, **Icon column with
-> external cache directory** (no extraction yet — see "Pick up
-> here" #1 for the extraction pipeline that's the next big task).
-> 68/68 C# tests + 67/67 Rust tests pass).
+> Last updated: 2026-05-13 (icon-extraction pipeline **Phase 1**:
+> `stringinfo.pabgb` parser + C ABI bridge landed in crimson-rs
+> [#24](https://github.com/bbfox0703/crimson-rs/pull/24); C# wrapper
+> + LocalizationProvider wiring on this side. Resolves the
+> `StringInfoKey` hashes harvested from iteminfo's `icon_path` /
+> `map_icon_path` to texture filenames like `cd_icon_arrow_basic.dds`
+> — the resolver Phases 2-4 need.
+> 73/73 C# tests + 80/80 Rust tests pass).
 
 ## Where we are
 
@@ -85,11 +83,21 @@
     existing `item_info` parser — only `(key, string_key)` retained;
     the other 100+ fields dropped. ~200 KB resident for 1.06's
     ~6,400 items.
-  - 67 tests pass (52 base + 15 c_abi tests across save, paloc, paz, iteminfo).
-- **Latest main**: `446ad1f`. PRs landed across recent sessions:
+  - **stringinfo bridge C ABI** (`crimson_string_info_*`):
+    `load_from_file` / `load_from_bytes` / `free` / `entry_count` /
+    `lookup_by_hash(u32)` (two-call) / `get_entry(idx, *out_hash, …)`
+    (two-call). Handle owns a `HashMap<u32, String>` built from the
+    new `string_info` parser. 30,206 entries in 1.06; ~900 KB
+    resident. Pairs with the existing `stringinfo.pabgh` index for
+    byte-identical Rust-side round-trip; the C ABI consumes only the
+    pabgb side because every entry is self-describing
+    (`[u32 hash][u32 zero][u8 flag][u32 slen][N bytes utf-8]`).
+  - 80 tests pass (60 base + 20 c_abi tests across save, paloc, paz,
+    iteminfo, string_info).
+- **Latest main**: `e335870`. PRs landed across recent sessions:
   #14, #15, #16, #17, #18 (path-addressed scalar mutation),
   #19 (PALOC C ABI), #20 (one-shot PAZ extraction),
-  #21 (iteminfo bridge).
+  #21 (iteminfo bridge), #24 (stringinfo bridge — icon pipeline P1).
 - **Branch model**: dev → PR → main (rebase merge, linear history).
   After merge, local + origin/dev get force-reset to match main.
 
@@ -127,6 +135,11 @@
                                     EntryCount,
                                     LookupStringKey(uint id) → string?,
                                     GetEntry(idx) → (key, stringKey)?.
+                                  - IStringInfoCatalog / NativeStringInfoCatalog —
+                                    LoadFromBytes (preferred),
+                                    EntryCount,
+                                    LookupByHash(uint hash) → string?,
+                                    GetEntry(idx) → (hash, value)?.
                                   + SaveLoaderScalarExtensions: typed
                                   SetScalarBool / SetScalarUInt32 /
                                   SetScalarSingle / … wrappers — each
@@ -258,20 +271,14 @@ is on PATH (the script `#requires -Version 7`).
 
 ## Pick up here (next concrete task)
 
-This session shipped: name resolution for 5 schema namespaces
-(Item / Faction / Character / GimmickInfo / LevelGimmickSceneObject
-+ hardcoded InventoryKey labels), Item Picker dialog (Browse
-Items…), per-edit-panel Set-to-max button, per-row Fill stack /
-Fill stacks button (with round-up-to-next-multiple math for small
-stacks), background-thread bulk fill (no UI hang), Mercenary
-false-positive fix, Browse Localization secondary-language column
-+ copy buttons (K / V / V₂), window restore-from-maximized size
-fix, Save / Save As mtime preservation, `build.cmd` / `build.ps1`
-wrapper at repo root, and an **Icon column wired up but pointed at
-an external cache directory** — actual extraction-from-game-data
-is the next big task.
+This session shipped the **first phase** of the icon-extraction
+pipeline: a `stringinfo.pabgb` parser, its C ABI bridge, the C#
+wrapper, and `LocalizationProvider` bootstrap. End to end, the
+editor can now resolve a `StringInfoKey` (u32 hash from iteminfo's
+`icon_path` / `map_icon_path`) to its underlying string (typically
+a `.dds` filename like `cd_icon_arrow_basic.dds`) at runtime.
 
-### #1 — Build the icon extraction pipeline (NEW SESSION TARGET)
+### #1 — Build the icon extraction pipeline (CONTINUING)
 
 User explicitly chose this for the next session. The current Icon
 work (this session) only does the *display* half: a configurable
@@ -309,18 +316,28 @@ RGBA bitmap (e.g. 256×256)
 
 **Phased plan** (each phase shippable on its own; 3-5 sessions total):
 
-1. **Phase 1 — `stringinfo.pabgb` parser + C ABI** (1 session).
-   - In `vendor/crimson-rs/src/`, add a new module `string_info/`
-     (mirror of `item_info/` and `skill_info/`). Reverse-engineer
-     the binary layout — start with `plcli` + hexpat patterns,
-     compare against `iteminfo` records whose `icon_path`
-     StringInfoKey we already know.
-   - Add `crimson_string_info_*` C ABI (load_from_bytes / free /
-     lookup_by_key → string).
-   - C# wrapper (`NativeStringInfoCatalog`) + tests.
-   - Wire bootstrap in `LocalizationProvider`.
+1. ~~**Phase 1 — `stringinfo.pabgb` parser + C ABI**~~ ✅ **Landed in
+   crimson-rs [#24](https://github.com/bbfox0703/crimson-rs/pull/24)
+   and this repo.** What shipped:
+   - `string_info/` Rust module: pabgb parser (linear walk, 30,206
+     entries in 1.06) + pabgh index for byte-identical round-trip;
+     entry shape `[u32 hash][u32 zero][u8 flag][u32 slen][N utf-8]`.
+     The reserved zero+flag bytes are always 0 in 1.06 — round-
+     tripped against a future patch promoting them.
+   - `crimson_string_info_*` C ABI: load_from_file / load_from_bytes
+     / free / entry_count / lookup_by_hash / get_entry. Same shape
+     as iteminfo / paloc bridges (two-call buffer pattern,
+     `NOT_FOUND` for missing hashes).
+   - `IStringInfoCatalog` + `NativeStringInfoCatalog` C# wrapper.
+   - `LocalizationProvider.TryBootstrapStringInfo` extracts
+     `stringinfo.pabgb` from `0008/0.pamt` and loads the catalog.
+     New public API: `ResolveStringInfoHash(uint) → string?` and
+     `HasStringInfo` for the icon pipeline to gate on.
+   - 5 new C# tests + 13 new Rust tests; all 73 / 80 pass.
+   - Status footer + name-resolution code paths unchanged — the
+     bridge degrades silently when no install is found.
 
-2. **Phase 2 — DDS decode + webp re-encode in C#** (1 session).
+2. **Phase 2 — DDS decode + webp re-encode in C#** (1 session; NEXT).
    - Add `Pfim` NuGet (or `BCnEncoder.Net`) for DDS → RGBA.
    - Use SkiaSharp resize + `SKBitmap.Encode(SKEncodedImageFormat.Webp, quality)`.
    - Standalone test: feed one known DDS, verify output webp opens
@@ -346,7 +363,7 @@ RGBA bitmap (e.g. 256×256)
    - Update docs/data-policy.md if needed (these icons ARE derived
      data and stay outside git — matches the rule).
 
-**Game data layout (investigated this session, snapshot for next pickup)**:
+**Game data layout (snapshot from the Phase 1 investigation)**:
 - `0008/gamedata/binary__/client/bin/iteminfo.pabgb` (~24 MB, 6,400 items).
 - `0008/gamedata/binary__/client/bin/stringinfo.pabgb` (~1.8 MB) — **the resolver we need**.
 - `0008/gamedata/binary__/client/bin/localstringinfo.pabgb` (~2.0 MB) — localized variants (probably distinct from PALOC).
