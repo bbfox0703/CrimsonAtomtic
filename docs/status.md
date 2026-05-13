@@ -3,11 +3,12 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-13 (item-name localization end-to-end —
-> crimson-rs PR #21 (iteminfo C ABI) merged, multi-language
-> LocalizationProvider + AppSettings persistence landed, fields
-> DataGrid now shows resolved item names beside u32 IDs with a
-> Tools → Secondary Language picker).
+> Last updated: 2026-05-13 (post-localization polish session —
+> PALOC lookup-encoding bug fixed, element-list now carries
+> ItemKey + Item Name columns with a live filter, nested locator
+> children resolve too, DataGrid columns use fixed widths +
+> horizontal scroll, window restore on multi-monitor fixed.
+> Faction-name resolution scoped + deferred to next session).
 
 ## Where we are
 
@@ -225,31 +226,44 @@
 
 ## Pick up here (next concrete task)
 
-Localization is now end-to-end. App startup discovers every
-`localizationstring_<lang>.paloc` the game ships, eagerly loads
-English, lazily loads the user's chosen secondary language, and the
-fields DataGrid shows resolved item names beside any `u32` field
-that matches a known item key. `Tools → Secondary Language`
-auto-populates from the discovered set; the choice persists to
-`%LOCALAPPDATA%\CrimsonAtomtic\settings.json`.
+The localization story is now visibly complete: item names show
+beside u32 IDs both in the field view (`_itemKey` rows) and the
+element list (`itemList[14]` and `EquipSlotElementSaveData → item`
+nested case), the fields filter and the element-list filter both
+match against item-name / ItemKey, and the user can pick a secondary
+language at runtime. DataGrids carry fixed column widths + a
+horizontal scrollbar so adding columns doesn't squeeze the rest.
+Window restore-from-maximize on multi-monitor setups now lands back
+on the originating monitor.
 
 Suggested next steps, in order of expected user value:
 
-1. **Length-changing edits (PR B)**. List add / remove / reorder,
+1. **Faction (and other key namespaces) name resolution.** The user
+   asked about `FactionSaveData._ownerFactionKey = 1000063` — can it
+   resolve to a faction display name? Currently no; only `ItemKey`
+   does. Same plumbing should generalise to `FactionKey`,
+   `SkillKey`, `CharacterKey`, `GimmickInfoKey`, … but each lives at
+   a different PALOC **type byte** (item names are at `0x70`; the
+   others are unknown). Plan:
+   - **Discover** the type byte for factions by scanning the loaded
+     English PALOC for entries whose `sid >> 32` matches a known
+     faction key (e.g. 1000063) and noting `sid & 0xFF`. A throwaway
+     C# helper or a one-shot run in `crimson-rs/scripts/` works.
+   - **Generalise** `LocalizationProvider._itemNamesByLang` from
+     `Dictionary<lang, Dictionary<uint, string>>` to
+     `Dictionary<lang, Dictionary<(byte typeByte, uint key), string>>`
+     (or one map per type byte).
+   - **Add** `ResolveName(uint id, byte typeByte, lang)` +
+     per-namespace helpers (`ResolveFactionName` etc.).
+   - **Wire** `FieldRowViewModel` + `ElementRowViewModel` — switch
+     on `row.TypeName` (`ItemKey` → 0x70, `FactionKey` → ??, …).
+   ~1 hour once the type bytes are known.
+
+2. **Length-changing edits (PR B)**. List add / remove / reorder,
    inline-byte resize. Needs an `ObjectBlock` re-serializer (mirror
    of `decoder.rs`) and a body re-emit path that re-computes TOC
    offsets. Hard but unlocks adding inventory items (not just
-   editing existing ones), which is the natural follow-up to the
-   localization work — now that the user can see "Gold" beside a
-   slot they actually want to *create new slots* rather than only
-   tweak counts.
-
-2. **Item-search box backed by ResolveItemName**. The localization
-   catalog is in memory and indexed; a "find rows whose item name
-   contains 'gold'" filter on top of the fields DataGrid would let
-   the user navigate to specific items in giant inventories. Small
-   diff, high UX leverage. Probably ships as an "Item search"
-   sibling to the existing fields filter.
+   editing existing ones).
 
 3. **Multi-level path tests on the C# side**. The current
    `SetScalarField_NestedPath_RoundTripsThroughWriteToFile` test
@@ -374,18 +388,30 @@ Suggested next steps, in order of expected user value:
   status-footer text is the only UI signal that this happened — the
   editor itself keeps working on saves. Don't add hard dependencies
   on `Localization.Lookup` succeeding.
-- **Item-name resolution is `u32 → string_key → text`.** Three
-  layers, all must succeed:
-  1. `NativeItemInfoCatalog.LookupStringKey(uint)` (group 0008's
-     `iteminfo.pabgb`).
-  2. `NativePalocCatalog.Lookup(string_key)` against English (group
-     0020's `localizationstring_eng.paloc`).
-  3. Optionally the same lookup against the user's secondary-language
-     PALOC.
-  `LocalizationProvider.ResolveItemName(uint id)` threads all three
-  and returns `(EnglishName?, SecondaryName?)`. Missing any layer
-  returns `null` for the affected part — the column hides empty
-  cells naturally.
+- **PALOC keys are integer-encoded decimal strings, not human ids.**
+  Each PALOC entry's `string_key` is a u64 written as base-10:
+  bits 63..32 = the item key, bits 7..0 = a "type byte"
+  (`0x70` == item name). The middle 24 bits aren't predictable, so
+  any name lookup must *scan* PALOC once and build a
+  `Dictionary<uint, string>` keyed by the upper 32 bits where
+  type byte == 0x70. `LocalizationProvider.BuildItemNameMap`
+  implements that walk; it runs ~once per loaded language (English
+  eagerly, secondary lazily on first switch). Lookup is then O(1).
+  iteminfo's `string_key` (e.g. `"Pyeonjeon_Arrow"`) is the
+  internal identifier, NOT a PALOC key — it's used only as a
+  fallback for the ~71 dev items the game ships without a 0x70
+  entry.
+- **Item-name resolution today only knows the `0x70` type byte.**
+  Faction / skill / character / gimmick keys each presumably live
+  at a different type byte that we haven't identified yet. "Pick up
+  here" #1 covers the generalisation.
+- **`ElementRowViewModel` walks one locator level.** When the
+  element directly carries an `ItemKey`-typed field
+  (e.g. `ItemSaveData._itemKey`), we use it. When it doesn't
+  (e.g. `EquipSlotElementSaveData._item` → locator into
+  `ItemSaveData`), we descend one level into inline locator
+  children. Deeper paths aren't covered — if a future schema needs
+  it, add recursion in `FindItemKeyInChildren`.
 - **PALOC discovery probes a fixed code list.** The 14 codes (eng,
   kor, jpn, zho-tw, zho-cn, ger, fra, spa, por, rus, tur, tha, ind,
   ara) cover every language Crimson Desert 1.06 ships. If a future
@@ -401,6 +427,22 @@ Suggested next steps, in order of expected user value:
   `JsonSerializerContext` keeps it AOT-safe. Add fields by appending
   to the record + the context — never reach for an
   `IConfiguration` abstraction here.
+- **DataGrid columns are intentionally fixed-width, no
+  `Width="*"`.** Total column width exceeds the viewport so the
+  built-in horizontal scrollbar appears (Avalonia DataGrid default
+  `HorizontalScrollBarVisibility = Auto`). Stretching one column to
+  fill made every resize a "shrink everything else first" chore;
+  fixed widths + scroll is the spreadsheet affordance the user
+  asked for. If you add a column, give it a sensible pixel width
+  that fits its typical content (and the user can still drag it).
+- **Window position/size restore is snapshot-based.** Avalonia 12
+  on Windows can land a restored-from-maximized window straddling
+  two monitors on multi-display setups. `MainWindow` snapshots
+  `Position` (via `PositionChanged` — it's not an AvaloniaProperty)
+  and `Width` / `Height` (via `OnPropertyChanged` for the standard
+  AvaloniaProperties) while in `WindowState.Normal`, then re-applies
+  them on the Maximized → Normal transition. Don't rely on the OS
+  to round-trip the window rect correctly.
 - **`<NoWarn>IL2104;IL3053</NoWarn>` is a load-bearing AOT hack.**
   Without it, `dotnet publish -p:PublishAot=true` fails on the
   unchanged baseline as of ilcompiler 10.0.7 — verified by stashing
