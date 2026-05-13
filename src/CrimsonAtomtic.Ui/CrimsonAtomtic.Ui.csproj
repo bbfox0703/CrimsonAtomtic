@@ -17,6 +17,16 @@
     <!-- Trim XAML resources we don't reference. -->
     <TrimMode>full</TrimMode>
     <InvariantGlobalization>true</InvariantGlobalization>
+
+    <!-- Avalonia.Controls.DataGrid 12.0.0 ships internal reflection that
+         the ilc analyzer (microsoft.dotnet.ilcompiler 10.0.7+) flags via
+         IL2104 / IL3053 rolled-up assembly warnings. TreatWarningsAsErrors
+         in Directory.Build.props would otherwise turn the AOT publish red.
+         The DataGrid is a third-party dependency we can't easily fork, and
+         the warnings are functionally identical to what we already accept
+         in Release builds — so suppress just these two codes here. Track
+         removal when Avalonia ships a trim-safe DataGrid. -->
+    <NoWarn>$(NoWarn);IL2104;IL3053</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
