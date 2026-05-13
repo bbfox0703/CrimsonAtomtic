@@ -3,11 +3,11 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-13 (localization pass — crimson-rs PRs #19
-> (PALOC C ABI) and #20 (PAZ extraction C ABI) merged, C# bindings +
-> bootstrap + Browse Localization dialog landed. Foundation in place
-> for the upcoming iteminfo bridge that resolves item IDs to display
-> names).
+> Last updated: 2026-05-13 (item-name localization end-to-end —
+> crimson-rs PR #21 (iteminfo C ABI) merged, multi-language
+> LocalizationProvider + AppSettings persistence landed, fields
+> DataGrid now shows resolved item names beside u32 IDs with a
+> Tools → Secondary Language picker).
 
 ## Where we are
 
@@ -73,17 +73,25 @@
     Wraps `binary::paz::extract_file` (ChaCha20 + LZ4 + manifest
     lookup). Errors map to `NOT_FOUND`, `IO`, `BODY_PARSE`,
     `NULL_ARG`, `INVALID_PATH`.
-  - 63 tests pass (52 base + 11 c_abi tests across save, paloc, paz).
-- **Latest main**: `6b75402`. PRs landed across recent sessions:
+  - **iteminfo bridge C ABI** (`crimson_iteminfo_*`): `load_from_file`
+    / `load_from_bytes` / `free` / `entry_count` /
+    `lookup_string_key(u32)` (two-call) / `get_entry(idx, *out_key, …)`
+    (two-call). Handle owns a `HashMap<u32, String>` built from the
+    existing `item_info` parser — only `(key, string_key)` retained;
+    the other 100+ fields dropped. ~200 KB resident for 1.06's
+    ~6,400 items.
+  - 67 tests pass (52 base + 15 c_abi tests across save, paloc, paz, iteminfo).
+- **Latest main**: `446ad1f`. PRs landed across recent sessions:
   #14, #15, #16, #17, #18 (path-addressed scalar mutation),
-  #19 (PALOC C ABI), #20 (one-shot PAZ extraction).
+  #19 (PALOC C ABI), #20 (one-shot PAZ extraction),
+  #21 (iteminfo bridge).
 - **Branch model**: dev → PR → main (rebase merge, linear history).
   After merge, local + origin/dev get force-reset to match main.
 
 ### `CrimsonAtomtic` (this repo)
 
 - **Foundation** (CLAUDE.md, docs/, .gitignore, vendor/, scripts/) — done.
-- **C# / Avalonia scaffolding** — done. Builds clean, 48/48 unit tests pass:
+- **C# / Avalonia scaffolding** — done. Builds clean, 51/51 unit tests pass:
   ```
   src/CrimsonAtomtic.Core         IPlatformPaths, ISingleInstanceGuard
   src/CrimsonAtomtic.SaveModel    SaveSummary, BlockSummary,
@@ -95,7 +103,7 @@
                                   i8..i64 / f32 / f64 to LE bytes).
   src/CrimsonAtomtic.Ui/Platform  WindowsPlatformPaths
                                   (resolves %LOCALAPPDATA%-based paths)
-  src/CrimsonAtomtic.RustInterop  Three thin wrapper sets over the C ABI:
+  src/CrimsonAtomtic.RustInterop  Four thin wrapper sets over the C ABI:
                                   - ISaveLoader / NativeSaveLoader —
                                     Load / LoadBlockDetails /
                                     SetScalarField (path-aware) /
@@ -109,6 +117,11 @@
                                   - IPazExtractor / NativePazExtractor —
                                     stateless ExtractFile(pamt, dir,
                                     name) → byte[].
+                                  - IItemInfoCatalog / NativeItemInfoCatalog —
+                                    LoadFromBytes (preferred),
+                                    EntryCount,
+                                    LookupStringKey(uint id) → string?,
+                                    GetEntry(idx) → (key, stringKey)?.
                                   + SaveLoaderScalarExtensions: typed
                                   SetScalarBool / SetScalarUInt32 /
                                   SetScalarSingle / … wrappers — each
@@ -134,29 +147,37 @@
                                   descent path to its enclosing block
                                   so deep mutations are addressable.
                                   src/CrimsonAtomtic.Ui/Services/
-                                  LocalizationProvider bootstraps an
-                                  in-memory PALOC catalog at startup
-                                  by extracting the English PALOC out
-                                  of the game's PAZ archive group via
-                                  NativePazExtractor. Lookup(key)
-                                  resolves to a localized string or
-                                  null. Tools → Browse Localization…
-                                  opens a separate
-                                  LocalizationSearchWindow with a
-                                  live-filtered (key, value) DataGrid
-                                  capped at 500 results.
-  src/CrimsonAtomtic.Tests        xUnit v3 — 48 tests:
+                                  LocalizationProvider owns the
+                                  iteminfo bridge + per-language PALOC
+                                  catalogs. Bootstrap discovers every
+                                  localizationstring_*.paloc the game
+                                  ships (groups 0019..0050, 14 known
+                                  codes), eagerly loads English,
+                                  lazily loads any secondary language
+                                  on SecondaryLanguage = "...".
+                                  ResolveItemName(uint id) pipes
+                                  id → string_key → text through both
+                                  PALOC layers. AppSettings persists
+                                  the user's secondary-language pick
+                                  to settings.json. Tools menu has a
+                                  Secondary Language picker
+                                  (auto-populated from
+                                  AvailableLanguages) with a
+                                  check-mark on the active choice;
+                                  Tools → Browse Localization… opens
+                                  the separate
+                                  LocalizationSearchWindow.
+  src/CrimsonAtomtic.Tests        xUnit v3 — 51 tests:
                                   16 NativeSaveLoaderTests + 25
                                   ScalarFieldEditingTests (as before) +
-                                  3 PalocCatalogTests (synthetic
+                                  3 PalocCatalogTests + 4
+                                  PazExtractorTests +
+                                  3 ItemInfoCatalogTests
+                                  (live-install get_entry / lookup
                                   round-trip, garbage bytes → BODY_PARSE,
-                                  post-Dispose throws) + 4
-                                  PazExtractorTests (live-install
-                                  extract → load round-trip,
-                                  NOT_FOUND on bogus directory, IO on
-                                  bad PAMT path, argument validation).
-                                  Live tests skip cleanly when the
-                                  game install / save isn't present.
+                                  post-Dispose throws). Live tests
+                                  skip cleanly when the game install
+                                  / save isn't present.
   ```
   The UI reads **real saves** via `crimson_rs.dll` and now writes
   them too. Open Save defaults to `%LOCALAPPDATA%\Pearl Abyss\CD\save\<user>\`
@@ -204,41 +225,31 @@
 
 ## Pick up here (next concrete task)
 
-Localization plumbing is now end-to-end: app startup extracts the
-English PALOC out of the game's PAZ archive group, loads it into an
-in-memory catalog, and `Tools → Browse Localization…` lets the user
-browse + filter the ~100k entries. Status footer reports how many
-entries are loaded.
+Localization is now end-to-end. App startup discovers every
+`localizationstring_<lang>.paloc` the game ships, eagerly loads
+English, lazily loads the user's chosen secondary language, and the
+fields DataGrid shows resolved item names beside any `u32` field
+that matches a known item key. `Tools → Secondary Language`
+auto-populates from the discovered set; the choice persists to
+`%LOCALAPPDATA%\CrimsonAtomtic\settings.json`.
 
-**But** PALOC alone gives keys like `ITEM_GOLD → "Gold"`. The save
-body references items by `u32` hash IDs, not by string keys. To
-actually show "Gold" beside item ID `0x12345678` in the fields
-DataGrid we need the second half of the bridge: **iteminfo.pabgb**
-maps `key: u32 → string_key: CString`. The crimson-rs side already
-has `item_info/item.rs` doing the byte-exact parse; the C ABI just
-isn't exposing it yet.
+Suggested next steps, in order of expected user value:
 
-1. **ItemInfo bridge — cross-repo, follows the PALOC + PAZ pattern.**
-   - **crimson-rs**: add `crimson_iteminfo_load_from_bytes` (handle)
-     + `crimson_iteminfo_lookup_string_key(handle, u32 key,
-     buf, buf_len, *required)`. Same shape as the PALOC surface.
-     The internal `ItemInfo` parser already runs; the new C ABI is
-     just a thin lookup table built from the parsed items.
-   - **C# / UI**: extend `LocalizationProvider` to bootstrap
-     iteminfo too (extract `iteminfo.pabgb` via the same PAZ
-     extractor, then load into the new catalog). Add
-     `ResolveItemName(uint id) → string?` that pipes
-     `id → string_key → localized text` through both tables.
-   - **UI surface**: tooltip / extra column in the fields DataGrid
-     showing the resolved item name for u32 scalars that match a
-     known item key. This is the user-visible win that "Localization"
-     was really about.
-
-2. **Length-changing edits (PR B)**. List add / remove / reorder,
+1. **Length-changing edits (PR B)**. List add / remove / reorder,
    inline-byte resize. Needs an `ObjectBlock` re-serializer (mirror
    of `decoder.rs`) and a body re-emit path that re-computes TOC
-   offsets. Hard; valuable for adding inventory items rather than
-   only editing existing ones. Independent of the iteminfo bridge.
+   offsets. Hard but unlocks adding inventory items (not just
+   editing existing ones), which is the natural follow-up to the
+   localization work — now that the user can see "Gold" beside a
+   slot they actually want to *create new slots* rather than only
+   tweak counts.
+
+2. **Item-search box backed by ResolveItemName**. The localization
+   catalog is in memory and indexed; a "find rows whose item name
+   contains 'gold'" filter on top of the fields DataGrid would let
+   the user navigate to specific items in giant inventories. Small
+   diff, high UX leverage. Probably ships as an "Item search"
+   sibling to the existing fields filter.
 
 3. **Multi-level path tests on the C# side**. The current
    `SetScalarField_NestedPath_RoundTripsThroughWriteToFile` test
@@ -363,11 +374,33 @@ isn't exposing it yet.
   status-footer text is the only UI signal that this happened — the
   editor itself keeps working on saves. Don't add hard dependencies
   on `Localization.Lookup` succeeding.
-- **PALOC alone isn't enough to show item names.** Save bodies
-  carry items as `u32` hash IDs, not localization keys. The PALOC
-  catalog maps `string_key → text`; we still need the
-  `id → string_key` bridge from `iteminfo.pabgb`. That C ABI is the
-  immediate next task ("Pick up here" #1).
+- **Item-name resolution is `u32 → string_key → text`.** Three
+  layers, all must succeed:
+  1. `NativeItemInfoCatalog.LookupStringKey(uint)` (group 0008's
+     `iteminfo.pabgb`).
+  2. `NativePalocCatalog.Lookup(string_key)` against English (group
+     0020's `localizationstring_eng.paloc`).
+  3. Optionally the same lookup against the user's secondary-language
+     PALOC.
+  `LocalizationProvider.ResolveItemName(uint id)` threads all three
+  and returns `(EnglishName?, SecondaryName?)`. Missing any layer
+  returns `null` for the affected part — the column hides empty
+  cells naturally.
+- **PALOC discovery probes a fixed code list.** The 14 codes (eng,
+  kor, jpn, zho-tw, zho-cn, ger, fra, spa, por, rus, tur, tha, ind,
+  ara) cover every language Crimson Desert 1.06 ships. If a future
+  patch adds one, add it to `KnownLanguageCodes` in
+  `LocalizationProvider`; otherwise the picker won't surface it.
+  Discovery itself runs synchronously at app launch (probes
+  `0019..0050`); first-launch cost is ~1 s on SSD because each
+  successful probe also caches the catalog. Subsequent launches
+  re-probe — settings only persists the user's preferred secondary,
+  not the discovery result.
+- **`AppSettings` is a deliberately tiny JSON file.** One field
+  today (`secondary_language`); source-generated
+  `JsonSerializerContext` keeps it AOT-safe. Add fields by appending
+  to the record + the context — never reach for an
+  `IConfiguration` abstraction here.
 - **`<NoWarn>IL2104;IL3053</NoWarn>` is a load-bearing AOT hack.**
   Without it, `dotnet publish -p:PublishAot=true` fails on the
   unchanged baseline as of ilcompiler 10.0.7 — verified by stashing
