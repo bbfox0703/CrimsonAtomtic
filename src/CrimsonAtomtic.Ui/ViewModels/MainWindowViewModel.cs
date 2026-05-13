@@ -1110,35 +1110,37 @@ public sealed partial class MainWindowViewModel(
             }
         }
 
-        // Show a "working" message and yield to the UI before the
-        // long-running loop. Without this and the Task.Run below, 168
-        // SetScalarField calls + their per-call full-block re-decodes
-        // hold the UI thread for several seconds — the user can't
-        // even see the modal close cleanly.
         BulkOpStatus = $"Filling {candidates.Count} stack(s)…";
         var blockIdx = topBlock.Index;
 
-        // SetScalarField is thread-safe via NativeSaveLoader's
-        // internal _cacheLock; running the loop on a worker thread
-        // keeps the UI responsive during the long re-decode storm.
-        var (applied, firstError) = await Task.Run(() =>
+        // One batch FFI call: the Rust side validates every op first
+        // (all-or-nothing), patches them all in input order, then
+        // re-decodes once at the end. Replaces what used to be N
+        // single-op SetScalarField calls (one full re-decode per
+        // mutation, ~5 s for the 168-op container path); the batch
+        // amortises to O(N + block_count). Still on Task.Run to
+        // keep the UI thread free during the FFI call.
+        var ops = new List<ScalarBatchOp>(candidates.Count);
+        foreach (var c in candidates)
         {
-            var count = 0;
-            CrimsonSaveException? err = null;
-            foreach (var c in candidates)
+            ops.Add(new ScalarBatchOp(blockIdx, c.Path, c.FieldIndex, c.Bytes));
+        }
+
+        var (applied, firstError) = await Task.Run<(int, CrimsonSaveException?)>(() =>
+        {
+            try
             {
-                try
-                {
-                    loader.SetScalarField(blockIdx, c.Path, c.FieldIndex, c.Bytes);
-                    count++;
-                }
-                catch (CrimsonSaveException ex)
-                {
-                    err = ex;
-                    break;
-                }
+                loader.SetScalarFieldsBatch(ops);
+                return (ops.Count, null);
             }
-            return (count, err);
+            catch (CrimsonSaveException ex)
+            {
+                // Atomicity contract: on failure no op was applied,
+                // so the count reported back is 0 — surfacing the
+                // batch's all-or-nothing semantics in the status
+                // text the user sees.
+                return (0, ex);
+            }
         });
 
         // Refresh nav stack so the picker's KeyText / ResolvedName

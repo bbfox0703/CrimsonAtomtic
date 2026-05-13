@@ -423,6 +423,169 @@ public sealed class NativeSaveLoaderTests
         Assert.Equal(-15, ex.ErrorCode);
     }
 
+    [Fact]
+    public void SetScalarFieldsBatch_LiveSave_RoundTripsThroughWriteToFile()
+    {
+        // Apply a mix of top-level + nested ops in one batch call,
+        // verify each value reflected in the decoded JSON, write to
+        // disk, reload, and confirm every sentinel survived HMAC /
+        // ChaCha20 / LZ4 re-emission. Mirrors the Rust-side
+        // c_abi_set_scalar_fields_batch_smoke test from the
+        // crimson-rs PR.
+        var path = FindLiveSave();
+        if (path is null)
+        {
+            return;
+        }
+
+        using var loader = new NativeSaveLoader();
+        loader.Load(path);
+
+        // Op 1: top-level — block 0 field 0 _characterKey (u32).
+        var before0 = loader.LoadBlockDetails(path, 0);
+        Assert.Equal("fixed_suffix", before0.Fields[0].Kind);
+        const uint topSentinel = 32_492_971u; // 0x01EFCDAB
+        var topBytes = new byte[4];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(topBytes, topSentinel);
+
+        // Op 2: nested — first one-step-reachable u32 anywhere in the save.
+        var nested = FindNestedU32Target(loader, path);
+        Assert.True(nested is not null,
+            "expected a one-step-reachable u32 scalar in a live save");
+        var n = nested!.Value;
+        var nestedSentinel = n.OriginalValue + 0x0BADF00Du;
+        var nestedBytes = new byte[4];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(nestedBytes, nestedSentinel);
+
+        var ops = new List<ScalarBatchOp>
+        {
+            new(BlockIndex: 0,
+                Path: [],
+                FieldIndex: 0,
+                Bytes: topBytes),
+            new(BlockIndex: n.BlockIndex,
+                Path: [n.Step],
+                FieldIndex: n.LeafFieldIndex,
+                Bytes: nestedBytes),
+        };
+
+        loader.SetScalarFieldsBatch(ops);
+
+        // Both ops must be visible in the decoded JSON immediately.
+        var afterTop = loader.LoadBlockDetails(path, 0);
+        Assert.Equal("32492971 <u32>", afterTop.Fields[0].Value);
+        var afterNested = loader.LoadBlockDetails(path, n.BlockIndex);
+        Assert.Equal(nestedSentinel, ReadNestedU32At(afterNested, n.Step, n.LeafFieldIndex));
+
+        // Round-trip via WriteToFile + reload — both sentinels must
+        // survive HMAC / ChaCha20 / LZ4 re-emission.
+        var tempPath = Path.Combine(Path.GetTempPath(),
+            $"crimsonatomtic_batch_{Guid.NewGuid():N}.save");
+        try
+        {
+            loader.WriteToFile(tempPath);
+            using var fresh = new NativeSaveLoader();
+            var summary = fresh.Load(tempPath);
+            Assert.True(summary.HmacOk, "reloaded save must verify HMAC after batch");
+
+            var freshTop = fresh.LoadBlockDetails(tempPath, 0);
+            Assert.Equal("32492971 <u32>", freshTop.Fields[0].Value);
+
+            var freshNested = fresh.LoadBlockDetails(tempPath, n.BlockIndex);
+            Assert.Equal(nestedSentinel, ReadNestedU32At(freshNested, n.Step, n.LeafFieldIndex));
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+        }
+    }
+
+    [Fact]
+    public void SetScalarFieldsBatch_ValidationFailure_LeavesSaveUntouched()
+    {
+        // All-or-nothing contract: if any op in the batch fails
+        // validation, no mutation must be applied — even ops that
+        // came BEFORE the failing one in input order. The thrown
+        // exception's FailedOpIndex must pinpoint the offending op.
+        var path = FindLiveSave();
+        if (path is null)
+        {
+            return;
+        }
+
+        using var loader = new NativeSaveLoader();
+        loader.Load(path);
+
+        // Capture the original block 0 field 0 value so we can prove
+        // it's unchanged after the failed batch.
+        var before = loader.LoadBlockDetails(path, 0);
+        var originalValue = before.Fields[0].Value;
+        Assert.Equal("fixed_suffix", before.Fields[0].Kind);
+
+        // Op 0 is valid (a u32 sentinel into block 0 field 0).
+        // Op 1 targets the same field but with bytes_len = 3 — a
+        // guaranteed LENGTH_MISMATCH (the field is u32, 4 bytes).
+        var validBytes = new byte[4];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(validBytes, 0xDEADBEEFu);
+        var badBytes = new byte[] { 0, 0, 0 };
+        var ops = new List<ScalarBatchOp>
+        {
+            new(0, [], 0, validBytes),
+            new(0, [], 0, badBytes),
+        };
+
+        var ex = Assert.Throws<CrimsonSaveException>(() => loader.SetScalarFieldsBatch(ops));
+        Assert.Equal(-13, ex.ErrorCode); // LENGTH_MISMATCH
+        Assert.Equal(1, ex.FailedOpIndex);
+
+        // The body must be untouched — op 0 must NOT have been
+        // applied just because validation reached it first.
+        var after = loader.LoadBlockDetails(path, 0);
+        Assert.Equal(originalValue, after.Fields[0].Value);
+
+        // NOT_NAVIGABLE on op 0 → also leaves the body untouched, and
+        // FailedOpIndex points at op 0.
+        PathStep[] badSteps = [new PathStep(0, 0)];
+        var dummyBytes = new byte[] { 0, 0, 0, 0 };
+        var ops2 = new List<ScalarBatchOp>
+        {
+            new(0, badSteps, 0, dummyBytes),
+        };
+        var ex2 = Assert.Throws<CrimsonSaveException>(() => loader.SetScalarFieldsBatch(ops2));
+        Assert.Equal(-15, ex2.ErrorCode); // NOT_NAVIGABLE
+        Assert.Equal(0, ex2.FailedOpIndex);
+
+        var stillAfter = loader.LoadBlockDetails(path, 0);
+        Assert.Equal(originalValue, stillAfter.Fields[0].Value);
+    }
+
+    [Fact]
+    public void SetScalarFieldsBatch_EmptyOps_IsNoOpEvenWithoutSaveLoaded()
+    {
+        // Empty batch must short-circuit before the "no save loaded"
+        // check — there's nothing to do, so there's nothing to fail.
+        // Matches the Rust-side semantics (op_count == 0 returns OK
+        // without touching the handle).
+        using var loader = new NativeSaveLoader();
+        loader.SetScalarFieldsBatch(Array.Empty<ScalarBatchOp>());
+    }
+
+    [Fact]
+    public void SetScalarFieldsBatch_BeforeLoad_ThrowsInvalidOperation()
+    {
+        // A non-empty batch on an empty loader must surface the same
+        // InvalidOperationException as the single-op setters.
+        using var loader = new NativeSaveLoader();
+        var ops = new List<ScalarBatchOp>
+        {
+            new(0, [], 0, new byte[] { 0, 0, 0, 0 }),
+        };
+        Assert.Throws<InvalidOperationException>(() => loader.SetScalarFieldsBatch(ops));
+    }
+
     /// <summary>
     /// Find any (top-level block, one-step path, leaf field, original u32
     /// value) reachable through either a Locator's inline child or the

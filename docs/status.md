@@ -19,13 +19,24 @@
 > font-size pick. Quiet `SetSecondaryLanguage` settings-clobber bug
 > fixed at the same time (`new AppSettings { … }` → `existing with { … }`).
 >
-> **Health**: 82/82 C# tests + 88/88 Rust tests (incl. `c_abi`); clippy
+> **Batch scalar mutation landed** (crimson-rs
+> [PR #27](https://github.com/bbfox0703/crimson-rs/pull/27) +
+> C# end). One FFI round trip applies N scalar mutations sharing a
+> single post-batch re-decode — the "Fill stacks" 168-op path now
+> pays O(N + block_count) instead of O(N · block_count) (~1 s in
+> place of ~5 s on the 1112-block save). All-or-nothing semantics
+> on validation failure; `CrimsonSaveException.FailedOpIndex`
+> pinpoints the offending op. Public surface:
+> `ISaveLoader.SetScalarFieldsBatch(IReadOnlyList<ScalarBatchOp>)`.
+>
+> **Health**: 86/86 C# tests + 91/91 Rust tests (incl. `c_abi`); clippy
 > clean. AOT publish 24.1 MB exe + 1.3 MB Rust DLL.
 >
 > **Next session targets**: pick from the lower-priority deferred list
 > below — none of them are blocked. `skill_info` C ABI bridge (#4) and
-> the `MissionKey`/`QuestKey` name resolution (#6) both have concrete
-> recipes in [`docs/crimsonforge-coverage-gaps.md`](crimsonforge-coverage-gaps.md).
+> the `MissionKey`/`QuestKey` name resolution (#6) are now the most
+> user-visible follow-ons — both have concrete recipes in
+> [`docs/crimsonforge-coverage-gaps.md`](crimsonforge-coverage-gaps.md).
 > PAR-container partial compression for `.pam`/`.pamlod`/`.pac` meshes
 > in 0009/0015 stays out of scope until mesh extraction is on the
 > roadmap.
@@ -133,13 +144,24 @@
     entry or the entry's hash is 0 (the explicit "no icon"
     sentinel). One extra ~50 KB `HashMap<u32, u32>` on the existing
     handle — total iteminfo memory still under 1 MB.
-  - 88 tests pass (60 base + 28 c_abi tests across save, paloc, paz,
-    iteminfo, string_info).
-- **Latest main**: `e335870`. PRs landed across recent sessions:
+  - **Batch scalar mutation C ABI** (`crimson_save_set_scalar_fields_batch`):
+    one FFI round trip, one re-decode for N writes. Validate-all →
+    patch-all → single `decode_blocks`. All-or-nothing on
+    validation failure; optional `out_failed_op_index` writes
+    `usize::MAX` on success, failing op index on error.
+    `CrimsonScalarBatchOp` repr(C) struct mirrors
+    `crimson_save_set_scalar_field_path` args. Per-op rules
+    factored into private `resolve_leaf_range` helper, shared
+    with the single-op setters.
+  - 91 tests pass (60 base + 31 c_abi tests across save, paloc,
+    paz, iteminfo, string_info — including 3 new batch tests:
+    smoke, atomicity, 200-op equivalence vs N × single-op).
+- **Latest main**: `244e0cd`. PRs landed across recent sessions:
   #14, #15, #16, #17, #18 (path-addressed scalar mutation),
   #19 (PALOC C ABI), #20 (one-shot PAZ extraction),
   #21 (iteminfo bridge), #24 (stringinfo bridge — icon pipeline P1),
-  #25 (partial-PAZ unblock), #26 (iteminfo icon_path getter — P3).
+  #25 (partial-PAZ unblock), #26 (iteminfo icon_path getter — P3),
+  #27 (batch scalar mutation).
 - **Branch model**: dev → PR → main (rebase merge, linear history).
   After merge, local + origin/dev get force-reset to match main.
 
@@ -313,13 +335,14 @@ is on PATH (the script `#requires -Version 7`).
 
 ## Pick up here (next concrete task)
 
-The icon-extraction pipeline (item #1 below) **is complete** — kept
-in this doc as historical context + a reference for the data-flow,
-file layout, and per-phase decisions. **The actual next tasks live
-in the deferred-items list (#2–#14)**; pick whichever matches your
-appetite. `skill_info` bridge (#4) and `Mission/Quest` name
-resolution (#6) are the most user-visible follow-ons; the batch
-`SetScalarField` C ABI (#3) is the highest-impact perf win.
+The icon-extraction pipeline (item #1 below) and the batch
+`SetScalarField` C ABI (item #3) are **both complete** — kept
+in this doc as historical context + a reference for the
+data-flow, file layout, and per-phase decisions. **The actual
+next tasks live in the deferred-items list (#2, #4–#14)**; pick
+whichever matches your appetite. `skill_info` bridge (#4) and
+`Mission/Quest` name resolution (#6) are now the most
+user-visible follow-ons.
 
 ### #1 — Icon extraction pipeline (DONE — kept as reference)
 
@@ -505,12 +528,27 @@ Open from earlier work, none blocking the icon pipeline:
    Run the probe against a save that has those containers
    populated, then extend `LocalizationProvider.InventoryContainerLabels`.
 
-3. **Batch `SetScalarField` C ABI**. Today every field write
-   triggers a full block re-decode. The "Fill stacks" container
-   path runs 168 of these and takes ~5 seconds (now on a
-   background thread, but still slow). A batch-mutate C ABI that
-   defers the re-decode storm to the end of the batch would cut
-   the cost to ~50 ms. Probably one Rust session + one C# session.
+3. ~~**Batch `SetScalarField` C ABI**~~ ✅ **Landed.** Single FFI
+   round trip applies many mutations with one post-batch
+   re-decode. Fill-stacks 168-op path: ~5 s → ~1 s.
+   - Rust: `crimson_save_set_scalar_fields_batch` + repr(C)
+     `CrimsonScalarBatchOp` (block_idx, field_idx, path[],
+     bytes); validate-all → patch-all → one `decode_blocks`.
+     All-or-nothing on validation failure; optional
+     `out_failed_op_index` pinpoints offending op. Shared
+     `resolve_leaf_range` private helper keeps the three setter
+     surfaces (top-level, path, batch) in lockstep on error codes.
+     91/91 Rust tests; live-save batch tests verify N-op
+     equivalence is byte-identical to N × single-op.
+     (crimson-rs [PR #27](https://github.com/bbfox0703/crimson-rs/pull/27))
+   - C#: `ScalarBatchOp` public record struct;
+     `ISaveLoader.SetScalarFieldsBatch(IReadOnlyList<ScalarBatchOp>)`;
+     `CrimsonSaveException.FailedOpIndex` (nullable int) for
+     batch failures. Marshalling: single PathStep arena + single
+     byte arena + one ops array — 3 GC pins regardless of N
+     (vs the 2N pins a per-op `GCHandle.Alloc` would have used).
+     `MainWindowViewModel.BulkFillItemListMaxStackAsync` now
+     issues one batch call inside `Task.Run`.
 
 4. **`skill_info` bridge** for SkillKey / KnowledgeKey name
    resolution. crimson-rs already has a `skill_info/` parser used
