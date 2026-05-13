@@ -461,6 +461,7 @@ internal static partial class NativeMethods
     public const int LENGTH_MISMATCH       = -13;
     public const int WRITE_FAILED          = -14;
     public const int NOT_NAVIGABLE         = -15;
+    public const int NOT_FOUND             = -16;
     public const int PANIC                 = -99;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -528,4 +529,44 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "crimson_save_write_to_file",
                    StringMarshalling = StringMarshalling.Utf8)]
     public static partial int WriteToFile(CrimsonSaveHandle handle, string path);
+
+    // ── PALOC catalog ───────────────────────────────────────────────────────
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_paloc_load_from_file",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int PalocLoadFromFile(string path, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_paloc_load_from_bytes")]
+    public static unsafe partial int PalocLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_paloc_free")]
+    public static partial void PalocFree(IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_paloc_entry_count")]
+    public static partial int PalocEntryCount(CrimsonPalocHandle handle, out uint count);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_paloc_lookup")]
+    public static unsafe partial int PalocLookup(
+        CrimsonPalocHandle handle,
+        byte* key, nuint keyLen,
+        byte* buf, nuint bufLen,
+        out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_paloc_get_entry")]
+    public static unsafe partial int PalocGetEntry(
+        CrimsonPalocHandle handle,
+        uint idx,
+        byte* keyBuf, nuint keyBufLen, out nuint keyRequired,
+        byte* valueBuf, nuint valueBufLen, out nuint valueRequired);
+
+    // ── PAZ extraction ──────────────────────────────────────────────────────
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_paz_extract_file",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static unsafe partial int PazExtractFile(
+        string pamtPath,
+        string directory,
+        string fileName,
+        byte* outBuf, nuint outBufLen,
+        out nuint outRequired);
 }
