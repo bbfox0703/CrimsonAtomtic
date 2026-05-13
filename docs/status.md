@@ -3,10 +3,11 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-13 (session that landed nested-field editing
-> end-to-end — crimson-rs PR #18 merged, vendor refreshed, C# C ABI
-> binding switched to the path API, UI editing surface lifted to any
-> nav depth).
+> Last updated: 2026-05-13 (localization pass — crimson-rs PRs #19
+> (PALOC C ABI) and #20 (PAZ extraction C ABI) merged, C# bindings +
+> bootstrap + Browse Localization dialog landed. Foundation in place
+> for the upcoming iteminfo bridge that resolves item IDs to display
+> names).
 
 ## Where we are
 
@@ -57,21 +58,32 @@
     against the modified body) and writes to disk. Error:
     `WRITE_FAILED (-14)`.
   - `crimson_save_free`
-  - 55 tests pass (52 base + 3 c_abi smokes: `c_abi_smoke` covering every
-    read entry point, `c_abi_mutate_and_write_roundtrip` covering top-level
-    mutate → write → reload → assert + every error path, and
-    `c_abi_set_scalar_field_path` covering empty-path parity, one-step
-    nested mutation, write/reload roundtrip, NOT_NAVIGABLE, OUT_OF_RANGE
-    on a path step, and three NULL_ARG variants).
-- **Latest main**: `d4de625`. PRs landed across recent sessions:
-  #14, #15, #16, #17, #18 (path-addressed scalar mutation).
+  - **PALOC C ABI** (`crimson_paloc_*`): `load_from_file` /
+    `load_from_bytes` / `free` / `entry_count` / `lookup` (two-call) /
+    `get_entry` (two-call). Handle owns a copied
+    `HashMap<String,String>` + insertion-order `Vec` for stable
+    enumeration. New error code `NOT_FOUND = -16`. Parser hardening:
+    `LocalizationFile::parse` now sanity-checks the trailing
+    `entry_count` against body bytes (each entry ≥ 16 bytes), so the
+    raw wrapped `gamedata/*.paloc` files don't crash the loader with
+    a 300 GB alloc.
+  - **PAZ extraction C ABI** (`crimson_paz_extract_file`): one-shot
+    stateless helper. Inputs `(pamt_path, directory, file_name)`,
+    output: extracted bytes via the standard two-call pattern.
+    Wraps `binary::paz::extract_file` (ChaCha20 + LZ4 + manifest
+    lookup). Errors map to `NOT_FOUND`, `IO`, `BODY_PARSE`,
+    `NULL_ARG`, `INVALID_PATH`.
+  - 63 tests pass (52 base + 11 c_abi tests across save, paloc, paz).
+- **Latest main**: `6b75402`. PRs landed across recent sessions:
+  #14, #15, #16, #17, #18 (path-addressed scalar mutation),
+  #19 (PALOC C ABI), #20 (one-shot PAZ extraction).
 - **Branch model**: dev → PR → main (rebase merge, linear history).
   After merge, local + origin/dev get force-reset to match main.
 
 ### `CrimsonAtomtic` (this repo)
 
 - **Foundation** (CLAUDE.md, docs/, .gitignore, vendor/, scripts/) — done.
-- **C# / Avalonia scaffolding** — done. Builds clean, 41/41 unit tests pass:
+- **C# / Avalonia scaffolding** — done. Builds clean, 48/48 unit tests pass:
   ```
   src/CrimsonAtomtic.Core         IPlatformPaths, ISingleInstanceGuard
   src/CrimsonAtomtic.SaveModel    SaveSummary, BlockSummary,
@@ -83,16 +95,20 @@
                                   i8..i64 / f32 / f64 to LE bytes).
   src/CrimsonAtomtic.Ui/Platform  WindowsPlatformPaths
                                   (resolves %LOCALAPPDATA%-based paths)
-  src/CrimsonAtomtic.RustInterop  ISaveLoader + NativeSaveLoader
-                                  (LibraryImport + SafeHandle wrapper
-                                  around crimson_save_* C ABI).
-                                  IDisposable; caches a live handle for
-                                  the currently-open save. Exposes
-                                  Load / LoadBlockDetails (read) +
-                                  SetScalarField (no-path + path
-                                  overload) / WriteToFile (write).
-                                  PathStep is the public FFI-layout
-                                  struct callers build descents from.
+  src/CrimsonAtomtic.RustInterop  Three thin wrapper sets over the C ABI:
+                                  - ISaveLoader / NativeSaveLoader —
+                                    Load / LoadBlockDetails /
+                                    SetScalarField (path-aware) /
+                                    WriteToFile. SafeHandle, IDisposable,
+                                    cached live handle. PathStep is the
+                                    public FFI-layout descent struct.
+                                  - IPalocCatalog / NativePalocCatalog —
+                                    LoadFromFile or LoadFromBytes,
+                                    EntryCount, Lookup(key) → string?,
+                                    GetEntry(idx) → (key, value)?.
+                                  - IPazExtractor / NativePazExtractor —
+                                    stateless ExtractFile(pamt, dir,
+                                    name) → byte[].
                                   + SaveLoaderScalarExtensions: typed
                                   SetScalarBool / SetScalarUInt32 /
                                   SetScalarSingle / … wrappers — each
@@ -102,34 +118,45 @@
   src/CrimsonAtomtic.Ui           Avalonia 12 / .NET 10, PublishAot=true,
                                   Mutex single-instance, MainWindow with
                                   File menu (Open / Save / Save As /
-                                  Exit) + blocks DataGrid + lazy
-                                  field-detail pane (GridSplitter) +
-                                  fields filter + breadcrumb-based
+                                  Exit) + Tools menu (Browse
+                                  Localization…) + blocks DataGrid +
+                                  lazy field-detail pane (GridSplitter)
+                                  + fields filter + breadcrumb-based
                                   drill-down + inline scalar-edit
                                   panel under the fields DataGrid +
-                                  dirty title indicator. All DataGrids
-                                  have resizable columns.
-                                  FieldRowViewModel wraps each
-                                  DecodedFieldRow; IsEditable gates on
-                                  scalar kind + supported type tag.
-                                  Each wrapper carries the descent
-                                  path to its enclosing block so deep
-                                  mutations are addressable.
-  src/CrimsonAtomtic.Tests        xUnit v3 — 41 tests:
-                                  16 NativeSaveLoaderTests (live-save
-                                  summary, block-details, cache reuse,
-                                  Dispose lifecycle, nested data
-                                  reachability, top-level mutation
-                                  round-trip, nested-path mutation
-                                  round-trip, NOT_NAVIGABLE on a
-                                  scalar mid-path, mutation error
-                                  paths, typed SetScalarUInt32
-                                  extension) + 25
-                                  ScalarFieldEditingTests (pure-CPU
-                                  parse / encode / IsTextEditable
-                                  matrix across every supported tag).
-                                  Live-save tests skip cleanly when
-                                  no save is present.
+                                  dirty title indicator + status
+                                  footer reporting localization load
+                                  state. All DataGrids have resizable
+                                  columns. FieldRowViewModel wraps
+                                  each DecodedFieldRow; IsEditable
+                                  gates on scalar kind + supported
+                                  type tag. Each wrapper carries the
+                                  descent path to its enclosing block
+                                  so deep mutations are addressable.
+                                  src/CrimsonAtomtic.Ui/Services/
+                                  LocalizationProvider bootstraps an
+                                  in-memory PALOC catalog at startup
+                                  by extracting the English PALOC out
+                                  of the game's PAZ archive group via
+                                  NativePazExtractor. Lookup(key)
+                                  resolves to a localized string or
+                                  null. Tools → Browse Localization…
+                                  opens a separate
+                                  LocalizationSearchWindow with a
+                                  live-filtered (key, value) DataGrid
+                                  capped at 500 results.
+  src/CrimsonAtomtic.Tests        xUnit v3 — 48 tests:
+                                  16 NativeSaveLoaderTests + 25
+                                  ScalarFieldEditingTests (as before) +
+                                  3 PalocCatalogTests (synthetic
+                                  round-trip, garbage bytes → BODY_PARSE,
+                                  post-Dispose throws) + 4
+                                  PazExtractorTests (live-install
+                                  extract → load round-trip,
+                                  NOT_FOUND on bogus directory, IO on
+                                  bad PAMT path, argument validation).
+                                  Live tests skip cleanly when the
+                                  game install / save isn't present.
   ```
   The UI reads **real saves** via `crimson_rs.dll` and now writes
   them too. Open Save defaults to `%LOCALAPPDATA%\Pearl Abyss\CD\save\<user>\`
@@ -177,40 +204,57 @@
 
 ## Pick up here (next concrete task)
 
-Scalar editing now works **at any nav depth** — top-level fields,
-fields inside locator children, fields inside object-list elements.
-The Rust + C# + UI surfaces are covered by 41 xUnit C# tests + 55
-Rust tests, and the AOT publish remains green.
+Localization plumbing is now end-to-end: app startup extracts the
+English PALOC out of the game's PAZ archive group, loads it into an
+in-memory catalog, and `Tools → Browse Localization…` lets the user
+browse + filter the ~100k entries. Status footer reports how many
+entries are loaded.
 
-The next gap depends on which capability you want to unlock first:
+**But** PALOC alone gives keys like `ITEM_GOLD → "Gold"`. The save
+body references items by `u32` hash IDs, not by string keys. To
+actually show "Gold" beside item ID `0x12345678` in the fields
+DataGrid we need the second half of the bridge: **iteminfo.pabgb**
+maps `key: u32 → string_key: CString`. The crimson-rs side already
+has `item_info/item.rs` doing the byte-exact parse; the C ABI just
+isn't exposing it yet.
 
-1. **Length-changing edits (PR B)**. List add / remove / reorder,
+1. **ItemInfo bridge — cross-repo, follows the PALOC + PAZ pattern.**
+   - **crimson-rs**: add `crimson_iteminfo_load_from_bytes` (handle)
+     + `crimson_iteminfo_lookup_string_key(handle, u32 key,
+     buf, buf_len, *required)`. Same shape as the PALOC surface.
+     The internal `ItemInfo` parser already runs; the new C ABI is
+     just a thin lookup table built from the parsed items.
+   - **C# / UI**: extend `LocalizationProvider` to bootstrap
+     iteminfo too (extract `iteminfo.pabgb` via the same PAZ
+     extractor, then load into the new catalog). Add
+     `ResolveItemName(uint id) → string?` that pipes
+     `id → string_key → localized text` through both tables.
+   - **UI surface**: tooltip / extra column in the fields DataGrid
+     showing the resolved item name for u32 scalars that match a
+     known item key. This is the user-visible win that "Localization"
+     was really about.
+
+2. **Length-changing edits (PR B)**. List add / remove / reorder,
    inline-byte resize. Needs an `ObjectBlock` re-serializer (mirror
    of `decoder.rs`) and a body re-emit path that re-computes TOC
-   offsets. Hard; the value is being able to add inventory items,
-   not just edit existing ones. The path API from this session
-   doesn't directly help here — different code path entirely.
+   offsets. Hard; valuable for adding inventory items rather than
+   only editing existing ones. Independent of the iteminfo bridge.
 
-2. **Multi-level path tests on the C# side**. The current
+3. **Multi-level path tests on the C# side**. The current
    `SetScalarField_NestedPath_RoundTripsThroughWriteToFile` test
-   exercises one descent step. Worth adding a two-step test
-   (`inventoryList[N].itemList[M].count`-shaped) to lock in the
-   recursive walker on both sides. The Rust c_abi test already
-   covers any one-step-reachable scalar; the C# coverage on
-   multi-step paths is the gap.
+   exercises one descent step. Worth a two-step regression
+   (`inventoryList[N].itemList[M].count`-shaped) — the Rust c_abi
+   test already covers any one-step-reachable scalar, so the gap is
+   only on the C# side.
 
-3. **Asset / icon pipeline** — one-time mine icons from
+4. **Asset / icon pipeline** — one-time mine icons from
    `D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS`, run through
    a thumbnail pipeline (32 / 64 / 128), ship as a starter
    `IconCache/` in the AOT bundle.
 
-4. **Localization** — read game `paloc/*.paloc` via crimson-rs to
-   resolve item / skill / region names in the user's chosen game
-   language (independent of UI shell language).
-
 5. **Save backup management** — auto-backup on every load + on every
-   write, configurable retention. (Especially valuable now that the
-   UI can overwrite a save in place at any nav depth.)
+   write, configurable retention. (Valuable now that the UI can
+   overwrite a save in place at any nav depth.)
 
 6. **Mod awareness** — read `CDMods/cdumm.db` (SQLite) and
    `mods/_enabled/` to surface mod-added items without crashing on
@@ -305,6 +349,25 @@ The next gap depends on which capability you want to unlock first:
   (selected block, breadcrumb, edit panel) resets. Acceptable for
   v1; the standard "Save Copy As…" alternative that keeps the
   session anchored to the original is a follow-up if anyone wants it.
+- **Raw `gamedata/*.paloc` is encrypted/wrapped.** Reading the
+  file straight off disk and handing it to PALOC parse will fail
+  loudly with `BODY_PARSE` now (it used to alloc-bomb the process).
+  The right path is PAZ extraction: feed `<install>/0020/0.pamt` +
+  `gamedata/stringtable/binary__` + `localizationstring_eng.paloc`
+  into `IPazExtractor.ExtractFile` first, then hand the bytes to
+  `NativePalocCatalog.LoadFromBytes`. `LocalizationProvider` wires
+  both halves together at app startup.
+- **`LocalizationProvider` degrades silently.** When no game install
+  is detected (or the PAZ extract fails, or the PALOC parse fails),
+  `IsLoaded` stays false and `Lookup` always returns null. The
+  status-footer text is the only UI signal that this happened — the
+  editor itself keeps working on saves. Don't add hard dependencies
+  on `Localization.Lookup` succeeding.
+- **PALOC alone isn't enough to show item names.** Save bodies
+  carry items as `u32` hash IDs, not localization keys. The PALOC
+  catalog maps `string_key → text`; we still need the
+  `id → string_key` bridge from `iteminfo.pabgb`. That C ABI is the
+  immediate next task ("Pick up here" #1).
 - **`<NoWarn>IL2104;IL3053</NoWarn>` is a load-bearing AOT hack.**
   Without it, `dotnet publish -p:PublishAot=true` fails on the
   unchanged baseline as of ilcompiler 10.0.7 — verified by stashing
