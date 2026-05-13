@@ -13,6 +13,8 @@
   <sys:String x:Key="MenuExit">E_xit</sys:String>
   <sys:String x:Key="MenuTools">_Tools</sys:String>
   <sys:String x:Key="MenuBrowseLocalization">_Browse Localization…</sys:String>
+  <sys:String x:Key="MenuLanguage">_Secondary Language</sys:String>
+  <sys:String x:Key="MenuLanguageOff">English only (no secondary)</sys:String>
 
   <!-- Browse-localization dialog -->
   <sys:String x:Key="LocalizationWindowTitle">Browse localization</sys:String>
@@ -53,6 +55,7 @@
   <sys:String x:Key="FieldsColKind">Kind</sys:String>
   <sys:String x:Key="FieldsColPresent">Present</sys:String>
   <sys:String x:Key="FieldsColValue">Value</sys:String>
+  <sys:String x:Key="FieldsColResolvedName">Item name</sys:String>
   <sys:String x:Key="FieldsColRange">Bytes</sys:String>
   <sys:String x:Key="FieldsMask">Mask</sys:String>
   <sys:String x:Key="FieldsTrailingPad">Trailing pad</sys:String>

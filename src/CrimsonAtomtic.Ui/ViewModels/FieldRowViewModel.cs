@@ -1,6 +1,8 @@
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CrimsonAtomtic.RustInterop;
 using CrimsonAtomtic.SaveModel;
+using CrimsonAtomtic.Ui.Services;
 
 namespace CrimsonAtomtic.Ui.ViewModels;
 
@@ -25,7 +27,10 @@ public sealed partial class FieldRowViewModel : ObservableObject
     /// </summary>
     public IReadOnlyList<PathStep> EnclosingPath { get; }
 
-    public FieldRowViewModel(DecodedFieldRow row, IReadOnlyList<PathStep> enclosingPath)
+    public FieldRowViewModel(
+        DecodedFieldRow row,
+        IReadOnlyList<PathStep> enclosingPath,
+        LocalizationProvider? localization = null)
     {
         _row = row;
         _displayValue = row.Value;
@@ -43,6 +48,19 @@ public sealed partial class FieldRowViewModel : ObservableObject
             _committedRawText = raw;
             _rawText = raw;
             IsEditable = true;
+
+            // Best-effort item-name resolution: any u32-tagged scalar
+            // could be an item key. Look it up through iteminfo + PALOC;
+            // null when the catalogs aren't loaded or this u32 isn't a
+            // recognised item ID. Stored on the wrapper so the
+            // DataGrid binding stays a flat property read.
+            if (localization is not null
+                && tag == "u32"
+                && uint.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var itemId))
+            {
+                var (english, secondary) = localization.ResolveItemName(itemId);
+                _resolvedName = FormatResolvedName(english, secondary);
+            }
         }
         else
         {
@@ -51,6 +69,16 @@ public sealed partial class FieldRowViewModel : ObservableObject
             _rawText = string.Empty;
             IsEditable = false;
         }
+    }
+
+    private static string FormatResolvedName(string? english, string? secondary)
+    {
+        var hasEnglish = !string.IsNullOrEmpty(english);
+        var hasSecondary = !string.IsNullOrEmpty(secondary);
+        if (!hasEnglish && !hasSecondary) return string.Empty;
+        if (!hasSecondary) return english!;
+        if (!hasEnglish) return secondary!;
+        return $"{english} / {secondary}";
     }
 
     public DecodedFieldRow Row => _row;
@@ -69,6 +97,16 @@ public sealed partial class FieldRowViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private string _displayValue;
+
+    /// <summary>
+    /// Resolved item name for u32-shaped scalars whose value matches a
+    /// known item key. Empty string when no match (or no localization
+    /// available); the column binding hides empty cells naturally.
+    /// Shape: "English" or "English / Local" depending on whether a
+    /// secondary language is selected.
+    /// </summary>
+    [ObservableProperty]
+    private string _resolvedName = string.Empty;
 
     /// <summary>True when this row is a top-level-block scalar of a supported type.</summary>
     public bool IsEditable { get; }
