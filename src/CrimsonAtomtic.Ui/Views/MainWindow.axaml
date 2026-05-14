@@ -542,6 +542,25 @@
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
+              <!-- "Remove" button — length-changing edit (PR B). Drops
+                   this element from the parent list via
+                   ISaveLoader.ListRemoveElement, re-emits the body, and
+                   refreshes the nav stack so the row disappears in
+                   place. Confirms via the same modal hook the Fill
+                   command uses; cancelled removes leave the save
+                   untouched. -->
+              <DataGridTemplateColumn Header="{StaticResource ElementsColRemove}" Width="90">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:ElementRowViewModel">
+                    <Button Content="{StaticResource ElementsRemoveButton}"
+                            ToolTip.Tip="{StaticResource ElementsRemoveTip}"
+                            Padding="8,2"
+                            MinHeight="0"
+                            Command="{Binding $parent[DataGrid].((vm:MainWindowViewModel)DataContext).RemoveElementCommand}"
+                            CommandParameter="{Binding}" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
             </DataGrid.Columns>
           </DataGrid>
         </Grid>

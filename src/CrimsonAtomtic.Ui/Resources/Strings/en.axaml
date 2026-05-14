@@ -107,6 +107,10 @@
   <sys:String x:Key="ElementsBulkFillButton">Fill stacks</sys:String>
   <sys:String x:Key="ElementsBulkFillTip">Set every item in this container's _stackCount to its iteminfo max_stack_count.</sys:String>
   <sys:String x:Key="ElementsBulkFillConfirmTitle">Fill stacks to max?</sys:String>
+  <sys:String x:Key="ElementsColRemove">Remove</sys:String>
+  <sys:String x:Key="ElementsRemoveButton">✕ Remove</sys:String>
+  <sys:String x:Key="ElementsRemoveTip">Drop this element from the list. The save body shrinks to match; reversible by reloading without writing.</sys:String>
+  <sys:String x:Key="ItemPickerAddToBagTip">Add this item to the inventory list the main window is currently showing. Open a bag (drill into _inventorylist[N]._itemList) first; otherwise the click reports the requirement in the status bar.</sys:String>
   <sys:String x:Key="EditPanelNestedReadOnly">Editing nested fields is not yet supported. Use Back to return to the top-level block.</sys:String>
   <sys:String x:Key="ElementsColIcon">Icon</sys:String>
   <sys:String x:Key="ElementsColIndex">#</sys:String>

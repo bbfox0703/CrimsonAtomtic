@@ -99,4 +99,117 @@ public interface ISaveLoader
     /// <see cref="InvalidOperationException"/> when no save is loaded.
     /// </remarks>
     void WriteToFile(string destinationPath);
+
+    // ── Length-changing edits (PR B) ───────────────────────────────────────
+    //
+    // The first three (Remove / Clone / SetScalarFieldPresent) cover the
+    // user-facing UX gestures the editor needs today:
+    //   - Remove an item from a bag → ListRemoveElement
+    //   - Add an item by duplicating an existing one → ListCloneElement +
+    //     SetScalarField (patch _itemKey / _stackCount on the clone)
+    //   - Mark a challenge complete → SetScalarFieldPresent (_completedTime
+    //     absent → present with a u64 timestamp)
+    // The remaining two (MakeEmptyElementBytes / ListInsertElement) cover
+    // the "add a brand-new element of any class" path where no similar
+    // element exists to clone from.
+
+    /// <summary>
+    /// Drop element <paramref name="elementIndex"/> from an
+    /// <c>object_list</c> field reached by
+    /// <c>(blockIndex, path, fieldIndex)</c>. The list's count and its
+    /// variant-specific header bytes are rewritten in place and the body
+    /// is re-emitted + re-parsed so subsequent reads see the new layout.
+    /// </summary>
+    /// <remarks>
+    /// Variants observed in 1.06 saves all use
+    /// <c>zero1_count_u24</c>; the only unsupported variant is
+    /// <c>marker_run_plus_zeros</c>, which is rejected with
+    /// <c>LIST_VARIANT_UNSUPPORTED (-17)</c>. On any error the in-memory
+    /// save body is left exactly as it was before the call.
+    /// </remarks>
+    void ListRemoveElement(
+        int blockIndex,
+        ReadOnlySpan<PathStep> path,
+        int fieldIndex,
+        int elementIndex);
+
+    /// <summary>
+    /// Insert a byte-identical copy of element <paramref name="sourceIndex"/>
+    /// at position <paramref name="destinationIndex"/> in the same
+    /// <c>object_list</c>. <c>destinationIndex</c> may be 0..=count
+    /// (inclusive on both ends; equal to count means append).
+    /// </summary>
+    /// <remarks>
+    /// The clone is byte-identical to the source — callers typically
+    /// follow up with <see cref="SetScalarField(int, ReadOnlySpan{PathStep}, int, ReadOnlySpan{byte})"/>
+    /// to patch a few scalar fields (<c>_itemKey</c>, <c>_stackCount</c>,
+    /// <c>_slotNo</c>, …) so the clone represents a distinct entity.
+    /// </remarks>
+    void ListCloneElement(
+        int blockIndex,
+        ReadOnlySpan<PathStep> path,
+        int fieldIndex,
+        int sourceIndex,
+        int destinationIndex);
+
+    /// <summary>
+    /// Flip the presence bit of a fixed-size scalar field. When making
+    /// the field present, <paramref name="initialBytes"/> must equal
+    /// the field's <c>meta_size</c> and is decoded into the field's
+    /// declared scalar type. When making the field absent,
+    /// <paramref name="initialBytes"/> is ignored (pass
+    /// <c>ReadOnlySpan&lt;byte&gt;.Empty</c>).
+    /// </summary>
+    /// <remarks>
+    /// Restricted to scalar fields (<c>meta_kind 0</c> or <c>2</c>).
+    /// Toggling presence on a list / locator / inline-bytes field
+    /// returns <c>NOT_SCALAR_FIELD_KIND (-18)</c>; the template-builder
+    /// surface (<see cref="MakeEmptyElementBytes"/> +
+    /// <see cref="ListInsertElement"/>) handles those richer cases.
+    /// </remarks>
+    void SetScalarFieldPresent(
+        int blockIndex,
+        ReadOnlySpan<PathStep> path,
+        int fieldIndex,
+        bool makePresent,
+        ReadOnlySpan<byte> initialBytes);
+
+    /// <summary>
+    /// Produce the minimal valid bytes for a list element of
+    /// <paramref name="classIndex"/>: a wrapper with an all-zero mask
+    /// (every field absent) and an empty inline payload. Total size is
+    /// <c>mbc + 25</c> bytes, where <c>mbc</c> is the class's mask byte
+    /// count.
+    /// </summary>
+    /// <remarks>
+    /// The returned bytes can be passed straight to
+    /// <see cref="ListInsertElement"/>. The standard editor workflow
+    /// then populates fields one-by-one via
+    /// <see cref="SetScalarFieldPresent"/> + the existing
+    /// <see cref="SetScalarField(int, ReadOnlySpan{PathStep}, int, ReadOnlySpan{byte})"/>.
+    /// </remarks>
+    byte[] MakeEmptyElementBytes(int classIndex);
+
+    /// <summary>
+    /// Insert a caller-supplied list-element bytes blob into an
+    /// <c>object_list</c> at position <paramref name="insertAt"/>
+    /// (0..=count). The bytes are decoded against the loaded schema
+    /// before insertion; malformed blobs throw
+    /// <see cref="CrimsonSaveException"/> with code
+    /// <c>BODY_PARSE (-9)</c> and the handle is left untouched.
+    /// </summary>
+    /// <remarks>
+    /// Use <see cref="MakeEmptyElementBytes"/> to construct the blob
+    /// for a brand-new element of an arbitrary class, or extract bytes
+    /// from an existing element via
+    /// <see cref="LoadBlockDetails"/> + body offsets when copying from
+    /// a different save. For clone-and-edit within the same save,
+    /// <see cref="ListCloneElement"/> is more efficient.
+    /// </remarks>
+    void ListInsertElement(
+        int blockIndex,
+        ReadOnlySpan<PathStep> path,
+        int fieldIndex,
+        int insertAt,
+        ReadOnlySpan<byte> bytes);
 }

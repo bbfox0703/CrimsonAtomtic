@@ -106,6 +106,27 @@ public sealed partial class ItemPickerViewModel : ObservableObject
 
     partial void OnSearchTextChanged(string? value) => Refresh();
 
+    /// <summary>
+    /// Raised when the user clicks the "+ Bag" button on a row,
+    /// asking the main window to add that item to the currently-
+    /// displayed inventory list (clone + patch _itemKey, PR B.4.2).
+    ///
+    /// MainWindow's <c>OnBrowseItemsClick</c> subscribes a handler
+    /// that delegates to
+    /// <c>MainWindowViewModel.AddItemToCurrentListAsync</c>; the
+    /// picker itself stays decoupled from the main VM so it can be
+    /// shown standalone (read-only) by other call sites.
+    /// </summary>
+    public event Action<uint>? AddItemRequested;
+
+    /// <summary>
+    /// Invoked by the code-behind click handler when the user clicks
+    /// the "+ Bag" button. Fires <see cref="AddItemRequested"/>. Public
+    /// so the AXAML.cs in this assembly can call it without reaching
+    /// into private state.
+    /// </summary>
+    public void RequestAddItem(uint itemKey) => AddItemRequested?.Invoke(itemKey);
+
     private void Refresh()
     {
         Results.Clear();
