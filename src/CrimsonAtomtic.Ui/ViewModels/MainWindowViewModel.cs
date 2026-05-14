@@ -1321,44 +1321,70 @@ public sealed partial class MainWindowViewModel(
             BulkOpStatus = $"This list holds {sourceClass}, not ItemSaveData. Add unsupported here.";
             return;
         }
-        // Find _itemKey on the source element so we know which field
-        // index to patch on the clone. Schema indices are stable per
-        // class so the same field index works on the new clone.
-        var sourceItemKeyField = -1;
-        for (var i = 0; i < parent.Elements[0].Fields.Count; i++)
+        // Resolve field indices on the source element. Schema indices
+        // are stable per class so the same indices apply to every
+        // element in the list (including the clone we're about to make).
+        if (!TryFindItemSaveDataFieldIndices(
+                parent.Elements[0],
+                out var idxItemKey,
+                out var idxStackCount,
+                out var idxSlotNo,
+                out var idxItemNo))
         {
-            var f = parent.Elements[0].Fields[i];
-            if (f.Name == "_itemKey" && f.Present)
-            {
-                sourceItemKeyField = i;
-                break;
-            }
-        }
-        if (sourceItemKeyField < 0)
-        {
-            BulkOpStatus = "Source element has no _itemKey field — can't clone-and-patch here.";
+            BulkOpStatus = "Source element missing one of "
+                           + "_itemKey / _stackCount / _slotNo / _itemNo — bag layout "
+                           + "incompatible with the clone-and-patch strategy.";
             return;
         }
+
+        // Compute fresh values that won't collide with anything else in
+        // the list. Cloning blindly inherits the source's _slotNo /
+        // _itemNo / _stackCount, which crashes the game on load:
+        //   - duplicate _slotNo (two items at the same UI grid cell)
+        //   - duplicate _itemNo (game uses this as a persistent ID)
+        //   - _stackCount > the new item's max_stack
+        var (existingMaxSlot, existingMaxItemNo) =
+            ScanItemListMaxes(parent.Elements);
+        var newSlotNo = (ushort)Math.Min(existingMaxSlot + 1, ushort.MaxValue);
+        var newItemNo = existingMaxItemNo + 1;
+        // _stackCount defaults to 1 — guaranteed-safe across every
+        // iteminfo entry. The user can bump it via the edit panel's
+        // Set-to-max button or by typing a new value; those paths
+        // already validate against iteminfo's max_stack.
+        const ulong newStackCount = 1UL;
 
         BulkOpStatus = $"Adding item {itemKey}…";
         var blockIdx = topBlock.Index;
         var listPath = parent.PathToList is PathStep[] a ? a : parent.PathToList.ToArray();
         var listFieldIdx = (int)parent.ListFieldIndex;
-        // Insert at index 0 so the user sees the new item at the top
-        // of the picker without scrolling; the game's UI re-sorts on
-        // next save tick anyway.
+        // Insert at index 0; the game's UI re-sorts on next save tick
+        // by _slotNo anyway, so the array position doesn't matter for
+        // correctness.
         const int dstIdx = 0;
-        // Pre-compute the patch bytes outside the Task lambda so we
-        // don't reach for stackalloc inside a captured closure.
-        var itemKeyBytes = BitConverter.GetBytes(itemKey);
         var clonePath = ExtendPath(listPath, new PathStep((uint)listFieldIdx, (uint)dstIdx));
+
+        // Pre-compute LE byte buffers for the batched patch. One batch
+        // FFI call mutates all four scalars atomically (all-or-nothing
+        // on validation), with a single post-batch re-decode.
+        var itemKeyBytes = BitConverter.GetBytes(itemKey);
+        var stackCountBytes = BitConverter.GetBytes(newStackCount);
+        var slotNoBytes = BitConverter.GetBytes(newSlotNo);
+        var itemNoBytes = BitConverter.GetBytes(newItemNo);
+        var batchOps = new List<ScalarBatchOp>(4)
+        {
+            new(blockIdx, clonePath, idxItemKey,    itemKeyBytes),
+            new(blockIdx, clonePath, idxStackCount, stackCountBytes),
+            new(blockIdx, clonePath, idxSlotNo,     slotNoBytes),
+            new(blockIdx, clonePath, idxItemNo,     itemNoBytes),
+        };
+
         CrimsonSaveException? error = null;
         await Task.Run(() =>
         {
             try
             {
                 loader.ListCloneElement(blockIdx, listPath, listFieldIdx, 0, dstIdx);
-                loader.SetScalarField(blockIdx, clonePath, sourceItemKeyField, itemKeyBytes);
+                loader.SetScalarFieldsBatch(batchOps);
             }
             catch (CrimsonSaveException ex)
             {
@@ -1381,12 +1407,100 @@ public sealed partial class MainWindowViewModel(
         {
             IsDirty = true;
             OnPropertyChanged(nameof(WindowTitle));
-            BulkOpStatus = $"Added item {itemKey} (clone of [0], patched _itemKey).";
+            BulkOpStatus = $"Added item {itemKey} (qty {newStackCount}, slot {newSlotNo}, itemNo {newItemNo}).";
         }
         else
         {
             BulkOpStatus = $"Add failed: {error.Message}";
         }
+    }
+
+    /// <summary>
+    /// Locate field indices of <c>_itemKey</c>, <c>_stackCount</c>,
+    /// <c>_slotNo</c>, and <c>_itemNo</c> on an <c>ItemSaveData</c>
+    /// element. All four must be present in the source's field list
+    /// (their presence bits don't have to be set — the field indices
+    /// are schema-stable). Returns <c>false</c> if any is missing.
+    /// </summary>
+    private static bool TryFindItemSaveDataFieldIndices(
+        BlockDetails source,
+        out int itemKey,
+        out int stackCount,
+        out int slotNo,
+        out int itemNo)
+    {
+        itemKey = -1;
+        stackCount = -1;
+        slotNo = -1;
+        itemNo = -1;
+        for (var i = 0; i < source.Fields.Count; i++)
+        {
+            var f = source.Fields[i];
+            switch (f.Name)
+            {
+                case "_itemKey":    itemKey    = i; break;
+                case "_stackCount": stackCount = i; break;
+                case "_slotNo":     slotNo     = i; break;
+                case "_itemNo":     itemNo     = i; break;
+            }
+        }
+        return itemKey >= 0 && stackCount >= 0 && slotNo >= 0 && itemNo >= 0;
+    }
+
+    /// <summary>
+    /// Walk every element in the parent list and return
+    /// <c>(maxSlotNo, maxItemNo)</c>, parsing each element's
+    /// pre-formatted scalar value strings. Used to pick collision-free
+    /// values for a newly-cloned element. Missing / unparseable
+    /// fields are treated as 0 — the worst case is a redundant +1 on
+    /// the already-existing maximum.
+    /// </summary>
+    private static (ulong MaxSlotNo, ulong MaxItemNo) ScanItemListMaxes(
+        IReadOnlyList<BlockDetails> elements)
+    {
+        ulong maxSlot = 0;
+        ulong maxItemNo = 0;
+        foreach (var el in elements)
+        {
+            foreach (var f in el.Fields)
+            {
+                if (!f.Present)
+                {
+                    continue;
+                }
+                if (f.Name == "_slotNo" && TryParseScalarUInt(f.Value, out var slot) && slot > maxSlot)
+                {
+                    maxSlot = slot;
+                }
+                else if (f.Name == "_itemNo" && TryParseScalarUInt(f.Value, out var itemNo) && itemNo > maxItemNo)
+                {
+                    maxItemNo = itemNo;
+                }
+            }
+        }
+        return (maxSlot, maxItemNo);
+    }
+
+    /// <summary>
+    /// Parse a pre-formatted scalar value (<c>"123 &lt;u32&gt;"</c>,
+    /// <c>"100 &lt;u64&gt;"</c>) as an unsigned integer. Lossy on
+    /// signed / float / bytes values — returns false instead of a
+    /// wrong number, so the caller can skip the field.
+    /// </summary>
+    private static bool TryParseScalarUInt(string formatted, out ulong value)
+    {
+        value = 0;
+        if (!ScalarFieldEditing.TryParse(formatted, out var rawText, out var tag))
+        {
+            return false;
+        }
+        if (tag is not ("u8" or "u16" or "u32" or "u64"))
+        {
+            return false;
+        }
+        return ulong.TryParse(rawText, System.Globalization.NumberStyles.Integer,
+                              System.Globalization.CultureInfo.InvariantCulture,
+                              out value);
     }
 
     /// <summary>
