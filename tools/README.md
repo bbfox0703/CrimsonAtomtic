@@ -55,6 +55,9 @@ print full usage when run with no args.
 
 | Tool                          | Status | Purpose                                                |
 | ----------------------------- | ------ | ------------------------------------------------------ |
+| `dump_save_fields.py`         | DONE   | Flatten a `.save` into one-row-per-field JSONL (for duckdb/pandas correlation work — unknown-Key RE) |
+| `dump_catalogs.py`            | DONE   | Pull iteminfo + PALOC out of an install as JSONL (the lookup tables `dump_save_fields.py` joins against) |
+| `extract_keycases.py`         | DONE   | Real-case pack per Key TypeName — value + siblings + catalog resolves — for handing to the crimson_rs parser-writing session |
 | `analyze_item_distribution.py`| TODO   | Statistical view over the iteminfo table               |
 | `analyze_save_corpus.py`      | TODO   | Aggregate statistics across many save fixtures         |
 
