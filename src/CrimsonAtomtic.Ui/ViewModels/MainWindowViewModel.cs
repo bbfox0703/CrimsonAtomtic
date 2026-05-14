@@ -1321,11 +1321,35 @@ public sealed partial class MainWindowViewModel(
             BulkOpStatus = $"This list holds {sourceClass}, not ItemSaveData. Add unsupported here.";
             return;
         }
-        // Resolve field indices on the source element. Schema indices
-        // are stable per class so the same indices apply to every
-        // element in the list (including the clone we're about to make).
+        // Pick the clone template: prefer the row the user has
+        // currently SELECTED in the elements DataGrid (so they can
+        // point at a same-shape donor, e.g. an existing food row when
+        // adding beer). Falling back to element [0] is risky — Gold
+        // Bar / currency rows have a different mask from consumables,
+        // and the game's load-time validation crashes on mask shapes
+        // that don't match the item's iteminfo profile.
+        int sourceIndex = 0;
+        BlockDetails sourceElement = parent.Elements[0];
+        string cloneSourceLabel = "[0]: first element";
+        if (SelectedElement is { Block: var selBlock and not null } selRow)
+        {
+            for (var i = 0; i < parent.Elements.Count; i++)
+            {
+                if (ReferenceEquals(parent.Elements[i], selBlock))
+                {
+                    sourceIndex = i;
+                    sourceElement = selBlock;
+                    var name = string.IsNullOrEmpty(selRow.ResolvedName) ? selRow.KeyText : selRow.ResolvedName;
+                    cloneSourceLabel = $"selected [{i}]: {name}";
+                    break;
+                }
+            }
+        }
+        // Resolve field indices on the chosen source element. Schema
+        // indices are stable per class so the same indices apply to
+        // every element in the list (including the clone).
         if (!TryFindItemSaveDataFieldIndices(
-                parent.Elements[0],
+                sourceElement,
                 out var idxItemKey,
                 out var idxStackCount,
                 out var idxSlotNo,
@@ -1353,7 +1377,7 @@ public sealed partial class MainWindowViewModel(
         // already validate against iteminfo's max_stack.
         const ulong newStackCount = 1UL;
 
-        BulkOpStatus = $"Adding item {itemKey}…";
+        BulkOpStatus = $"Adding item {itemKey} (template: {cloneSourceLabel})…";
         var blockIdx = topBlock.Index;
         var listPath = parent.PathToList is PathStep[] a ? a : parent.PathToList.ToArray();
         var listFieldIdx = (int)parent.ListFieldIndex;
@@ -1361,6 +1385,10 @@ public sealed partial class MainWindowViewModel(
         // by _slotNo anyway, so the array position doesn't matter for
         // correctness.
         const int dstIdx = 0;
+        // When the source isn't [0], cloning to dst=0 shifts the source
+        // down by one (its old index becomes sourceIndex+1). We still
+        // patch at clonePath=ExtendPath(listPath, [listFieldIdx, dstIdx])
+        // since that's where the clone now lives.
         var clonePath = ExtendPath(listPath, new PathStep((uint)listFieldIdx, (uint)dstIdx));
 
         // Pre-compute LE byte buffers for the batched patch. One batch
@@ -1383,7 +1411,7 @@ public sealed partial class MainWindowViewModel(
         {
             try
             {
-                loader.ListCloneElement(blockIdx, listPath, listFieldIdx, 0, dstIdx);
+                loader.ListCloneElement(blockIdx, listPath, listFieldIdx, sourceIndex, dstIdx);
                 loader.SetScalarFieldsBatch(batchOps);
             }
             catch (CrimsonSaveException ex)
@@ -1407,7 +1435,8 @@ public sealed partial class MainWindowViewModel(
         {
             IsDirty = true;
             OnPropertyChanged(nameof(WindowTitle));
-            BulkOpStatus = $"Added item {itemKey} (qty {newStackCount}, slot {newSlotNo}, itemNo {newItemNo}).";
+            BulkOpStatus = $"Added item {itemKey} from {cloneSourceLabel} "
+                           + $"(qty {newStackCount}, slot {newSlotNo}, itemNo {newItemNo}).";
         }
         else
         {
