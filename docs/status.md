@@ -3,7 +3,54 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-13.
+> Last updated: 2026-05-14.
+>
+> **🆕 All 9 save-editor key resolvers shipped (vendor dev = `cea8300`).**
+> Two upstream sessions delivered the full set of `crimson_<table>_*` C
+> ABI bridges this week:
+>
+> 1. Six initial bridges: `mission_info`, `quest_info`, `stage_info`,
+>    `knowledge_info`, `quest_gauge_info`, `skill_info` + the
+>    `crimson_calculate_checksum` helper.
+> 2. Two follow-up bridges + Issue #1/#2 fixes: `gimmick_info` (hash
+>    hop at `lo32=0x200`) and `sub_level_info` (Pattern A only). The
+>    `gimmick_info` bridge is co-resident with the legacy PALOC-byte-
+>    0x00 path on the editor side — `ResolveByFieldTypeName` consults
+>    the table-driven bridge first and falls back to the byte map
+>    when the bridge doesn't cover the value.
+>
+> **Issue #1 (mojibake) — fully resolved.** Upstream tightened the
+> anchor-scan parsers (strict `std::str::from_utf8` + `name.contains('_')`
+> + first-wins dedup). Probe survey after refresh: **0 of 4,059
+> missioninfo / 49,508 stageinfo / 6,046 knowledgeinfo entries** carry
+> U+FFFD bytes (was 791/4,939 + 39/48,019 + 0/5,483).
+>
+> **Issue #2 (coverage gap) — exceeded projection.** Upstream widened
+> the hi-byte cap from `==0` to `<0x80`, picking up the
+> `Shop_*` (0x41) / `HerStore_*` (0x05) / `Knowledge_Recipe_*` (0x7F)
+> categories that had been wrongly rejected. Save-side coverage moved:
+>
+> | Bridge | Before | After |
+> |---|---:|---:|
+> | StageKey  | 97.3% | **99.7%** (156 unresolved, all hi=0x00 procedurals) |
+> | KnowledgeKey | 87.7% | **100.0%** (beat the predicted ~hi=0x7F slice) |
+> | MissionKey | 70.1% | 70.1% (1,299 unresolveds are 0xFF save-internal sentinels — no game-data fix possible, editor's empty-Name handling is correct) |
+>
+> **IGN match rate (Phase A challenge catalog)**: 76.6% → **90.8%** as
+> a knock-on benefit — the ~20 Mastery missing-tier challenges
+> (Sword 2/6, Bow 1/4/5, Spear 2, Cannon 3, etc.) that vanished into
+> the mojibake fallout came back cleanly. Residual 13 unmatched are
+> all Combat/Life challenges that live in a different game-data file
+> (not in `missioninfo.pabgb` under any prefix).
+>
+> Bedrock verified end-to-end: `MissionKey 1000083 → "Where the Wind
+> Guides You"`, `KnowledgeKey 1002588 → "Demenissian Ruins"`,
+> `StageKey 1100170020 → "Shop_Hernand_General"` (new this refresh).
+>
+> **Health**: 95/95 C# tests (was 93; +2 in `KeyInfoCatalogsTests` for
+> gimmick_info + sub_level_info), AOT publish 24.1 MB exe + 1.4 MB
+> Rust DLL (was 1.3 MB), trim-clean. `_proto_probe_keyinfo.py` deleted
+> — both issues closed.
 >
 > **Icon-extraction pipeline is complete (Phases 1–3).** Tools →
 > Extract Icons from Game Data… walks every item, resolves each
@@ -28,9 +75,6 @@
 > on validation failure; `CrimsonSaveException.FailedOpIndex`
 > pinpoints the offending op. Public surface:
 > `ISaveLoader.SetScalarFieldsBatch(IReadOnlyList<ScalarBatchOp>)`.
->
-> **Health**: 86/86 C# tests + 91/91 Rust tests (incl. `c_abi`); clippy
-> clean. AOT publish 24.1 MB exe + 1.3 MB Rust DLL.
 >
 > **Next session targets**: pick from the lower-priority deferred list
 > below — none of them are blocked. `skill_info` C ABI bridge (#4) and
@@ -295,6 +339,111 @@
   21.7 MB, crimson_rs.dll 1.3 MB, plus Avalonia native deps and PDBs.
 - **Python tools** (unchanged, working): `tools/extract/extract_save.py`,
   `tools/inspect/inspect_save_body.py`, `tools/inspect/inspect_save_section.py`.
+- **`tools/analyze/dump_save_fields.py`** (new): flattens a `.save` into
+  one-row-per-field JSONL (`save / top_class / class / path / field / type /
+  prim / kind / value`). One slot0 = ~273k rows / 64 MB, ~10 s. Feeds
+  duckdb/pandas correlation work for unknown-Key RE — e.g. "do any
+  `MissionKey` values appear at a different namespace's row?" Object lists
+  + locators are recursed; `dynamic_array` is opt-in via
+  `--include-array-elements`. See [tools/analyze/README.md](../tools/analyze/README.md).
+- **`tools/analyze/dump_catalogs.py`** (new): pulls iteminfo + per-language
+  PALOC out of the game install into JSONL — the lookup tables
+  `dump_save_fields.py` JOINs against. PALOC rows carry derived `key`
+  (upper 32 bits) and `type_byte` (lower 8 bits) columns so
+  `WHERE type_byte = 0x70` queries are direct. Sample smoke run on 1.06:
+  6,253 items + 179,513 English PALOC entries in ~15 s. **stringinfo is
+  NOT yet covered** — needs an upstream PR adding
+  `parse_string_info_from_bytes` to `vendor/crimson-rs/src/python.rs`
+  (mirror of `parse_iteminfo_from_bytes`). Cross-resolve sanity check
+  against slot0 confirmed status.md's RE notes (MissionKey 1003440 →
+  iteminfo `Braised_Meat_Fish_XLarge` + PALOC 0x70 "Hearty Braised Meat
+  and Fish"; StageKey resolves mostly at PALOC 0x00) and surfaced one
+  new finding: **every QuestGaugeKey value in slot0 (311/311, 100%)
+  exists as an `ItemKey` in iteminfo** — gauges look like they live in
+  a strict subset of the item-key numeric range.
+- **Challenge catalog + IGN enrichment** (this session, Phase A).
+  `tools/analyze/dump_challenges.py` walks `missioninfo.pabgb` via the
+  new `NativeMissionInfoCatalog.GetEntry(idx)` enumeration, filters
+  `Challenge_*` / `Mission_MiniGame_*` prefixes, applies title
+  normalisation (Roman→Arabic), strips PALOC's
+  `{StaticInfo:Knowledge:…#Display}` template wrapper, and cross-refs
+  the result against (a) the current save's `MissionStateData._state` /
+  `_completedTime` and (b) the IGN page text (parsed via
+  `--ign-text`). Slot0 result: **1,720 challenges** in catalog,
+  **141 IGN rows parsed**, **108 matched (76.6%)**, **261
+  player-completed**, **1,273 in-progress**, **184 not-yet-encountered**.
+  IGN data adds user-recognisable subcategories like "Goyen's Advice -
+  Sword" and per-row goal+reward — the Browse Challenges UI (Phase B,
+  deferred) will display these as extra columns. **One-click complete
+  is blocked on PR B (length-changing edits)**: every single completed
+  challenge in slot0 (261/261) has both `_state=5` AND `_completedTime`
+  present, so flipping state without promoting the absent
+  `_completedTime` would likely desync the game's read-side checks.
+  The 33 unmatched IGN entries decompose into ~14 "missing tier"
+  rows (Issue #1 mojibake victims that will reappear after upstream
+  fix), ~17 Combat/Life challenges that live outside `missioninfo.pabgb`
+  entirely (potential new bridge target), and 2 title-only collisions.
+- **`ElementRowViewModel` lazy-resolved hot properties** (this session,
+  Phase C). `ResolvedName` and `NestedMatchHaystack` are now computed
+  on first access and cached, not in the constructor. Constructing
+  46,541 `ElementRowViewModel` instances for QuestSaveData's
+  `_stageStateData` previously did 46k native-bridge FFI calls back-
+  to-back at load time, which was the dominant cost when drilling
+  into that list. With lazy + virtualised DataGrid rendering, the
+  cost amortises over user scroll instead of concentrating at first-
+  click. The bookkeeping is one sentinel field per property and three
+  carried instance fields (`_localization`, `_keyField`, `_key`); no
+  INPC plumbing needed because the resolved values are stable once
+  computed (a save edit or language switch already rebuilds the row
+  list fresh).
+- **Six new key-resolver bridges wired into `LocalizationProvider`**
+  (this session). Upstream session shipped C ABI for
+  `mission_info` / `quest_info` / `stage_info` / `knowledge_info` /
+  `quest_gauge_info` / `skill_info` plus a `crimson_calculate_checksum`
+  helper (`crimson_<table>_lookup_string_key` + `lookup_display_name`
+  surfaces). C# side: 16 new `[LibraryImport]` declarations in
+  [`NativeSaveLoader.cs`](../src/CrimsonAtomtic.RustInterop/NativeSaveLoader.cs),
+  six small wrapper classes in
+  [`NativeKeyInfoCatalogs.cs`](../src/CrimsonAtomtic.RustInterop/NativeKeyInfoCatalogs.cs)
+  (Mission/Quest/Stage/Knowledge expose `LookupStringKey` +
+  `LookupDisplayName(paloc, lo32)`; QuestGauge/Skill expose
+  `LookupStringKey` only — gauges + skills aren't on the PALOC hash-hop
+  chain in this model). `CrimsonPalocHandle` got an `internal
+  NativeHandle` accessor so the four hash-hop bridges can drive PALOC
+  in one FFI call. **Dispatch**: `LocalizationProvider` now runs a
+  `TableDrivenKeyTypes` check ahead of the PALOC-type-byte map; the
+  six new TypeNames route through `ResolveViaKeyTable` which prefers
+  `LookupDisplayName` and falls back to the internal name. Crucially
+  this **avoids the wrong-namespace pitfall** where MissionKey 1003440
+  would have resolved to "Hearty Braised Meat and Fish" via PALOC
+  0x70 — now it resolves cleanly to the actual mission title (or
+  nothing) via missioninfo's hash hop. `ElementRowViewModel.IsNameKey`
+  whitelist expanded so per-element DataGrid views (mission list,
+  knowledge list, etc.) auto-pick the Key field for the Name column.
+  7 new `KeyInfoCatalogsTests` (live-install gated) pin the bedrock
+  cases — `MissionKey 1000083 → "Where the Wind Guides You"`,
+  `MissionKey 1000157 → "Unfamiliar Lands"`, `KnowledgeKey 1002588 →
+  "Demenissian Ruins"`. Total: 86 → 93 tests, all passing. AOT
+  publish unchanged (24.1 MB).
+- **`tools/analyze/extract_keycases.py`** (new): the hand-off shape for
+  the separate crimson_rs RE session — for every distinct `(type,
+  value)` of a `*Key` schema TypeName in a save, emit a self-contained
+  row with `total_occurrences`, up to N example `(path, block_class,
+  top_class, siblings)` records, and `resolves = {iteminfo_id, paloc[5
+  type bytes]}`. **`siblings` = every other scalar in the same block** —
+  that's the context (`_state`, `_completedTime`, `_alertType`, etc.)
+  that tells the receiving session what the Key actually labels.
+  Compound fields stubbed as `"<object_list, N elements>"`. Smoke run on
+  4 Quest-family Key types: 7,108 distinct (type, value) cases / 4 MB.
+  Surfaced two leads worth following: (a) `MissionKey
+  4294964206/4207/4208 = 0xFFFFF3EE/EF/F0` — sequential, in completed
+  MissionStateData blocks, no catalog hit anywhere → likely
+  negative-encoded internal mission IDs (`-3090..-3088` if i32),
+  candidate for `missioninfo.pabgb` negative-keyed entries; (b)
+  KnowledgeKey 3/4/7 hit PALOC `0x93 knowledge_category` ("Endless
+  Adventures and Stories", …) while larger KnowledgeKey values don't —
+  confirms the small-vs-large KnowledgeKey split status.md previously
+  guessed at.
 - **Vendor**: `vendor/crimson-rs` at `3eff882`. Refresh via
   `.\vendor\update_vendors.ps1`.
 
