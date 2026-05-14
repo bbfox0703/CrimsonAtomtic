@@ -803,4 +803,280 @@ internal static partial class NativeMethods
         out uint outHash,
         byte* buf, nuint bufLen,
         out nuint required);
+
+    // ── MissionInfo bridge (missioninfo.pabgb) ──────────────────────────────
+    //
+    // Mission / Quest / Stage / Knowledge all share the same shape: load
+    // (file/bytes) + free + entry_count + lookup_string_key (internal name
+    // fallback) + lookup_display_name (PALOC-resolved title via the
+    // hashlittle2 hash hop, takes a CrimsonPalocHandle + lo32 namespace
+    // selector) + get_entry. lo32 namespace values vary by table —
+    // documented in vendor/crimson-rs/docs/save-editor-keys-plan.md.
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_missioninfo_load_from_file",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int MissionInfoLoadFromFile(string path, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_missioninfo_load_from_bytes")]
+    public static unsafe partial int MissionInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_missioninfo_free")]
+    public static partial void MissionInfoFree(IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_missioninfo_entry_count")]
+    public static partial int MissionInfoEntryCount(CrimsonMissionInfoHandle handle, out uint count);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_missioninfo_lookup_string_key")]
+    public static unsafe partial int MissionInfoLookupStringKey(
+        CrimsonMissionInfoHandle handle, uint missionKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_missioninfo_lookup_display_name")]
+    public static unsafe partial int MissionInfoLookupDisplayName(
+        CrimsonMissionInfoHandle handle,
+        CrimsonPalocHandle palocHandle,
+        uint missionKey, uint lo32Namespace,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_missioninfo_get_entry")]
+    public static unsafe partial int MissionInfoGetEntry(
+        CrimsonMissionInfoHandle handle, uint idx, out uint outKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    // ── QuestInfo bridge (questinfo.pabgb) ──────────────────────────────────
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_questinfo_load_from_file",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int QuestInfoLoadFromFile(string path, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_questinfo_load_from_bytes")]
+    public static unsafe partial int QuestInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_questinfo_free")]
+    public static partial void QuestInfoFree(IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_questinfo_entry_count")]
+    public static partial int QuestInfoEntryCount(CrimsonQuestInfoHandle handle, out uint count);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_questinfo_lookup_string_key")]
+    public static unsafe partial int QuestInfoLookupStringKey(
+        CrimsonQuestInfoHandle handle, uint questKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_questinfo_lookup_display_name")]
+    public static unsafe partial int QuestInfoLookupDisplayName(
+        CrimsonQuestInfoHandle handle,
+        CrimsonPalocHandle palocHandle,
+        uint questKey, uint lo32Namespace,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_questinfo_get_entry")]
+    public static unsafe partial int QuestInfoGetEntry(
+        CrimsonQuestInfoHandle handle, uint idx, out uint outKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    // ── StageInfo bridge (stageinfo.pabgb) ──────────────────────────────────
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_stageinfo_load_from_file",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int StageInfoLoadFromFile(string path, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_stageinfo_load_from_bytes")]
+    public static unsafe partial int StageInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_stageinfo_free")]
+    public static partial void StageInfoFree(IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_stageinfo_entry_count")]
+    public static partial int StageInfoEntryCount(CrimsonStageInfoHandle handle, out uint count);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_stageinfo_lookup_string_key")]
+    public static unsafe partial int StageInfoLookupStringKey(
+        CrimsonStageInfoHandle handle, uint stageKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_stageinfo_lookup_display_name")]
+    public static unsafe partial int StageInfoLookupDisplayName(
+        CrimsonStageInfoHandle handle,
+        CrimsonPalocHandle palocHandle,
+        uint stageKey, uint lo32Namespace,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_stageinfo_get_entry")]
+    public static unsafe partial int StageInfoGetEntry(
+        CrimsonStageInfoHandle handle, uint idx, out uint outKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    // ── KnowledgeInfo bridge (knowledgeinfo.pabgb) ──────────────────────────
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_knowledgeinfo_load_from_file",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int KnowledgeInfoLoadFromFile(string path, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_knowledgeinfo_load_from_bytes")]
+    public static unsafe partial int KnowledgeInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_knowledgeinfo_free")]
+    public static partial void KnowledgeInfoFree(IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_knowledgeinfo_entry_count")]
+    public static partial int KnowledgeInfoEntryCount(CrimsonKnowledgeInfoHandle handle, out uint count);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_knowledgeinfo_lookup_string_key")]
+    public static unsafe partial int KnowledgeInfoLookupStringKey(
+        CrimsonKnowledgeInfoHandle handle, uint knowledgeKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_knowledgeinfo_lookup_display_name")]
+    public static unsafe partial int KnowledgeInfoLookupDisplayName(
+        CrimsonKnowledgeInfoHandle handle,
+        CrimsonPalocHandle palocHandle,
+        uint knowledgeKey, uint lo32Namespace,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_knowledgeinfo_get_entry")]
+    public static unsafe partial int KnowledgeInfoGetEntry(
+        CrimsonKnowledgeInfoHandle handle, uint idx, out uint outKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    // ── QuestGaugeInfo bridge (questgaugeinfo.pabgb) ────────────────────────
+    //
+    // Pattern A only — gauges aren't in PALOC, so there's no
+    // lookup_display_name. The bridge returns the internal name as the
+    // user-facing label.
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_questgaugeinfo_load_from_file",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int QuestGaugeInfoLoadFromFile(string path, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_questgaugeinfo_load_from_bytes")]
+    public static unsafe partial int QuestGaugeInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_questgaugeinfo_free")]
+    public static partial void QuestGaugeInfoFree(IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_questgaugeinfo_entry_count")]
+    public static partial int QuestGaugeInfoEntryCount(CrimsonQuestGaugeInfoHandle handle, out uint count);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_questgaugeinfo_lookup_string_key")]
+    public static unsafe partial int QuestGaugeInfoLookupStringKey(
+        CrimsonQuestGaugeInfoHandle handle, uint gaugeKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_questgaugeinfo_get_entry")]
+    public static unsafe partial int QuestGaugeInfoGetEntry(
+        CrimsonQuestGaugeInfoHandle handle, uint idx, out uint outKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    // ── SkillInfo bridge (skill.pabgb + skill.pabgh — two files) ────────────
+    //
+    // Pattern A only. The internal-name fallback IS the user-facing label
+    // (skills don't sit at a PALOC byte that resolves through the hash
+    // hop, at least not yet). Loader takes both pabgh + pabgb halves; the
+    // editor extracts them via two PAZ calls.
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_skillinfo_load_from_file",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int SkillInfoLoadFromFile(string pabghPath, string pabgbPath, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_skillinfo_load_from_bytes")]
+    public static unsafe partial int SkillInfoLoadFromBytes(
+        byte* pabghData, nuint pabghLen,
+        byte* pabgbData, nuint pabgbLen,
+        out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_skillinfo_free")]
+    public static partial void SkillInfoFree(IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_skillinfo_entry_count")]
+    public static partial int SkillInfoEntryCount(CrimsonSkillInfoHandle handle, out uint count);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_skillinfo_lookup_string_key")]
+    public static unsafe partial int SkillInfoLookupStringKey(
+        CrimsonSkillInfoHandle handle, uint skillKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_skillinfo_get_entry")]
+    public static unsafe partial int SkillInfoGetEntry(
+        CrimsonSkillInfoHandle handle, uint idx, out uint outKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    // ── Checksum helper (Jenkins hashlittle2_c) ─────────────────────────────
+    //
+    // Exposed for callers that need to compose the hash hop themselves
+    // (e.g. if a future Key type's display chain isn't covered by the
+    // lookup_display_name family above). The five lookup_display_name
+    // entry points already use this internally, so the editor typically
+    // doesn't need to call it directly.
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_calculate_checksum")]
+    public static unsafe partial int CalculateChecksum(byte* data, nuint dataLen, out uint outHash);
+
+    // ── GimmickInfo bridge (gimmickinfo.pabgb) ──────────────────────────────
+    //
+    // Mirrors mission/quest/stage/knowledge: load + free + entry_count +
+    // lookup_string_key + lookup_display_name (hash hop at lo32=0x200) +
+    // get_entry. Co-resident with the existing PALOC-byte-0x00 path for
+    // GimmickInfoKey / LevelGimmickSceneObjectInfoKey — the editor prefers
+    // the bridge (canonical hash hop) and falls back to PALOC 0x00 when
+    // the bridge doesn't cover the value.
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_gimmickinfo_load_from_file",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int GimmickInfoLoadFromFile(string path, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_gimmickinfo_load_from_bytes")]
+    public static unsafe partial int GimmickInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_gimmickinfo_free")]
+    public static partial void GimmickInfoFree(IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_gimmickinfo_entry_count")]
+    public static partial int GimmickInfoEntryCount(CrimsonGimmickInfoHandle handle, out uint count);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_gimmickinfo_lookup_string_key")]
+    public static unsafe partial int GimmickInfoLookupStringKey(
+        CrimsonGimmickInfoHandle handle, uint gimmickKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_gimmickinfo_lookup_display_name")]
+    public static unsafe partial int GimmickInfoLookupDisplayName(
+        CrimsonGimmickInfoHandle handle,
+        CrimsonPalocHandle palocHandle,
+        uint gimmickKey, uint lo32Namespace,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_gimmickinfo_get_entry")]
+    public static unsafe partial int GimmickInfoGetEntry(
+        CrimsonGimmickInfoHandle handle, uint idx, out uint outKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    // ── SubLevelInfo bridge (sublevelinfo.pabgb) ────────────────────────────
+    //
+    // Pattern A only — no lookup_display_name exposed yet. SubLevelKey
+    // wasn't in any catalog before this bridge; internal-name resolution
+    // alone closes the 7-distinct-key handoff worklist for slot0.
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_sublevelinfo_load_from_file",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int SubLevelInfoLoadFromFile(string path, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_sublevelinfo_load_from_bytes")]
+    public static unsafe partial int SubLevelInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_sublevelinfo_free")]
+    public static partial void SubLevelInfoFree(IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_sublevelinfo_entry_count")]
+    public static partial int SubLevelInfoEntryCount(CrimsonSubLevelInfoHandle handle, out uint count);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_sublevelinfo_lookup_string_key")]
+    public static unsafe partial int SubLevelInfoLookupStringKey(
+        CrimsonSubLevelInfoHandle handle, uint subLevelKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_sublevelinfo_get_entry")]
+    public static unsafe partial int SubLevelInfoGetEntry(
+        CrimsonSubLevelInfoHandle handle, uint idx, out uint outKey,
+        byte* buf, nuint bufLen, out nuint required);
 }

@@ -35,6 +35,17 @@ public sealed class LocalizationProvider : IDisposable
     private const string ItemInfoDirectory = "gamedata/binary__/client/bin";
     private const string ItemInfoFileName = "iteminfo.pabgb";
     private const string StringInfoFileName = "stringinfo.pabgb";
+    // Sibling .pabgb files in the same `gamedata/binary__/client/bin/`
+    // directory, all under group 0008.
+    private const string MissionInfoFileName     = "missioninfo.pabgb";
+    private const string QuestInfoFileName       = "questinfo.pabgb";
+    private const string StageInfoFileName       = "stageinfo.pabgb";
+    private const string KnowledgeInfoFileName   = "knowledgeinfo.pabgb";
+    private const string QuestGaugeInfoFileName  = "questgaugeinfo.pabgb";
+    private const string GimmickInfoFileName     = "gimmickinfo.pabgb";
+    private const string SubLevelInfoFileName    = "sublevelinfo.pabgb";
+    private const string SkillPabgbFileName      = "skill.pabgb";
+    private const string SkillPabghFileName      = "skill.pabgh";
 
     /// <summary>
     /// Known PALOC language codes the game ships. Sourced authoritatively
@@ -135,23 +146,13 @@ public sealed class LocalizationProvider : IDisposable
     /// extend coverage — no other code changes required.
     ///
     /// <para>
-    /// Deliberately omitted:
+    /// <c>MissionKey</c> / <c>QuestKey</c> / <c>StageKey</c> /
+    /// <c>KnowledgeKey</c> / <c>QuestGaugeKey</c> / <c>SkillKey</c> are
+    /// resolved through dedicated <c>*.pabgb</c> bridges in the new
+    /// table-driven path (see <see cref="ResolveViaKeyTable"/>) — they
+    /// don't sit at a single PALOC type byte and are routed by
+    /// schema TypeName, not by integer namespace.
     /// </para>
-    /// <list type="bullet">
-    ///   <item><c>MissionKey</c> — the values do hit 0x70 cleanly, but
-    ///   those are <i>item</i> entries: the game stores missions and
-    ///   their tracking items in the same numeric ID space, so
-    ///   `MissionKey 1003440` resolves to "Hearty Braised Meat and
-    ///   Fish" (the dish the mission rewards), not a mission title.
-    ///   Verified against the user's <c>out/output*.txt</c> dumps —
-    ///   PALOC has no per-key mission-name namespace; mission text
-    ///   only appears at 0xC1 with embedded <c>staticInfo:Mission:</c>
-    ///   templates that need a separate resolver. Better to show the
-    ///   raw key than mislead with an item name.</item>
-    ///   <item><c>KnowledgeKey</c> / <c>QuestKey</c> — straddle
-    ///   multiple type bytes; large values just coincidentally hit
-    ///   the item / character tables (see "gotchas" in docs/status.md).</item>
-    /// </list>
     /// </summary>
     private static readonly Dictionary<string, byte> TypeNameToTypeByte =
         new(StringComparer.Ordinal)
@@ -168,6 +169,34 @@ public sealed class LocalizationProvider : IDisposable
             // 1000121 → "Oak Barrel", …) cleanly resolves here.
             ["LevelGimmickSceneObjectInfoKey"] = GimmickNameTypeByte,
         };
+
+    /// <summary>
+    /// Schema TypeNames that resolve through the dedicated key-table
+    /// bridges instead of (or before) a PALOC type byte scan. Routed by
+    /// <see cref="ResolveViaKeyTable"/> — each entry corresponds to a
+    /// <c>Native*InfoCatalog</c> field below. Resolution preference:
+    /// PALOC-localized title (when the bridge ships
+    /// <c>LookupDisplayName</c>) → internal name fallback → if both
+    /// produce nothing AND the TypeName is also in
+    /// <see cref="TypeNameToTypeByte"/>, fall through to the PALOC-byte
+    /// path. The PALOC fallback matters specifically for
+    /// <c>GimmickInfoKey</c> / <c>LevelGimmickSceneObjectInfoKey</c>:
+    /// the new <c>gimmickinfo.pabgb</c> bridge covers most rows but
+    /// not the legacy scene-object 0x00 slice, and we want both
+    /// resolutions to reach the column.
+    /// </summary>
+    private static readonly HashSet<string> TableDrivenKeyTypes = new(StringComparer.Ordinal)
+    {
+        "MissionKey",
+        "QuestKey",
+        "StageKey",
+        "KnowledgeKey",
+        "QuestGaugeKey",
+        "SkillKey",
+        "GimmickInfoKey",
+        "LevelGimmickSceneObjectInfoKey",
+        "SubLevelKey",
+    };
 
     /// <summary>
     /// Hardcoded labels for the 18 <c>InventoryKey</c> containers the
@@ -204,6 +233,14 @@ public sealed class LocalizationProvider : IDisposable
 
     private NativeItemInfoCatalog? _itemInfo;
     private NativeStringInfoCatalog? _stringInfo;
+    private NativeMissionInfoCatalog? _missionInfo;
+    private NativeQuestInfoCatalog? _questInfo;
+    private NativeStageInfoCatalog? _stageInfo;
+    private NativeKnowledgeInfoCatalog? _knowledgeInfo;
+    private NativeQuestGaugeInfoCatalog? _questGaugeInfo;
+    private NativeSkillInfoCatalog? _skillInfo;
+    private NativeGimmickInfoCatalog? _gimmickInfo;
+    private NativeSubLevelInfoCatalog? _subLevelInfo;
     private string? _gameRoot;
     private string? _secondaryLanguage;
 
@@ -320,6 +357,29 @@ public sealed class LocalizationProvider : IDisposable
         // working (the existing IconProvider cache path is unaffected).
         TryBootstrapStringInfo(gameRoot);
 
+        // ── Key-resolver bridges (Mission/Quest/Stage/Knowledge live
+        // alongside iteminfo in group 0008's
+        // gamedata/binary__/client/bin/). Each is independent — failure
+        // of one only blanks the corresponding column. Display-name
+        // lookups also need the English PALOC to be loaded below, but
+        // the bridge-load step can run before that since
+        // LookupDisplayName only needs the paloc handle at call time.
+        TryBootstrapKeyInfoCatalog(gameRoot, MissionInfoFileName,
+            NativeMissionInfoCatalog.LoadFromBytes, ref _missionInfo);
+        TryBootstrapKeyInfoCatalog(gameRoot, QuestInfoFileName,
+            NativeQuestInfoCatalog.LoadFromBytes, ref _questInfo);
+        TryBootstrapKeyInfoCatalog(gameRoot, StageInfoFileName,
+            NativeStageInfoCatalog.LoadFromBytes, ref _stageInfo);
+        TryBootstrapKeyInfoCatalog(gameRoot, KnowledgeInfoFileName,
+            NativeKnowledgeInfoCatalog.LoadFromBytes, ref _knowledgeInfo);
+        TryBootstrapKeyInfoCatalog(gameRoot, QuestGaugeInfoFileName,
+            NativeQuestGaugeInfoCatalog.LoadFromBytes, ref _questGaugeInfo);
+        TryBootstrapKeyInfoCatalog(gameRoot, GimmickInfoFileName,
+            NativeGimmickInfoCatalog.LoadFromBytes, ref _gimmickInfo);
+        TryBootstrapKeyInfoCatalog(gameRoot, SubLevelInfoFileName,
+            NativeSubLevelInfoCatalog.LoadFromBytes, ref _subLevelInfo);
+        TryBootstrapSkillInfo(gameRoot);
+
         // ── Discover available PALOC languages by probing the well-known
         // group range. PAMT parses are fast (a few ms each); the probe
         // exits early on NOT_FOUND so the total cost stays under a
@@ -373,6 +433,68 @@ public sealed class LocalizationProvider : IDisposable
             // StringInfo missing or malformed — the icon pipeline
             // degrades to "no extraction" but everything else still
             // works.
+        }
+        catch (IOException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Generic loader for the Mission / Quest / Stage / Knowledge / Gauge
+    /// catalogs — same group, same directory, same one-file-load shape.
+    /// Failures degrade silently: the corresponding TypeName just stops
+    /// resolving in <see cref="ResolveViaKeyTable"/> until the next
+    /// successful bootstrap.
+    /// </summary>
+    private void TryBootstrapKeyInfoCatalog<T>(
+        string gameRoot,
+        string fileName,
+        Func<ReadOnlySpan<byte>, T> loader,
+        ref T? slot)
+        where T : class, IDisposable
+    {
+        var pamt = Path.Combine(gameRoot, "0008", "0.pamt");
+        if (!File.Exists(pamt))
+        {
+            return;
+        }
+        try
+        {
+            var bytes = _paz.ExtractFile(pamt, ItemInfoDirectory, fileName);
+            slot?.Dispose();
+            slot = loader(bytes);
+        }
+        catch (CrimsonSaveException)
+        {
+            // File missing or parse failure — degrade gracefully.
+        }
+        catch (IOException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Two-file loader for the skill bridge — needs both
+    /// <c>skill.pabgh</c> (index) and <c>skill.pabgb</c> (body). Failure
+    /// of either extraction blanks the SkillKey column without affecting
+    /// anything else.
+    /// </summary>
+    private void TryBootstrapSkillInfo(string gameRoot)
+    {
+        var pamt = Path.Combine(gameRoot, "0008", "0.pamt");
+        if (!File.Exists(pamt))
+        {
+            return;
+        }
+        try
+        {
+            var pabgh = _paz.ExtractFile(pamt, ItemInfoDirectory, SkillPabghFileName);
+            var pabgb = _paz.ExtractFile(pamt, ItemInfoDirectory, SkillPabgbFileName);
+            _skillInfo?.Dispose();
+            _skillInfo = NativeSkillInfoCatalog.LoadFromBytes(pabgh, pabgb);
+        }
+        catch (CrimsonSaveException)
+        {
         }
         catch (IOException)
         {
@@ -606,14 +728,17 @@ public sealed class LocalizationProvider : IDisposable
 
     /// <summary>
     /// True when the given save-schema field <c>TypeName</c> has a
-    /// name-resolution path — either PALOC-backed (item / faction /
-    /// character / gimmick) or hardcoded (InventoryKey). Lets callers
+    /// name-resolution path — PALOC-backed (item / faction / character /
+    /// gimmick), table-driven (mission / quest / stage / knowledge /
+    /// gauge / skill), or hardcoded (InventoryKey). Lets callers
     /// cheaply gate UI work without trying a lookup that's bound to
     /// come back empty.
     /// </summary>
     public static bool CanResolveTypeName(string? typeName) =>
         typeName is not null
-        && (TypeNameToTypeByte.ContainsKey(typeName) || typeName == "InventoryKey");
+        && (TypeNameToTypeByte.ContainsKey(typeName)
+            || TableDrivenKeyTypes.Contains(typeName)
+            || typeName == "InventoryKey");
 
     /// <summary>
     /// Convenience: look up the same key in English and (if set) the
@@ -661,12 +786,130 @@ public sealed class LocalizationProvider : IDisposable
             // a hardcoded table sourced from inspecting live saves.
             return InventoryContainerLabels.GetValueOrDefault(key, string.Empty);
         }
+        // Table-driven Key bridges (Mission/Quest/Stage/Knowledge/Gauge/
+        // Skill/Gimmick/SubLevel) resolve through their dedicated
+        // .pabgb files. Tried first because some of these (e.g.
+        // MissionKey) numerically collide with item keys at PALOC 0x70 —
+        // routing through the table-driven path avoids leaking the
+        // wrong-namespace answer through.
+        if (typeName is not null && TableDrivenKeyTypes.Contains(typeName))
+        {
+            var bridgeResult = FormatPair(ResolveViaKeyTable(typeName, key));
+            if (!string.IsNullOrEmpty(bridgeResult))
+            {
+                return bridgeResult;
+            }
+            // Bridge didn't cover this value. For GimmickInfoKey /
+            // LevelGimmickSceneObjectInfoKey, the legacy PALOC-byte-0x00
+            // path may still resolve (scene-object slice). Fall through
+            // to the byte-map check below — for TypeNames that aren't
+            // in TypeNameToTypeByte (Mission/Quest/Stage/Knowledge/…),
+            // the fall-through returns empty, same as before.
+        }
         if (typeName is null
             || !TypeNameToTypeByte.TryGetValue(typeName, out var typeByte))
         {
             return string.Empty;
         }
         return FormatPair(ResolveAt(typeByte, key));
+    }
+
+    /// <summary>
+    /// Resolve a Key value through its dedicated <c>*.pabgb</c> bridge
+    /// (Mission / Quest / Stage / Knowledge / Gauge / Skill). Each entry
+    /// in <see cref="TableDrivenKeyTypes"/> routes here; the dispatch
+    /// picks the right bridge by TypeName.
+    ///
+    /// <para>Resolution preference, per bridge:</para>
+    /// <list type="bullet">
+    ///   <item>If the bridge supports the hash-hop chain (Mission /
+    ///   Quest / Stage / Knowledge), try <c>LookupDisplayName</c>
+    ///   against the loaded PALOC — that's the localized title.</item>
+    ///   <item>On miss (or for bridges without a PALOC chain — Gauge
+    ///   and Skill), fall back to <c>LookupStringKey</c>, the internal
+    ///   ASCII identifier from the <c>.pabgb</c> row.</item>
+    ///   <item>If neither lookup hits, the column blanks. Showing
+    ///   nothing is better than misattributing a value to the wrong
+    ///   namespace (the bug the table-driven path is designed to
+    ///   avoid).</item>
+    /// </list>
+    /// </summary>
+    private (string? English, string? Secondary) ResolveViaKeyTable(string typeName, uint key)
+    {
+        var english = ResolveKeyTableOne(typeName, key, DefaultLanguage);
+        var secondary = _secondaryLanguage is null
+            ? null
+            : ResolveKeyTableOne(typeName, key, _secondaryLanguage);
+        return (english, secondary);
+    }
+
+    private string? ResolveKeyTableOne(string typeName, uint key, string langCode)
+    {
+        _catalogs.TryGetValue(langCode, out var paloc);
+        return typeName switch
+        {
+            "MissionKey"    => DisplayOrFallback(_missionInfo, key, paloc,
+                                                bridge => bridge.LookupDisplayName(key, paloc!),
+                                                bridge => bridge.LookupStringKey(key)),
+            "QuestKey"      => DisplayOrFallback(_questInfo, key, paloc,
+                                                bridge => bridge.LookupDisplayName(key, paloc!),
+                                                bridge => bridge.LookupStringKey(key)),
+            "StageKey"      => DisplayOrFallback(_stageInfo, key, paloc,
+                                                bridge => bridge.LookupDisplayName(key, paloc!),
+                                                bridge => bridge.LookupStringKey(key)),
+            "KnowledgeKey"  => DisplayOrFallback(_knowledgeInfo, key, paloc,
+                                                bridge => bridge.LookupDisplayName(key, paloc!),
+                                                bridge => bridge.LookupStringKey(key)),
+            // Gauge + Skill: no PALOC chain. Internal name only, same
+            // value across all languages (so secondary-language columns
+            // intentionally echo the English one — the alternative is a
+            // blank secondary cell next to a populated primary cell,
+            // which reads as "missing data").
+            "QuestGaugeKey" => _questGaugeInfo?.LookupStringKey(key),
+            "SkillKey"      => _skillInfo?.LookupStringKey(key),
+            // Gimmick: hash hop at lo32=0x200. Same dispatch shape as
+            // Mission/Quest/Stage/Knowledge. If the bridge returns
+            // nothing, ResolveByFieldTypeName falls through to the
+            // legacy PALOC-byte-0x00 path (the scene-object slice).
+            "GimmickInfoKey"                 => DisplayOrFallback(_gimmickInfo, key, paloc,
+                                                bridge => bridge.LookupDisplayName(key, paloc!),
+                                                bridge => bridge.LookupStringKey(key)),
+            "LevelGimmickSceneObjectInfoKey" => DisplayOrFallback(_gimmickInfo, key, paloc,
+                                                bridge => bridge.LookupDisplayName(key, paloc!),
+                                                bridge => bridge.LookupStringKey(key)),
+            // SubLevel: Pattern A only — internal name is the label.
+            "SubLevelKey"   => _subLevelInfo?.LookupStringKey(key),
+            _               => null,
+        };
+    }
+
+    /// <summary>
+    /// Apply the "display-name preferred, internal-name fallback" rule
+    /// generically. <paramref name="paloc"/> may be null (catalog for
+    /// the language wasn't loaded); in that case the display-name probe
+    /// is skipped and only the internal-name fallback runs.
+    /// </summary>
+    private static string? DisplayOrFallback<TBridge>(
+        TBridge? bridge,
+        uint key,
+        NativePalocCatalog? paloc,
+        Func<TBridge, string?> displayLookup,
+        Func<TBridge, string?> internalLookup)
+        where TBridge : class
+    {
+        if (bridge is null)
+        {
+            return null;
+        }
+        if (paloc is not null)
+        {
+            var display = displayLookup(bridge);
+            if (!string.IsNullOrEmpty(display))
+            {
+                return display;
+            }
+        }
+        return internalLookup(bridge);
     }
 
     /// <summary>
@@ -704,6 +947,22 @@ public sealed class LocalizationProvider : IDisposable
         _itemInfo = null;
         _stringInfo?.Dispose();
         _stringInfo = null;
+        _missionInfo?.Dispose();
+        _missionInfo = null;
+        _questInfo?.Dispose();
+        _questInfo = null;
+        _stageInfo?.Dispose();
+        _stageInfo = null;
+        _knowledgeInfo?.Dispose();
+        _knowledgeInfo = null;
+        _questGaugeInfo?.Dispose();
+        _questGaugeInfo = null;
+        _skillInfo?.Dispose();
+        _skillInfo = null;
+        _gimmickInfo?.Dispose();
+        _gimmickInfo = null;
+        _subLevelInfo?.Dispose();
+        _subLevelInfo = null;
         foreach (var cat in _catalogs.Values)
         {
             cat.Dispose();
