@@ -43,13 +43,18 @@ public sealed partial class FieldRowViewModel : ObservableObject
     {
         _row = row;
         _displayValue = row.Value;
+        _present = row.Present;
         _localization = localization;
         EnclosingPath = enclosingPath;
 
-        // For scalar rows, split the pre-formatted value ("123 <u32>") into
-        // raw + tag once so the editor can show the bare number. Anything
-        // that doesn't parse (locator strings, "(absent)", etc.) leaves
-        // both fields empty and IsEditable = false.
+        // Three editable shapes:
+        //   1. Present scalar — parse "raw <tag>" from row.Value.
+        //   2. Absent scalar (schema fixed_prefix / fixed_suffix, MetaKind 0
+        //      or 2) — Rust erases the underlying kind to Absent on the
+        //      JSON side, so we infer the editable tag from the schema
+        //      TypeName instead. Apply routes to SetScalarFieldPresent.
+        //   3. Everything else — locators, lists, vectors, bytes — not
+        //      reachable through this textbox; IsEditable stays false.
         if (ScalarFieldEditing.IsScalarKind(row.Kind)
             && ScalarFieldEditing.TryParse(row.Value, out var raw, out var tag)
             && ScalarFieldEditing.SupportedTypeTags.Contains(tag))
@@ -77,6 +82,20 @@ public sealed partial class FieldRowViewModel : ObservableObject
                 _resolvedName = localization.ResolveByFieldTypeName(row.TypeName, nameKey);
             }
         }
+        else if (!row.Present
+            && (row.MetaKind == 0 || row.MetaKind == 2)
+            && ScalarFieldEditing.TryInferTypeTagFromSchema(row.TypeName, row.MetaSize, out var inferredTag)
+            && ScalarFieldEditing.SupportedTypeTags.Contains(inferredTag))
+        {
+            // Absent scalar — schema knows the shape, just no value yet.
+            // The edit panel opens empty; the user types a value, hits
+            // Apply, and CommitFieldEdit routes the call through the
+            // SetScalarFieldPresent path because Present is still false.
+            _typeTag = inferredTag;
+            _committedRawText = string.Empty;
+            _rawText = string.Empty;
+            IsEditable = true;
+        }
         else
         {
             _typeTag = string.Empty;
@@ -92,7 +111,17 @@ public sealed partial class FieldRowViewModel : ObservableObject
     public string Name => _row.Name;
     public string TypeName => _row.TypeName;
     public string Kind => _row.Kind;
-    public bool Present => _row.Present;
+
+    /// <summary>
+    /// Latest-known presence flag for the field. Initialized from
+    /// <c>row.Present</c> at construction; updated by
+    /// <see cref="ApplyCommittedValue"/> after a successful mutation
+    /// so an absent→present promotion flips the column live without
+    /// rebuilding the row VM. The Present column in the fields
+    /// DataGrid binds here.
+    /// </summary>
+    [ObservableProperty]
+    private bool _present;
 
     /// <summary>
     /// Display string for the Value column. Always tracks the latest known
@@ -146,6 +175,7 @@ public sealed partial class FieldRowViewModel : ObservableObject
     public void ApplyCommittedValue(DecodedFieldRow fresh)
     {
         DisplayValue = fresh.Value;
+        Present = fresh.Present;
         if (IsEditable
             && ScalarFieldEditing.TryParse(fresh.Value, out var raw, out var tag)
             && tag == _typeTag)

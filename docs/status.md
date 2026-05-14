@@ -3,24 +3,82 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-14 (PR B + Add-to-bag investigation).
+> Last updated: 2026-05-14 (Add-to-bag unblocked + nav perf + absent↔present + challenge guards).
 >
-> ## 🛑 ACTIVE BLOCKER — Add-to-bag still crashes the game on load
+> ## ✅ Beer Add-to-bag works end-to-end
 >
-> Five C# fixes landed this session trying to make "+ Bag" produce a
-> save the game will load. **All five compile + test green, but the
-> game still crashes**. The encoder + interop layer is correct (119/119
-> tests, byte-perfect idempotent round-trip); the issue is in the
-> **per-item field-population recipe** — there's still some field /
-> hash / pointer we're not setting that the engine cross-checks on
-> load. Full debrief: [Add-to-bag investigation](#add-to-bag-investigation-active-blocker)
+> The per-item field-population recipe from the previous session
+> shipped; the user confirmed the game loads + accepts the cloned beer
+> and it appears in their backpack. The recipe is the existing
+> `b393b03..b0a015a` patch series. No further investigation needed on
+> the basic Add-to-bag flow.
+>
+> ## ⏸ INVESTIGATION PAUSED — Sealed Abyss Artifact "claim reward" trigger
+>
+> Separate problem from beer add-to-bag. Engine-natural completion of
+> a Sealed Abyss Artifact challenge in 1.06 changes the artifact item's
+> `_chargedUseableCount: 0 → 15` and clears `_maxChargeUseableCount`
+> (mask bit flip + 4-byte payload removal). **Our editor produces
+> byte-identical output to the engine** (verified via ctypes-driven
+> test against the real slot102 → slot103 minimal pair — mask
+> `9f282900`, data_size 228, 6 expected `payload_offset` divergences
+> that match the absolute body shift). **But the artifact is still
+> not claimable in-game** after loading the edit. Whatever extra state
+> the engine writes to mark "ready to claim" lives outside the artifact
+> item itself. Candidate: `ContentsMiscSaveData._alertHistorySaveDataList`
+> gained an entry (alertType=30, missionKey=`0xFFFFFE99` sentinel) in
+> the engine-natural transition. **Deferred** per user direction. Full
+> findings: [Sealed Abyss Artifact investigation](#sealed-abyss-artifact-investigation-paused)
 > later in this doc.
 >
-> **Next session's first task**: empirical bisection between a known-
-> good slot101 (engine wrote a beer via in-game purchase) and our
-> editor's output. Either dump-and-diff every byte of `_itemList[123]`
-> in both saves, OR re-RE the engine's per-item init code path in
-> CrimsonForge / the legacy editor.
+> ## ✅ This session — what shipped (2026-05-14 part 2)
+>
+> | Area | Scope |
+> |---|---|
+> | **Nav perf** | `NativeSaveLoader` gained a `Dictionary<int, BlockDetails>` cache. Same-block re-clicks are O(1) (was 1–2 s for QuestSaveData/4341 missions). Cache invalidated on every body mutation, on `Load(path)` swap, on `Dispose`; preserved across `WriteToFile`. Plus `OnSelectedBlockChanged` offloaded to `Task.Run` with a race guard — first-click no longer freezes the window. 4 new live-save cache tests. |
+> | **Absent ↔ present UI** | Edit panel now lights up for absent scalar rows (gated on `MetaKind in {0,2}` + `ScalarFieldEditing.TryInferTypeTagFromSchema`). Apply routes through `SetScalarFieldPresent(makePresent: true, …)` for absent-source rows, normal `SetScalarField` otherwise. New **"Make absent"** button flips a present scalar to absent via `SetScalarFieldPresent(makePresent: false, …)`. `FieldRowViewModel.Present` is now `ObservableProperty` so the Present column refreshes live after the toggle. Type hint shows `"u32 (absent — Apply makes present)"` when applicable. 28 new InferTypeTag tests. |
+> | **Challenge completion guard** | `CommitFieldEdit` is async (`CommitFieldEditAsync`). When editing a `MissionStateData` field to mark completion (`_state ← 5` or `_completedTime` promoting to present), a confirm dialog gates the FFI write. First call per save path shows combined Sealed Abyss Artifact + achievement-impact warning; subsequent calls on the same save show only the artifact reminder. Tracking field: `_challengeWarningAcknowledgedForPath`. Loading a different save naturally re-arms the first-time warning. |
+> | **Icon cache fixed location** | Removed `AppSettings.IconCacheDirectory` + Tools menu's "Set Icon Folder…" + the folder-picker handler. Cache now lives at `%LOCALAPPDATA%\CrimsonAtomtic\IconCache\` unconditionally (mirrors `SaveBackupService.BackupsSubdirectory` pattern). `IconProvider` takes a single root path, creates the dir on construction, exposes `ResolveRoot(localAppData)` static helper. `MainWindowViewModel.RefreshIconCache()` replaces `SetIconCacheDirectory(path)`. |
+> | **Backup retention 3 → 6** | `SaveBackupService.MaxVersionsPerSlot = 6` (was 3). Reason: Restore from backup itself triggers another pre-write snapshot, so 5 normal edits + 1 restore already consume 6 slots. Test renamed `FourthVersion → OverRetention`, drives the loop off `MaxVersionsPerSlot + 1` so future cap tweaks don't desync. |
+> | **Add-to-bag container blocklist — added then removed** | Mid-session: blocked `+ Bag` into Quest Artifacts (InventoryKey 5) and Kuku Pot (13) with an alert dialog. **User reverted the policy**: protection off, user accepts consequences. The `AlertRequested` plumbing + `ConfirmDialog.ShowAlertAsync` infrastructure stays (used elsewhere). |
+>
+> Health: **151 / 151 C# tests pass** (was 119; +4 cache tests + 28 InferTypeTag tests). AOT publish clean at 24.3 MB exe + 1.4 MB `crimson_rs.dll`. No new Rust changes this session; `vendor/crimson-rs` still pinned at `ab815e6`.
+>
+> ## 🆕 Verified facts to remember
+>
+> - **Schema version drift sinks naive diffs.** Two saves can have
+>   *different* `ItemSaveData` schemas if they come from different
+>   game versions. Today's red herring: slot104 (2026-04-29, chapter II)
+>   is a 1.05-era save with a **23-field** ItemSaveData; slot103
+>   (2026-05-14, chapter VIII) is 1.06 with **25 fields**. The two
+>   extra 1.06 fields are `_maxChargeUseableCount` (uint32) and
+>   `_coolTimePerCharge` (TickCount64). **Always check `type_count`
+>   and `schema_end` from `parse_save_body_from_bytes` before reading
+>   a cross-save diff as logical state difference.** slot102 / slot103
+>   are the right minimal pair (both 1.06, 9 minutes apart).
+> - **`_transferredItemKey` formula is universal** for Quest Artifacts:
+>   `((itemKey & 0xFFFF) << 16) | 0x0101`. 543/546 items in slot103
+>   inv[4] match; the 3 outliers all sit in inv[1] (Camp &
+>   Contributions) — different encoding for legacy non-stackable
+>   currency-style items. Earlier in this session I miscomputed
+>   `1002011 & 0xFFFF` as `0xF49B` (decimal-to-hex error); the real
+>   answer is `0x4A1B`, the formula matches perfectly. Don't relearn.
+> - **`_useItemSaveList` is the equip / quick-use bar, NOT a Sealed
+>   Abyss Artifact shortcut.** The 8→9 element change between slot102
+>   and slot103 references item `1002130` (`Kuku_Pot_BackPack`), not
+>   `1002011` (`Sealed_Abyss_Artifact_0083`). The artifact has no
+>   external pointer anywhere in the body — it lives only at
+>   `_inventorylist[4]._itemList[37]._itemKey`. Don't chase a shortcut
+>   theory.
+> - **Our encoder is byte-perfect, modulo expected absolute offsets.**
+>   `SetScalarFieldPresent(false) + SetScalarField` on the artifact
+>   produces output that's structurally identical to the engine's
+>   natural completion. The 6 byte diffs we see in slot102-edited vs
+>   slot103 are all `payload_offset` u32/u64 values that match the
+>   global +512 byte shift between the two saves (artifact lives at
+>   a different absolute body position). PR B.6's `payload_offset`
+>   canonicalization is correct. Verified with a ctypes-driven test —
+>   see `out/diff-slot102-103/` if you want the raw bytes.
 >
 > ## ✅ PR B — Length-changing edits — fully shipped (Rust + C#)
 >
@@ -39,7 +97,7 @@
 > |---|---|---|
 > | B.4 | `5eb94cc` | C# interop layer (5 new `ISaveLoader` methods, 9 new tests); "Remove" button on elements DataGrid; "+ Bag" on Item Picker (cross-window event pipe) |
 > | B.5 | `dc52904` | `SaveBackupService` + RestoreFromBackup dialog. Auto-snapshot before every Save / Save As to `%LOCALAPPDATA%\CrimsonAtomtic\Backups\<userId>\<slot>\<timestamp>\` (save.save + lobby.save together). 3-version rolling retention. File → Restore from Backup… picker (15 new unit tests on the service) |
-> | B.4.fixup | `b393b03..b0a015a` (5 commits) | Per-field Add-to-bag refinements; see [investigation](#add-to-bag-investigation-active-blocker) |
+> | B.4.fixup | `b393b03..b0a015a` (5 commits) | Per-field Add-to-bag refinements; see [historical Add-to-bag investigation](#historical-add-to-bag-investigation--resolved) below |
 >
 > ## Health
 >
@@ -493,7 +551,95 @@ whichever matches your appetite. `skill_info` bridge (#4) and
 `Mission/Quest` name resolution (#6) are now the most
 user-visible follow-ons.
 
-## Add-to-bag investigation (ACTIVE BLOCKER)
+## Sealed Abyss Artifact investigation (PAUSED)
+
+### Symptom
+
+Workflow: load slot103 (1.06, chapter VIII, Harmonious Hooves 2
+challenge **in progress** in slot102 then engine-completed in
+slot103). Try to replicate via editor: take slot102, edit
+`_inventorylist[4]._itemList[37]` (the Sealed Abyss Artifact, item
+1002011) so `_chargedUseableCount = 15` + `_maxChargeUseableCount`
+becomes absent. Save. Copy resulting file to a new slot. Load
+in-game → **artifact stays in "in progress" state, can't be clicked
+to claim reward**. (Compare: slot103 itself loads in-game and the
+artifact IS claimable.)
+
+### What we verified
+
+- **Our encoder is byte-perfect**. ctypes-driven test (see
+  `out/diff-slot102-103/slot102_edited.save`) replicates the engine's
+  slot102→slot103 transition. The 6 byte diffs between our output
+  and slot103 are all u32/u64 `payload_offset` values, each
+  consistent with a global +512-byte shift caused by other content
+  differences earlier in the save. Mask matches (`9f282900`),
+  data_size matches (228 bytes, was 232), every scalar field
+  matches. PR B.6 `payload_offset` canonicalization is producing
+  correct output.
+- **The artifact item has no external cross-reference.** itemKey
+  `1002011` appears only at `_inventorylist[4]._itemList[37]._itemKey`
+  in both slot102 and slot103. No `_useItemSaveList` entry. No
+  shortcut. No equipment-bar binding.
+- **`_useItemSaveList` 8→9 element change was for a different item**
+  (1002130 = `Kuku_Pot_BackPack`). Don't confuse it with the artifact.
+
+### Suspected remaining state
+
+Between slot102 and slot103 the engine wrote **2570 diff rows**
+(mostly noise: faction reputation, field state, cooldown timer ticks).
+Among the smaller-footprint changes that COULD relate to artifact
+claimability:
+
+- **`ContentsMiscSaveData._alertHistorySaveDataList[1832]` — new
+  entry**:
+  - `_alertType = 30`
+  - `_generatedLocalTime = 1778794559`
+  - `_missionKey = 4294966809` (= `0xFFFFFE99`, looks like a
+    negative-encoded internal mission ID — same sentinel pattern as
+    `_lastCompletedMissionKey` updates documented earlier)
+  - `_saveVersion = 2`
+- `ContentsMiscSaveData._lastFieldGimmickSaveDataKey: 251658240 → 1577058304`
+- `EquipmentSaveData._equipCacheSequenceNo: 25519 → 25529` (+10)
+- Many `_chargedUseableCount` timestamps tick forward by a fixed
+  delta (engine game-clock counter advancing 9 minutes).
+
+The alertHistory entry is the most plausible "ready to claim"
+trigger. Next session: try adding a matching entry via list_insert
++ field patches before re-testing.
+
+### What NOT to retry
+
+- **Mask + 2-field edit on artifact alone** — confirmed insufficient.
+  This is the user's tested case ("無效").
+- **Looking for a "shortcut" / pointer in equip bar** — there is
+  none for this item class.
+- **Bytes-level encoder review** — encoder is correct.
+
+### Files / scripts that help
+
+- `out/diff-slot102-103/slot102.jsonl` / `slot103.jsonl` — every
+  scalar field, JSONL per row. duckdb / pandas friendly.
+- `out/diff-slot102-103/slot102_edited.save` — our editor's output
+  (engine-equivalent for the artifact item). Use as the byte-level
+  reference for "what our edit produces".
+- `out/diff-slot102-103/slot102_body/` / `slot104_body/` — extracted
+  bodies via `tools/extract/extract_save.py`. (slot104 is a 1.05-era
+  save — DIFFERENT SCHEMA, don't compare against 1.06 saves.)
+- `tools/analyze/dump_save_fields.py` — flattens to one-row-per-field
+  JSONL for diff queries. `--include-array-elements` for socket sub-data.
+
+### When picking this up again
+
+1. Read [this section](#sealed-abyss-artifact-investigation-paused)
+   from the top — context evaporates fast.
+2. Verify slot102 / slot103 are still the right minimal pair (check
+   their save chapter in-game + `parse_save_body_from_bytes` schema
+   signature). If user has played further, take a fresh minimal pair.
+3. Try the alertHistory insertion as the first hypothesis. If it
+   doesn't unblock, do a comprehensive `_alertHistorySaveDataList`
+   diff to see if the entry's shape is recipe-specific.
+
+## (historical) Add-to-bag investigation — RESOLVED
 
 ### Symptom
 
@@ -502,6 +648,13 @@ user's backpack, 168 items, first element happens to be Gold Bar) →
 optionally select a same-shape donor row (Water, item 22008) →
 Browse Items → pick Beer (item 22007) → "+ Bag" → Save → load in
 game → **crash on save load**.
+
+**Status: RESOLVED.** The five-fix series (`b393b03..b0a015a`) plus
+PR B.6's `payload_offset` canonicalization produces saves the game
+loads cleanly. The beer appears in the player's backpack and
+behaves correctly. The investigation below is kept for historical
+context — `_transferredItemKey` formula, mask shape constraints,
+clone-template selection — but no action items remain.
 
 The editor's status footer reports the operation as successful; the
 on-disk save round-trips through our loader cleanly (HMAC ok, body

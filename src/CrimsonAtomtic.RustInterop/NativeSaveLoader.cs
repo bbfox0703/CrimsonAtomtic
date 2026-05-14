@@ -34,6 +34,15 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
     private string? _cachedPath;
     private CrimsonSaveHandle? _cachedHandle;
 
+    // BlockDetails cache keyed by blockIndex. Populated on demand from the
+    // fast path; cleared whenever the body could have changed (every
+    // mutation, plus Load handle swap and Dispose). For a save like
+    // QuestSaveData with 4341 mission elements, one fetch costs ~1-2 s
+    // (Rust JSON serialize + C# deserialize); subsequent re-clicks are
+    // O(1) until the next mutation invalidates the entry. WriteToFile is
+    // intentionally NOT a cache buster — it doesn't touch the body.
+    private readonly Dictionary<int, BlockDetails> _detailsCache = new();
+
     public SaveSummary Load(string savePath, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(savePath);
@@ -53,12 +62,16 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         }
 
         // Swap into cache: free the old handle, take ownership of the new one.
+        // The details cache is keyed by blockIndex against the previous handle,
+        // so it must be cleared too — even if the new path matches the old,
+        // the underlying bytes could have changed on disk between loads.
         CrimsonSaveHandle? previous;
         lock (_cacheLock)
         {
             previous = _cachedHandle;
             _cachedHandle = newHandle;
             _cachedPath = savePath;
+            _detailsCache.Clear();
         }
         previous?.Dispose();
 
@@ -71,22 +84,30 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Fast path: same save still loaded — reuse the cached handle.
-        // SafeHandle.AddRef'd implicitly when crossing the LibraryImport
-        // boundary, so a Dispose race can't yank the native handle out
-        // from under the FFI call.
+        // Fast path: same save still loaded — reuse the cached handle and
+        // the per-block details cache. SafeHandle.AddRef'd implicitly when
+        // crossing the LibraryImport boundary, so a Dispose race can't yank
+        // the native handle out from under the FFI call.
         lock (_cacheLock)
         {
             if (PathsMatch(_cachedPath, savePath)
                 && _cachedHandle is { IsInvalid: false } cached)
             {
-                return ReadBlockDetails(cached, (uint)blockIndex);
+                if (_detailsCache.TryGetValue(blockIndex, out var hit))
+                {
+                    return hit;
+                }
+                var details = ReadBlockDetails(cached, (uint)blockIndex);
+                _detailsCache[blockIndex] = details;
+                return details;
             }
         }
 
         // Slow path: the cache hasn't been primed for this save (e.g.
         // LoadBlockDetails called before Load, or with a different
-        // path). Open transiently and tear down at scope end.
+        // path). Open transiently and tear down at scope end. Transient
+        // reads aren't cached — they don't share state with the live
+        // handle and could go stale undetectably.
         using var handle = OpenHandle(savePath);
         return ReadBlockDetails(handle, (uint)blockIndex);
     }
@@ -99,10 +120,17 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
 
+        // Invalidate the per-block details cache up-front: Rust re-decodes
+        // every block after a successful mutation, so any cached BlockDetails
+        // would otherwise show stale field values. Clearing pre-FFI is fine
+        // because the Rust side is all-or-nothing on errors (the body is
+        // left untouched, so the cache could in theory survive; clearing
+        // anyway costs only one re-fetch on the rare error path).
         CrimsonSaveHandle? cached;
         lock (_cacheLock)
         {
             cached = _cachedHandle;
+            _detailsCache.Clear();
         }
         if (cached is null || cached.IsInvalid)
         {
@@ -147,6 +175,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         lock (_cacheLock)
         {
             cached = _cachedHandle;
+            _detailsCache.Clear();
         }
         if (cached is null || cached.IsInvalid)
         {
@@ -291,7 +320,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(elementIndex);
 
-        var cached = RequireLoaded(nameof(ListRemoveElement));
+        var cached = RequireLoaded(nameof(ListRemoveElement), invalidateDetailsCache: true);
         unsafe
         {
             fixed (PathStep* pPath = path)
@@ -325,7 +354,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(sourceIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(destinationIndex);
 
-        var cached = RequireLoaded(nameof(ListCloneElement));
+        var cached = RequireLoaded(nameof(ListCloneElement), invalidateDetailsCache: true);
         unsafe
         {
             fixed (PathStep* pPath = path)
@@ -358,7 +387,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
 
-        var cached = RequireLoaded(nameof(SetScalarFieldPresent));
+        var cached = RequireLoaded(nameof(SetScalarFieldPresent), invalidateDetailsCache: true);
         unsafe
         {
             fixed (PathStep* pPath = path)
@@ -435,7 +464,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(insertAt);
 
-        var cached = RequireLoaded(nameof(ListInsertElement));
+        var cached = RequireLoaded(nameof(ListInsertElement), invalidateDetailsCache: true);
         unsafe
         {
             fixed (PathStep* pPath = path)
@@ -461,12 +490,26 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         }
     }
 
-    private CrimsonSaveHandle RequireLoaded(string caller)
+    /// <summary>
+    /// Validate a save is loaded and return its cached handle, optionally
+    /// dropping the per-block details cache atomically with the handle
+    /// read. <paramref name="invalidateDetailsCache"/> should be
+    /// <c>true</c> for any caller about to perform a body mutation — the
+    /// Rust side re-decodes every block on success, so cached
+    /// <see cref="BlockDetails"/> would otherwise serve stale values. Use
+    /// <c>false</c> for read-only callers (<see cref="MakeEmptyElementBytes"/>
+    /// queries the schema template, never the body).
+    /// </summary>
+    private CrimsonSaveHandle RequireLoaded(string caller, bool invalidateDetailsCache = false)
     {
         CrimsonSaveHandle? cached;
         lock (_cacheLock)
         {
             cached = _cachedHandle;
+            if (invalidateDetailsCache)
+            {
+                _detailsCache.Clear();
+            }
         }
         if (cached is null || cached.IsInvalid)
         {
@@ -484,6 +527,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
             toDispose = _cachedHandle;
             _cachedHandle = null;
             _cachedPath = null;
+            _detailsCache.Clear();
         }
         toDispose?.Dispose();
     }

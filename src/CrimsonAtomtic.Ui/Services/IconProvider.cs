@@ -11,11 +11,13 @@ namespace CrimsonAtomtic.Ui.Services;
 ///
 /// <para>
 /// Pearl Abyss owns the icon artwork — we deliberately don't bundle
-/// them with CrimsonAtomtic itself. The user points at their own
-/// extracted folder via
-/// <c>AppSettings.IconCacheDirectory</c> (Tools menu → Set icon
-/// folder…) or drops the icons into a default <c>IconCache/</c>
-/// directory next to the exe.
+/// them with CrimsonAtomtic itself. The icons live in a fixed
+/// directory under <c>%LOCALAPPDATA%\CrimsonAtomtic\</c>
+/// (see <see cref="SubdirectoryName"/>), populated by
+/// Tools → Extract Icons from Game Data. No user-configurable path —
+/// %LOCALAPPDATA% is per-user, per-machine, and matches where
+/// SaveBackupService writes, so the editor's persistent data lives
+/// in one predictable place.
 /// </para>
 ///
 /// <para>
@@ -27,7 +29,15 @@ namespace CrimsonAtomtic.Ui.Services;
 /// </summary>
 public sealed class IconProvider
 {
-    private readonly string? _root;
+    /// <summary>
+    /// Subdirectory under <c>%LOCALAPPDATA%\CrimsonAtomtic\</c>
+    /// where extracted icons live. Mirrors <see cref="SaveBackupService.BackupsSubdirectory"/>
+    /// — both pieces of the editor's persistent data live as
+    /// sibling folders under one root.
+    /// </summary>
+    public const string SubdirectoryName = "IconCache";
+
+    private readonly string _root;
     private readonly Dictionary<uint, Bitmap?> _cache = new();
     private readonly object _gate = new();
     private int _hits;
@@ -35,17 +45,21 @@ public sealed class IconProvider
     private int _decodeFailures;
     private string? _lastError;
 
-    /// <summary>True when a usable icon directory was found at startup.</summary>
-    public bool IsAvailable => _root is not null;
+    /// <summary>
+    /// True once the root directory exists on disk. Failures during
+    /// the create attempt (rare — read-only filesystem, AV interference)
+    /// flip this to false and the provider degrades to "no icons
+    /// available" rather than crashing the UI.
+    /// </summary>
+    public bool IsAvailable { get; }
 
-    /// <summary>The active icon root, or <c>null</c> when no directory was found.</summary>
-    public string? Root => _root;
+    /// <summary>The active icon root (always set; created on first use).</summary>
+    public string Root => _root;
 
     /// <summary>
-    /// Count of <c>.webp</c> files in the configured root, measured
-    /// once at construction. <c>0</c> when no root is configured.
-    /// Drives the "Icons: N files" status indicator so the user can
-    /// tell at a glance whether the path actually contains anything.
+    /// Count of <c>.webp</c> files in the root, measured once at
+    /// construction. <c>0</c> when the directory is empty (e.g. fresh
+    /// install before Tools → Extract Icons has run).
     /// </summary>
     public int FileCount { get; }
 
@@ -66,34 +80,54 @@ public sealed class IconProvider
     /// </summary>
     public string? LastError => _lastError;
 
-    public IconProvider(string? configuredPath, string? exeDirectory)
+    /// <summary>
+    /// Resolve the canonical icon-cache directory for a given platform
+    /// paths instance — <c>&lt;LocalAppData&gt;\IconCache\</c>. Pure
+    /// path math; doesn't touch the filesystem.
+    /// </summary>
+    public static string ResolveRoot(string localAppDataDirectory) =>
+        Path.Combine(localAppDataDirectory, SubdirectoryName);
+
+    public IconProvider(string rootDirectory)
     {
-        // Probe order: explicit setting wins, then a sibling folder
-        // next to the exe (handy for "drop a copy here" workflows),
-        // then nothing. We deliberately don't probe %LOCALAPPDATA% —
-        // icons are big enough that the user should make an explicit
-        // choice about where they live.
-        string?[] candidates =
-        [
-            configuredPath,
-            exeDirectory is null ? null : Path.Combine(exeDirectory, "IconCache"),
-        ];
-        foreach (var candidate in candidates)
+        ArgumentNullException.ThrowIfNull(rootDirectory);
+        _root = rootDirectory;
+        if (string.IsNullOrWhiteSpace(rootDirectory))
         {
-            if (!string.IsNullOrWhiteSpace(candidate) && Directory.Exists(candidate))
-            {
-                _root = candidate;
-                try
-                {
-                    FileCount = Directory.EnumerateFiles(candidate, "*.webp",
-                                                          SearchOption.TopDirectoryOnly).Count();
-                }
-                catch (IOException) { /* leave 0 */ }
-                catch (UnauthorizedAccessException) { /* leave 0 */ }
-                return;
-            }
+            // Bootstrap stub — used before platform paths are known.
+            // App.axaml.cs replaces this via ConfigureIconProvider
+            // immediately after constructing LocalizationProvider.
+            IsAvailable = false;
+            return;
         }
-        _root = null;
+        // Eagerly create the dir so Tools → Extract Icons has a
+        // landing pad without a separate first-run codepath. Swallow
+        // failure modes that aren't actionable (no permission to
+        // write under LocalAppData) — the provider just reports zero
+        // files and IsAvailable=false.
+        try
+        {
+            Directory.CreateDirectory(_root);
+            IsAvailable = Directory.Exists(_root);
+        }
+        catch (IOException)
+        {
+            IsAvailable = false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            IsAvailable = false;
+        }
+        if (IsAvailable)
+        {
+            try
+            {
+                FileCount = Directory.EnumerateFiles(_root, "*.webp",
+                                                      SearchOption.TopDirectoryOnly).Count();
+            }
+            catch (IOException) { /* leave 0 */ }
+            catch (UnauthorizedAccessException) { /* leave 0 */ }
+        }
     }
 
     /// <summary>
@@ -104,7 +138,7 @@ public sealed class IconProvider
     /// </summary>
     public Bitmap? GetItemIcon(uint itemKey)
     {
-        if (_root is null)
+        if (!IsAvailable)
         {
             return null;
         }

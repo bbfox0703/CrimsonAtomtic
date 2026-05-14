@@ -157,11 +157,17 @@ public sealed class SaveBackupServiceTests : IDisposable
     }
 
     [Fact]
-    public void BackupBeforeWrite_FourthVersion_PrunesOldest()
+    public void BackupBeforeWrite_OverRetention_PrunesOldest()
     {
+        // Drives one extra backup past MaxVersionsPerSlot so the prune
+        // path fires deterministically regardless of the configured cap.
+        // Sources its loop bound from the service constant so future
+        // retention tweaks don't desync the test from the production
+        // behavior it claims to pin.
         var savePath = CreateSaveFile("u1", "slot0");
-        var entries = new List<BackupEntry>(4);
-        for (var i = 0; i < 4; i++)
+        var rounds = SaveBackupService.MaxVersionsPerSlot + 1;
+        var entries = new List<BackupEntry>(rounds);
+        for (var i = 0; i < rounds; i++)
         {
             // Mutate the file slightly so each backup is distinct on
             // disk. Sleep so the timestamp folders differ — the
@@ -173,15 +179,14 @@ public sealed class SaveBackupServiceTests : IDisposable
             entries.Add(outcome.Entry!);
         }
 
-        // After the 4th backup, only 3 should remain on disk + the
-        // pruned-count flag on the 4th call's outcome should be 1.
+        // After the (cap+1)-th backup, exactly MaxVersionsPerSlot should
+        // remain on disk; the very first entry is the one pruned.
         var listed = _service.ListBackups()
             .Where(b => b.UserId == "u1" && b.SlotName == "slot0")
             .ToList();
-        Assert.Equal(3, listed.Count);
-        // Newest 3 retained: entries[1], [2], [3]; oldest entries[0] gone.
+        Assert.Equal(SaveBackupService.MaxVersionsPerSlot, listed.Count);
         Assert.DoesNotContain(listed, b => b.BackupDirectory == entries[0].BackupDirectory);
-        Assert.Contains(listed, b => b.BackupDirectory == entries[3].BackupDirectory);
+        Assert.Contains(listed, b => b.BackupDirectory == entries[^1].BackupDirectory);
     }
 
     [Fact]

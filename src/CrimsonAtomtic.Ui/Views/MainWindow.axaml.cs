@@ -186,6 +186,7 @@ public sealed partial class MainWindow : Window
             prev.FieldScrollRequested -= ScrollFieldIntoView;
             prev.ElementScrollRequested -= ScrollElementIntoView;
             prev.ConfirmRequested = null;
+            prev.AlertRequested = null;
             _wiredVm = null;
         }
         if (DataContext is not MainWindowViewModel vm)
@@ -198,6 +199,7 @@ public sealed partial class MainWindow : Window
         // Lambda captures the Window directly so the VM never sees a
         // Window type — keeps the MVVM boundary intact.
         vm.ConfirmRequested = (title, msg) => ConfirmDialog.ShowAsync(this, title, msg);
+        vm.AlertRequested = (title, msg) => ConfirmDialog.ShowAlertAsync(this, title, msg);
         _wiredVm = vm;
         var menu = SecondaryLanguageMenu;
         // Clear any dynamic entries (everything past the static "English
@@ -431,51 +433,6 @@ public sealed partial class MainWindow : Window
         OnDataContextChanged(this, System.EventArgs.Empty);
     }
 
-    /// <summary>
-    /// Tools → Set Icon Folder. Opens a folder picker (starting at the
-    /// currently-configured icon path when one is set, so re-pointing
-    /// nearby folders doesn't require re-navigating from scratch);
-    /// persists the choice to settings.json on confirm; re-seeds the
-    /// IconProvider so the main window's element grid refreshes
-    /// without a restart. (Open Item Picker windows don't auto-refresh
-    /// — close + reopen to see the change.) Cancels are a no-op.
-    /// </summary>
-    private async void OnSetIconFolderClick(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is not MainWindowViewModel vm)
-        {
-            return;
-        }
-
-        // Start the picker at the existing icon folder (if any) so a
-        // re-point lands in the right neighbourhood. Falls back to
-        // whatever Avalonia chooses when no path is set / the saved
-        // path no longer exists.
-        IStorageFolder? startLocation = null;
-        var currentRoot = vm.Localization.Icons.Root;
-        if (!string.IsNullOrEmpty(currentRoot) && Directory.Exists(currentRoot))
-        {
-            startLocation = await StorageProvider.TryGetFolderFromPathAsync(currentRoot);
-        }
-
-        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = "Pick item-icon folder (contains <ItemKey>.webp files)",
-            AllowMultiple = false,
-            SuggestedStartLocation = startLocation,
-        });
-        if (folders.Count == 0)
-        {
-            return;
-        }
-        var path = folders[0].TryGetLocalPath();
-        if (string.IsNullOrEmpty(path))
-        {
-            return;
-        }
-        vm.SetIconCacheDirectory(path);
-    }
-
     private void OnBrowseLocalizationClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel vm)
@@ -562,14 +519,14 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// Tools → Extract Icons from Game Data. Drives
     /// <see cref="IconExtractionProgressDialog"/> against the loaded
-    /// LocalizationProvider, then — if anything was written — re-seeds
-    /// the IconProvider at the same path so the new icons show up in
-    /// the elements grid + Item Picker on the next render pass.
+    /// LocalizationProvider, writing into the fixed
+    /// <c>%LOCALAPPDATA%\CrimsonAtomtic\IconCache\</c> directory.
+    /// Re-seeds the IconProvider on success so the new icons appear
+    /// in already-rendered DataGrids without a restart.
     ///
     /// Degrades silently when stringinfo isn't loaded (no game install
-    /// found at bootstrap), or when no icon-cache target can be
-    /// resolved. The status footer is the user-facing signal for
-    /// those cases.
+    /// found at bootstrap). The status footer is the user-facing
+    /// signal for that case.
     /// </summary>
     private async void OnExtractIconsClick(object? sender, RoutedEventArgs e)
     {
@@ -584,14 +541,10 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        // Target directory probe order matches IconProvider's: configured
-        // path (Tools → Set Icon Folder) wins, else fall back to
-        // <exe-dir>/IconCache. Either way we ensure the directory
-        // exists before the extractor opens it.
-        var configured = loc.Icons.Root;
-        var cacheDir = !string.IsNullOrEmpty(configured)
-            ? configured
-            : Path.Combine(AppContext.BaseDirectory, "IconCache");
+        // Always target the canonical IconCache root under LocalAppData.
+        // IconProvider creates the directory on construction, so the
+        // path is guaranteed to exist at this point.
+        var cacheDir = loc.Icons.Root;
 
         var result = await IconExtractionProgressDialog.RunAsync(
             owner: this,
@@ -602,13 +555,11 @@ public sealed partial class MainWindow : Window
             overwriteExisting: false);
 
         // Re-seed the icon provider so newly-written .webp files
-        // appear immediately in already-rendered DataGrids. Same code
-        // path as the user picking the folder manually via Tools →
-        // Set Icon Folder, so all the same cache-invalidation work
-        // (drop the per-key Bitmap dict, repaint visible rows) fires.
+        // appear immediately in already-rendered DataGrids — drops
+        // the per-key Bitmap dict, refreshes FileCount, repaints.
         if (result is not null && result.Written > 0)
         {
-            vm.SetIconCacheDirectory(cacheDir);
+            vm.RefreshIconCache();
         }
     }
 

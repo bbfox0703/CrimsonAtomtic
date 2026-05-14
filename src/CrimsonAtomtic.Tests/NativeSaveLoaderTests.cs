@@ -225,6 +225,114 @@ public sealed class NativeSaveLoaderTests
     }
 
     [Fact]
+    public void LoadBlockDetails_RepeatedFastPath_ReturnsSameInstance()
+    {
+        // The fast path memoizes BlockDetails per blockIndex so a re-click
+        // on the same block in the UI is O(1). Reference identity proves
+        // the cache served the second call — value equality alone wouldn't
+        // distinguish "served from cache" vs "re-fetched and re-parsed".
+        var path = FindLiveSave();
+        if (path is null)
+        {
+            return;
+        }
+
+        using var loader = new NativeSaveLoader();
+        loader.Load(path);
+
+        var first = loader.LoadBlockDetails(path, 0);
+        var second = loader.LoadBlockDetails(path, 0);
+        Assert.Same(first, second);
+    }
+
+    [Fact]
+    public void LoadBlockDetails_AfterMutation_RefetchesFreshInstance()
+    {
+        // Cache invalidation contract: any successful mutation must drop
+        // stale BlockDetails so the next read picks up the new bytes. We
+        // assert (a) the post-mutation read isn't the cached pre-mutation
+        // instance, and (b) the new instance carries the mutated value
+        // (so we didn't accidentally serve a different stale entry).
+        // Mutations only affect in-memory state — the live save on disk
+        // is untouched unless WriteToFile is called.
+        var path = FindLiveSave();
+        if (path is null)
+        {
+            return;
+        }
+
+        using var loader = new NativeSaveLoader();
+        loader.Load(path);
+
+        var before = loader.LoadBlockDetails(path, 0);
+        Assert.Equal("fixed_suffix", before.Fields[0].Kind);
+
+        ReadOnlySpan<byte> sentinel = [0xAB, 0xCD, 0xEF, 0x01];
+        loader.SetScalarField(0, 0, sentinel);
+
+        var after = loader.LoadBlockDetails(path, 0);
+        Assert.NotSame(before, after);
+        Assert.Equal("32492971 <u32>", after.Fields[0].Value);
+    }
+
+    [Fact]
+    public void LoadBlockDetails_AfterLoadSwap_ClearsCache()
+    {
+        // Reloading the same path counts as a swap — the bytes on disk
+        // could have changed between loads (Steam Cloud sync, in-game
+        // save, etc.), so the per-block cache must not carry across.
+        var path = FindLiveSave();
+        if (path is null)
+        {
+            return;
+        }
+
+        using var loader = new NativeSaveLoader();
+        loader.Load(path);
+        var beforeReload = loader.LoadBlockDetails(path, 0);
+
+        loader.Load(path);
+        var afterReload = loader.LoadBlockDetails(path, 0);
+
+        Assert.NotSame(beforeReload, afterReload);
+    }
+
+    [Fact]
+    public void LoadBlockDetails_AcrossWriteToFile_PreservesCache()
+    {
+        // WriteToFile only serializes the in-memory body; it doesn't
+        // mutate any block. The details cache must survive the call so
+        // saving doesn't make the next nav click pay full-fetch cost
+        // for no good reason.
+        var path = FindLiveSave();
+        if (path is null)
+        {
+            return;
+        }
+
+        using var loader = new NativeSaveLoader();
+        loader.Load(path);
+
+        var before = loader.LoadBlockDetails(path, 0);
+
+        var tempPath = Path.Combine(Path.GetTempPath(),
+            $"crimsonatomtic_cachetest_{Guid.NewGuid():N}.save");
+        try
+        {
+            loader.WriteToFile(tempPath);
+            var after = loader.LoadBlockDetails(path, 0);
+            Assert.Same(before, after);
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+        }
+    }
+
+    [Fact]
     public void SetScalarField_LiveSave_RoundTripsThroughWriteToFile()
     {
         // End-to-end: load → mutate block 0 field 0 → write to a temp

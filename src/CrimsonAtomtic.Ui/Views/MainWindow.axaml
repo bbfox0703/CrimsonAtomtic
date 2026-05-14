@@ -67,8 +67,6 @@
         <MenuItem Header="{StaticResource MenuBrowseLocalization}"
                   Click="OnBrowseLocalizationClick" />
         <Separator />
-        <MenuItem Header="{StaticResource MenuSetIconFolder}"
-                  Click="OnSetIconFolderClick" />
         <MenuItem Header="{StaticResource MenuExtractIcons}"
                   Click="OnExtractIconsClick" />
         <Separator />
@@ -433,6 +431,17 @@
                        Text="{Binding SelectedField.RawText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                        KeyDown="OnEditValueKeyDown"
                        PlaceholderText="{Binding SelectedFieldTypeHint}" />
+              <!-- Make absent: flips a present scalar to absent. Hidden
+                   for already-absent rows (Apply handles the reverse).
+                   Placed before Set-to-max so it sits visually adjacent
+                   to the textbox — the destructive action that loses
+                   the typed value. -->
+              <Button Grid.Row="1" Grid.Column="2"
+                      Content="{StaticResource EditPanelMakeAbsent}"
+                      ToolTip.Tip="{StaticResource EditPanelMakeAbsentTip}"
+                      Command="{Binding MakeFieldAbsentCommand}"
+                      CommandParameter="{Binding SelectedField}"
+                      IsVisible="{Binding SelectedField.Present, FallbackValue=False}" />
               <!-- Set-to-max: pre-fills RawText with the item's
                    max_stack_count. CanExecute keeps the button
                    disabled when there's no peer ItemKey or no

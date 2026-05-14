@@ -54,16 +54,19 @@ public sealed class App : Application
                 localization.SecondaryLanguage = settings.SecondaryLanguage;
             }
 
-            // Icon cache wiring. Configured path (settings.json) wins;
-            // falls back to <exe-dir>/IconCache/. Pearl Abyss owns the
-            // artwork — we don't bundle them, the user points at their
-            // own extracted folder.
-            var exeDir = System.IO.Path.GetDirectoryName(
-                System.AppContext.BaseDirectory.TrimEnd(System.IO.Path.DirectorySeparatorChar));
-            localization.ConfigureIconProvider(settings.IconCacheDirectory, exeDir);
+            // Icon cache wiring. Fixed location under
+            // %LOCALAPPDATA%\CrimsonAtomtic\IconCache\ — matches where
+            // the save-backup tree lives, so all of the editor's
+            // per-user data sits under one root. Pearl Abyss owns the
+            // artwork, so we don't bundle them; Tools → Extract Icons
+            // populates this directory from the user's game install.
+            localization.ConfigureIconProvider(
+                CrimsonAtomtic.Ui.Services.IconProvider.ResolveRoot(paths.LocalAppDataDirectory));
             // Wire the static converter singleton so XAML icon-column
-            // bindings can resolve immediately. Updated whenever the
-            // user re-points the icon path through Tools menu.
+            // bindings can resolve immediately. Re-pointed whenever
+            // Tools → Extract Icons completes (the provider is rebuilt
+            // so its FileCount snapshot reflects the freshly-written
+            // .webp files).
             CrimsonAtomtic.Ui.Services.ItemKeyToIconConverter.Provider = localization.Icons;
 
             // Backup service: pure file-system orchestrator, no native deps.
