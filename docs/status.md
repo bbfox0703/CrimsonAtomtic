@@ -3,87 +3,87 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-14.
+> Last updated: 2026-05-14 (PR B + Add-to-bag investigation).
 >
-> **🆕 All 9 save-editor key resolvers shipped (vendor dev = `cea8300`).**
-> Two upstream sessions delivered the full set of `crimson_<table>_*` C
-> ABI bridges this week:
+> ## 🛑 ACTIVE BLOCKER — Add-to-bag still crashes the game on load
 >
-> 1. Six initial bridges: `mission_info`, `quest_info`, `stage_info`,
->    `knowledge_info`, `quest_gauge_info`, `skill_info` + the
->    `crimson_calculate_checksum` helper.
-> 2. Two follow-up bridges + Issue #1/#2 fixes: `gimmick_info` (hash
->    hop at `lo32=0x200`) and `sub_level_info` (Pattern A only). The
->    `gimmick_info` bridge is co-resident with the legacy PALOC-byte-
->    0x00 path on the editor side — `ResolveByFieldTypeName` consults
->    the table-driven bridge first and falls back to the byte map
->    when the bridge doesn't cover the value.
+> Five C# fixes landed this session trying to make "+ Bag" produce a
+> save the game will load. **All five compile + test green, but the
+> game still crashes**. The encoder + interop layer is correct (119/119
+> tests, byte-perfect idempotent round-trip); the issue is in the
+> **per-item field-population recipe** — there's still some field /
+> hash / pointer we're not setting that the engine cross-checks on
+> load. Full debrief: [Add-to-bag investigation](#add-to-bag-investigation-active-blocker)
+> later in this doc.
 >
-> **Issue #1 (mojibake) — fully resolved.** Upstream tightened the
-> anchor-scan parsers (strict `std::str::from_utf8` + `name.contains('_')`
-> + first-wins dedup). Probe survey after refresh: **0 of 4,059
-> missioninfo / 49,508 stageinfo / 6,046 knowledgeinfo entries** carry
-> U+FFFD bytes (was 791/4,939 + 39/48,019 + 0/5,483).
+> **Next session's first task**: empirical bisection between a known-
+> good slot101 (engine wrote a beer via in-game purchase) and our
+> editor's output. Either dump-and-diff every byte of `_itemList[123]`
+> in both saves, OR re-RE the engine's per-item init code path in
+> CrimsonForge / the legacy editor.
 >
-> **Issue #2 (coverage gap) — exceeded projection.** Upstream widened
-> the hi-byte cap from `==0` to `<0x80`, picking up the
-> `Shop_*` (0x41) / `HerStore_*` (0x05) / `Knowledge_Recipe_*` (0x7F)
-> categories that had been wrongly rejected. Save-side coverage moved:
+> ## ✅ PR B — Length-changing edits — fully shipped (Rust + C#)
 >
-> | Bridge | Before | After |
-> |---|---:|---:|
-> | StageKey  | 97.3% | **99.7%** (156 unresolved, all hi=0x00 procedurals) |
-> | KnowledgeKey | 87.7% | **100.0%** (beat the predicted ~hi=0x7F slice) |
-> | MissionKey | 70.1% | 70.1% (1,299 unresolveds are 0xFF save-internal sentinels — no game-data fix possible, editor's empty-Name handling is correct) |
+> Vendor pin: `vendor/crimson-rs` at `ab815e6`. Eight upstream PRs and
+> two C# feature commits delivered an end-to-end pipeline that can
+> grow / shrink / re-shape decoded `ObjectBlock`s and re-emit the body:
 >
-> **IGN match rate (Phase A challenge catalog)**: 76.6% → **90.8%** as
-> a knock-on benefit — the ~20 Mastery missing-tier challenges
-> (Sword 2/6, Bow 1/4/5, Spear 2, Cannon 3, etc.) that vanished into
-> the mojibake fallout came back cleanly. Residual 13 unmatched are
-> all Combat/Life challenges that live in a different game-data file
-> (not in `missioninfo.pabgb` under any prefix).
+> | Phase | Upstream PR | Commit | Scope |
+> |---|---|---|---|
+> | B.1 | [#29](https://github.com/bbfox0703/crimson-rs/pull/29) | `43242f0` | `ObjectBlock` re-serializer + body re-emit + round-trip golden tests |
+> | B.2 | [#30](https://github.com/bbfox0703/crimson-rs/pull/30) | `1ba3051` | `list_remove_element` + `list_clone_element` + `set_scalar_field_present` C ABI |
+> | B.3 | [#31](https://github.com/bbfox0703/crimson-rs/pull/31) | `f6dac92` | `make_empty_element_bytes` + `list_insert_element` (schema-aware) |
+> | B.6 | [#32](https://github.com/bbfox0703/crimson-rs/pull/32) | `ab815e6` | `payload_offset` canonicalization — the encoder rewrites every locator wrapper's `payload_offset` u32 to wrapper_end_body_offset, since the engine writes stale values that go dangling after a clone-insert |
 >
-> Bedrock verified end-to-end: `MissionKey 1000083 → "Where the Wind
-> Guides You"`, `KnowledgeKey 1002588 → "Demenissian Ruins"`,
-> `StageKey 1100170020 → "Shop_Hernand_General"` (new this refresh).
+> | Phase | CrimsonAtomtic commit | Scope |
+> |---|---|---|
+> | B.4 | `5eb94cc` | C# interop layer (5 new `ISaveLoader` methods, 9 new tests); "Remove" button on elements DataGrid; "+ Bag" on Item Picker (cross-window event pipe) |
+> | B.5 | `dc52904` | `SaveBackupService` + RestoreFromBackup dialog. Auto-snapshot before every Save / Save As to `%LOCALAPPDATA%\CrimsonAtomtic\Backups\<userId>\<slot>\<timestamp>\` (save.save + lobby.save together). 3-version rolling retention. File → Restore from Backup… picker (15 new unit tests on the service) |
+> | B.4.fixup | `b393b03..b0a015a` (5 commits) | Per-field Add-to-bag refinements; see [investigation](#add-to-bag-investigation-active-blocker) |
 >
-> **Health**: 95/95 C# tests (was 93; +2 in `KeyInfoCatalogsTests` for
-> gimmick_info + sub_level_info), AOT publish 24.1 MB exe + 1.4 MB
-> Rust DLL (was 1.3 MB), trim-clean. `_proto_probe_keyinfo.py` deleted
-> — both issues closed.
+> ## Health
 >
-> **Icon-extraction pipeline is complete (Phases 1–3).** Tools →
-> Extract Icons from Game Data… walks every item, resolves each
-> `icon_path` hash through stringinfo, PAZ-extracts the DDS from
-> `0012/ui/texture/icon/`, decodes BC1/BC3 + resizes + WebP-encodes,
-> and writes `<cache>/<ItemKey>.webp`. One run ≈ 3 min, ~6,200 icons,
-> ~5 MB on disk. Built on crimson-rs PRs #24 (stringinfo bridge),
-> #25 (partial-PAZ unblock), #26 (icon_path_hash getter).
+> - **119 / 119 C# tests pass** (was 95; +9 for the new interop entry
+>   points in B.4.1, +15 for `SaveBackupServiceTests` in B.5).
+> - **69 lib / 146 c_abi Rust tests pass.** Clippy clean both modes.
+> - AOT publish clean: 24.3 MB exe + 1.4 MB `crimson_rs.dll`.
 >
-> **UI polish landed**: collapsible Save Summary panel (« / » toggle
-> in the header), Tools → Font Size submenu (10–20 pt presets,
-> persisted + clamped), DataGrid cells + status footer follow the
-> font-size pick. Quiet `SetSecondaryLanguage` settings-clobber bug
-> fixed at the same time (`new AppSettings { … }` → `existing with { … }`).
+> ## Round-trip invariants — updated (don't relearn these)
 >
-> **Batch scalar mutation landed** (crimson-rs
-> [PR #27](https://github.com/bbfox0703/crimson-rs/pull/27) +
-> C# end). One FFI round trip applies N scalar mutations sharing a
-> single post-batch re-decode — the "Fill stacks" 168-op path now
-> pays O(N + block_count) instead of O(N · block_count) (~1 s in
-> place of ~5 s on the 1112-block save). All-or-nothing semantics
-> on validation failure; `CrimsonSaveException.FailedOpIndex`
-> pinpoints the offending op. Public surface:
-> `ISaveLoader.SetScalarFieldsBatch(IReadOnlyList<ScalarBatchOp>)`.
+> The encoder canonicalizes `payload_offset` in every locator wrapper
+> (B.6). This **intentionally breaks byte-identity** against the raw
+> engine bytes, because the engine writes a few items' `payload_offset`
+> with non-canonical values (decoder always fell back to wrapper_end —
+> see `body/decoder.rs`'s comment near
+> `decode_inline_object_locator`).
 >
-> **Next session targets**: pick from the lower-priority deferred list
-> below — none of them are blocked. `skill_info` C ABI bridge (#4) and
-> the `MissionKey`/`QuestKey` name resolution (#6) are now the most
-> user-visible follow-ons — both have concrete recipes in
-> [`docs/crimsonforge-coverage-gaps.md`](crimsonforge-coverage-gaps.md).
-> PAR-container partial compression for `.pam`/`.pamlod`/`.pac` meshes
-> in 0009/0015 stays out of scope until mesh extraction is on the
-> roadmap.
+> Updated invariants:
+> - `test_save_body_block_roundtrip_per_block` now only asserts
+>   `encoded.len() == raw.len()`. Per-block byte identity isn't a
+>   property we need.
+> - `test_save_body_full_roundtrip` now asserts **idempotence**:
+>   `Body::write(canonical, parse(canonical)) == canonical`. The first
+>   write may differ from the raw save (canonicalization); subsequent
+>   writes are stable.
+> - C# `ListCloneElement_ThenRemove_RoundTripsThroughLoad` still passes
+>   because both the pre- and post-mutation files go through the same
+>   canonicalizing encoder.
+>
+> ## Previous milestones (kept for reference, no action needed)
+>
+> All 9 save-editor key resolver bridges (mission/quest/stage/knowledge
+> /quest_gauge/skill + checksum, plus gimmick + sub_level) shipped in
+> earlier sessions (`cea8300` and before). Coverage: StageKey 99.7%,
+> KnowledgeKey 100%, MissionKey 70.1% (residual 1,299 are 0xFF
+> save-internal sentinels). Issues #1 (mojibake) and #2 (coverage
+> gap) closed upstream. IGN challenge match rate 76.6% → 90.8%.
+>
+> Icon-extraction pipeline complete (Phases 1–3); Tools → Extract
+> Icons from Game Data… works against a live 1.06 install.
+>
+> Batch scalar mutation (`SetScalarFieldsBatch`) lands per-FFI-call
+> performance for "Fill stacks" UX. UI polish — collapsible save
+> summary, font-size submenu, AppSettings preservation across edits.
 
 ## Where we are
 
@@ -492,6 +492,153 @@ next tasks live in the deferred-items list (#2, #4–#14)**; pick
 whichever matches your appetite. `skill_info` bridge (#4) and
 `Mission/Quest` name resolution (#6) are now the most
 user-visible follow-ons.
+
+## Add-to-bag investigation (ACTIVE BLOCKER)
+
+### Symptom
+
+Workflow: load slot100 → enter `_inventorylist[1]._itemList` (the
+user's backpack, 168 items, first element happens to be Gold Bar) →
+optionally select a same-shape donor row (Water, item 22008) →
+Browse Items → pick Beer (item 22007) → "+ Bag" → Save → load in
+game → **crash on save load**.
+
+The editor's status footer reports the operation as successful; the
+on-disk save round-trips through our loader cleanly (HMAC ok, body
+re-parses); only the game engine rejects it.
+
+### What we already verified
+
+- **HMAC + LZ4 + ChaCha20** are correct — saves we DON'T modify
+  re-write byte-perfect and the game loads them. The crypto layer is
+  fine.
+- **Encoder is structurally correct** — round-trip + idempotence
+  tests pass on every live save (slot0/1/2/100..105).
+- **Per-element byte length** of the cloned beer matches the
+  donor's; no list-count desync, no TOC offset drift.
+- **`_transferredItemKey` encoding cracked** (this session):
+  `_transferredItemKey = ((itemKey & 0xFFFF) << 16) | 0x0101` for
+  every observed item across the user's full save. Verified on
+  beer (22007 → 0x55F70101), Investigative Report
+  (1000677 → 0x44E50101), and several others. Universal — works
+  for itemKey ≤ 0xFFFF AND > 0xFFFF.
+- **`payload_offset` canonicalization** (this session, upstream
+  #32) — encoder now writes each locator wrapper's `payload_offset`
+  u32 as the absolute body offset of wrapper_end, not the
+  potentially-stale stored value. This was the most likely culprit
+  per the legacy `parc_inserter3.py` reference, but **the fix
+  alone didn't unblock the crash**.
+
+### Five fixes attempted this session (all green, none unblocking)
+
+| Commit | Fix | Test result | Game test |
+|---|---|---|---|
+| `b393b03` | Patch 4 fields on clone (`_itemKey`, `_stackCount`, `_slotNo`, `_itemNo`) instead of 1 | 119/119 ok | crash |
+| `4a18a3a` | Honour `SelectedElement` as clone template — user can pick Water (consumable) instead of always cloning `[0]` (Gold Bar / currency) | 119/119 ok | crash |
+| `52e2161` | Add `_transferredItemKey` patch (delta-shift) + `_isNewMark = true` | 119/119 ok | crash |
+| `b0a015a` | Simplify `_transferredItemKey` to canonical `((itemKey & 0xFFFF) << 16) \| 0x0101` after user spotted my hex arithmetic error | 119/119 ok | crash |
+| `ab815e6` (upstream) | Encoder rewrites every `payload_offset` to canonical wrapper_end | 119/119 ok | crash |
+
+### Reference data
+
+Empirical RE from slot100 → slot101 (engine wrote beer naturally
+via in-game purchase). Documented in
+`out/diff-slot100-101/`:
+
+- slot100[123] = some item, displaced to slot101[124] after the
+  insert (the engine inserts at array index 123, shifts the rest
+  down by 1).
+- slot101[123] = NEW BEER, fields:
+  - `_saveVersion = 1`
+  - `_itemNo = 3489`
+  - `_itemKey = 22007 (0x55F7)`
+  - `_slotNo = 123`
+  - `_stackCount = 3` (player bought 3)
+  - `_endurance = 65535` (max — present on every item observed)
+  - `_maxSocketCount = 5`
+  - `_socketSaveDataList` = 5 empty `ItemSocketSaveData` elements
+  - `_transferredItemKey = 0x55F70101` (matches our formula)
+  - `_chargedUseableCount = 0x0000_0001_DC37_0000` (looks
+    timestamp-encoded — see below)
+  - `_coolTimePerCharge = 0x0000_0001_DC37_0000` (same value!)
+  - `_timeWhenPushItem = 116571626995711` (clearly a timestamp;
+    looks like .NET Ticks or PA's analog)
+  - `_isNewMark = true`
+- **Element mask drift**: cloning shifts the mask shape:
+  - Gold Bar `_itemList[0]` mask: `9f 28 2d 00` (has
+    `_maxChargeUseableCount`, no `_coolTimePerCharge`, no
+    `_isNewMark`)
+  - Beer mask: `9f 28 b9 00` (no `_maxChargeUseableCount`, has
+    `_coolTimePerCharge` + `_isNewMark`)
+  - Water (22008) mask = beer's mask (same item-type, both are
+    consumable drinks).
+
+### Most likely remaining culprits (in priority order)
+
+1. **`_chargedUseableCount` / `_coolTimePerCharge` / `_timeWhenPushItem`
+   are stale.** Cloning Water keeps Water's encoded values
+   verbatim. These look like per-instance timestamp-packed values
+   the engine generates fresh per item; if the engine validates
+   them against `_itemNo` / current time / each other on load,
+   our reused values fail validation.
+   *Recipe to test next session*: after clone, also patch these to
+   either 0 or `DateTime.UtcNow.Ticks` (best-effort). The engine
+   may also accept "all zero" as "freshly spawned, never used".
+
+2. **`_socketSaveDataList` sub-elements have stale
+   `_transferredItemKey` (or other) values.** Cloning Water →
+   Beer keeps Water's `_socketSaveDataList` elements, including
+   their wrapper payload_offsets (fixed by B.6 encoder) AND any
+   sub-element scalars (NOT fixed). If `ItemSocketSaveData` has
+   a `_transferredItemKey`-like field tied to the parent item,
+   it'd be stale.
+   *Recipe*: dump the beer element's complete byte breakdown
+   side-by-side with the engine's slot101 beer; find any
+   non-matching sub-element value.
+
+3. **Hash / checksum we haven't found yet.** The reference repos
+   don't have one over the decompressed body — but PaChecksum
+   (Pearl Abyss's Jenkins lookup3 variant, in CrimsonForge
+   `core/checksum_engine.py`) is used for PAZ/PAMT/PAPGT
+   archives. The save engine MIGHT compute it per-item or
+   per-block on load and crash on mismatch. None of our tooling
+   detects it; needs `plcli` + hexpat probing.
+
+4. **`item_use_info_list` cross-reference**: in iteminfo,
+   beer's `item_use_info_list` is a list of MissionInfoKey hashes
+   that point at the in-game "drinking beer" interaction tree. If
+   the save references one of these per-instance somewhere we're
+   missing, mismatch → crash.
+
+### Files / scripts that help
+
+- `out/diff-slot100-101/` — already has decompressed bodies and
+  the field-by-field diff dump.
+- `D:\Github\crimson-rs\out\items.jsonl` — every iteminfo entry
+  for 1.06; useful for "what should THIS field look like for
+  beer vs Water" comparisons.
+- `D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS\CrimsonGameMods\parc_inserter3.py`
+  — the legacy reference's full insert recipe. We've cribbed 6
+  of its 7 fixup passes; the gap is either in the per-item field
+  patches it does (lines 202–259 build_item_from_template) or in
+  a structural fixup we haven't translated.
+- `D:\Github\crimsonforge\core\checksum_engine.py` — PaChecksum
+  implementation, kept in case the save engine uses it
+  somewhere we haven't found.
+- `tools/analyze/dump_save_fields.py` — flattens a save to
+  one-row-per-field JSONL. Useful for cross-saving diff queries.
+
+### What NOT to retry
+
+- **Encoder fixes** — done correctly. Round-trip is byte-perfect
+  modulo intentional canonicalization. Don't touch.
+- **`_transferredItemKey` formula** — verified universal on every
+  observed item. Don't tweak.
+- **Mask shape concerns** — cloning a same-class donor (Water →
+  Beer, both `_itemList` consumables) gives the right mask.
+  Don't add mask-derivation logic.
+- **Cloning from item `[0]` indiscriminately** — fixed in
+  `4a18a3a`; the picker now respects `SelectedElement`.
 
 ### #1 — Icon extraction pipeline (DONE — kept as reference)
 
