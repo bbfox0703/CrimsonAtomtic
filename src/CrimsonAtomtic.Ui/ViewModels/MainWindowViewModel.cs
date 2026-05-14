@@ -16,8 +16,16 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 public sealed partial class MainWindowViewModel(
     ISaveLoader loader,
     IPlatformPaths paths,
-    LocalizationProvider localization) : ObservableObject
+    LocalizationProvider localization,
+    SaveBackupService backupService) : ObservableObject
 {
+    /// <summary>
+    /// Backup service exposed for the Restore dialog (read-only — it
+    /// enumerates the on-disk backup tree). The VM owns the write side
+    /// via <see cref="BackupBeforeWriteSilent"/>.
+    /// </summary>
+    public SaveBackupService BackupService => backupService;
+
     /// <summary>
     /// Localization service exposed for child view-models (e.g. the
     /// browse-localization dialog opened from the Tools menu).
@@ -1595,6 +1603,11 @@ public sealed partial class MainWindowViewModel(
         {
             return;
         }
+        // PR B addendum: snapshot the on-disk state into the backup
+        // tree before overwriting it. Backup failure (read-only folder,
+        // disk full) reports via BulkOpStatus but doesn't abort the
+        // Save itself — a missing backup is better than a missing Save.
+        BackupBeforeWriteSilent(_loadedPath);
         loader.WriteToFile(_loadedPath);
         PreserveOriginalTimestamp(_loadedPath);
         IsDirty = false;
@@ -1616,6 +1629,10 @@ public sealed partial class MainWindowViewModel(
         {
             return;
         }
+        // Same backup-before-overwrite policy as Save: snapshot the
+        // destination's current state if it exists. Save As to a brand-
+        // new path is a no-op (Skipped_NoSource).
+        BackupBeforeWriteSilent(destinationPath);
         loader.WriteToFile(destinationPath);
         // Stamp the destination with the original save's mtime BEFORE
         // re-loading. SaveAs re-anchors `_loadedFileLastWriteTime` to
@@ -1634,6 +1651,101 @@ public sealed partial class MainWindowViewModel(
         ClearNavigation();
         SaveCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(WindowTitle));
+    }
+
+    /// <summary>
+    /// Snapshot <paramref name="targetPath"/>'s on-disk state into the
+    /// backup tree and surface the result via <see cref="BulkOpStatus"/>.
+    /// Never throws — backup failures are logged for the user but the
+    /// caller's Save / Save As proceeds either way.
+    /// </summary>
+    private void BackupBeforeWriteSilent(string targetPath)
+    {
+        var outcome = backupService.BackupBeforeWrite(targetPath);
+        if (outcome.IsSuccess && outcome.Entry is { } entry)
+        {
+            BulkOpStatus = outcome.VersionsPruned > 0
+                ? $"Backup: {entry.SlotName} @ {SaveBackupService.FormatTimestamp(entry.Timestamp)} ({entry.TotalBytes:N0} B, pruned {outcome.VersionsPruned})."
+                : $"Backup: {entry.SlotName} @ {SaveBackupService.FormatTimestamp(entry.Timestamp)} ({entry.TotalBytes:N0} B).";
+        }
+        else if (outcome.Kind == BackupOutcomeKind.Failed)
+        {
+            // Show the failure prominently so the user knows the safety
+            // net's down; their Save still works.
+            BulkOpStatus = $"⚠ Backup failed (save still wrote): {outcome.Message}";
+        }
+        // Skipped (no source / bad path) is silent — common for first
+        // Save As to a fresh path, or for paths outside the canonical
+        // <userId>/<slotName>/save.save layout.
+    }
+
+    /// <summary>
+    /// Restore a backup snapshot back to the user's live save folder.
+    /// Snapshots the current state first (so undo is itself undoable),
+    /// copies the backup files, then re-loads the restored save so the
+    /// UI reflects the new state.
+    ///
+    /// <para>
+    /// The View opens a picker dialog that resolves the user's choice
+    /// to a <see cref="BackupEntry"/> and invokes this. CanExecute
+    /// gates on <see cref="ConfirmRequested"/> being wired (we always
+    /// require explicit confirmation for a restore — it overwrites
+    /// the on-disk save).
+    /// </para>
+    /// </summary>
+    public async Task RestoreFromBackupAsync(BackupEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (ConfirmRequested is not { } ask)
+        {
+            BulkOpStatus = "Restore needs a confirm dialog hook — UI bug, file an issue.";
+            return;
+        }
+
+        var gameSaveRoot = paths.GameSaveRoot;
+        var targetSlotDir = Path.Combine(gameSaveRoot, entry.UserId, entry.SlotName);
+        var targetSavePath = Path.Combine(targetSlotDir, "save.save");
+
+        var msg = $"Restore {entry.SlotName} from backup taken at "
+                  + $"{SaveBackupService.FormatTimestamp(entry.Timestamp)}?\n\n"
+                  + $"Files: {string.Join(", ", entry.FileNames)} ({entry.TotalBytes:N0} bytes)\n"
+                  + $"Target: {targetSlotDir}\n\n"
+                  + "The current contents of the slot folder will be backed up first.";
+        var ok = await ask("Restore from backup?", msg);
+        if (!ok)
+        {
+            BulkOpStatus = "Restore cancelled.";
+            return;
+        }
+
+        // Snapshot the about-to-be-overwritten state. If the slot folder
+        // doesn't exist (rare — restoring into an empty user dir), the
+        // pre-restore backup is just a no-op.
+        BackupBeforeWriteSilent(targetSavePath);
+
+        try
+        {
+            await Task.Run(() => SaveBackupService.Restore(entry, gameSaveRoot));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            BulkOpStatus = $"Restore failed: {ex.Message}";
+            return;
+        }
+
+        // Reload the freshly-restored save so the UI shows it. If the
+        // user already had a save open from the same path, this re-anchors
+        // the cached handle to the new bytes.
+        try
+        {
+            LoadSave(targetSavePath);
+            BulkOpStatus = $"Restored {entry.SlotName} from "
+                           + $"{SaveBackupService.FormatTimestamp(entry.Timestamp)}.";
+        }
+        catch (CrimsonSaveException ex)
+        {
+            BulkOpStatus = $"Restored, but reload failed: {ex.Message}";
+        }
     }
 
     private void PushFrame(NavFrame frame)

@@ -111,6 +111,16 @@
   <sys:String x:Key="ElementsRemoveButton">✕ Remove</sys:String>
   <sys:String x:Key="ElementsRemoveTip">Drop this element from the list. The save body shrinks to match; reversible by reloading without writing.</sys:String>
   <sys:String x:Key="ItemPickerAddToBagTip">Add this item to the inventory list the main window is currently showing. Open a bag (drill into _inventorylist[N]._itemList) first; otherwise the click reports the requirement in the status bar.</sys:String>
+  <sys:String x:Key="MenuRestoreFromBackup">Restore from Backup…</sys:String>
+  <sys:String x:Key="RestoreFromBackupTitle">Restore from Backup</sys:String>
+  <sys:String x:Key="RestoreFromBackupColumnHint">Click "Restore" on a row to overwrite the live save with that snapshot. The current contents are backed up first.</sys:String>
+  <sys:String x:Key="RestoreColSlot">Slot (user / name)</sys:String>
+  <sys:String x:Key="RestoreColTimestamp">Backup taken</sys:String>
+  <sys:String x:Key="RestoreColFiles">Files</sys:String>
+  <sys:String x:Key="RestoreColSize">Size</sys:String>
+  <sys:String x:Key="RestoreColAction">Action</sys:String>
+  <sys:String x:Key="RestoreButton">⤺ Restore</sys:String>
+  <sys:String x:Key="RestoreButtonTip">Overwrite the live save with this backup. The current state is backed up first, so this restore is itself undoable.</sys:String>
   <sys:String x:Key="EditPanelNestedReadOnly">Editing nested fields is not yet supported. Use Back to return to the top-level block.</sys:String>
   <sys:String x:Key="ElementsColIcon">Icon</sys:String>
   <sys:String x:Key="ElementsColIndex">#</sys:String>
