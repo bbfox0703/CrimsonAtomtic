@@ -504,6 +504,32 @@ public sealed partial class MainWindow : Window
     /// footer is the user-facing signal that bootstrap didn't find
     /// the install.
     /// </summary>
+    /// <summary>
+    /// File → Restore from Backup… opens the picker dialog. The dialog
+    /// surfaces every backup currently under
+    /// %LOCALAPPDATA%\CrimsonAtomtic\Backups\; click-Restore on a row
+    /// fires the picker VM's RestoreRequested event which routes to
+    /// <c>MainWindowViewModel.RestoreFromBackupAsync</c>. Same
+    /// decoupling pattern as Browse Items / "+ Bag".
+    /// </summary>
+    private void OnRestoreFromBackupClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+        var restoreVm = new RestoreFromBackupViewModel(vm.BackupService);
+        restoreVm.RestoreRequested += entry =>
+        {
+            _ = vm.RestoreFromBackupAsync(entry);
+        };
+        var dialog = new RestoreFromBackupWindow
+        {
+            DataContext = restoreVm,
+        };
+        dialog.Show(this);
+    }
+
     private void OnBrowseItemsClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel vm)

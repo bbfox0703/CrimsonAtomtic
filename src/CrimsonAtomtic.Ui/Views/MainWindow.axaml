@@ -56,6 +56,9 @@
                   Click="OnSaveAsClick"
                   IsEnabled="{Binding HasSave}" />
         <Separator />
+        <MenuItem Header="{StaticResource MenuRestoreFromBackup}"
+                  Click="OnRestoreFromBackupClick" />
+        <Separator />
         <MenuItem Header="{StaticResource MenuExit}" Click="OnExitClick" />
       </MenuItem>
       <MenuItem Header="{StaticResource MenuTools}">

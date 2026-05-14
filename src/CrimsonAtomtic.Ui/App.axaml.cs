@@ -66,9 +66,14 @@ public sealed class App : Application
             // user re-points the icon path through Tools menu.
             CrimsonAtomtic.Ui.Services.ItemKeyToIconConverter.Provider = localization.Icons;
 
+            // Backup service: pure file-system orchestrator, no native deps.
+            // Lives for the app lifetime alongside the loader so the same
+            // %LOCALAPPDATA%\CrimsonAtomtic\Backups\ tree is the single
+            // source of truth for the Restore dialog.
+            var backupService = new CrimsonAtomtic.Ui.Services.SaveBackupService(paths);
             desktop.MainWindow = new MainWindow
             {
-                DataContext = new MainWindowViewModel(loader, paths, localization),
+                DataContext = new MainWindowViewModel(loader, paths, localization, backupService),
             };
         }
 
