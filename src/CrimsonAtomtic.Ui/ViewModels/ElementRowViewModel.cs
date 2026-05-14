@@ -31,7 +31,6 @@ public sealed class ElementRowViewModel
 {
     public BlockDetails Block { get; }
     public string KeyText { get; }
-    public string ResolvedName { get; }
 
     /// <summary>
     /// Numeric form of the row's ItemKey, used to drive the icon
@@ -42,19 +41,28 @@ public sealed class ElementRowViewModel
     /// </summary>
     public uint IconItemKey { get; }
 
-    /// <summary>
-    /// Concatenated, lower-cased haystack of every resolved name found
-    /// inside this element's nested ObjectList children. Empty when the
-    /// element has no name-bearing children, or when none of them
-    /// resolves. Used by the elements filter so "Gold" matches a bag
-    /// element that *contains* Gold without the user having to open
-    /// the bag first.
-    /// </summary>
-    public string NestedMatchHaystack { get; }
+    // Lazy-resolved fields. The DataGrid hosting this VM virtualises
+    // *rendering*, but instances are still constructed eagerly for the
+    // entire list when the user drills into a large ObjectList — and
+    // QuestSaveData._stageStateData has 46,541 elements on 1.06's
+    // slot0. Resolving every row's display name through the native
+    // bridge at construction time was the dominant load-cost there
+    // (~46k FFI calls back-to-back). Deferring to first-access shifts
+    // that work to per-row rendering, which is naturally amortised
+    // over user scroll + the virtualised render window. Same logic
+    // for NestedMatchHaystack, which only the elements-filter input
+    // actually exercises — when the filter box is empty (the common
+    // case at first open), we pay zero.
+    private readonly LocalizationProvider? _localization;
+    private readonly DecodedFieldRow? _keyField;
+    private readonly uint _key;
+    private string? _resolvedName;          // null sentinel = not yet computed
+    private string? _nestedMatchHaystack;   // null sentinel = not yet computed
 
     public ElementRowViewModel(BlockDetails block, LocalizationProvider? localization)
     {
         Block = block;
+        _localization = localization;
         // Locate the directly-bearing key field. Two depths covered:
         //   1. Directly on this element's Fields (e.g. ItemSaveData._itemKey).
         //   2. One level down through any inline locator child
@@ -72,9 +80,8 @@ public sealed class ElementRowViewModel
             && uint.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var key))
         {
             KeyText = raw;
-            ResolvedName = localization is null
-                ? string.Empty
-                : localization.ResolveByFieldTypeName(keyField.TypeName, key);
+            _keyField = keyField;
+            _key = key;
             // Only ItemKey-typed rows feed the icon column — the
             // reference pack is keyed by ItemKey, so a CharacterKey or
             // FactionKey value here would just produce a miss. Leave
@@ -85,13 +92,10 @@ public sealed class ElementRowViewModel
         else
         {
             KeyText = string.Empty;
-            ResolvedName = string.Empty;
+            // _keyField stays null → ResolvedName returns string.Empty
+            // on first access (and caches that empty).
             IconItemKey = 0u;
         }
-
-        NestedMatchHaystack = localization is null
-            ? string.Empty
-            : BuildNestedHaystack(block, localization);
 
         // Fill-stack affordance comes in two flavours:
         //
@@ -116,6 +120,49 @@ public sealed class ElementRowViewModel
             !IsSingleFillCandidate
             && HasStackableInventoryList(block)
             && IsContainerRowByKeyType(keyField);
+    }
+
+    /// <summary>
+    /// Localized name resolved through
+    /// <see cref="LocalizationProvider.ResolveByFieldTypeName"/>. Empty
+    /// when this row has no resolvable key, or when localization isn't
+    /// loaded. Lazily evaluated and cached — see the class-level note
+    /// on the deferral rationale.
+    /// </summary>
+    public string ResolvedName
+    {
+        get
+        {
+            if (_resolvedName is null)
+            {
+                _resolvedName = (_keyField is null || _localization is null)
+                    ? string.Empty
+                    : _localization.ResolveByFieldTypeName(_keyField.TypeName, _key);
+            }
+            return _resolvedName;
+        }
+    }
+
+    /// <summary>
+    /// Concatenated, lower-cased haystack of every resolved name found
+    /// inside this element's nested ObjectList children. Empty when the
+    /// element has no name-bearing children, or when none of them
+    /// resolves. Used by the elements filter so "Gold" matches a bag
+    /// element that *contains* Gold without the user having to open
+    /// the bag first. Lazily evaluated.
+    /// </summary>
+    public string NestedMatchHaystack
+    {
+        get
+        {
+            if (_nestedMatchHaystack is null)
+            {
+                _nestedMatchHaystack = _localization is null
+                    ? string.Empty
+                    : BuildNestedHaystack(Block, _localization);
+            }
+            return _nestedMatchHaystack;
+        }
     }
 
     /// <summary>
@@ -268,7 +315,19 @@ public sealed class ElementRowViewModel
                  or "CharacterKey"
                  or "GimmickInfoKey"
                  or "LevelGimmickSceneObjectInfoKey"
-                 or "InventoryKey";
+                 or "InventoryKey"
+                 // Table-driven key resolvers added when the new
+                 // *.pabgb bridges (mission/quest/stage/knowledge/
+                 // gauge/skill) landed. Mirrors
+                 // LocalizationProvider.TableDrivenKeyTypes — keep
+                 // both lists in sync when adding a future Key namespace.
+                 or "MissionKey"
+                 or "QuestKey"
+                 or "StageKey"
+                 or "KnowledgeKey"
+                 or "QuestGaugeKey"
+                 or "SkillKey"
+                 or "SubLevelKey";
 
     /// <summary>
     /// Walk every nested <c>ObjectList</c> field of this element one

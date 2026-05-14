@@ -28,6 +28,16 @@ public sealed class NativePalocCatalog : IPalocCatalog
         _entryCount = entryCount;
     }
 
+    /// <summary>
+    /// Native handle, exposed to peer key-info catalogs in this assembly
+    /// (Mission / Quest / Stage / Knowledge) whose
+    /// <c>lookup_display_name</c> entry points take a
+    /// <c>*const CrimsonPalocHandle</c> alongside their own handle so the
+    /// hash-hop → PALOC chain runs in one FFI call. Stays
+    /// <c>internal</c> — UI code never touches the raw handle.
+    /// </summary>
+    internal CrimsonPalocHandle NativeHandle => _handle;
+
     /// <summary>Load a PALOC table from a pre-extracted file on disk.</summary>
     /// <remarks>
     /// The raw <c>gamedata/*.paloc</c> files in a Steam install are
