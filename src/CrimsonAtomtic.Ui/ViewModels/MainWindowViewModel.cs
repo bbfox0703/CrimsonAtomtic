@@ -1360,6 +1360,45 @@ public sealed partial class MainWindowViewModel(
                            + "incompatible with the clone-and-patch strategy.";
             return;
         }
+        // _transferredItemKey is an engine-internal handle whose high
+        // 16 bits encode the item's identity (verified empirically:
+        // beer's transferredItemKey = 0x55F7_xxxx where 0x55F7 = 22007).
+        // Cloning Water and patching only _itemKey leaves the
+        // transferred value pointing at Water — the game's cross-check
+        // on load fails and the save crashes. Find the field so we can
+        // apply a delta patch alongside the four standard ones.
+        var idxTransferred = -1;
+        ulong sourceTransferred = 0;
+        ulong sourceItemKeyValue = 0;
+        for (var i = 0; i < sourceElement.Fields.Count; i++)
+        {
+            var f = sourceElement.Fields[i];
+            if (f.Name == "_transferredItemKey" && f.Present
+                && TryParseScalarUInt(f.Value, out var v))
+            {
+                idxTransferred = i;
+                sourceTransferred = v;
+            }
+            else if (f.Name == "_itemKey" && f.Present
+                     && TryParseScalarUInt(f.Value, out var ik))
+            {
+                sourceItemKeyValue = ik;
+            }
+        }
+        // _isNewMark: bool flag the engine sets on freshly-spawned
+        // items. Some items have it absent (currency, equipment with
+        // a "received from quest" provenance). For a brand-new item,
+        // present + true is the safe shape — matches what slot101's
+        // engine-created beer looks like.
+        var idxIsNewMark = -1;
+        for (var i = 0; i < sourceElement.Fields.Count; i++)
+        {
+            if (sourceElement.Fields[i].Name == "_isNewMark")
+            {
+                idxIsNewMark = i;
+                break;
+            }
+        }
 
         // Compute fresh values that won't collide with anything else in
         // the list. Cloning blindly inherits the source's _slotNo /
@@ -1392,19 +1431,42 @@ public sealed partial class MainWindowViewModel(
         var clonePath = ExtendPath(listPath, new PathStep((uint)listFieldIdx, (uint)dstIdx));
 
         // Pre-compute LE byte buffers for the batched patch. One batch
-        // FFI call mutates all four scalars atomically (all-or-nothing
-        // on validation), with a single post-batch re-decode.
+        // FFI call mutates every scalar atomically (all-or-nothing on
+        // validation), with a single post-batch re-decode.
         var itemKeyBytes = BitConverter.GetBytes(itemKey);
         var stackCountBytes = BitConverter.GetBytes(newStackCount);
         var slotNoBytes = BitConverter.GetBytes(newSlotNo);
         var itemNoBytes = BitConverter.GetBytes(newItemNo);
-        var batchOps = new List<ScalarBatchOp>(4)
+        var batchOps = new List<ScalarBatchOp>(6)
         {
             new(blockIdx, clonePath, idxItemKey,    itemKeyBytes),
             new(blockIdx, clonePath, idxStackCount, stackCountBytes),
             new(blockIdx, clonePath, idxSlotNo,     slotNoBytes),
             new(blockIdx, clonePath, idxItemNo,     itemNoBytes),
         };
+        // Apply the _transferredItemKey delta when both the field and
+        // the source's itemKey were resolvable. Skipped on
+        // schema-mismatch / absent field — the four standard patches
+        // still go through and the game's tolerance may carry us.
+        if (idxTransferred >= 0 && sourceItemKeyValue != 0)
+        {
+            // Engine encoding: high 16 bits of _transferredItemKey
+            // encode the item's identity; cloning + patching _itemKey
+            // alone leaves the transferred pointer dangling. The
+            // delta-shift below preserves the engine-generated low 16
+            // bits while moving the high 16 bits to match the new
+            // itemKey — verified against slot101's RE data where beer
+            // (22007) sits at transferredItemKey = 0x55F7_0101 and the
+            // adjacent items use linearly-shifted values.
+            var newTransferred = sourceTransferred + ((ulong)itemKey - sourceItemKeyValue);
+            var transferredBytes = BitConverter.GetBytes((uint)newTransferred);
+            batchOps.Add(new ScalarBatchOp(blockIdx, clonePath, idxTransferred, transferredBytes));
+        }
+        // Mark the new item as "fresh" so the in-game inventory UI shows
+        // the (NEW) indicator. When the source had _isNewMark present,
+        // we just overwrite the byte; when it was absent, the simpler
+        // path is the standalone SetScalarFieldPresent call below.
+        var markIsNewMarkPresent = idxIsNewMark >= 0 && !sourceElement.Fields[idxIsNewMark].Present;
 
         CrimsonSaveException? error = null;
         await Task.Run(() =>
@@ -1413,6 +1475,21 @@ public sealed partial class MainWindowViewModel(
             {
                 loader.ListCloneElement(blockIdx, listPath, listFieldIdx, sourceIndex, dstIdx);
                 loader.SetScalarFieldsBatch(batchOps);
+                if (idxIsNewMark >= 0)
+                {
+                    var newMarkByte = new byte[] { 0x01 };
+                    if (markIsNewMarkPresent)
+                    {
+                        // Source had it absent — set present + true.
+                        loader.SetScalarFieldPresent(blockIdx, clonePath, idxIsNewMark,
+                            makePresent: true, newMarkByte);
+                    }
+                    else
+                    {
+                        // Source had it present — just overwrite the byte.
+                        loader.SetScalarField(blockIdx, clonePath, idxIsNewMark, newMarkByte);
+                    }
+                }
             }
             catch (CrimsonSaveException ex)
             {
