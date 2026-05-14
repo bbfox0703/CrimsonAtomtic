@@ -1444,44 +1444,36 @@ public sealed partial class MainWindowViewModel(
             new(blockIdx, clonePath, idxSlotNo,     slotNoBytes),
             new(blockIdx, clonePath, idxItemNo,     itemNoBytes),
         };
-        // _transferredItemKey encoding (RE'd from slot100→slot101 diff):
+        // _transferredItemKey encoding (verified empirically against
+        // every ItemSaveData in the user's restored slot100):
         //
-        //   high 16 bits  →  encodes item identity
-        //                    when _itemKey ≤ 0xFFFF (common case for
-        //                    consumables/currencies), high 16 = itemKey
-        //                    directly. Larger itemKeys use a hash we
-        //                    haven't cracked.
-        //   low 16 bits   →  status marker
-        //                    0x0001 = pre-existing item (player has had
-        //                            it for a while; engine cleared the
-        //                            "new" flag at some point)
-        //                    0x0101 = newly-spawned item (just bought
-        //                            from a vendor / picked up / etc.)
+        //   _transferredItemKey = ((itemKey & 0xFFFF) << 16) | 0x0101
         //
-        // For Add-to-bag we always want the "newly-spawned" marker, so
-        // the canonical encoding for small itemKeys is just
-        // (itemKey << 16) | 0x0101. Larger itemKeys are skipped — we
-        // can't synthesize the hash, so we leave the cloned value in
-        // place and hope the game's tolerance carries us. (For the
-        // user's typical add-consumable workflow, beer/water/etc. all
-        // sit at sub-u16 itemKeys so this codepath always succeeds.)
-        const ushort NewlySpawnedMarker = 0x0101;
-        if (idxTransferred >= 0 && itemKey <= 0xFFFF)
+        //   Worked examples:
+        //     itemKey 22007    (Beer)             → 0x55F7_0101 = 1442251009
+        //     itemKey 1000677  (Investigative Rpt)→ 0x44E5_0101 = 1155858689
+        //     itemKey 950017   (some equipment)   → 0x7F01_0101 = 2130772225
+        //
+        // The high 16 bits are `itemKey % 65536` (i.e. the low 16 bits
+        // of itemKey, even when itemKey itself overflows u16). The low
+        // 16 bits are a constant `0x0101` for every item observed —
+        // not a "newly-spawned" flag as I'd initially guessed; the
+        // distinction was a math error on my part decoding the bytes.
+        //
+        // Same formula for all itemKeys, no conditional branch.
+        const ushort TransferredLowConstant = 0x0101;
+        if (idxTransferred >= 0)
         {
-            var newTransferred = (uint)((itemKey << 16) | NewlySpawnedMarker);
+            var newTransferred = (uint)(((itemKey & 0xFFFFu) << 16) | TransferredLowConstant);
             var transferredBytes = BitConverter.GetBytes(newTransferred);
             batchOps.Add(new ScalarBatchOp(blockIdx, clonePath, idxTransferred, transferredBytes));
         }
-        else if (idxTransferred >= 0)
-        {
-            // Best-effort fallback: keep the source's high 16 (a guess
-            // — actually wrong, but at least keeps the value in the
-            // engine's expected range) and stamp the new-item marker.
-            var newTransferred = (uint)((sourceTransferred & 0xFFFF_0000UL) | NewlySpawnedMarker);
-            var transferredBytes = BitConverter.GetBytes(newTransferred);
-            batchOps.Add(new ScalarBatchOp(blockIdx, clonePath, idxTransferred, transferredBytes));
-        }
-        _ = sourceItemKeyValue; // captured for diagnostics; not needed now.
+        // `sourceTransferred` and `sourceItemKeyValue` were captured
+        // for an earlier delta-shift approach that's no longer used;
+        // keeping the destructure for diagnostic value if a future
+        // patch needs them again.
+        _ = sourceTransferred;
+        _ = sourceItemKeyValue;
         // Mark the new item as "fresh" so the in-game inventory UI shows
         // the (NEW) indicator. When the source had _isNewMark present,
         // we just overwrite the byte; when it was absent, the simpler
