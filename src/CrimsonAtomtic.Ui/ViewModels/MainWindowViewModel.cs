@@ -1444,24 +1444,44 @@ public sealed partial class MainWindowViewModel(
             new(blockIdx, clonePath, idxSlotNo,     slotNoBytes),
             new(blockIdx, clonePath, idxItemNo,     itemNoBytes),
         };
-        // Apply the _transferredItemKey delta when both the field and
-        // the source's itemKey were resolvable. Skipped on
-        // schema-mismatch / absent field — the four standard patches
-        // still go through and the game's tolerance may carry us.
-        if (idxTransferred >= 0 && sourceItemKeyValue != 0)
+        // _transferredItemKey encoding (RE'd from slot100→slot101 diff):
+        //
+        //   high 16 bits  →  encodes item identity
+        //                    when _itemKey ≤ 0xFFFF (common case for
+        //                    consumables/currencies), high 16 = itemKey
+        //                    directly. Larger itemKeys use a hash we
+        //                    haven't cracked.
+        //   low 16 bits   →  status marker
+        //                    0x0001 = pre-existing item (player has had
+        //                            it for a while; engine cleared the
+        //                            "new" flag at some point)
+        //                    0x0101 = newly-spawned item (just bought
+        //                            from a vendor / picked up / etc.)
+        //
+        // For Add-to-bag we always want the "newly-spawned" marker, so
+        // the canonical encoding for small itemKeys is just
+        // (itemKey << 16) | 0x0101. Larger itemKeys are skipped — we
+        // can't synthesize the hash, so we leave the cloned value in
+        // place and hope the game's tolerance carries us. (For the
+        // user's typical add-consumable workflow, beer/water/etc. all
+        // sit at sub-u16 itemKeys so this codepath always succeeds.)
+        const ushort NewlySpawnedMarker = 0x0101;
+        if (idxTransferred >= 0 && itemKey <= 0xFFFF)
         {
-            // Engine encoding: high 16 bits of _transferredItemKey
-            // encode the item's identity; cloning + patching _itemKey
-            // alone leaves the transferred pointer dangling. The
-            // delta-shift below preserves the engine-generated low 16
-            // bits while moving the high 16 bits to match the new
-            // itemKey — verified against slot101's RE data where beer
-            // (22007) sits at transferredItemKey = 0x55F7_0101 and the
-            // adjacent items use linearly-shifted values.
-            var newTransferred = sourceTransferred + ((ulong)itemKey - sourceItemKeyValue);
-            var transferredBytes = BitConverter.GetBytes((uint)newTransferred);
+            var newTransferred = (uint)((itemKey << 16) | NewlySpawnedMarker);
+            var transferredBytes = BitConverter.GetBytes(newTransferred);
             batchOps.Add(new ScalarBatchOp(blockIdx, clonePath, idxTransferred, transferredBytes));
         }
+        else if (idxTransferred >= 0)
+        {
+            // Best-effort fallback: keep the source's high 16 (a guess
+            // — actually wrong, but at least keeps the value in the
+            // engine's expected range) and stamp the new-item marker.
+            var newTransferred = (uint)((sourceTransferred & 0xFFFF_0000UL) | NewlySpawnedMarker);
+            var transferredBytes = BitConverter.GetBytes(newTransferred);
+            batchOps.Add(new ScalarBatchOp(blockIdx, clonePath, idxTransferred, transferredBytes));
+        }
+        _ = sourceItemKeyValue; // captured for diagnostics; not needed now.
         // Mark the new item as "fresh" so the in-game inventory UI shows
         // the (NEW) indicator. When the source had _isNewMark present,
         // we just overwrite the byte; when it was absent, the simpler
