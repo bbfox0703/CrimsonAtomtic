@@ -1168,6 +1168,220 @@ public sealed partial class MainWindowViewModel(
     }
 
     /// <summary>
+    /// Remove a single element from the currently-displayed
+    /// <see cref="ElementsFrame"/>. Wired to the "Remove" per-row
+    /// button on the elements DataGrid; confirms via the same modal
+    /// dialog hook as "Fill stacks", then drives
+    /// <see cref="ISaveLoader.ListRemoveElement"/> on the parent list.
+    /// </summary>
+    /// <remarks>
+    /// Locates the element's index inside the parent's
+    /// <see cref="ElementsFrame.Elements"/> the same way
+    /// <see cref="BulkFillItemListMaxStackAsync"/> does. The Rust
+    /// re-emit shrinks the list; the nav-stack refresh after the FFI
+    /// call pulls the new <c>Elements</c> back into the frame so the
+    /// grid re-renders without the removed row.
+    /// </remarks>
+    [RelayCommand]
+    private async Task RemoveElementAsync(ElementRowViewModel? row)
+    {
+        BulkOpStatus = null;
+        if (row is null
+            || _loadedPath is null
+            || SelectedBlock is not { } topBlock
+            || _navStack.Count == 0
+            || _navStack.Peek() is not ElementsFrame parent)
+        {
+            return;
+        }
+
+        var elementIdx = -1;
+        for (var i = 0; i < parent.Elements.Count; i++)
+        {
+            if (ReferenceEquals(parent.Elements[i], row.Block))
+            {
+                elementIdx = i;
+                break;
+            }
+        }
+        if (elementIdx < 0)
+        {
+            return;
+        }
+
+        if (ConfirmRequested is not { } ask)
+        {
+            return;
+        }
+        var displayName = string.IsNullOrEmpty(row.ResolvedName) ? row.ClassName : row.ResolvedName;
+        var msg = $"Remove this element from the list?\n\n"
+                  + $"Element: [{elementIdx}] {displayName}\n"
+                  + $"List size: {parent.Elements.Count} → {parent.Elements.Count - 1}\n\n"
+                  + "Reversible by reloading the save without writing.";
+        var ok = await ask("Remove element?", msg);
+        if (!ok)
+        {
+            BulkOpStatus = "Remove cancelled.";
+            return;
+        }
+
+        BulkOpStatus = "Removing element…";
+        var blockIdx = topBlock.Index;
+        var pathArr = parent.PathToList is PathStep[] a ? a : parent.PathToList.ToArray();
+        var listFieldIdxRemove = (int)parent.ListFieldIndex;
+        CrimsonSaveException? error = null;
+        await Task.Run(() =>
+        {
+            try
+            {
+                loader.ListRemoveElement(blockIdx, pathArr, listFieldIdxRemove, elementIdx);
+            }
+            catch (CrimsonSaveException ex)
+            {
+                error = ex;
+            }
+        });
+
+        try
+        {
+            var freshTop = loader.LoadBlockDetails(_loadedPath, blockIdx);
+            RefreshNavStack(freshTop);
+            RebuildFromTop();
+        }
+        catch (CrimsonSaveException)
+        {
+            // Stale view is better than a crash — next nav re-fetches.
+        }
+
+        if (error is null)
+        {
+            IsDirty = true;
+            OnPropertyChanged(nameof(WindowTitle));
+            BulkOpStatus = $"Removed element [{elementIdx}].";
+        }
+        else
+        {
+            BulkOpStatus = $"Remove failed: {error.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Add a new <c>ItemSaveData</c> element to the currently-displayed
+    /// inventory list with <paramref name="itemKey"/> as its
+    /// <c>_itemKey</c>. Implemented as clone-and-patch on the existing
+    /// list's first element so the new entry inherits a known-valid
+    /// presence mask + field shape from the engine.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Requires the user to be navigated into an <c>object_list</c>
+    /// frame whose first element is class <c>ItemSaveData</c> (an
+    /// <c>_itemList</c> inside an <c>InventoryElementSaveData</c>).
+    /// Empty bags fall back to <c>MakeEmptyElementBytes</c> +
+    /// <c>ListInsertElement</c> with the first element's class index
+    /// inferred from the schema — but no live save has an empty
+    /// inventory bag, so that path is untested in practice.
+    /// </para>
+    /// <para>
+    /// The clone is byte-identical to the source; we patch
+    /// <c>_itemKey</c> to the picker-selected value. <c>_stackCount</c>
+    /// is left at the source's value (typically 1 for cloned-from-stack-
+    /// of-1 sources); the user can adjust via the field-edit panel or
+    /// the existing Set-to-max button. <c>_slotNo</c> is also kept
+    /// from the clone source — the game may renumber slots on its
+    /// next save tick.
+    /// </para>
+    /// </remarks>
+    public async Task AddItemToCurrentListAsync(uint itemKey)
+    {
+        BulkOpStatus = null;
+        if (_loadedPath is null
+            || SelectedBlock is not { } topBlock
+            || _navStack.Count == 0
+            || _navStack.Peek() is not ElementsFrame parent
+            || parent.Elements.Count == 0)
+        {
+            BulkOpStatus = "Open a bag first (drill into _inventorylist[N]._itemList).";
+            return;
+        }
+        // Only handle ItemSaveData lists — refusing other element classes
+        // keeps us from inserting an ItemSaveData-shaped row into a
+        // non-item list and corrupting the save.
+        var sourceClass = parent.Elements[0].ClassName;
+        if (!string.Equals(sourceClass, "ItemSaveData", StringComparison.Ordinal))
+        {
+            BulkOpStatus = $"This list holds {sourceClass}, not ItemSaveData. Add unsupported here.";
+            return;
+        }
+        // Find _itemKey on the source element so we know which field
+        // index to patch on the clone. Schema indices are stable per
+        // class so the same field index works on the new clone.
+        var sourceItemKeyField = -1;
+        for (var i = 0; i < parent.Elements[0].Fields.Count; i++)
+        {
+            var f = parent.Elements[0].Fields[i];
+            if (f.Name == "_itemKey" && f.Present)
+            {
+                sourceItemKeyField = i;
+                break;
+            }
+        }
+        if (sourceItemKeyField < 0)
+        {
+            BulkOpStatus = "Source element has no _itemKey field — can't clone-and-patch here.";
+            return;
+        }
+
+        BulkOpStatus = $"Adding item {itemKey}…";
+        var blockIdx = topBlock.Index;
+        var listPath = parent.PathToList is PathStep[] a ? a : parent.PathToList.ToArray();
+        var listFieldIdx = (int)parent.ListFieldIndex;
+        // Insert at index 0 so the user sees the new item at the top
+        // of the picker without scrolling; the game's UI re-sorts on
+        // next save tick anyway.
+        const int dstIdx = 0;
+        // Pre-compute the patch bytes outside the Task lambda so we
+        // don't reach for stackalloc inside a captured closure.
+        var itemKeyBytes = BitConverter.GetBytes(itemKey);
+        var clonePath = ExtendPath(listPath, new PathStep((uint)listFieldIdx, (uint)dstIdx));
+        CrimsonSaveException? error = null;
+        await Task.Run(() =>
+        {
+            try
+            {
+                loader.ListCloneElement(blockIdx, listPath, listFieldIdx, 0, dstIdx);
+                loader.SetScalarField(blockIdx, clonePath, sourceItemKeyField, itemKeyBytes);
+            }
+            catch (CrimsonSaveException ex)
+            {
+                error = ex;
+            }
+        });
+
+        try
+        {
+            var freshTop = loader.LoadBlockDetails(_loadedPath, blockIdx);
+            RefreshNavStack(freshTop);
+            RebuildFromTop();
+        }
+        catch (CrimsonSaveException)
+        {
+            // Stale view is better than a crash.
+        }
+
+        if (error is null)
+        {
+            IsDirty = true;
+            OnPropertyChanged(nameof(WindowTitle));
+            BulkOpStatus = $"Added item {itemKey} (clone of [0], patched _itemKey).";
+        }
+        else
+        {
+            BulkOpStatus = $"Add failed: {error.Message}";
+        }
+    }
+
+    /// <summary>
     /// One scalar mutation to apply: the descent path from the top
     /// block to the leaf block, the leaf field's index inside that
     /// block, and the encoded bytes to write.

@@ -514,9 +514,21 @@ public sealed partial class MainWindow : Window
         {
             return;
         }
+        var pickerVm = new ItemPickerViewModel(vm.Localization);
+        // PR B.4.2 — wire the picker's "+ Bag" click back into the main
+        // window so a click clones-and-patches the item into the
+        // currently-displayed inventory list. The handler is fire-and-
+        // forget on the UI thread; AddItemToCurrentListAsync drives the
+        // FFI on a Task.Run worker. The picker stays decoupled — other
+        // call sites can show it without subscribing and the "+ Bag"
+        // button still works (just no-ops the click).
+        pickerVm.AddItemRequested += itemKey =>
+        {
+            _ = vm.AddItemToCurrentListAsync(itemKey);
+        };
         var child = new ItemPickerWindow
         {
-            DataContext = new ItemPickerViewModel(vm.Localization),
+            DataContext = pickerVm,
         };
         child.Show(this);
     }

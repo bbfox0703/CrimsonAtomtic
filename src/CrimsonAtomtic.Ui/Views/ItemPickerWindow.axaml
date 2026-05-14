@@ -107,6 +107,19 @@
                         Tag="{Binding NameSecondary}"
                         Click="OnCopyButtonClick"
                         IsVisible="{Binding $parent[Window].((vm:ItemPickerViewModel)DataContext).HasSecondary}" />
+                <!-- "+ Bag" button: add this item to the inventory list
+                     the main window is currently showing. Routed
+                     through the picker VM's AddItemRequested event so
+                     this window stays decoupled from MainWindowViewModel
+                     (callers that want a read-only picker just don't
+                     subscribe). The actual clone-and-patch happens in
+                     MainWindowViewModel.AddItemToCurrentListAsync. -->
+                <Button Content="+ Bag"
+                        ToolTip.Tip="{StaticResource ItemPickerAddToBagTip}"
+                        Padding="6,2"
+                        MinHeight="0"
+                        Tag="{Binding ItemKey}"
+                        Click="OnAddToBagClick" />
               </StackPanel>
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>

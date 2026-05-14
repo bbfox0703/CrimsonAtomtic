@@ -279,6 +279,203 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         }
     }
 
+    // ── Length-changing edits (PR B) ───────────────────────────────────────
+
+    public void ListRemoveElement(
+        int blockIndex,
+        ReadOnlySpan<PathStep> path,
+        int fieldIndex,
+        int elementIndex)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(elementIndex);
+
+        var cached = RequireLoaded(nameof(ListRemoveElement));
+        unsafe
+        {
+            fixed (PathStep* pPath = path)
+            {
+                var rc = NativeMethods.ListRemoveElement(
+                    cached,
+                    (uint)blockIndex,
+                    pPath,
+                    (nuint)path.Length,
+                    (uint)fieldIndex,
+                    (uint)elementIndex);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_save_list_remove_element(block={blockIndex}, path_len={path.Length}, " +
+                        $"field={fieldIndex}, element={elementIndex}) failed: {ErrorName(rc)}");
+                }
+            }
+        }
+    }
+
+    public void ListCloneElement(
+        int blockIndex,
+        ReadOnlySpan<PathStep> path,
+        int fieldIndex,
+        int sourceIndex,
+        int destinationIndex)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(sourceIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(destinationIndex);
+
+        var cached = RequireLoaded(nameof(ListCloneElement));
+        unsafe
+        {
+            fixed (PathStep* pPath = path)
+            {
+                var rc = NativeMethods.ListCloneElement(
+                    cached,
+                    (uint)blockIndex,
+                    pPath,
+                    (nuint)path.Length,
+                    (uint)fieldIndex,
+                    (uint)sourceIndex,
+                    (uint)destinationIndex);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_save_list_clone_element(block={blockIndex}, path_len={path.Length}, " +
+                        $"field={fieldIndex}, src={sourceIndex}, dst={destinationIndex}) failed: {ErrorName(rc)}");
+                }
+            }
+        }
+    }
+
+    public void SetScalarFieldPresent(
+        int blockIndex,
+        ReadOnlySpan<PathStep> path,
+        int fieldIndex,
+        bool makePresent,
+        ReadOnlySpan<byte> initialBytes)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
+
+        var cached = RequireLoaded(nameof(SetScalarFieldPresent));
+        unsafe
+        {
+            fixed (PathStep* pPath = path)
+            fixed (byte* pInit = initialBytes)
+            {
+                var rc = NativeMethods.SetScalarFieldPresent(
+                    cached,
+                    (uint)blockIndex,
+                    pPath,
+                    (nuint)path.Length,
+                    (uint)fieldIndex,
+                    makePresent ? 1 : 0,
+                    pInit,
+                    (nuint)initialBytes.Length);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_save_set_scalar_field_present(block={blockIndex}, path_len={path.Length}, " +
+                        $"field={fieldIndex}, present={makePresent}, bytes={initialBytes.Length}) failed: " +
+                        $"{ErrorName(rc)}");
+                }
+            }
+        }
+    }
+
+    public byte[] MakeEmptyElementBytes(int classIndex)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(classIndex);
+
+        var cached = RequireLoaded(nameof(MakeEmptyElementBytes));
+        nuint required = 0;
+        unsafe
+        {
+            var sizeRc = NativeMethods.MakeEmptyElementBytes(
+                cached, (uint)classIndex, null, 0, out required);
+            if (sizeRc != NativeMethods.BUFFER_TOO_SMALL && sizeRc != NativeMethods.OK)
+            {
+                throw new CrimsonSaveException(sizeRc,
+                    $"crimson_save_make_empty_element_bytes(class={classIndex}) size query failed: " +
+                    $"{ErrorName(sizeRc)}");
+            }
+        }
+        if (required == 0)
+        {
+            return Array.Empty<byte>();
+        }
+
+        var buf = new byte[(int)required];
+        unsafe
+        {
+            fixed (byte* p = buf)
+            {
+                var rc = NativeMethods.MakeEmptyElementBytes(
+                    cached, (uint)classIndex, p, (nuint)buf.Length, out _);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_save_make_empty_element_bytes(class={classIndex}) fill failed: " +
+                        $"{ErrorName(rc)}");
+                }
+            }
+        }
+        return buf;
+    }
+
+    public void ListInsertElement(
+        int blockIndex,
+        ReadOnlySpan<PathStep> path,
+        int fieldIndex,
+        int insertAt,
+        ReadOnlySpan<byte> bytes)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(insertAt);
+
+        var cached = RequireLoaded(nameof(ListInsertElement));
+        unsafe
+        {
+            fixed (PathStep* pPath = path)
+            fixed (byte* pBytes = bytes)
+            {
+                var rc = NativeMethods.ListInsertElement(
+                    cached,
+                    (uint)blockIndex,
+                    pPath,
+                    (nuint)path.Length,
+                    (uint)fieldIndex,
+                    (uint)insertAt,
+                    pBytes,
+                    (nuint)bytes.Length);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_save_list_insert_element(block={blockIndex}, path_len={path.Length}, " +
+                        $"field={fieldIndex}, insert_at={insertAt}, bytes={bytes.Length}) failed: " +
+                        $"{ErrorName(rc)}");
+                }
+            }
+        }
+    }
+
+    private CrimsonSaveHandle RequireLoaded(string caller)
+    {
+        CrimsonSaveHandle? cached;
+        lock (_cacheLock)
+        {
+            cached = _cachedHandle;
+        }
+        if (cached is null || cached.IsInvalid)
+        {
+            throw new InvalidOperationException(
+                $"No save is currently loaded. Call Load(savePath) before {caller}.");
+        }
+        return cached;
+    }
+
     public void Dispose()
     {
         CrimsonSaveHandle? toDispose;
@@ -510,6 +707,10 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         NativeMethods.LENGTH_MISMATCH       => "LENGTH_MISMATCH",
         NativeMethods.WRITE_FAILED          => "WRITE_FAILED",
         NativeMethods.NOT_NAVIGABLE         => "NOT_NAVIGABLE",
+        NativeMethods.NOT_FOUND             => "NOT_FOUND",
+        NativeMethods.LIST_VARIANT_UNSUPPORTED => "LIST_VARIANT_UNSUPPORTED",
+        NativeMethods.NOT_SCALAR_FIELD_KIND => "NOT_SCALAR_FIELD_KIND",
+        NativeMethods.MUTATION_INVALID      => "MUTATION_INVALID",
         NativeMethods.PANIC                 => "PANIC",
         _                                   => $"UNKNOWN({code})",
     };
@@ -600,6 +801,10 @@ internal static partial class NativeMethods
     public const int WRITE_FAILED          = -14;
     public const int NOT_NAVIGABLE         = -15;
     public const int NOT_FOUND             = -16;
+    // Length-changing edit error codes (PR B).
+    public const int LIST_VARIANT_UNSUPPORTED = -17;
+    public const int NOT_SCALAR_FIELD_KIND    = -18;
+    public const int MUTATION_INVALID         = -19;
     public const int PANIC                 = -99;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -691,6 +896,57 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "crimson_save_write_to_file",
                    StringMarshalling = StringMarshalling.Utf8)]
     public static partial int WriteToFile(CrimsonSaveHandle handle, string path);
+
+    // ── Length-changing edits (PR B) ────────────────────────────────────────
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_list_remove_element")]
+    public static unsafe partial int ListRemoveElement(
+        CrimsonSaveHandle handle,
+        uint blockIdx,
+        PathStep* path,
+        nuint pathLen,
+        uint fieldIdx,
+        uint elementIdx);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_list_clone_element")]
+    public static unsafe partial int ListCloneElement(
+        CrimsonSaveHandle handle,
+        uint blockIdx,
+        PathStep* path,
+        nuint pathLen,
+        uint fieldIdx,
+        uint srcElementIdx,
+        uint dstElementIdx);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_set_scalar_field_present")]
+    public static unsafe partial int SetScalarFieldPresent(
+        CrimsonSaveHandle handle,
+        uint blockIdx,
+        PathStep* path,
+        nuint pathLen,
+        uint fieldIdx,
+        int presentFlag,
+        byte* initBytes,
+        nuint initLen);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_make_empty_element_bytes")]
+    public static unsafe partial int MakeEmptyElementBytes(
+        CrimsonSaveHandle handle,
+        uint classIndex,
+        byte* buf,
+        nuint bufLen,
+        out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_list_insert_element")]
+    public static unsafe partial int ListInsertElement(
+        CrimsonSaveHandle handle,
+        uint blockIdx,
+        PathStep* path,
+        nuint pathLen,
+        uint fieldIdx,
+        uint insertAt,
+        byte* bytes,
+        nuint bytesLen);
 
     // ── PALOC catalog ───────────────────────────────────────────────────────
 
