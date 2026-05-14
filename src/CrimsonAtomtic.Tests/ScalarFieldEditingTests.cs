@@ -135,6 +135,59 @@ public sealed class ScalarFieldEditingTests
         Assert.False(ScalarFieldEditing.IsTextEditable(absent));
     }
 
+    [Theory]
+    [InlineData("bool",   1, "bool")]
+    [InlineData("uint8",  1, "u8")]
+    [InlineData("byte",   1, "u8")]
+    [InlineData("uint16", 2, "u16")]
+    [InlineData("uint32", 4, "u32")]
+    [InlineData("uint64", 8, "u64")]
+    [InlineData("int8",   1, "i8")]
+    [InlineData("sbyte",  1, "i8")]
+    [InlineData("int16",  2, "i16")]
+    [InlineData("int32",  4, "i32")]
+    [InlineData("int64",  8, "i64")]
+    [InlineData("float",  4, "f32")]
+    [InlineData("single", 4, "f32")]
+    [InlineData("double", 8, "f64")]
+    [InlineData("u32",    4, "u32")]
+    [InlineData("f64",    8, "f64")]
+    public void TryInferTypeTagFromSchema_PrimitiveTypeNamesResolve(
+        string typeName, int metaSize, string expected)
+    {
+        Assert.True(ScalarFieldEditing.TryInferTypeTagFromSchema(typeName, metaSize, out var tag));
+        Assert.Equal(expected, tag);
+    }
+
+    [Theory]
+    [InlineData("ItemKey",      4)]
+    [InlineData("MissionKey",   4)]
+    [InlineData("QuestKey",     4)]
+    [InlineData("StageKey",     4)]
+    [InlineData("KnowledgeKey", 4)]
+    [InlineData("FactionKey",   4)]
+    [InlineData("CharacterKey", 4)]
+    public void TryInferTypeTagFromSchema_KeyTypedefsResolveToU32(string typeName, int metaSize)
+    {
+        // Every `*Key` typedef in the 1.06 schema is a u32 under the hood.
+        // The size gate keeps this from misclassifying a future patch that
+        // introduces a wider key shape.
+        Assert.True(ScalarFieldEditing.TryInferTypeTagFromSchema(typeName, metaSize, out var tag));
+        Assert.Equal("u32", tag);
+    }
+
+    [Theory]
+    [InlineData("float3", 12)]
+    [InlineData("float4", 16)]
+    [InlineData("Quaternion", 16)]
+    [InlineData("MissionKey", 8)] // future-patch divergence; size-gated rejection
+    [InlineData("",          4)]
+    public void TryInferTypeTagFromSchema_NonScalarOrUnknownReturnsFalse(string typeName, int metaSize)
+    {
+        Assert.False(ScalarFieldEditing.TryInferTypeTagFromSchema(typeName, metaSize, out var tag));
+        Assert.Equal(string.Empty, tag);
+    }
+
     private static DecodedFieldRow MakeRow(string kind, string value) => new(
         FieldIndex: 0,
         Name: "_characterKey",

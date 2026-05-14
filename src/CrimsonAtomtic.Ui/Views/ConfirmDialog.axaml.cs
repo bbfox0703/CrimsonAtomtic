@@ -35,6 +35,24 @@ public sealed partial class ConfirmDialog : Window
         return dlg.ShowDialog<bool>(owner);
     }
 
+    /// <summary>
+    /// Show a modal single-button info / refusal dialog over
+    /// <paramref name="owner"/>. Used when the editor wants to inform
+    /// the user that an action was refused (e.g. "+ Bag" blocked for
+    /// engine-managed containers) — there's no real choice to make,
+    /// just an acknowledgement. The No button is hidden; the Yes
+    /// button is relabelled "OK". Returns a <see cref="Task"/> that
+    /// completes when the user dismisses the dialog.
+    /// </summary>
+    public static async Task ShowAlertAsync(Window owner, string title, string message)
+    {
+        var dlg = new ConfirmDialog { Title = title };
+        dlg.MessageText.Text = message;
+        dlg.NoButton.IsVisible = false;
+        dlg.YesButton.Content = "OK";
+        await dlg.ShowDialog<bool>(owner);
+    }
+
     private void OnYesClick(object? sender, RoutedEventArgs e) => Close(true);
     private void OnNoClick(object? sender, RoutedEventArgs e)  => Close(false);
 }

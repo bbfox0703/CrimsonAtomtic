@@ -48,14 +48,17 @@ public sealed partial class MainWindowViewModel(
             var icons = localization.Icons;
             if (!icons.IsAvailable)
             {
-                return "Icons: not set (Tools → Set Icon Folder…)";
+                return "Icons: cache directory inaccessible";
             }
-            var basename = Path.GetFileName(icons.Root!.TrimEnd(Path.DirectorySeparatorChar));
+            if (icons.FileCount == 0)
+            {
+                return "Icons: empty (Tools → Extract Icons from Game Data…)";
+            }
             if (icons.DecodeFailures > 0 && !string.IsNullOrEmpty(icons.LastError))
             {
-                return $"Icons: {basename} — {icons.DecodeFailures} decode fail(s); {icons.LastError}";
+                return $"Icons: {icons.FileCount:N0} files — {icons.DecodeFailures} decode fail(s); {icons.LastError}";
             }
-            return $"Icons: {basename} ({icons.FileCount:N0} files)";
+            return $"Icons: {icons.FileCount:N0} files";
         }
     }
 
@@ -101,37 +104,23 @@ public sealed partial class MainWindowViewModel(
     /// currently-displayed fields so their resolved names update in place.
     /// </summary>
     /// <summary>
-    /// Update the active icon-cache directory and persist the choice
-    /// to settings.json. Re-seeds the IconProvider AND the static
-    /// converter singleton so already-rendered cells repaint with
-    /// the new icons (or with blanks if the new path has no match).
-    /// Empty path clears the configured value — falls back to the
-    /// exe-dir probe.
+    /// Re-seed the icon provider against the fixed
+    /// <c>%LOCALAPPDATA%\CrimsonAtomtic\IconCache\</c> directory and
+    /// invalidate the Bitmap cache so newly-extracted .webp files
+    /// surface in already-rendered DataGrids without a restart.
+    /// Open Item Picker windows aren't refreshed here — they hold
+    /// their own VMs and need close + reopen for the new icons.
     /// </summary>
-    public void SetIconCacheDirectory(string? path)
+    public void RefreshIconCache()
     {
-        var normalized = string.IsNullOrWhiteSpace(path) ? null : path;
-        // Persist first so a crash mid-refresh doesn't drop the user's
-        // choice. The previously-loaded language pref is preserved
-        // through the record-with copy.
-        var existing = AppSettingsStore.Load(paths.LocalAppDataDirectory);
-        AppSettingsStore.TrySave(paths.LocalAppDataDirectory,
-            existing with { IconCacheDirectory = normalized });
-
-        // Re-seed the provider. The exe directory is the same as on
-        // first boot — passing it again keeps the
-        // <exe-dir>/IconCache/ fallback consistent.
-        var exeDir = Path.GetDirectoryName(
-            AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar));
-        localization.ConfigureIconProvider(normalized, exeDir);
+        localization.ConfigureIconProvider(
+            IconProvider.ResolveRoot(paths.LocalAppDataDirectory));
         ItemKeyToIconConverter.Provider = localization.Icons;
 
         // Force every currently-rendered icon binding to re-query the
         // converter by rebuilding the visible row collections. The
         // converter doesn't have a "cache invalidated, re-query"
-        // signal otherwise. Open Item Picker windows aren't refreshed
-        // here — they hold their own VMs and need a close + reopen
-        // for the new icons to surface.
+        // signal otherwise.
         if (_navStack.Count > 0)
         {
             RebuildFromTop();
@@ -312,6 +301,29 @@ public sealed partial class MainWindowViewModel(
     /// CA1051 stays happy.
     /// </summary>
     public Func<string, string, Task<bool>>? ConfirmRequested { get; set; }
+
+    /// <summary>
+    /// Async one-button info / refusal alert callback (title, message).
+    /// Provided by <c>MainWindow</c>'s code-behind via
+    /// <see cref="ConfirmDialog.ShowAlertAsync"/>. Null in headless
+    /// test scenarios, in which case the refusal path silently falls
+    /// back to <see cref="BulkOpStatus"/> only.
+    /// </summary>
+    public Func<string, string, Task>? AlertRequested { get; set; }
+
+    /// <summary>
+    /// Path of the save for which the first-time "challenge completion
+    /// edit → achievement impact" warning has already been shown and
+    /// confirmed this run. Null before any challenge has been edited.
+    /// On every challenge-completion edit we compare against
+    /// <see cref="_loadedPath"/>: a match means "already warned for
+    /// this save — skip the first-time prose, just show the recurring
+    /// artifact warning". A mismatch (different save loaded since
+    /// the last confirm) re-arms the first-time warning. No explicit
+    /// reset hook needed; the comparison naturally resets when the
+    /// user loads a different save.
+    /// </summary>
+    private string? _challengeWarningAcknowledgedForPath;
 
     /// <summary>
     /// Status footer text for the most recent bulk operation —
@@ -530,8 +542,17 @@ public sealed partial class MainWindowViewModel(
     /// <summary>Edit panel is shown when the user has selected an editable scalar field.</summary>
     public bool IsEditPanelVisible => SelectedField is { IsEditable: true };
 
-    /// <summary>Type-tag hint shown in the edit panel, e.g. "u32" or "f64".</summary>
-    public string SelectedFieldTypeHint => SelectedField?.TypeTag ?? string.Empty;
+    /// <summary>
+    /// Type-tag hint shown in the edit panel, e.g. "u32" or "f64".
+    /// For absent fields, suffix " (absent — Apply makes present)" so
+    /// the user understands the click flips the presence bit, not just
+    /// writes a value. The TextBox's placeholder text uses the same
+    /// string, so an empty textbox spells out what's about to happen.
+    /// </summary>
+    public string SelectedFieldTypeHint =>
+        SelectedField is not { } f ? string.Empty :
+        f.Present       ? f.TypeTag :
+        $"{f.TypeTag} (absent — Apply makes present)";
 
     /// <summary>
     /// True when the currently-selected scalar field can be filled
@@ -728,16 +749,53 @@ public sealed partial class MainWindowViewModel(
         {
             return;
         }
+        // Fire-and-forget: LoadBlockDetails for large blocks (e.g.
+        // QuestSaveData with 4341 missions) costs ~1-2 s on first hit
+        // because Rust serializes the whole block tree to JSON and C#
+        // deserializes it back. Running it on the UI thread freezes
+        // the window; a Task.Run worker keeps clicks responsive. Cache
+        // hits return in microseconds so the Task.Run overhead is
+        // negligible there too. `_ =` discards the Task — the
+        // continuation handles its own completion + error path.
+        _ = LoadSelectedBlockAsync(value, _loadedPath);
+    }
+
+    /// <summary>
+    /// Worker for <see cref="OnSelectedBlockChanged"/>: fetches block
+    /// details on a thread-pool thread, then pushes the root frame on
+    /// the UI thread via Avalonia's synchronization context.
+    /// </summary>
+    /// <remarks>
+    /// Race guard: the user can click a different row while this is
+    /// awaiting. When the awaited fetch completes we re-check that
+    /// <see cref="MainWindowViewModel.SelectedBlock"/> is still the
+    /// block we started loading; if not, the result is dropped silently
+    /// and the more-recent click's worker is left to handle the new
+    /// selection.
+    /// </remarks>
+    private async Task LoadSelectedBlockAsync(BlockSummary requested, string loadedPath)
+    {
+        BlockDetails details;
         try
         {
-            var details = loader.LoadBlockDetails(_loadedPath, value.Index);
-            // Root frame: empty path — this block is at the TOC level.
-            PushFrame(new BlockFrame(details.ClassName, details, Array.Empty<PathStep>()));
+            details = await Task.Run(() => loader.LoadBlockDetails(loadedPath, requested.Index))
+                .ConfigureAwait(true);
         }
         catch (CrimsonSaveException ex)
         {
-            DetailsError = $"{ex.Message} (code {ex.ErrorCode})";
+            if (ReferenceEquals(SelectedBlock, requested))
+            {
+                DetailsError = $"{ex.Message} (code {ex.ErrorCode})";
+            }
+            return;
         }
+
+        if (!ReferenceEquals(SelectedBlock, requested))
+        {
+            return;
+        }
+        // Root frame: empty path — this block is at the TOC level.
+        PushFrame(new BlockFrame(details.ClassName, details, Array.Empty<PathStep>()));
     }
 
     partial void OnFieldsFilterChanged(string? value) => ApplyFieldsFilter();
@@ -909,8 +967,19 @@ public sealed partial class MainWindowViewModel(
     /// On failure, leaves the raw text intact and stamps
     /// <see cref="FieldRowViewModel.EditError"/>.
     /// </summary>
+    /// <remarks>
+    /// Edits that flip a <c>MissionStateData</c> field to "completed"
+    /// (either <c>_state ← 5</c> or <c>_completedTime</c> going from
+    /// absent to present) are routed through
+    /// <see cref="ConfirmChallengeCompletionEditAsync"/> first — the
+    /// engine cross-checks mission state with the matching quest-reward
+    /// item, and an edit here can leave the artifact in a stuck state
+    /// (un-claimable AND un-deletable). The user explicitly confirms
+    /// per edit, with an extra "may affect achievement progress"
+    /// preamble the first time per save in this session.
+    /// </remarks>
     [RelayCommand]
-    private void CommitFieldEdit(FieldRowViewModel? row)
+    private async Task CommitFieldEditAsync(FieldRowViewModel? row)
     {
         var block = SelectedBlock;
         if (row is null || !row.IsEditable || _loadedPath is null || block is null)
@@ -922,12 +991,38 @@ public sealed partial class MainWindowViewModel(
             row.EditError = err;
             return;
         }
+        // Challenge-completion guard. Detected before the FFI mutation so
+        // a "cancel" in the dialog leaves the save body fully untouched.
+        if (IsChallengeCompletionEdit(row))
+        {
+            if (!await ConfirmChallengeCompletionEditAsync())
+            {
+                return;
+            }
+        }
         try
         {
             // Path-addressed FFI: empty path collapses to a top-level mutation,
             // non-empty walks into locator children / list elements.
+            //
+            // Two routes depending on the field's current presence:
+            //  - Present scalar → SetScalarField (in-place byte patch over
+            //    the existing field bytes; mask unchanged).
+            //  - Absent scalar → SetScalarFieldPresent with makePresent=true
+            //    (flips the mask bit AND fills the freshly-allocated bytes
+            //    with `bytes`; encoder rewrites the block's body and all
+            //    cascading TOC offsets in one pass).
             var pathArr = row.EnclosingPath is PathStep[] a ? a : row.EnclosingPath.ToArray();
-            loader.SetScalarField(block.Index, pathArr, row.FieldIndex, bytes);
+            if (row.Present)
+            {
+                loader.SetScalarField(block.Index, pathArr, row.FieldIndex, bytes);
+            }
+            else
+            {
+                loader.SetScalarFieldPresent(
+                    block.Index, pathArr, row.FieldIndex,
+                    makePresent: true, bytes);
+            }
         }
         catch (CrimsonSaveException ex)
         {
@@ -944,6 +1039,175 @@ public sealed partial class MainWindowViewModel(
         RefreshNavStack(freshTop);
         IsDirty = true;
         OnPropertyChanged(nameof(WindowTitle));
+        // The "(absent — Apply makes present)" suffix on SelectedFieldTypeHint
+        // depends on SelectedField.Present, which may have just flipped from
+        // false → true. The accessor doesn't observe nested property changes,
+        // so prod it manually here.
+        OnPropertyChanged(nameof(SelectedFieldTypeHint));
+    }
+
+    /// <summary>
+    /// Flip a currently-present scalar field to absent. Mirrors the
+    /// "absent → present" path that <see cref="CommitFieldEdit"/> handles
+    /// via <c>SetScalarFieldPresent(makePresent: true, …)</c>, but for
+    /// the reverse direction with an empty initial-bytes span. Only
+    /// reachable when the selected field is editable AND currently
+    /// present — the inline edit panel's button is hidden otherwise.
+    /// </summary>
+    /// <remarks>
+    /// The previously-stored byte content is dropped (the mask bit flips
+    /// and the field's payload region is removed from the block). To
+    /// restore it, the user types a fresh value and clicks Apply —
+    /// <see cref="CommitFieldEdit"/> takes the absent → present path
+    /// once <see cref="FieldRowViewModel.Present"/> is false.
+    /// </remarks>
+    [RelayCommand]
+    private void MakeFieldAbsent(FieldRowViewModel? row)
+    {
+        var block = SelectedBlock;
+        if (row is null || !row.IsEditable || !row.Present
+            || _loadedPath is null || block is null)
+        {
+            return;
+        }
+        try
+        {
+            var pathArr = row.EnclosingPath is PathStep[] a ? a : row.EnclosingPath.ToArray();
+            loader.SetScalarFieldPresent(
+                block.Index, pathArr, row.FieldIndex,
+                makePresent: false, ReadOnlySpan<byte>.Empty);
+        }
+        catch (CrimsonSaveException ex)
+        {
+            row.EditError = $"{ex.Message} (code {ex.ErrorCode})";
+            return;
+        }
+        var freshTop = loader.LoadBlockDetails(_loadedPath, block.Index);
+        RefreshNavStack(freshTop);
+        IsDirty = true;
+        OnPropertyChanged(nameof(WindowTitle));
+        OnPropertyChanged(nameof(SelectedFieldTypeHint));
+    }
+
+    /// <summary>
+    /// True when applying <paramref name="row"/>'s pending edit would
+    /// mark a <c>MissionStateData</c> as completed — either
+    /// <c>_state ← 5</c> (when not already 5) or <c>_completedTime</c>
+    /// promoting from absent to present. Used to gate
+    /// <see cref="CommitFieldEditAsync"/> on the confirmation dialog.
+    /// </summary>
+    /// <remarks>
+    /// Detection is intentionally narrow: only the two shapes the
+    /// engine itself uses to mark completion (per the slot102 → slot103
+    /// engine-natural transition). Lesser state transitions
+    /// (<c>_state 2 → 3</c>, etc.) and unrelated MissionStateData
+    /// edits proceed without prompting.
+    /// </remarks>
+    private bool IsChallengeCompletionEdit(FieldRowViewModel row)
+    {
+        if (_navStack.Count == 0
+            || _navStack.Peek() is not BlockFrame bf
+            || !string.Equals(bf.Block.ClassName, "MissionStateData", StringComparison.Ordinal))
+        {
+            return false;
+        }
+        // Pattern 1: _state ← 5 (when not already 5).
+        if (row.Name == "_state")
+        {
+            if (!int.TryParse(row.RawText.Trim(),
+                              System.Globalization.NumberStyles.Integer,
+                              System.Globalization.CultureInfo.InvariantCulture,
+                              out var newState)
+                || newState != 5)
+            {
+                return false;
+            }
+            // Skip when already 5 — pure no-op.
+            if (TryParseScalarUInt(row.DisplayValue, out var current) && current == 5UL)
+            {
+                return false;
+            }
+            return true;
+        }
+        // Pattern 2: _completedTime going from absent to present.
+        // The engine sets this u64 timestamp exactly when it marks
+        // completion, so any promote-to-present qualifies.
+        if (row.Name == "_completedTime" && !row.Present)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Show the challenge-completion confirmation dialog. Returns
+    /// <c>true</c> when the user accepts the edit, <c>false</c> when
+    /// they cancel.
+    /// </summary>
+    /// <remarks>
+    /// First call per save in this session shows the combined
+    /// "Sealed Abyss Artifact + achievement impact" message and, on
+    /// accept, stamps <see cref="_challengeWarningAcknowledgedForPath"/>
+    /// with the current <see cref="_loadedPath"/>. Subsequent calls on
+    /// the same save show only the artifact warning (the achievement
+    /// preamble is one-time). Loading a different save naturally
+    /// re-arms the first-time message because the path comparison no
+    /// longer matches.
+    /// </remarks>
+    private async Task<bool> ConfirmChallengeCompletionEditAsync()
+    {
+        var ask = ConfirmRequested;
+        if (ask is null)
+        {
+            // Headless / test scenarios — no dialog wired. Proceed
+            // without prompting so unit tests aren't blocked.
+            return true;
+        }
+        var firstTimeForThisSave = !string.Equals(
+            _challengeWarningAcknowledgedForPath,
+            _loadedPath,
+            StringComparison.OrdinalIgnoreCase);
+        string title = "Marking challenge as completed";
+        string msg;
+        if (firstTimeForThisSave)
+        {
+            msg =
+                "You're about to mark a challenge as completed.\n\n" +
+                "[Quest item warning] If this challenge rewards a Sealed " +
+                "Abyss Artifact (or similar quest item), the in-game item " +
+                "will become un-claimable AND un-deletable — the engine " +
+                "cross-references mission state with item state on the " +
+                "'claim reward' path, and a file-edit creates a mismatch " +
+                "the engine can't unwind. The editor cannot reliably " +
+                "detect the artifact link yet, so this warning fires for " +
+                "every challenge-completion edit.\n\n" +
+                "[Achievement warning — shown once per save] Marking " +
+                "missions complete via file edit may also break in-game " +
+                "achievement progress. This preamble is shown only on " +
+                "the first challenge edit per save in this session; " +
+                "subsequent challenge edits on this save will only show " +
+                "the artifact warning.\n\n" +
+                "Recommended: confirm in-game (close + reopen the save) " +
+                "before deciding how to proceed.\n\n" +
+                "Proceed with the edit?";
+        }
+        else
+        {
+            msg =
+                "You're about to mark another challenge as completed.\n\n" +
+                "Reminder: if this challenge rewards a Sealed Abyss " +
+                "Artifact (or similar quest item), the in-game item " +
+                "will become un-claimable AND un-deletable. The editor " +
+                "cannot reliably detect the artifact link yet, so this " +
+                "warning fires for every challenge-completion edit.\n\n" +
+                "Proceed?";
+        }
+        var ok = await ask(title, msg);
+        if (ok && firstTimeForThisSave)
+        {
+            _challengeWarningAcknowledgedForPath = _loadedPath;
+        }
+        return ok;
     }
 
     /// <summary>
@@ -1321,6 +1585,12 @@ public sealed partial class MainWindowViewModel(
             BulkOpStatus = $"This list holds {sourceClass}, not ItemSaveData. Add unsupported here.";
             return;
         }
+        // Note: we deliberately do NOT refuse "+ Bag" into engine-managed
+        // containers (Quest Artifacts, Kuku Pot, …). Cloning entries
+        // there produces an orphan whose in-game "claim reward" /
+        // "consume" path will silently fail, but the user has accepted
+        // that consequence. Edit at your own risk — the editor's job
+        // is to expose the surface, not policy.
         // Pick the clone template: prefer the row the user has
         // currently SELECTED in the elements DataGrid (so they can
         // point at a same-shape donor, e.g. an existing food row when

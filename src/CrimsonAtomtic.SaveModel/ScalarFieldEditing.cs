@@ -60,6 +60,55 @@ public static class ScalarFieldEditing
         kind == "fixed_prefix" || kind == "fixed_suffix";
 
     /// <summary>
+    /// Derive an editable type tag from a row's schema <c>TypeName</c>
+    /// even when the field is absent (no <c>"&lt;tag&gt;"</c> in its
+    /// formatted value to parse). The Rust side erases the underlying
+    /// scalar kind to <c>FieldKind::Absent</c> on absent rows, so
+    /// promote-an-absent-field flows can't lean on
+    /// <see cref="TryParse"/>; this helper fills the gap.
+    /// </summary>
+    /// <remarks>
+    /// Handles primitive aliases (<c>uint64</c> ↔ <c>u64</c>, <c>float</c>
+    /// ↔ <c>f32</c>, …) and the schema's <c>*Key</c> typedefs (all of
+    /// which are 4-byte u32 in 1.06: ItemKey, MissionKey, QuestKey,
+    /// StageKey, KnowledgeKey, FactionKey, CharacterKey, …). Vector
+    /// types like <c>float3</c> / <c>float4</c> are intentionally
+    /// rejected — a single textbox can't drive a multi-component value.
+    /// </remarks>
+    public static bool TryInferTypeTagFromSchema(string typeName, int metaSize, out string typeTag)
+    {
+        typeTag = string.Empty;
+        if (string.IsNullOrEmpty(typeName))
+        {
+            return false;
+        }
+        switch (typeName)
+        {
+            case "bool":                          typeTag = "bool"; return true;
+            case "uint8":  case "u8":  case "byte":  typeTag = "u8";  return true;
+            case "uint16": case "u16":               typeTag = "u16"; return true;
+            case "uint32": case "u32":               typeTag = "u32"; return true;
+            case "uint64": case "u64":               typeTag = "u64"; return true;
+            case "int8":   case "i8":  case "sbyte": typeTag = "i8";  return true;
+            case "int16":  case "i16":               typeTag = "i16"; return true;
+            case "int32":  case "i32":               typeTag = "i32"; return true;
+            case "int64":  case "i64":               typeTag = "i64"; return true;
+            case "float":  case "f32": case "single": typeTag = "f32"; return true;
+            case "double": case "f64":               typeTag = "f64"; return true;
+        }
+        // Schema typedef heuristic: every `*Key` typedef in 1.06 is a
+        // 4-byte u32 (ItemKey, MissionKey, FactionKey, etc.). We gate
+        // on metaSize so a future patch that introduces a wider key
+        // type doesn't get misclassified silently.
+        if (metaSize == 4 && typeName.EndsWith("Key", StringComparison.Ordinal))
+        {
+            typeTag = "u32";
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Split <paramref name="formatted"/> ("123 &lt;u32&gt;") into the raw
     /// stringified value ("123") and the lowercase type tag ("u32"). Returns
     /// false when the input doesn't carry the expected trailing tag.

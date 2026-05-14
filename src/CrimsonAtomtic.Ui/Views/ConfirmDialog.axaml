@@ -24,10 +24,12 @@
                 HorizontalAlignment="Right"
                 Spacing="8"
                 Margin="0,16,0,0">
-      <Button Content="{StaticResource ConfirmDialogNo}"
+      <Button Name="NoButton"
+              Content="{StaticResource ConfirmDialogNo}"
               Click="OnNoClick"
               MinWidth="80" />
-      <Button Content="{StaticResource ConfirmDialogYes}"
+      <Button Name="YesButton"
+              Content="{StaticResource ConfirmDialogYes}"
               Click="OnYesClick"
               MinWidth="80"
               IsDefault="True" />

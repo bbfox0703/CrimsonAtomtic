@@ -41,8 +41,15 @@ namespace CrimsonAtomtic.Ui.Services;
 /// </summary>
 public sealed class SaveBackupService
 {
-    /// <summary>Hard cap on per-slot backup versions kept on disk.</summary>
-    public const int MaxVersionsPerSlot = 3;
+    /// <summary>
+    /// Hard cap on per-slot backup versions kept on disk. A Restore From
+    /// Backup… picks an existing snapshot and immediately writes the
+    /// loaded save, which itself triggers a fresh pre-write backup —
+    /// so 5 distinct user-visible save edits already consume 6 slots
+    /// once a restore happens. 6 gives the user breathing room for a
+    /// restore-then-keep-editing flow without losing the original.
+    /// </summary>
+    public const int MaxVersionsPerSlot = 6;
 
     /// <summary>
     /// Subdirectory name under <see cref="IPlatformPaths.LocalAppDataDirectory"/>

@@ -14,7 +14,6 @@
   <sys:String x:Key="MenuTools">_Tools</sys:String>
   <sys:String x:Key="MenuBrowseLocalization">_Browse Localization…</sys:String>
   <sys:String x:Key="MenuBrowseItems">Browse _Items…</sys:String>
-  <sys:String x:Key="MenuSetIconFolder">Set _Icon Folder…</sys:String>
   <sys:String x:Key="MenuExtractIcons">_Extract Icons from Game Data…</sys:String>
   <sys:String x:Key="MenuFontSize">_Font Size</sys:String>
   <sys:String x:Key="SummaryToggleTip">Show / hide the Save Summary panel — claim more room for the main grids.</sys:String>
@@ -101,6 +100,8 @@
   <sys:String x:Key="EditPanelRevert">Revert</sys:String>
   <sys:String x:Key="EditPanelFillMaxStack">Set to max</sys:String>
   <sys:String x:Key="EditPanelFillMaxStackTip">Fill this field with the item's max_stack_count (from iteminfo). Pre-fills the textbox — review then click Apply.</sys:String>
+  <sys:String x:Key="EditPanelMakeAbsent">Make absent</sys:String>
+  <sys:String x:Key="EditPanelMakeAbsentTip">Flip this scalar's presence bit off — the field is removed from the block (mask bit cleared, payload bytes dropped). Reverse it by typing a value and clicking Apply.</sys:String>
   <sys:String x:Key="ConfirmDialogYes">Yes</sys:String>
   <sys:String x:Key="ConfirmDialogNo">No</sys:String>
   <sys:String x:Key="ElementsColBulkFill">Bulk</sys:String>

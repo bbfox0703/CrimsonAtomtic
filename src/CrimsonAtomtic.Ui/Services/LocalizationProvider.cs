@@ -247,8 +247,11 @@ public sealed class LocalizationProvider : IDisposable
     /// <summary>
     /// Item-icon resolver. Always non-null; <see cref="IconProvider.IsAvailable"/>
     /// tells the UI whether to bother rendering the icon column at all.
+    /// Default instance points at a placeholder path that never exists —
+    /// real wiring happens via <see cref="ConfigureIconProvider"/> at
+    /// app startup once the platform paths are known.
     /// </summary>
-    public IconProvider Icons { get; private set; } = new(configuredPath: null, exeDirectory: null);
+    public IconProvider Icons { get; private set; } = new(string.Empty);
 
     public LocalizationProvider(IPazExtractor paz)
     {
@@ -257,15 +260,15 @@ public sealed class LocalizationProvider : IDisposable
     }
 
     /// <summary>
-    /// Re-seed the icon provider with a fresh configured path. Called
-    /// once during bootstrap and again whenever the user edits the
-    /// path through the Tools menu. The previously-loaded Bitmap
-    /// cache is dropped — different folder, potentially different
-    /// icons keyed by the same ItemKey.
+    /// Re-seed the icon provider at <paramref name="rootDirectory"/>.
+    /// Called once during bootstrap (with <c>%LOCALAPPDATA%\CrimsonAtomtic\IconCache\</c>)
+    /// and again after Tools → Extract Icons so the Bitmap cache is
+    /// dropped and the FileCount snapshot refreshes against the
+    /// freshly-written .webp files.
     /// </summary>
-    public void ConfigureIconProvider(string? configuredPath, string? exeDirectory)
+    public void ConfigureIconProvider(string rootDirectory)
     {
-        Icons = new IconProvider(configuredPath, exeDirectory);
+        Icons = new IconProvider(rootDirectory);
     }
 
     /// <summary>True when the iteminfo bridge AND the English PALOC are loaded.</summary>
