@@ -56,6 +56,10 @@
                             Binding="{Binding CharacterKey}"
                             Width="110"
                             IsReadOnly="True" />
+        <DataGridTextColumn Header="{StaticResource RenameMercenaryColCharName}"
+                            Binding="{Binding ResolvedCharacterName}"
+                            Width="200"
+                            IsReadOnly="True" />
         <DataGridTextColumn Header="{StaticResource RenameMercenaryColType}"
                             Binding="{Binding TypeTag}"
                             Width="90"

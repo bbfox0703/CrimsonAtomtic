@@ -34,10 +34,11 @@
   <sys:String x:Key="SocketEditorNotAvailableTitle">No filled sockets in this save</sys:String>
   <sys:String x:Key="SocketEditorNotAvailableBody">The loaded save has no items with filled sockets (or no items with a _socketSaveDataList at all). Filled sockets appear here once you've embedded a gem in-game.</sys:String>
   <sys:String x:Key="SocketEditorPickerTitle">Pick a gem</sys:String>
-  <sys:String x:Key="RenameMercenaryHeader">Rename mercenaries / pets. Current saved names are NOT shown (read-side FFI pending) — identify each row by MercNo, CharacterKey, and Equip count. Type a new name and click Apply per row. Saves to the file on next File → Save.</sys:String>
+  <sys:String x:Key="RenameMercenaryHeader">Rename mercenaries / pets. The Name column shows the character/template name resolved from CharacterKey (same source as the main window's mercenaryDataList Name column) — use it to recognise each row. Your custom rename (already stored as _mercenaryName) is NOT shown — read-side FFI pending. Type a new name and click Apply per row. Saves to the file on next File → Save.</sys:String>
   <sys:String x:Key="RenameMercenaryColIdx">Index</sys:String>
   <sys:String x:Key="RenameMercenaryColMercNo">MercNo</sys:String>
   <sys:String x:Key="RenameMercenaryColCharKey">CharKey</sys:String>
+  <sys:String x:Key="RenameMercenaryColCharName">Name</sys:String>
   <sys:String x:Key="RenameMercenaryColType">Type</sys:String>
   <sys:String x:Key="RenameMercenaryColEquip">Equip</sys:String>
   <sys:String x:Key="RenameMercenaryColNewName">New name (UTF-8)</sys:String>
@@ -49,7 +50,6 @@
   <sys:String x:Key="RenameMercenaryNotAvailableTitle">No mercenaries to rename</sys:String>
   <sys:String x:Key="RenameMercenaryNotAvailableBody">The loaded save doesn't have a MercenaryClanSaveData block, or its _mercenaryDataList is empty / unreadable. Mercenaries appear here once you've recruited at least one in-game.</sys:String>
   <sys:String x:Key="MenuFillAllStacks">Fill _All Stacks Across Every Inventory…</sys:String>
-  <sys:String x:Key="MenuDropAllArtifacts">Drop All Sealed Abyss _Artifacts From Inventory…</sys:String>
   <sys:String x:Key="MenuFontSize">_Font Size</sys:String>
   <sys:String x:Key="SummaryToggleTip">Show / hide the Save Summary panel — claim more room for the main grids.</sys:String>
   <sys:String x:Key="MenuLanguage">_Secondary Language</sys:String>

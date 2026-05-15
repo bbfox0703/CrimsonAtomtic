@@ -78,8 +78,6 @@
              dialog before mutating anything. -->
         <MenuItem Header="{StaticResource MenuFillAllStacks}"
                   Command="{Binding FillAllStacksAcrossInventoriesCommand}" />
-        <MenuItem Header="{StaticResource MenuDropAllArtifacts}"
-                  Command="{Binding DropAllSealedAbyssArtifactsCommand}" />
         <MenuItem Header="{StaticResource MenuRenameMercenary}"
                   Click="OnRenameMercenaryClick"
                   IsEnabled="{Binding HasSave}" />

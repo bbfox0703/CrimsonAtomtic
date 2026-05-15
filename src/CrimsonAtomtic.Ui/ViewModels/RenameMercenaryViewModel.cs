@@ -21,12 +21,17 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 /// mercenary entries; equip count == 0 typically infers an animal.
 /// </para>
 /// <para>
-/// v1 limitation: the FFI currently exposes an
+/// Row identification: the dialog shows the character/template name
+/// resolved from <c>_characterKey</c> via
+/// <see cref="LocalizationProvider.ResolveByFieldTypeName"/> — same
+/// source as the main window's <c>mercenaryDataList</c> Name column.
+/// That makes rows recognisable as e.g. "Damiane / 德米安" instead of
+/// raw numbers. The user's <i>custom</i> rename (stored as
+/// <c>InlineBytes</c> in <c>_mercenaryName</c>) is still not shown —
+/// the FFI exposes an
 /// <see cref="ISaveLoader.SetInlineBytesField">inline_bytes setter</see>
-/// but no symmetric getter, so the dialog does NOT show each
-/// mercenary's existing name. Users identify rows by
-/// (MercNo, CharacterKey, EquipCount) instead. A read-side FFI is the
-/// natural next iteration.
+/// but no symmetric getter. A read-side FFI is the natural next
+/// iteration.
 /// </para>
 /// </remarks>
 public sealed partial class RenameMercenaryViewModel : ObservableObject
@@ -158,7 +163,7 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
 
         for (var i = 0; i < elements.Count; i++)
         {
-            var row = BuildRow(vm, i, elements[i]);
+            var row = BuildRow(vm, i, elements[i], localization);
             vm.Mercenaries.Add(row);
         }
         vm.StatusMessage = $"{elements.Count} mercenary entries loaded.";
@@ -167,7 +172,8 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
 
     /// <summary>Read identifying fields out of one decoded mercenary element.</summary>
     private static MercenaryRow BuildRow(
-        RenameMercenaryViewModel vm, int index, BlockDetails element)
+        RenameMercenaryViewModel vm, int index, BlockDetails element,
+        LocalizationProvider localization)
     {
         ulong mercNo = 0;
         uint characterKey = 0;
@@ -196,7 +202,16 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
                 equipCount += f.Elements?.Count ?? 0;
             }
         }
-        var row = new MercenaryRow(vm, index, mercNo, characterKey, equipCount);
+        // Resolve the character/template name from CharacterKey via the
+        // same path the main-window mercenaryDataList Name column uses
+        // (PALOC-backed character namespace). Empty when localization
+        // isn't loaded (no game install configured) or when this
+        // CharacterKey has no PALOC entry — we render that as a blank
+        // cell rather than guessing.
+        var resolvedName = characterKey == 0
+            ? string.Empty
+            : localization.ResolveByFieldTypeName("CharacterKey", characterKey);
+        var row = new MercenaryRow(vm, index, mercNo, characterKey, equipCount, resolvedName);
         return row;
     }
 
@@ -273,19 +288,31 @@ public sealed partial class MercenaryRow : ObservableObject
         int index,
         ulong mercNo,
         uint characterKey,
-        int equipCount)
+        int equipCount,
+        string resolvedCharacterName)
     {
         _parent = parent;
         Index = index;
         MercNo = mercNo;
         CharacterKey = characterKey;
         EquipCount = equipCount;
+        ResolvedCharacterName = resolvedCharacterName;
     }
 
     public int Index { get; }
     public ulong MercNo { get; }
     public uint CharacterKey { get; }
     public int EquipCount { get; }
+
+    /// <summary>
+    /// Localized character/template name resolved from
+    /// <see cref="CharacterKey"/> via the PALOC-backed character
+    /// namespace (e.g. <c>"Damiane / 德米安"</c>). Empty when no
+    /// PALOC entry exists or localization isn't loaded. NOT the
+    /// user's custom in-save rename — that lives in
+    /// <c>_mercenaryName</c> and still needs a read-side FFI.
+    /// </summary>
+    public string ResolvedCharacterName { get; }
 
     /// <summary>Display tag derived from <see cref="EquipCount"/>.</summary>
     public string TypeTag => EquipCount == 0 ? "Animal" : "Mercenary";

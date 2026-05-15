@@ -187,7 +187,6 @@ public sealed partial class MainWindow : Window
             prev.ElementScrollRequested -= ScrollElementIntoView;
             prev.ConfirmRequested = null;
             prev.AlertRequested = null;
-            prev.ArtifactBulkOpRequested = null;
             _wiredVm = null;
         }
         if (DataContext is not MainWindowViewModel vm)
@@ -201,11 +200,6 @@ public sealed partial class MainWindow : Window
         // Window type — keeps the MVVM boundary intact.
         vm.ConfirmRequested = (title, msg) => ConfirmDialog.ShowAsync(this, title, msg);
         vm.AlertRequested = (title, msg) => ConfirmDialog.ShowAlertAsync(this, title, msg);
-        // Same trick for the artifact-drop bulk op: the VM collects
-        // intent, the dialog drives the worker + reports progress +
-        // handles cancel.
-        vm.ArtifactBulkOpRequested = (loader, loc, savePath, blocks) =>
-            ChallengeBulkOpProgressDialog.RunAsync(this, loader, loc, savePath, blocks);
         _wiredVm = vm;
         var menu = SecondaryLanguageMenu;
         // Clear any dynamic entries (everything past the static "English

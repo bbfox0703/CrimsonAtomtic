@@ -162,23 +162,33 @@
 > `b393b03..b0a015a` patch series. No further investigation needed on
 > the basic Add-to-bag flow.
 >
-> ## ⏸ INVESTIGATION PAUSED — Sealed Abyss Artifact "claim reward" trigger
+> ## ✅ RESOLVED — Sealed Abyss Artifact "claim reward" trigger (via Pattern B v1)
 >
-> Separate problem from beer add-to-bag. Engine-natural completion of
-> a Sealed Abyss Artifact challenge in 1.06 changes the artifact item's
-> `_chargedUseableCount: 0 → 15` and clears `_maxChargeUseableCount`
-> (mask bit flip + 4-byte payload removal). **Our editor produces
-> byte-identical output to the engine** (verified via ctypes-driven
-> test against the real slot102 → slot103 minimal pair — mask
-> `9f282900`, data_size 228, 6 expected `payload_offset` divergences
-> that match the absolute body shift). **But the artifact is still
-> not claimable in-game** after loading the edit. Whatever extra state
-> the engine writes to mark "ready to claim" lives outside the artifact
-> item itself. Candidate: `ContentsMiscSaveData._alertHistorySaveDataList`
-> gained an entry (alertType=30, missionKey=`0xFFFFFE99` sentinel) in
-> the engine-natural transition. **Deferred** per user direction. Full
-> findings: [Sealed Abyss Artifact investigation](#sealed-abyss-artifact-investigation-paused)
-> later in this doc.
+> **The recipe in one line:** don't touch the artifact item, don't
+> touch the related quest's catalog row, don't touch the adjacent
+> negative-key visibility-twin quest row — only click the per-row
+> "✓ Mark Challenge Complete (Pattern B v1)" button, which flips the
+> FAR tracker and inserts the X_2 follow-up sub-mission. On reload +
+> in-game claim, the engine fills in catalog + visibility twin +
+> alertHistory + the completed tag naturally.
+>
+> | 4-piece structure | Touch? |
+> |---|---|
+> | Artifact ITEM (`_inventorylist[*]._itemList[*]`, the SA artifact) | **NO** |
+> | Catalog row (positive key, e.g. 1000898 Hooves II) | **NO** |
+> | Adjacent visibility twin (negative key, e.g. 4294966810) | **NO** |
+> | FAR tracker (negative key = adjacent_twin._key − 1) | **YES** (button) |
+> | X_2 follow-up sub-mission (positive key, appended at list end) | **YES** (button) |
+>
+> The original `_chargedUseableCount: 0 → 15` edit on the artifact
+> item was the wrong layer — the engine's "ready to claim" gate is
+> keyed on `QuestSaveData._missionStateList` progression bookkeeping,
+> not on the artifact item itself. So "byte-perfect encoder but still
+> not claimable" was always correct on the encoder; the recipe was
+> aimed at the wrong layer. Verified end-to-end on slot102 against
+> Shield II, Spear I, Hooves II, Slash III. Historical deep-dive
+> kept below at [Sealed Abyss Artifact investigation
+> (HISTORICAL)](#sealed-abyss-artifact-investigation-historical--superseded-by-2026-05-15).
 >
 > ## ✅ This session — what shipped (2026-05-14 part 2)
 >
@@ -722,9 +732,7 @@ do them all at once.
 | 6 | **Unlock All Abyss Gates (Knowledge bulk-append)** | EASY | One-button Tools menu action that appends every `Knowledge_AbyssRuins_*` key (or a verified-safe subset) to `KnowledgeSaveData._list`. Mirrors the `ArtifactBulkOpService` shape: pre-flight count → confirm dialog → batch FFI → status footer. No JSON pack vendoring needed — keyset enumerated live from `knowledgeinfo.pabgb` via the existing C ABI bridge. **Caveat**: same engine-cross-reference risk pattern as SA Pattern A — start with abyss-gate prefix only (proven by the predecessor at 398 keys), defer per-key Browse Knowledge UI to a MEDIUM follow-up. |
 
 **Lower-priority deferred items** (the older list — none blocking; pick by appetite):
-- `skill_info` bridge (#4) and `Mission/Quest` name resolution (#6)
-  are still the most user-visible follow-ons not tied to SA work.
-- Items #2, #4–#14 from the original list below.
+- Items #1, #5, #7–#14 from the original list below. (Items #2, #3, #4, #6 already shipped — see strikethrough rows there.)
 
 ## Sealed Abyss Artifact investigation (HISTORICAL — superseded by 2026-05-15)
 
@@ -1189,13 +1197,18 @@ Open from earlier work, none blocking the icon pipeline:
      `MainWindowViewModel.BulkFillItemListMaxStackAsync` now
      issues one batch call inside `Task.Run`.
 
-4. **`skill_info` bridge** for SkillKey / KnowledgeKey name
-   resolution. crimson-rs already has a `skill_info/` parser used
-   internally; needs a C ABI bridge (mirror of `iteminfo` /
-   `paloc`) to surface skill names in the editor's resolved-name
-   column. Would also let us label
-   `SkillLearnElementSaveData._knowledgeKey` values like 40114
-   that today show empty.
+4. ~~**`skill_info` bridge** for SkillKey / KnowledgeKey name
+   resolution.~~ ✅ **Shipped.** `skill_info` C ABI now lives at
+   `vendor/crimson-rs/src/c_abi/skill_info.rs`; C# consumes via
+   `NativeSkillInfoCatalog` + `LocalizationProvider._skillInfo` →
+   `LookupStringKey` (no PALOC chain). Same wave brought 8 sibling
+   Key bridges online — `MissionKey`, `QuestKey`, `StageKey`,
+   `KnowledgeKey`, `QuestGaugeKey`, `SkillKey`, `GimmickInfoKey`,
+   `LevelGimmickSceneObjectInfoKey`, `SubLevelKey` — all in
+   `LocalizationProvider.TableDrivenKeyTypes`. Mission/Quest/Stage/
+   Knowledge resolve through `LookupDisplayName → PALOC localized
+   title`; Gauge/Skill/SubLevel are internal-name only (no PALOC
+   chain). So follow-on #6 below also dropped.
 
 5. **`FieldGimmickSaveDataKey` / `FieldNPCSaveData._characterKey`
    resolution.** Both probe to no-PALOC-entry today. These look
@@ -1204,13 +1217,12 @@ Open from earlier work, none blocking the icon pipeline:
    parsed; lower priority since most users don't care about
    anonymous field NPCs.
 
-6. **`MissionKey` / `KnowledgeKey` / `QuestKey` proper names.**
-   These straddle multiple PALOC type bytes or live entirely
-   outside PALOC (mission text uses `{staticInfo:Mission:...}`
-   template references at 0xC1). Needs a template-resolver pass
-   to reconstruct full strings. Currently NOT in
-   `TypeNameToTypeByte` so they show blank (correct — better
-   than showing the wrong name).
+6. ~~**`MissionKey` / `KnowledgeKey` / `QuestKey` proper names.**~~
+   ✅ **Shipped** as part of the table-driven Key bridge wave (see
+   #4). All three now resolve through their dedicated `.pabgb`
+   bridges (`mission_info` / `quest_info` / `knowledge_info`) +
+   `LookupDisplayName → PALOC` for the localized title; internal
+   name fallback when PALOC misses.
 
 7. **Length-changing edits (PR B)**. List add / remove / reorder
    + inline-byte resize. Needs an `ObjectBlock` re-serializer
