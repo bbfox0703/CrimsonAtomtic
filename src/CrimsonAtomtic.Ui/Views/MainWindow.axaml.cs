@@ -666,6 +666,87 @@ public sealed partial class MainWindow : Window
         child.Show(this);
     }
 
+    /// <summary>
+    /// Tools → Edit Item Sockets. Opens
+    /// <see cref="SocketEditorWindow"/> with a fresh
+    /// <see cref="ViewModels.SocketEditorViewModel"/> built against the
+    /// loaded save. Each row's "Change Gem…" button opens a
+    /// gem-filtered <see cref="ItemPickerWindow"/> as a child of the
+    /// socket editor; the picker's action click routes back into
+    /// <see cref="ViewModels.SocketEditorViewModel.ApplyGemPick"/> to
+    /// write the new gem ItemKey in-place via
+    /// <c>SetScalarField</c>.
+    /// </summary>
+    private async void OnEditItemSocketsClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+        var summary = vm.Summary;
+        if (summary?.Blocks is not { Count: > 0 } blocks
+            || vm.LoadedPath is not { } path)
+        {
+            return;
+        }
+        var socketsVm = ViewModels.SocketEditorViewModel.TryCreate(
+            vm.GetSaveLoader(),
+            vm.Localization,
+            path,
+            blocks);
+        if (socketsVm is null)
+        {
+            var title = (string?)this.FindResource("SocketEditorNotAvailableTitle")
+                        ?? "No filled sockets";
+            var body = (string?)this.FindResource("SocketEditorNotAvailableBody")
+                       ?? "No sockets to edit.";
+            await ConfirmDialog.ShowAlertAsync(this, title, body);
+            return;
+        }
+        var child = new SocketEditorWindow { DataContext = socketsVm };
+        socketsVm.ChangeGemRequested += row =>
+        {
+            OpenGemPicker(child, vm, socketsVm, row);
+        };
+        child.Closed += (_, _) =>
+        {
+            if (socketsVm.IsDirty)
+            {
+                vm.MarkDirtyFromExternalEdit();
+            }
+        };
+        child.Show(this);
+    }
+
+    /// <summary>
+    /// Helper: open a gem-filtered <see cref="ItemPickerWindow"/> as a
+    /// child of the Sockets editor. The picker's action click is
+    /// routed to <see cref="ViewModels.SocketEditorViewModel.ApplyGemPick"/>
+    /// instead of the usual Add-to-bag handler.
+    /// </summary>
+    private static void OpenGemPicker(
+        SocketEditorWindow owner,
+        MainWindowViewModel _,
+        ViewModels.SocketEditorViewModel socketsVm,
+        ViewModels.SocketRow row)
+    {
+        var pickerVm = new ViewModels.ItemPickerViewModel(
+            socketsVm.Localization
+                ?? throw new System.InvalidOperationException("localization not attached"),
+            ViewModels.SocketEditorViewModel.GemStringKeyPrefixes)
+        {
+            ActionButtonLabel = "Pick",
+            ActionButtonTooltip = "Apply this gem to the selected socket.",
+        };
+        var picker = new ItemPickerWindow { DataContext = pickerVm };
+        pickerVm.AddItemRequested += pickedItemKey =>
+        {
+            socketsVm.ApplyGemPick(row, pickedItemKey);
+            picker.Close();
+        };
+        picker.Show(owner);
+    }
+
     private void OnExitClick(object? sender, RoutedEventArgs e)
     {
         if (Avalonia.Application.Current?.ApplicationLifetime

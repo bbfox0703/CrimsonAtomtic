@@ -28,15 +28,36 @@ public sealed partial class ItemPickerViewModel : ObservableObject
     private readonly List<ItemPickerRow> _allRows;
 
     public ItemPickerViewModel(LocalizationProvider localization)
+        : this(localization, allowedStringKeyPrefixes: null)
+    {
+    }
+
+    /// <summary>
+    /// Filtered constructor — passes a list of string-key prefixes that
+    /// gate which iteminfo entries land in <see cref="_allRows"/>.
+    /// When non-null and non-empty, only items whose
+    /// <c>StringKey.StartsWith(prefix, OrdinalIgnoreCase)</c> for at
+    /// least one prefix are eligible. Used by Sockets editor to scope
+    /// the picker to gems (<c>Item_Stat_AbyssGear_</c> /
+    /// <c>Item_Skill_AbyssGear_</c>).
+    /// </summary>
+    public ItemPickerViewModel(
+        LocalizationProvider localization,
+        IReadOnlyList<string>? allowedStringKeyPrefixes)
     {
         ArgumentNullException.ThrowIfNull(localization);
         SecondaryLanguage = localization.SecondaryLanguage;
+        var prefixes = allowedStringKeyPrefixes is { Count: > 0 } p ? p : null;
 
         _allRows = new List<ItemPickerRow>(localization.ItemCount);
         for (var i = 0; i < localization.ItemCount; i++)
         {
             var entry = localization.GetItem(i);
             if (entry is not { } e)
+            {
+                continue;
+            }
+            if (prefixes is not null && !MatchesAnyPrefix(e.StringKey, prefixes))
             {
                 continue;
             }
@@ -65,6 +86,18 @@ public sealed partial class ItemPickerViewModel : ObservableObject
         Refresh();
     }
 
+    private static bool MatchesAnyPrefix(string stringKey, IReadOnlyList<string> prefixes)
+    {
+        foreach (var p in prefixes)
+        {
+            if (stringKey.StartsWith(p, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /// <summary>
     /// User's currently-active secondary language, captured at dialog
     /// open. Null when only English is loaded. Changing the secondary
@@ -74,6 +107,22 @@ public sealed partial class ItemPickerViewModel : ObservableObject
     public string? SecondaryLanguage { get; }
 
     public bool HasSecondary => !string.IsNullOrEmpty(SecondaryLanguage);
+
+    /// <summary>
+    /// Caller-overridable label on the per-row "action" button. Default
+    /// is the original "+ Bag" Add-to-bag wording so existing call sites
+    /// stay correct without change. The Sockets editor overrides this
+    /// to <c>"Pick"</c> when the picker is acting as a gem selector.
+    /// </summary>
+    public string ActionButtonLabel { get; init; } = "+ Bag";
+
+    /// <summary>
+    /// Caller-overridable tooltip on the action button. Mirrors
+    /// <see cref="ActionButtonLabel"/>; defaults to the
+    /// <c>ItemPickerAddToBagTip</c> static-resource shape so existing
+    /// behaviour is preserved.
+    /// </summary>
+    public string? ActionButtonTooltip { get; init; }
 
     public string SecondaryNameHeader =>
         HasSecondary ? $"Name ({SecondaryLanguage})" : "Name (secondary)";

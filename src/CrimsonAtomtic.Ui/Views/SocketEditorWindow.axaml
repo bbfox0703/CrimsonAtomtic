@@ -1,0 +1,75 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        x:Class="CrimsonAtomtic.Ui.Views.SocketEditorWindow"
+        x:DataType="vm:SocketEditorViewModel"
+        Title="{StaticResource MenuEditItemSockets}"
+        Width="980" Height="560"
+        MinWidth="720" MinHeight="380"
+        FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
+
+  <DockPanel LastChildFill="True" Margin="12">
+    <TextBlock DockPanel.Dock="Top"
+               Text="{StaticResource SocketEditorHeader}"
+               TextWrapping="Wrap"
+               Opacity="0.7"
+               Margin="0,0,0,8" />
+
+    <Grid DockPanel.Dock="Bottom"
+          ColumnDefinitions="*,Auto"
+          ColumnSpacing="12"
+          Margin="0,8,0,0">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding StatusMessage}"
+                 Opacity="0.7"
+                 VerticalAlignment="Center"
+                 TextTrimming="CharacterEllipsis" />
+      <Button Grid.Column="1"
+              Content="{StaticResource SocketEditorClose}"
+              Click="OnCloseClick"
+              MinWidth="80" />
+    </Grid>
+
+    <DataGrid ItemsSource="{Binding Sockets}"
+              AutoGenerateColumns="False"
+              CanUserResizeColumns="True"
+              CanUserSortColumns="False"
+              GridLinesVisibility="Horizontal"
+              IsReadOnly="True"
+              HeadersVisibility="Column">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="{StaticResource SocketEditorColBag}"
+                            Binding="{Binding BagLabel}"
+                            Width="140" />
+        <DataGridTextColumn Header="{StaticResource SocketEditorColItem}"
+                            Binding="{Binding ItemName}"
+                            Width="2*" />
+        <DataGridTextColumn Header="{StaticResource SocketEditorColItemKey}"
+                            Binding="{Binding ItemKey}"
+                            Width="100" />
+        <DataGridTextColumn Header="{StaticResource SocketEditorColSocket}"
+                            Binding="{Binding SocketIndex}"
+                            Width="70" />
+        <DataGridTextColumn Header="{StaticResource SocketEditorColCurrentGem}"
+                            Binding="{Binding DisplayGemName}"
+                            Width="2*" />
+        <DataGridTextColumn Header="{StaticResource SocketEditorColCurrentGemKey}"
+                            Binding="{Binding CurrentGemKey}"
+                            Width="100" />
+        <DataGridTemplateColumn Header="{StaticResource SocketEditorColAction}"
+                                Width="120">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate DataType="vm:SocketRow">
+              <Button Content="{StaticResource SocketEditorChangeGem}"
+                      Command="{Binding ChangeGemCommand}"
+                      HorizontalAlignment="Stretch" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTextColumn Header="{StaticResource SocketEditorColApplied}"
+                            Binding="{Binding AppliedGemName}"
+                            Width="2*" />
+      </DataGrid.Columns>
+    </DataGrid>
+  </DockPanel>
+</Window>

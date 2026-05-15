@@ -3,7 +3,29 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-15 (Rename Mercenary dialog + new `set_inline_bytes_field` FFI in crimson-rs).
+> Last updated: 2026-05-15 (Sockets editor v1 — swap-only, gem-filtered Item Picker).
+>
+> ## ✅ This session — what shipped (2026-05-15 part 5)
+>
+> Pick #4 of the porting roadmap — **Sockets editor v1 (swap-only)**.
+> The highest-value save-editor feature still missing, now shipped in
+> its safest scope.
+>
+> | Area | Scope |
+> |---|---|
+> | **Tools → Edit Item Sockets…** | New menu item; opens [`SocketEditorWindow`](../src/CrimsonAtomtic.Ui/Views/SocketEditorWindow.axaml) bound to [`SocketEditorViewModel`](../src/CrimsonAtomtic.Ui/ViewModels/SocketEditorViewModel.cs). Walks every `InventorySaveData._inventorylist[*]._itemList[*]._socketSaveDataList[*]`, surfaces one row per **filled** socket (mask present + `_itemKey > 0`). Empty sockets are not shown — per the predecessor's hard caveat, embedding gems into empty sockets requires the in-game Witch NPC and forcing fills can crash. |
+> | **DataGrid columns** | Bag (InventoryKey-resolved label) / Item name (PALOC-resolved) / ItemKey / Slot # / Current gem name / Current gem key / Change Gem… button / Applied gem name (post-edit). |
+> | **Change Gem… flow** | Clicking the per-row button raises `SocketEditorViewModel.ChangeGemRequested`; MainWindow code-behind opens a **gem-filtered** [`ItemPickerWindow`](../src/CrimsonAtomtic.Ui/Views/ItemPickerWindow.axaml). Picker is filtered via the new `ItemPickerViewModel(localization, allowedStringKeyPrefixes)` overload to `Item_Stat_AbyssGear_*` + `Item_Skill_AbyssGear_*`. Action button relabelled to "Pick" via the new `ItemPickerViewModel.ActionButtonLabel` / `ActionButtonTooltip` init-only properties. |
+> | **Apply** | On pick, `SocketEditorViewModel.ApplyGemPick(row, gemKey)` writes the 4-byte gem `_itemKey` in-place via `ISaveLoader.SetScalarField` with a 3-step path: `_inventorylist[bag] → _itemList[item] → _socketSaveDataList[socket] → _itemKey`. No length-changing edits. Mirrors the predecessor's "swap-only" practice — fill_socket_slots / clear_socket_slots / socket-count unlock are explicitly out of v1 scope per the safe-edit contract. |
+>
+> Gem identification: TWO string-key prefixes (`Item_Stat_AbyssGear_*` for stat-mod gems, `Item_Skill_AbyssGear_*` for skill-bestowing gems). Internally Pearl Abyss called these "AbyssGear" — only localised to "gem" in display. 100% of the predecessor save editor's curated 189-entry gem list falls under one of these two prefixes in the 1.06.01 baseline. No vendored JSON; the picker enumerates live from `iteminfo.pabgb` via the existing iteminfo bridge.
+>
+> Out of v1 scope (documented in the [`SocketEditorViewModel`](../src/CrimsonAtomtic.Ui/ViewModels/SocketEditorViewModel.cs) docstring):
+> - **Fill empty socket** — length-changing splice; the predecessor exposes the Python function but the UI route is "swap only" because empty sockets need the in-game Witch NPC.
+> - **Clear filled socket** — length-changing splice with sibling-offset cascading.
+> - **Socket-count unlock** — triple coupled write (`_maxSocketCount` + `_validSocketCount` + `_endurance` high byte). The predecessor explicitly warns "0 → positive on a zero-record list may crash".
+>
+> Tests: **170/170 pass** (no new tests for v1 — the FFI surface is `SetScalarField` which is already covered by `SetScalarField_NestedPath_RoundTripsThroughWriteToFile`; v1's net code is UI plumbing over existing primitives). AOT build clean.
 >
 > ## ✅ This session — what shipped (2026-05-15 part 4)
 >
@@ -695,7 +717,7 @@ do them all at once.
 | 1 | ~~**Auto-find saves on launch**~~ | ~~EASY~~ | ✅ **Shipped 2026-05-15 part 2.** Steam / Epic / Game Pass plain-folder probe + most-recent-mtime preference + `preferred_platform` settings persistence + platform-scoped backup tree with legacy migration. Game Pass wgs UWP container deferred. Linux Proton prefix detection (appid `3321460`) deferred. |
 | 2 | ~~**Item Pack import**~~ | DEFERRED | Decided not to ship for now — user can already use the Item Picker + Add-to-bag for individual items, and curating safe pack JSONs against the 1.06 schema is more upfront work than the convenience gain warrants. Revisit if/when there's demand for batch-imported gear loadouts. |
 | 3 | ~~**Pet rename + Equipment-set duplicator**~~ | ~~EASY~~ | ✅ **Pet rename shipped 2026-05-15 part 4** (as Rename Mercenary; the predecessor's "Pet rename" is mercenary rename in this game's save model). Required a new `set_inline_bytes_field` Rust FFI because `_mercenaryName` is `meta_kind=1` which the existing scalar setters reject. Equipment-set duplicator dropped — the predecessor's "duplicator" is a stack-count exploit, not a true duplication, and our `EquipmentSaveData` shape has no multi-loadout slot to duplicate into. |
-| 4 | **Sockets editor (fill / clear / swap gems, up to 5 sockets/item)** | MEDIUM | Highest-impact save-editor feature still missing. Needs a typed UI atop the existing scalar/element + ItemPicker plumbing. Per-gear schema lookup + gem-key catalog. |
+| 4 | ~~**Sockets editor (fill / clear / swap gems, up to 5 sockets/item)**~~ | ~~MEDIUM~~ | ✅ **v1 (swap-only) shipped 2026-05-15 part 5.** Tools → Edit Item Sockets… surfaces every filled socket across inventory; per-row Change Gem… opens a gem-filtered Item Picker (`Item_Stat_AbyssGear_*` / `Item_Skill_AbyssGear_*`) → writes new gem `_itemKey` via `SetScalarField`. Fill/clear/unlock deferred per predecessor's safe-edit contract (empty-socket fill needs in-game Witch NPC; socket-count unlock has triple-coupled-write risk). |
 | 5 | **Dye editor (RGB / material / grime)** | MEDIUM | Reference data: `CrimsonGameMods/data/All_Dyes.json` + `dye_slot_db.json` + `dyeable_items_full.json` mineable. Needs a dye-slot lookup + RGB picker UI. |
 | 6 | **Unlock All Abyss Gates (Knowledge bulk-append)** | EASY | One-button Tools menu action that appends every `Knowledge_AbyssRuins_*` key (or a verified-safe subset) to `KnowledgeSaveData._list`. Mirrors the `ArtifactBulkOpService` shape: pre-flight count → confirm dialog → batch FFI → status footer. No JSON pack vendoring needed — keyset enumerated live from `knowledgeinfo.pabgb` via the existing C ABI bridge. **Caveat**: same engine-cross-reference risk pattern as SA Pattern A — start with abyss-gate prefix only (proven by the predecessor at 398 keys), defer per-key Browse Knowledge UI to a MEDIUM follow-up. |
 

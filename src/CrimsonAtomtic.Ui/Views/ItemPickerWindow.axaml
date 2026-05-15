@@ -114,8 +114,9 @@
                      (callers that want a read-only picker just don't
                      subscribe). The actual clone-and-patch happens in
                      MainWindowViewModel.AddItemToCurrentListAsync. -->
-                <Button Content="+ Bag"
-                        ToolTip.Tip="{StaticResource ItemPickerAddToBagTip}"
+                <Button Content="{Binding $parent[Window].((vm:ItemPickerViewModel)DataContext).ActionButtonLabel, FallbackValue='+ Bag'}"
+                        ToolTip.Tip="{Binding $parent[Window].((vm:ItemPickerViewModel)DataContext).ActionButtonTooltip,
+                                              FallbackValue={StaticResource ItemPickerAddToBagTip}}"
                         Padding="6,2"
                         MinHeight="0"
                         Tag="{Binding ItemKey}"
