@@ -175,6 +175,67 @@ public interface ISaveLoader
         ReadOnlySpan<byte> initialBytes);
 
     /// <summary>
+    /// Apply many <see cref="ScalarPresentBatchOp"/> mutations in one
+    /// FFI round trip, sharing a single post-batch re-emit + re-decode.
+    /// All-or-nothing: if any op fails validation the save body is
+    /// left exactly as it was before the call, and the thrown
+    /// <see cref="CrimsonSaveException"/> carries
+    /// <see cref="CrimsonSaveException.FailedOpIndex"/> pinpointing the
+    /// offending op. An empty <paramref name="ops"/> list is a no-op.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Per-op validation rules match the single-op
+    /// <see cref="SetScalarFieldPresent(int, ReadOnlySpan{PathStep}, int, bool, ReadOnlySpan{byte})"/>
+    /// exactly — same <c>NOT_SCALAR_FIELD_KIND</c> /
+    /// <c>LENGTH_MISMATCH</c> / <c>OUT_OF_RANGE</c> /
+    /// <c>NOT_NAVIGABLE</c> codes. The batch path exists for
+    /// performance: applying N ops one-at-a-time pays
+    /// N × re-emit + re-decode cost (~20 minutes for the
+    /// 1300-challenge bulk-completion flow on a 1100-block save),
+    /// while the batch amortises to a single re-emit at the end.
+    /// </para>
+    /// <para>
+    /// Requires a prior <see cref="Load"/> call. Throws
+    /// <see cref="InvalidOperationException"/> when no save is loaded.
+    /// </para>
+    /// </remarks>
+    void SetScalarFieldsPresentBatch(IReadOnlyList<ScalarPresentBatchOp> ops);
+
+    /// <summary>
+    /// Apply many <see cref="ListRemoveBatchOp"/> mutations in one FFI
+    /// round trip, sharing a single post-batch re-emit + re-decode.
+    /// All-or-nothing: if any op fails validation the save body is
+    /// left exactly as it was before the call, and the thrown
+    /// <see cref="CrimsonSaveException"/> carries
+    /// <see cref="CrimsonSaveException.FailedOpIndex"/> pinpointing the
+    /// offending op. An empty <paramref name="ops"/> list is a no-op.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Per-op validation rules match the single-op
+    /// <see cref="ListRemoveElement(int, ReadOnlySpan{PathStep}, int, int)"/>
+    /// exactly — same <c>NOT_SCALAR</c> / <c>OUT_OF_RANGE</c> /
+    /// <c>LIST_VARIANT_UNSUPPORTED</c> / <c>NOT_NAVIGABLE</c> codes.
+    /// </para>
+    /// <para>
+    /// Ops are applied in input order, so earlier removes targeting
+    /// the same list shift later indexes. Callers must pre-sort ops
+    /// against the same list by descending
+    /// <see cref="ListRemoveBatchOp.ElementIndex"/> so the indexes
+    /// stay valid throughout the batch — a later op whose
+    /// <see cref="ListRemoveBatchOp.ElementIndex"/> outruns the
+    /// post-remove length fails with <c>OUT_OF_RANGE</c> and rolls
+    /// back the entire batch.
+    /// </para>
+    /// <para>
+    /// Requires a prior <see cref="Load"/> call. Throws
+    /// <see cref="InvalidOperationException"/> when no save is loaded.
+    /// </para>
+    /// </remarks>
+    void ListRemoveElementsBatch(IReadOnlyList<ListRemoveBatchOp> ops);
+
+    /// <summary>
     /// Produce the minimal valid bytes for a list element of
     /// <paramref name="classIndex"/>: a wrapper with an all-zero mask
     /// (every field absent) and an empty inline payload. Total size is
