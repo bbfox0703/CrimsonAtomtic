@@ -1439,6 +1439,18 @@ internal static partial class NativeMethods
         byte* outBuf, nuint outBufLen,
         out nuint outRequired);
 
+    // List every NPC portrait DDS file in a PAZ group's PAMT. Output is
+    // a NUL-separated UTF-8 list of `<dir>/<filename>` paths. Filters
+    // out non-NPC "portrait-like" images (animal / riding / pet / wagon
+    // / knowledge thumbnails) — see the Rust prefix table in paz.rs.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_paz_list_npc_portraits",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static unsafe partial int PazListNpcPortraits(
+        string pamtPath,
+        byte* outBuf, nuint outBufLen,
+        out nuint outRequired,
+        out uint outCount);
+
     // ── ItemInfo bridge (iteminfo.pabgb) ────────────────────────────────────
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_iteminfo_load_from_file",
@@ -1802,6 +1814,22 @@ internal static partial class NativeMethods
         CrimsonPalocHandle palocHandle,
         uint characterKey, uint lo32Namespace,
         byte* buf, nuint bufLen, out nuint required);
+
+    // High-level CharacterKey → portrait DDS path matcher. Chains the
+    // display name + internal name against the portrait list returned
+    // by PazListNpcPortraits, scores each candidate (0–100), and
+    // returns the best match. out_score is informational; callers can
+    // apply their own threshold (~30 = noise floor, ~50 = suggestive,
+    // higher = exact normalised match).
+    [LibraryImport(LibraryName, EntryPoint = "crimson_characterinfo_resolve_portrait")]
+    public static unsafe partial int CharacterInfoResolvePortrait(
+        CrimsonCharacterInfoHandle handle,
+        CrimsonPalocHandle palocHandle,
+        uint characterKey,
+        byte* portraitListBuf, nuint portraitListLen,
+        byte* outBuf, nuint outBufLen,
+        out nuint outRequired,
+        out int outScore);
 
     // ── SubLevelInfo bridge (sublevelinfo.pabgb) ────────────────────────────
     //

@@ -238,6 +238,50 @@ public sealed class KeyInfoCatalogsTests
         Assert.Null(cat.LookupDisplayName(uint.MaxValue, paloc));
     }
 
+    // ── Portrait pipeline (paz.list_npc_portraits + characterinfo.resolve_portrait) ──
+
+    [Fact]
+    public void PortraitPipeline_LiveInstall_ListsAndResolves()
+    {
+        var live = LiveOrSkip();
+        if (live is null) return;
+        var (paz, p0008, p0020) = live.Value;
+
+        // Portraits live in group 0012 (same as item-icon DDS).
+        var p0012 = FindGroupPamt("0012");
+        if (p0012 is null) return;
+
+        // Step 1: enumerate NPC portrait DDS paths in 0012.
+        var (portraitBuf, portraitCount) = paz.ListNpcPortraits(p0012);
+        Assert.True(portraitCount > 0,
+                    "expected at least one NPC portrait in 0012's PAMT");
+        Assert.True(portraitBuf.Length > 0,
+                    "non-empty count should produce a non-empty buffer");
+
+        // Step 2: load characterinfo + English PALOC.
+        var charBytes = paz.ExtractFile(p0008, ItemInfoDirectory, "characterinfo.pabgb");
+        using var cat = NativeCharacterInfoCatalog.LoadFromBytes(charBytes);
+        using var paloc = LoadEnglishPaloc(paz, p0020);
+
+        // Step 3: bogus key returns null cleanly (no throw).
+        var miss = cat.ResolvePortrait(uint.MaxValue, paloc, portraitBuf);
+        Assert.Null(miss);
+
+        // Step 4: surface check on a representative character. The
+        // user's screenshot of the mercenary list shows CharKey 4 →
+        // "Damiane / 德米安" (a main-story NPC); she's the most likely
+        // to have a portrait shipped. Accept either a hit or a null —
+        // we only assert structure when the matcher returns a result.
+        var damiane = cat.ResolvePortrait(4, paloc, portraitBuf);
+        if (damiane is { } m)
+        {
+            Assert.False(string.IsNullOrEmpty(m.Path),
+                         "match path must be non-empty");
+            Assert.EndsWith(".dds", m.Path, StringComparison.OrdinalIgnoreCase);
+            Assert.InRange(m.Score, 0, 100);
+        }
+    }
+
     // ── SubLevelInfo (Pattern A) ────────────────────────────────────────────
 
     [Fact]

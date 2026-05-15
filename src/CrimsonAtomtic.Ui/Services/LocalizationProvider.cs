@@ -938,6 +938,35 @@ public sealed class LocalizationProvider : IDisposable
     }
 
     /// <summary>
+    /// High-level: resolve a <c>CharacterKey</c> to its best-scoring
+    /// NPC portrait DDS path against <paramref name="portraitListBuffer"/>
+    /// (the raw NUL-separated buffer from
+    /// <see cref="IPazExtractor.ListNpcPortraits"/>). Returns
+    /// <c>null</c> when:
+    /// <list type="bullet">
+    ///   <item>characterinfo.pabgb wasn't loaded (no game install);</item>
+    ///   <item>the default-language PALOC wasn't loaded;</item>
+    ///   <item>the bridge couldn't match the key to any portrait.</item>
+    /// </list>
+    /// The English PALOC drives the match because the bridge's
+    /// fuzzy scorer needs the English display name to compare against
+    /// the English-name-derived portrait filenames Pearl Abyss ships.
+    /// </summary>
+    public (string Path, int Score)? ResolvePortraitForCharacter(
+        uint characterKey, ReadOnlySpan<byte> portraitListBuffer)
+    {
+        if (_characterInfo is null)
+        {
+            return null;
+        }
+        if (!_catalogs.TryGetValue(DefaultLanguage, out var paloc))
+        {
+            return null;
+        }
+        return _characterInfo.ResolvePortrait(characterKey, paloc, portraitListBuffer);
+    }
+
+    /// <summary>
     /// Resolve a Key value through its dedicated <c>*.pabgb</c> bridge
     /// (Mission / Quest / Stage / Knowledge / Gauge / Skill). Each entry
     /// in <see cref="TableDrivenKeyTypes"/> routes here; the dispatch

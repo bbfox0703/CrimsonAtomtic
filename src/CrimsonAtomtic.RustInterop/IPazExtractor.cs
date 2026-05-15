@@ -24,4 +24,26 @@ public interface IPazExtractor
     /// for malformed PAMT or extraction failures.
     /// </exception>
     byte[] ExtractFile(string pamtPath, string directory, string fileName);
+
+    /// <summary>
+    /// List every NPC-portrait DDS path in a PAZ group's PAMT. Output
+    /// is the raw NUL-separated UTF-8 buffer emitted by the Rust C
+    /// ABI's <c>crimson_paz_list_npc_portraits</c> — each record is
+    /// <c>&lt;dir&gt;/&lt;filename&gt;</c>, suitable for feeding
+    /// straight into
+    /// <c>NativeCharacterInfoCatalog.ResolvePortrait</c> without
+    /// re-serialising.
+    /// </summary>
+    /// <param name="pamtPath">Absolute path to the group's
+    /// <c>0.pamt</c>.</param>
+    /// <returns>
+    /// A <c>(Buffer, Count)</c> tuple. <c>Buffer</c> is the raw
+    /// NUL-separated UTF-8 path list (empty array when the PAMT
+    /// contains zero portraits); <c>Count</c> is the number of
+    /// portrait entries.
+    /// </returns>
+    /// <exception cref="CrimsonSaveException">
+    /// Same shape as <see cref="ExtractFile"/> failures.
+    /// </exception>
+    (byte[] Buffer, int Count) ListNpcPortraits(string pamtPath);
 }

@@ -53,6 +53,43 @@ public sealed class NativePazExtractor : IPazExtractor
         }
     }
 
+    public (byte[] Buffer, int Count) ListNpcPortraits(string pamtPath)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(pamtPath);
+        unsafe
+        {
+            nuint required = 0;
+            uint count = 0;
+            int rc = NativeMethods.PazListNpcPortraits(
+                pamtPath, null, 0, out required, out count);
+            if (rc != NativeMethods.BUFFER_TOO_SMALL && rc != NativeMethods.OK)
+            {
+                throw new CrimsonSaveException(rc,
+                    $"crimson_paz_list_npc_portraits({pamtPath}) " +
+                    $"size query failed: {ErrorName(rc)}");
+            }
+            if (required == 0)
+            {
+                // No portraits in this PAMT (or empty PAMT). Both are
+                // legitimate — return an empty buffer so the resolve
+                // path can short-circuit to NOT_FOUND.
+                return ([], (int)count);
+            }
+            var buf = new byte[required];
+            fixed (byte* p = buf)
+            {
+                rc = NativeMethods.PazListNpcPortraits(
+                    pamtPath, p, (nuint)buf.Length, out _, out count);
+            }
+            if (rc != NativeMethods.OK)
+            {
+                throw new CrimsonSaveException(rc,
+                    $"crimson_paz_list_npc_portraits({pamtPath}) fill failed: {ErrorName(rc)}");
+            }
+            return (buf, (int)count);
+        }
+    }
+
     private static string ErrorName(int code) => code switch
     {
         NativeMethods.OK                    => "OK",

@@ -972,6 +972,100 @@ public sealed class NativeCharacterInfoCatalog : IDisposable
         }
     }
 
+    /// <summary>
+    /// Resolve <paramref name="characterKey"/> to its best-scoring NPC
+    /// portrait DDS path against <paramref name="portraitListBuffer"/>
+    /// (the raw NUL-separated buffer from
+    /// <see cref="IPazExtractor.ListNpcPortraits"/>). Returns
+    /// <c>null</c> when the character has no resolvable name at either
+    /// the display-name or internal-name surface, or when no portrait
+    /// scored above zero.
+    /// </summary>
+    /// <param name="characterKey">Save-side _characterKey (cat-byte tolerated).</param>
+    /// <param name="paloc">Loaded PALOC for the display-name primary signal.</param>
+    /// <param name="portraitListBuffer">
+    /// NUL-separated UTF-8 portrait paths emitted by
+    /// <c>crimson_paz_list_npc_portraits</c>. Empty span = no portraits
+    /// to match against; the call short-circuits to <c>null</c>.
+    /// </param>
+    /// <returns>
+    /// Tuple of the winning portrait's <c>&lt;dir&gt;/&lt;filename&gt;</c>
+    /// path plus a confidence score (0 = no match, ~30 = noise floor,
+    /// ~100 = exact normalised match). Callers apply their own
+    /// threshold.
+    /// </returns>
+    public (string Path, int Score)? ResolvePortrait(
+        uint characterKey,
+        NativePalocCatalog paloc,
+        ReadOnlySpan<byte> portraitListBuffer)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(paloc);
+        if (portraitListBuffer.IsEmpty)
+        {
+            return null;
+        }
+        // Two-call buffer pattern inlined (vs. the NameBuffer.ReadString
+        // helper used by other lookups) because C# can't capture a
+        // `fixed` local in a lambda — we need the portrait-list pointer
+        // pinned across both calls and that has to live in straight-
+        // line code.
+        unsafe
+        {
+            fixed (byte* listPtr = portraitListBuffer)
+            {
+                var listLen = (nuint)portraitListBuffer.Length;
+                nuint required = 0;
+                int score = 0;
+                int rc = NativeMethods.CharacterInfoResolvePortrait(
+                    _handle, paloc.NativeHandle, characterKey,
+                    listPtr, listLen,
+                    null, 0, out required,
+                    out score);
+                if (rc == NativeMethods.NOT_FOUND)
+                {
+                    return null;
+                }
+                if (rc != NativeMethods.BUFFER_TOO_SMALL && rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_characterinfo_resolve_portrait({characterKey}) " +
+                        $"size query failed: {NameBuffer.ErrorName(rc)}");
+                }
+                if (required == 0)
+                {
+                    return null;
+                }
+                Span<byte> outBuf = required <= 256
+                    ? stackalloc byte[(int)required]
+                    : new byte[required];
+                fixed (byte* outPtr = outBuf)
+                {
+                    rc = NativeMethods.CharacterInfoResolvePortrait(
+                        _handle, paloc.NativeHandle, characterKey,
+                        listPtr, listLen,
+                        outPtr, (nuint)outBuf.Length, out _,
+                        out score);
+                }
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_characterinfo_resolve_portrait({characterKey}) " +
+                        $"fill failed: {NameBuffer.ErrorName(rc)}");
+                }
+                // Strip the trailing NUL the Rust side writes for C-string
+                // compatibility — mirror NameBuffer.ReadString's behaviour.
+                var len = outBuf.Length;
+                while (len > 0 && outBuf[len - 1] == 0)
+                {
+                    len--;
+                }
+                var path = System.Text.Encoding.UTF8.GetString(outBuf[..len]);
+                return (path, score);
+            }
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
