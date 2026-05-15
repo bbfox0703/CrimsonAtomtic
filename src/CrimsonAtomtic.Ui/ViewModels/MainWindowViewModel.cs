@@ -34,6 +34,26 @@ public sealed partial class MainWindowViewModel(
     public LocalizationProvider Localization => localization;
 
     /// <summary>
+    /// Expose the active save loader for child dialogs that mutate the
+    /// same handle (e.g. Rename Mercenary). The handle lives on this VM
+    /// for the lifetime of the app, so handing out the reference is
+    /// safe — children don't take ownership.
+    /// </summary>
+    internal ISaveLoader GetSaveLoader() => loader;
+
+    /// <summary>
+    /// Flip <see cref="IsDirty"/> + refresh window-title chrome when a
+    /// child dialog (e.g. Rename Mercenary) has mutated the save body.
+    /// Mirrors the post-edit notifications the main edit panel emits
+    /// directly when the user applies a field change.
+    /// </summary>
+    internal void MarkDirtyFromExternalEdit()
+    {
+        IsDirty = true;
+        OnPropertyChanged(nameof(WindowTitle));
+    }
+
+    /// <summary>
     /// Status string for the icon-cache slot of the footer.
     /// Shape:
     /// - "Icons: not set" → no path configured.

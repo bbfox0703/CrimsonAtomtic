@@ -3,7 +3,34 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-15 (Auto-find saves + multi-launcher game-install probe + Tools-menu manual override).
+> Last updated: 2026-05-15 (Rename Mercenary dialog + new `set_inline_bytes_field` FFI in crimson-rs).
+>
+> ## ✅ This session — what shipped (2026-05-15 part 4)
+>
+> Pick #3 of the porting roadmap — **Rename Mercenary** (the "Pet rename"
+> feature from the predecessor save editor; pets live as mercenary
+> entries in this game's save model). Required a new Rust FFI entry
+> point and the C# side around it.
+>
+> Equipment-set duplicator dropped from this iteration — see the
+> survey notes below; the predecessor's "duplicator" is actually a
+> stack-count exploit rather than a literal duplication, and our
+> single-loadout `EquipmentSaveData` shape doesn't map cleanly to
+> "duplicate set A to set B". Revisit if/when users actually ask.
+>
+> | Area | Scope |
+> |---|---|
+> | **`crimson_save_set_inline_bytes_field` (crimson-rs [PR #37](https://github.com/bbfox0703/crimson-rs/pull/37), merged at `d82e780`)** | New C ABI entry point for editing `meta_kind=1` (InlineBytes) fields, which the existing `set_scalar_field_present` rejects (it only handles fixed-size scalars at `meta_kind` 0/2). Mirrors that function's structure: `navigate_mut_to_parent` → validate kind == 1 → flip mask presence bit → overwrite `FieldValue::InlineBytes { count, bytes }` → run the standard `apply_length_changing_mutation` re-emit pipeline. Adds error code `NOT_INLINE_BYTES = -20`. Validates `new_bytes.len() % meta_size == 0` and rejects with `LENGTH_MISMATCH` otherwise. 3 new tests cover round-trip, scalar rejection, and NULL-arg handling. Live-save round-trip is byte-identical when rewriting bytes back to the original. |
+> | **C# wrapper** | `ISaveLoader.SetInlineBytesField(int blockIdx, ReadOnlySpan<PathStep> path, int fieldIndex, ReadOnlySpan<byte> newBytes)` + `NativeSaveLoader` impl + `[LibraryImport]` for `crimson_save_set_inline_bytes_field`. New error name `NOT_INLINE_BYTES`. |
+> | **Tools → Rename Mercenary…** | New dialog window (`RenameMercenaryWindow` + `RenameMercenaryViewModel`) bound to a DataGrid over `MercenaryClanSaveData._mercenaryDataList`. Columns: Index / MercNo / CharKey / Type (Animal vs Mercenary based on equip count) / Equip / New name (editable TextBox) / Apply / Applied. Apply UTF-8-encodes the textbox value and calls `SetInlineBytesField`. Dialog refuses to open when the save has no `MercenaryClanSaveData` block (alerts with guidance instead). |
+> | **v1 caveat — current names not shown** | The FFI has a setter but no symmetric getter for `inline_bytes`, so the dialog can't display each mercenary's existing name. Users identify rows by `(MercNo, CharacterKey, EquipCount)` and the inferred type tag. Header text in the dialog calls this out. A follow-on `crimson_save_get_inline_bytes_field` is the natural next iteration. |
+>
+> Tests: **170/170 pass** on C#; **154/154 pass** on crimson-rs (was 151, +3 from the new FFI). AOT build clean.
+>
+> ### Process notes
+>
+> - crimson-rs dev had drifted from main again (5 patch-id-equivalent commits with different SHAs after main got rebased). Fixed in-flight by rebasing dev, force-pushing, then merging the PR. After merge, local + origin/dev force-reset to match main per policy.
+> - One Rust round-trip required (PR → CI → merge → vendor refresh). Followed the documented "edit source at D:\Github\crimson-rs first, then `vendor/update_vendors.ps1`" pattern.
 >
 > ## ✅ This session — what shipped (2026-05-15 part 3)
 >
@@ -666,8 +693,8 @@ do them all at once.
 | # | Feature | Difficulty | Notes |
 |---|---|---|---|
 | 1 | ~~**Auto-find saves on launch**~~ | ~~EASY~~ | ✅ **Shipped 2026-05-15 part 2.** Steam / Epic / Game Pass plain-folder probe + most-recent-mtime preference + `preferred_platform` settings persistence + platform-scoped backup tree with legacy migration. Game Pass wgs UWP container deferred. Linux Proton prefix detection (appid `3321460`) deferred. |
-| 2 | **Item Pack import** | EASY | Apply curated JSON bundles (dyes / Kuku set / enchant scrolls / gem packs) on top of the existing Add-to-bag pipeline. Reference data: `CrimsonGameMods/dropset_packs/*.json` + `CrimsonSaveEditor/knowledge_packs/*.json` ready to mine. UI: Tools menu → Apply Item Pack… → file picker over `packs/` folder. |
-| 3 | **Pet rename + Equipment-set duplicator** | EASY | Two quick wins. Pet rename is a scalar string edit; equipment-set duplicate is a list-clone-element + per-slot patch. Both reuse existing primitives. |
+| 2 | ~~**Item Pack import**~~ | DEFERRED | Decided not to ship for now — user can already use the Item Picker + Add-to-bag for individual items, and curating safe pack JSONs against the 1.06 schema is more upfront work than the convenience gain warrants. Revisit if/when there's demand for batch-imported gear loadouts. |
+| 3 | ~~**Pet rename + Equipment-set duplicator**~~ | ~~EASY~~ | ✅ **Pet rename shipped 2026-05-15 part 4** (as Rename Mercenary; the predecessor's "Pet rename" is mercenary rename in this game's save model). Required a new `set_inline_bytes_field` Rust FFI because `_mercenaryName` is `meta_kind=1` which the existing scalar setters reject. Equipment-set duplicator dropped — the predecessor's "duplicator" is a stack-count exploit, not a true duplication, and our `EquipmentSaveData` shape has no multi-loadout slot to duplicate into. |
 | 4 | **Sockets editor (fill / clear / swap gems, up to 5 sockets/item)** | MEDIUM | Highest-impact save-editor feature still missing. Needs a typed UI atop the existing scalar/element + ItemPicker plumbing. Per-gear schema lookup + gem-key catalog. |
 | 5 | **Dye editor (RGB / material / grime)** | MEDIUM | Reference data: `CrimsonGameMods/data/All_Dyes.json` + `dye_slot_db.json` + `dyeable_items_full.json` mineable. Needs a dye-slot lookup + RGB picker UI. |
 | 6 | **Unlock All Abyss Gates (Knowledge bulk-append)** | EASY | One-button Tools menu action that appends every `Knowledge_AbyssRuins_*` key (or a verified-safe subset) to `KnowledgeSaveData._list`. Mirrors the `ArtifactBulkOpService` shape: pre-flight count → confirm dialog → batch FFI → status footer. No JSON pack vendoring needed — keyset enumerated live from `knowledgeinfo.pabgb` via the existing C ABI bridge. **Caveat**: same engine-cross-reference risk pattern as SA Pattern A — start with abyss-gate prefix only (proven by the predecessor at 398 keys), defer per-key Browse Knowledge UI to a MEDIUM follow-up. |

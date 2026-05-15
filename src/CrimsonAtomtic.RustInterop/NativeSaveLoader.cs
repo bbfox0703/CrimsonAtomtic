@@ -528,6 +528,40 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         }
     }
 
+    public void SetInlineBytesField(
+        int blockIndex,
+        ReadOnlySpan<PathStep> path,
+        int fieldIndex,
+        ReadOnlySpan<byte> newBytes)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
+
+        var cached = RequireLoaded(nameof(SetInlineBytesField), invalidateDetailsCache: true);
+        unsafe
+        {
+            fixed (PathStep* pPath = path)
+            fixed (byte* pBytes = newBytes)
+            {
+                var rc = NativeMethods.SetInlineBytesField(
+                    cached,
+                    (uint)blockIndex,
+                    pPath,
+                    (nuint)path.Length,
+                    (uint)fieldIndex,
+                    pBytes,
+                    (nuint)newBytes.Length);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_save_set_inline_bytes_field(block={blockIndex}, "
+                        + $"path_len={path.Length}, field={fieldIndex}, bytes_len={newBytes.Length}) failed: "
+                        + $"{ErrorName(rc)}");
+                }
+            }
+        }
+    }
+
     public uint[] DynamicArrayGetU32Elements(
         int blockIndex,
         ReadOnlySpan<PathStep> path,
@@ -1048,6 +1082,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         NativeMethods.LIST_VARIANT_UNSUPPORTED => "LIST_VARIANT_UNSUPPORTED",
         NativeMethods.NOT_SCALAR_FIELD_KIND => "NOT_SCALAR_FIELD_KIND",
         NativeMethods.MUTATION_INVALID      => "MUTATION_INVALID",
+        NativeMethods.NOT_INLINE_BYTES      => "NOT_INLINE_BYTES",
         NativeMethods.PANIC                 => "PANIC",
         _                                   => $"UNKNOWN({code})",
     };
@@ -1142,6 +1177,7 @@ internal static partial class NativeMethods
     public const int LIST_VARIANT_UNSUPPORTED = -17;
     public const int NOT_SCALAR_FIELD_KIND    = -18;
     public const int MUTATION_INVALID         = -19;
+    public const int NOT_INLINE_BYTES         = -20;
     public const int PANIC                 = -99;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -1297,6 +1333,16 @@ internal static partial class NativeMethods
         uint* outBuf,
         nuint bufLen,
         out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_set_inline_bytes_field")]
+    public static unsafe partial int SetInlineBytesField(
+        CrimsonSaveHandle handle,
+        uint blockIdx,
+        PathStep* path,
+        nuint pathLen,
+        uint fieldIdx,
+        byte* newBytes,
+        nuint newBytesLen);
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_save_write_to_file",
                    StringMarshalling = StringMarshalling.Utf8)]

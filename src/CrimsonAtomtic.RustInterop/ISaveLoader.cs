@@ -280,6 +280,41 @@ public interface ISaveLoader
         int fieldIndex);
 
     /// <summary>
+    /// Wholesale-replace an <c>inline_bytes</c> field's payload (schema
+    /// <c>meta_kind == 1</c>: a <c>u32 count</c> header followed by
+    /// <c>count * meta_size</c> payload bytes). Motivating use case is
+    /// renaming length-prefixed UTF-8 string fields such as
+    /// <c>MercenarySaveData._mercenaryName</c>; the same surface works
+    /// for any homogeneous-element-width inline array.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Caller passes raw payload bytes; the FFI derives
+    /// <c>count = bytes.Length / meta_size</c> and rewrites the count
+    /// header. The standard length-changing re-emit pipeline cascades
+    /// all downstream offsets so callers don't need to know byte layout
+    /// beyond the field itself.
+    /// </para>
+    /// <para>
+    /// Absent field is promoted to present (mask bit set) +
+    /// <paramref name="newBytes"/> written. Present field has its
+    /// existing payload overwritten. Empty <paramref name="newBytes"/>
+    /// writes <c>count = 0</c> + empty payload — does NOT make absent.
+    /// </para>
+    /// <para>
+    /// Errors: <c>NOT_INLINE_BYTES</c> when the field's <c>meta_kind</c>
+    /// isn't 1; <c>LENGTH_MISMATCH</c> when <c>newBytes.Length</c> isn't
+    /// a multiple of <c>meta_size</c>; <c>OUT_OF_RANGE</c> when the
+    /// derived count exceeds <c>uint.MaxValue</c>.
+    /// </para>
+    /// </remarks>
+    void SetInlineBytesField(
+        int blockIndex,
+        ReadOnlySpan<PathStep> path,
+        int fieldIndex,
+        ReadOnlySpan<byte> newBytes);
+
+    /// <summary>
     /// Produce the minimal valid bytes for a list element of
     /// <paramref name="classIndex"/>: a wrapper with an all-zero mask
     /// (every field absent) and an empty inline payload. Total size is

@@ -622,6 +622,50 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Tools → Rename Mercenary. Opens
+    /// <see cref="RenameMercenaryWindow"/> bound to a fresh
+    /// <see cref="ViewModels.RenameMercenaryViewModel"/> built against
+    /// the loaded save. Skips with an alert when the save has no
+    /// <c>MercenaryClanSaveData</c> block.
+    /// </summary>
+    private async void OnRenameMercenaryClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+        var summary = vm.Summary;
+        if (summary?.Blocks is not { Count: > 0 } blocks
+            || vm.LoadedPath is not { } path)
+        {
+            return;
+        }
+        var renameVm = ViewModels.RenameMercenaryViewModel.TryCreate(
+            vm.GetSaveLoader(),
+            vm.Localization,
+            path,
+            blocks);
+        if (renameVm is null)
+        {
+            var title = (string?)this.FindResource("RenameMercenaryNotAvailableTitle")
+                        ?? "No mercenaries to rename";
+            var body = (string?)this.FindResource("RenameMercenaryNotAvailableBody")
+                       ?? "MercenaryClanSaveData not found in this save.";
+            await ConfirmDialog.ShowAlertAsync(this, title, body);
+            return;
+        }
+        var child = new RenameMercenaryWindow { DataContext = renameVm };
+        child.Closed += (_, _) =>
+        {
+            if (renameVm.IsDirty)
+            {
+                vm.MarkDirtyFromExternalEdit();
+            }
+        };
+        child.Show(this);
+    }
+
     private void OnExitClick(object? sender, RoutedEventArgs e)
     {
         if (Avalonia.Application.Current?.ApplicationLifetime

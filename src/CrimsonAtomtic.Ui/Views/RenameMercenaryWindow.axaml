@@ -1,0 +1,94 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        x:Class="CrimsonAtomtic.Ui.Views.RenameMercenaryWindow"
+        x:DataType="vm:RenameMercenaryViewModel"
+        Title="{StaticResource MenuRenameMercenary}"
+        Width="900" Height="540"
+        MinWidth="640" MinHeight="360"
+        FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
+
+  <DockPanel LastChildFill="True" Margin="12">
+    <!-- Header explains the v1 limitation up front so users don't go
+         hunting for a "show current name" column that doesn't exist. -->
+    <TextBlock DockPanel.Dock="Top"
+               Text="{StaticResource RenameMercenaryHeader}"
+               TextWrapping="Wrap"
+               Opacity="0.7"
+               Margin="0,0,0,8" />
+
+    <!-- Status footer + Close button. -->
+    <Grid DockPanel.Dock="Bottom"
+          ColumnDefinitions="*,Auto"
+          ColumnSpacing="12"
+          Margin="0,8,0,0">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding StatusMessage}"
+                 Opacity="0.7"
+                 VerticalAlignment="Center"
+                 TextTrimming="CharacterEllipsis" />
+      <Button Grid.Column="1"
+              Content="{StaticResource RenameMercenaryClose}"
+              Click="OnCloseClick"
+              MinWidth="80" />
+    </Grid>
+
+    <!-- Mercenary list. Identity columns first; then a textbox per row
+         for the new name, an Apply button, and a tail "Applied" column
+         that fills in once the user has renamed an entry. -->
+    <DataGrid ItemsSource="{Binding Mercenaries}"
+              AutoGenerateColumns="False"
+              CanUserResizeColumns="True"
+              CanUserSortColumns="False"
+              GridLinesVisibility="Horizontal"
+              IsReadOnly="False"
+              HeadersVisibility="Column">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="{StaticResource RenameMercenaryColIdx}"
+                            Binding="{Binding Index}"
+                            Width="60"
+                            IsReadOnly="True" />
+        <DataGridTextColumn Header="{StaticResource RenameMercenaryColMercNo}"
+                            Binding="{Binding MercNo}"
+                            Width="110"
+                            IsReadOnly="True" />
+        <DataGridTextColumn Header="{StaticResource RenameMercenaryColCharKey}"
+                            Binding="{Binding CharacterKey}"
+                            Width="110"
+                            IsReadOnly="True" />
+        <DataGridTextColumn Header="{StaticResource RenameMercenaryColType}"
+                            Binding="{Binding TypeTag}"
+                            Width="90"
+                            IsReadOnly="True" />
+        <DataGridTextColumn Header="{StaticResource RenameMercenaryColEquip}"
+                            Binding="{Binding EquipCount}"
+                            Width="70"
+                            IsReadOnly="True" />
+        <DataGridTemplateColumn Header="{StaticResource RenameMercenaryColNewName}"
+                                Width="*">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate DataType="vm:MercenaryRow">
+              <TextBox Text="{Binding NewName, Mode=TwoWay}"
+                       VerticalAlignment="Center"
+                       PlaceholderText="{StaticResource RenameMercenaryNewNameWatermark}" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTemplateColumn Header="{StaticResource RenameMercenaryColApply}"
+                                Width="90">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate DataType="vm:MercenaryRow">
+              <Button Content="{StaticResource RenameMercenaryApply}"
+                      Command="{Binding ApplyCommand}"
+                      HorizontalAlignment="Stretch" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTextColumn Header="{StaticResource RenameMercenaryColApplied}"
+                            Binding="{Binding AppliedName}"
+                            Width="160"
+                            IsReadOnly="True" />
+      </DataGrid.Columns>
+    </DataGrid>
+  </DockPanel>
+</Window>

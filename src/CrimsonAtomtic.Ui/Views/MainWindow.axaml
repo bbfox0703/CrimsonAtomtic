@@ -80,6 +80,9 @@
                   Command="{Binding FillAllStacksAcrossInventoriesCommand}" />
         <MenuItem Header="{StaticResource MenuDropAllArtifacts}"
                   Command="{Binding DropAllSealedAbyssArtifactsCommand}" />
+        <MenuItem Header="{StaticResource MenuRenameMercenary}"
+                  Click="OnRenameMercenaryClick"
+                  IsEnabled="{Binding HasSave}" />
         <Separator />
         <!-- Font size submenu. Each entry sets the Window's FontSize
              via the VM, which cascades to every child control. The
