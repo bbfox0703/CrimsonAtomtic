@@ -38,6 +38,7 @@
   <sys:String x:Key="RenameMercenaryColIdx">Index</sys:String>
   <sys:String x:Key="RenameMercenaryColMercNo">MercNo</sys:String>
   <sys:String x:Key="RenameMercenaryColCharKey">CharKey</sys:String>
+  <sys:String x:Key="RenameMercenaryColPortrait">Portrait</sys:String>
   <sys:String x:Key="RenameMercenaryColCharName">Name</sys:String>
   <sys:String x:Key="RenameMercenaryColType">Type</sys:String>
   <sys:String x:Key="RenameMercenaryColEquip">Equip</sys:String>

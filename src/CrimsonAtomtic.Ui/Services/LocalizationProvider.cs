@@ -262,10 +262,25 @@ public sealed class LocalizationProvider : IDisposable
     /// </summary>
     public IconProvider Icons { get; private set; } = new(string.Empty);
 
+    /// <summary>
+    /// NPC portrait resolver, lazy + on-demand. Always non-null;
+    /// <see cref="PortraitProvider.IsAvailable"/> tells the UI whether
+    /// to bother rendering a portrait column. Default instance points
+    /// at a placeholder path — real wiring happens via
+    /// <see cref="ConfigurePortraitProvider"/> at app startup once the
+    /// platform paths AND the characterinfo bridge are bootstrapped.
+    /// </summary>
+    public PortraitProvider Portraits { get; private set; }
+
     public LocalizationProvider(IPazExtractor paz)
     {
         ArgumentNullException.ThrowIfNull(paz);
         _paz = paz;
+        // Stub portrait provider; replaced in ConfigurePortraitProvider
+        // after the platform paths and game install are known. Using a
+        // stub keeps Portraits non-null so callers don't need to
+        // null-guard the property itself.
+        Portraits = new PortraitProvider(string.Empty, paz, this, null);
     }
 
     /// <summary>
@@ -278,6 +293,21 @@ public sealed class LocalizationProvider : IDisposable
     public void ConfigureIconProvider(string rootDirectory)
     {
         Icons = new IconProvider(rootDirectory);
+    }
+
+    /// <summary>
+    /// Re-seed the portrait provider at <paramref name="cacheRootDirectory"/>.
+    /// Called once during bootstrap (with
+    /// <c>%LOCALAPPDATA%\CrimsonAtomtic\PortraitCache\</c>) and again
+    /// if the game install changes (Tools → Set Game Install Folder)
+    /// so the new install's PAMT becomes the source for cold-path
+    /// extraction. Disk-cached portraits from a previous game-root
+    /// stay valid across the swap (filename keys on CharacterKey, not
+    /// install path).
+    /// </summary>
+    public void ConfigurePortraitProvider(string cacheRootDirectory)
+    {
+        Portraits = new PortraitProvider(cacheRootDirectory, _paz, this, _gameRoot);
     }
 
     /// <summary>True when the iteminfo bridge AND the English PALOC are loaded.</summary>

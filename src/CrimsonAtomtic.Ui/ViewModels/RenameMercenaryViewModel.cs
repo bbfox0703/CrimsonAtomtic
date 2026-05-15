@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Text;
+using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CrimsonAtomtic.RustInterop;
@@ -58,6 +60,12 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
 
     private readonly ISaveLoader _loader;
     private readonly LocalizationProvider _localization;
+    /// <summary>
+    /// Portrait resolver — same instance as <c>_localization.Portraits</c>.
+    /// Captured separately so <see cref="MercenaryRow"/> can call it
+    /// without re-traversing the provider hierarchy on every row.
+    /// </summary>
+    internal PortraitProvider Portraits => _localization.Portraits;
     private readonly string _savePath;
     private readonly int _topBlockIdx;
     private readonly int _listFieldIdx;
@@ -165,6 +173,11 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
         {
             var row = BuildRow(vm, i, elements[i], localization);
             vm.Mercenaries.Add(row);
+            // Kick off the portrait load eagerly so the thread pool
+            // starts draining while the user reads the dialog header.
+            // PortraitProvider.GetPortrait is safe under concurrent
+            // access and the UI binding fills in as each one lands.
+            row.StartPortraitLoad(vm.Portraits);
         }
         vm.StatusMessage = $"{elements.Count} mercenary entries loaded.";
         return vm;
@@ -316,6 +329,44 @@ public sealed partial class MercenaryRow : ObservableObject
 
     /// <summary>Display tag derived from <see cref="EquipCount"/>.</summary>
     public string TypeTag => EquipCount == 0 ? "Animal" : "Mercenary";
+
+    /// <summary>
+    /// NPC portrait for this row's <see cref="CharacterKey"/>, lazily
+    /// populated by <see cref="StartPortraitLoad"/> on the thread
+    /// pool. Starts null; remains null when the bridge has no match
+    /// above <see cref="PortraitProvider.MinAcceptableScore"/>. The
+    /// DataGrid binding re-evaluates automatically via the
+    /// ObservableProperty notification.
+    /// </summary>
+    [ObservableProperty]
+    private Bitmap? _portrait;
+
+    /// <summary>
+    /// Kick off the background portrait load for this row. Invoked
+    /// once at row construction. The PortraitProvider's own cache
+    /// (memory + disk) makes repeat opens of the dialog cheap; on
+    /// first open the dialog renders rows immediately with empty
+    /// portrait cells and they fill in as the thread pool drains.
+    /// </summary>
+    internal void StartPortraitLoad(PortraitProvider portraits)
+    {
+        if (CharacterKey == 0 || !portraits.IsAvailable)
+        {
+            return;
+        }
+        Task.Run(() =>
+        {
+            var bmp = portraits.GetPortrait(CharacterKey);
+            if (bmp is null)
+            {
+                return;
+            }
+            // Hop to the UI thread to publish — Bitmap can be
+            // constructed off-thread but the binding update has to be
+            // marshalled.
+            Dispatcher.UIThread.Post(() => Portrait = bmp);
+        });
+    }
 
     [ObservableProperty]
     private string? _newName;

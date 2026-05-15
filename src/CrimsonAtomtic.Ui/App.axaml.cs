@@ -69,6 +69,15 @@ public sealed class App : Application
             // .webp files).
             CrimsonAtomtic.Ui.Services.ItemKeyToIconConverter.Provider = localization.Icons;
 
+            // NPC portrait cache wiring. Same %LOCALAPPDATA% root as
+            // the icon cache — sibling PortraitCache folder. Unlike
+            // icons there's no "extract all" pre-pass; portraits are
+            // resolved on-demand per CharacterKey when a dialog asks
+            // for one (mercenary list is small enough that batching
+            // isn't worth it).
+            localization.ConfigurePortraitProvider(
+                CrimsonAtomtic.Ui.Services.PortraitProvider.ResolveRoot(paths.LocalAppDataDirectory));
+
             // Backup service: pure file-system orchestrator, no native deps.
             // Lives for the app lifetime alongside the loader so the same
             // %LOCALAPPDATA%\CrimsonAtomtic\Backups\ tree is the single

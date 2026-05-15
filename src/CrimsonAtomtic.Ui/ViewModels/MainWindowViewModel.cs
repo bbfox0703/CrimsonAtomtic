@@ -156,6 +156,13 @@ public sealed partial class MainWindowViewModel(
         // failure leaves the provider in whatever state the previous
         // bootstrap left it (degraded or otherwise).
         localization.TryBootstrapFromGameRoot(installRoot);
+        // Portrait provider keyed on the install's 0012/0.pamt — must
+        // be re-seeded so subsequent CharacterKey lookups extract from
+        // the new install's PAZ. Disk-cached portraits from the
+        // previous install stay valid (keyed on CharacterKey, not
+        // install path).
+        localization.ConfigurePortraitProvider(
+            PortraitProvider.ResolveRoot(paths.LocalAppDataDirectory));
         OnPropertyChanged(nameof(LocalizationStatus));
         OnPropertyChanged(nameof(IconStatus));
         // Repaint any open save view so resolved-name columns pick up

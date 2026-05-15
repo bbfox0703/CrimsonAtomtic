@@ -56,6 +56,23 @@
                             Binding="{Binding CharacterKey}"
                             Width="110"
                             IsReadOnly="True" />
+        <!-- Portrait column. Image source is bound to the row's
+             Portrait property which fills in asynchronously after
+             construction; cells stay blank until the background load
+             completes (or permanently when no portrait matched
+             above PortraitProvider.MinAcceptableScore). -->
+        <DataGridTemplateColumn Header="{StaticResource RenameMercenaryColPortrait}"
+                                Width="60">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate DataType="vm:MercenaryRow">
+              <Image Source="{Binding Portrait}"
+                     Width="48" Height="48"
+                     Stretch="Uniform"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
         <DataGridTextColumn Header="{StaticResource RenameMercenaryColCharName}"
                             Binding="{Binding ResolvedCharacterName}"
                             Width="200"
