@@ -1242,10 +1242,23 @@ Open from earlier work, none blocking the icon pipeline:
 
 6. ~~**`MissionKey` / `KnowledgeKey` / `QuestKey` proper names.**~~
    ✅ **Shipped** as part of the table-driven Key bridge wave (see
-   #4). All three now resolve through their dedicated `.pabgb`
-   bridges (`mission_info` / `quest_info` / `knowledge_info`) +
-   `LookupDisplayName → PALOC` for the localized title; internal
+   #4). All three resolve via their dedicated `.pabgb` bridges
+   (`mission_info` / `quest_info` / `knowledge_info`) +
+   `LookupDisplayName → PALOC` for the localized **title**; internal
    name fallback when PALOC misses.
+
+   **Original entry was misframed.** It claimed titles need a
+   template-resolver pass because of `{staticInfo:Mission:...}`
+   references at 0xC1. That's wrong: PA's title strings are flat in
+   the localized catalog at the Key bridges' lo32 namespaces — they
+   don't pass through the template layer. Template references only
+   appear in the longer **description / dialogue / quest-objective**
+   strings (different PALOC entries, different lo32). Those aren't
+   currently surfaced anywhere in the editor, so no work is needed
+   today; if a future feature wants to show e.g. a quest's
+   objective text inline, *that* would need a template-resolver
+   pass — separate scope from the "proper name" goal which is now
+   fully covered.
 
 7. **Length-changing edits (PR B)**. List add / remove / reorder
    + inline-byte resize. Needs an `ObjectBlock` re-serializer
