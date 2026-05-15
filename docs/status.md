@@ -3,7 +3,20 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-15 (Sockets editor v1 — swap-only, gem-filtered Item Picker).
+> Last updated: 2026-05-15 part 6 (Rename Mercenary now resolves character names; Drop All SA Artifacts menu removed; crimson-rs bridge wave 2 surveyed into roadmap).
+>
+> ## ✅ This session — what shipped (2026-05-15 part 6)
+>
+> Two small UX changes plus a TODO roadmap sweep for the new bridges
+> that landed in the latest `vendor/crimson-rs` refresh.
+>
+> | Area | Scope |
+> |---|---|
+> | **Rename Mercenary now shows resolved character names** | The dialog's caveat "Current saved names are NOT shown" was technically true for the user-set custom name (`_mercenaryName` InlineBytes — still needs a read-side FFI) but misleading: the **character/template name** resolved from `_characterKey` was already available via `LocalizationProvider.ResolveByFieldTypeName("CharacterKey", k)` — the same source the main window's mercenaryDataList Name column already used. Dialog now has a **Name** column between CharKey and Type displaying e.g. "Damiane / 德米安". `BuildRow` takes `LocalizationProvider`; `MercenaryRow.ResolvedCharacterName` is populated at construction. Header text updated to explain the column source vs. the still-pending user-custom-name read FFI. |
+> | **Drop All Sealed Abyss Artifacts menu — removed** | Pattern B v1's per-row "Mark Challenge Complete" button is the correct fix for SA stuck-state; the artifact-clearing bulk drop was the wrong shape (operates at item layer; the engine's stuck-claim gate is at the quest layer). Deletes `Services/ChallengeBulkOpService.cs` + `Views/ChallengeBulkOpProgressDialog.axaml(.cs)` + `DropAllSealedAbyssArtifactsAsync` + `ScanArtifactBulkOpPreview` + `ArtifactBulkOpPreview` + `ArtifactBulkOpRequested` wiring. `LocalizationProvider.EnumerateItemsByStringKeyPrefix` retained — Pattern B v1's held-artifact gate still uses it. |
+> | **Roadmap sweep for new crimson-rs bridges** | `vendor/crimson-rs` refresh brought a **CharacterKey dedicated bridge** (`crimson_characterinfo_load_from_*`, `_lookup_string_key`, `_lookup_display_name`, `_get_entry`, `_resolve_portrait`) and an **NPC portrait pipeline** (`crimson_paz_list_npc_portraits`). C# does not consume either yet. Added as picks #7–9 in the porting roadmap below; also closes deferred item #5's `FieldNPCSaveData._characterKey` half (the bridge does the cat-byte lo24 strip we don't currently do, plus internal-name fallback). |
+>
+> 170/170 C# tests pass. AOT build clean. Diff +88 / −793 (big delete is the SA bulk-op feature).
 >
 > ## ✅ This session — what shipped (2026-05-15 part 5)
 >
@@ -729,10 +742,14 @@ do them all at once.
 | 3 | ~~**Pet rename + Equipment-set duplicator**~~ | ~~EASY~~ | ✅ **Pet rename shipped 2026-05-15 part 4** (as Rename Mercenary; the predecessor's "Pet rename" is mercenary rename in this game's save model). Required a new `set_inline_bytes_field` Rust FFI because `_mercenaryName` is `meta_kind=1` which the existing scalar setters reject. Equipment-set duplicator dropped — the predecessor's "duplicator" is a stack-count exploit, not a true duplication, and our `EquipmentSaveData` shape has no multi-loadout slot to duplicate into. |
 | 4 | ~~**Sockets editor (fill / clear / swap gems, up to 5 sockets/item)**~~ | ~~MEDIUM~~ | ✅ **v1 (swap-only) shipped 2026-05-15 part 5.** Tools → Edit Item Sockets… surfaces every filled socket across inventory; per-row Change Gem… opens a gem-filtered Item Picker (`Item_Stat_AbyssGear_*` / `Item_Skill_AbyssGear_*`) → writes new gem `_itemKey` via `SetScalarField`. Fill/clear/unlock deferred per predecessor's safe-edit contract (empty-socket fill needs in-game Witch NPC; socket-count unlock has triple-coupled-write risk). |
 | 5 | **Dye editor (RGB / material / grime)** | MEDIUM | Reference data: `CrimsonGameMods/data/All_Dyes.json` + `dye_slot_db.json` + `dyeable_items_full.json` mineable. Needs a dye-slot lookup + RGB picker UI. |
-| 6 | **Unlock All Abyss Gates (Knowledge bulk-append)** | EASY | One-button Tools menu action that appends every `Knowledge_AbyssRuins_*` key (or a verified-safe subset) to `KnowledgeSaveData._list`. Mirrors the `ArtifactBulkOpService` shape: pre-flight count → confirm dialog → batch FFI → status footer. No JSON pack vendoring needed — keyset enumerated live from `knowledgeinfo.pabgb` via the existing C ABI bridge. **Caveat**: same engine-cross-reference risk pattern as SA Pattern A — start with abyss-gate prefix only (proven by the predecessor at 398 keys), defer per-key Browse Knowledge UI to a MEDIUM follow-up. |
+| 6 | **Unlock All Abyss Gates (Knowledge bulk-append)** | EASY | One-button Tools menu action that appends every `Knowledge_AbyssRuins_*` key (or a verified-safe subset) to `KnowledgeSaveData._list`. Pattern: pre-flight count → confirm dialog → batch FFI → status footer (mirror `FillAllStacksAcrossInventoriesAsync` shape since `ArtifactBulkOpService` is gone). No JSON pack vendoring needed — keyset enumerated live from `knowledgeinfo.pabgb` via the existing C ABI bridge. **Caveat**: same engine-cross-reference risk pattern as SA Pattern A — start with abyss-gate prefix only (proven by the predecessor at 398 keys), defer per-key Browse Knowledge UI to a MEDIUM follow-up. |
+| 7 | **Wire CharacterKey through the new `character_info` C ABI bridge** | EASY | Pure C# work — Rust side already shipped (`vendor/crimson-rs/src/c_abi/character_info.rs`). Currently C# resolves CharacterKey via the generic PALOC byte path (`TypeNameToTypeByte["CharacterKey"] = 0x30`); the bridge adds (a) **cat-byte hi-byte strip** (`lo24 = key & 0x00FF_FFFF`), (b) **internal-name fallback** when PALOC misses (e.g. `"FieldNPC_Bandit_Lvl3"`), (c) up to 22% PALOC display + ~100% internal-name coverage on the 221-key sample save. Adds `NativeCharacterInfoCatalog` (mirror of `NativeSkillInfoCatalog`), moves CharacterKey from `TypeNameToTypeByte` to `TableDrivenKeyTypes`, adds `"CharacterKey" => DisplayOrFallback(_characterInfo, …)` in `ResolveKeyTableOne`. Closes the `FieldNPCSaveData._characterKey` half of deferred item #5. |
+| 8 | **NPC portrait pipeline + Rename Mercenary portrait column** | MEDIUM | Pure C# work — Rust side already shipped (`crimson_paz_list_npc_portraits` + `crimson_characterinfo_resolve_portrait`). Two-step: (1) enumerate NPC portrait DDS paths from a PAZ group's PAMT (the function already filters out animal / riding / pet / wagon — only real NPC head-shots), (2) per-CharacterKey, call `resolve_portrait` with the loaded `characterinfo` + PALOC + portrait list → best-scoring DDS path + score (0–100; below ~30 is noise). New `PortraitProvider` mirrors `IconProvider`'s lazy-load + Bitmap-cache shape; extracted DDS files land in `%LOCALAPPDATA%\CrimsonAtomtic\PortraitCache\`. Rename Mercenary dialog grows a Portrait column (drives off `ResolvedCharacterName` + `CharacterKey`). Depends on #7. |
+| 9 | **Browse Characters / NPCs dialog** | EASY | Mirror of "Browse Items" but for `characterinfo.pabgb`. `crimson_characterinfo_get_entry` (two-call enumerate) gives all `(CharacterKey, internal_name)` pairs; pair each with display name from the existing PALOC chain and a portrait from the #8 provider. Useful for FieldNPC investigation work (deferred item #5's other half). Low-priority but cheap once #7 + #8 land. |
 
 **Lower-priority deferred items** (the older list — none blocking; pick by appetite):
-- Items #1, #5, #7–#14 from the original list below. (Items #2, #3, #4, #6 already shipped — see strikethrough rows there.)
+- Items #1, #5b, #7–#14 from the original list below. (Items #2, #3, #4, #5a, #6 already shipped or addressed — see strikethrough rows there.)
+- Plus crimson-rs "optional follow-ons" surfaced by the wave-2 refresh: Knowledge group breadcrumb (resolve KnowledgeKey to "Knowledge › 〈group〉 › 〈entry〉"), Quest chapter rollup ("Quest › 〈chapter heading〉 › 〈quest title〉"), broader CharacterKey PALOC namespaces beyond `lo32=0x30` (needs a save sample touching more named NPCs), portrait matcher mesh / customisation tokens (CrimsonForge-style — current matcher scores name tokens only).
 
 ## Sealed Abyss Artifact investigation (HISTORICAL — superseded by 2026-05-15)
 
@@ -1210,12 +1227,18 @@ Open from earlier work, none blocking the icon pipeline:
    title`; Gauge/Skill/SubLevel are internal-name only (no PALOC
    chain). So follow-on #6 below also dropped.
 
-5. **`FieldGimmickSaveDataKey` / `FieldNPCSaveData._characterKey`
-   resolution.** Both probe to no-PALOC-entry today. These look
-   like spawn template IDs (structured u32, not localized
-   namespace references). Probably need a different data file
-   parsed; lower priority since most users don't care about
-   anonymous field NPCs.
+5a. ~~**`FieldNPCSaveData._characterKey` resolution.**~~
+    🟡 **Substantially addressed by roadmap pick #7** once shipped —
+    the new `character_info` C ABI bridge does the lo24 cat-byte
+    strip we don't do today, plus internal-name fallback when PALOC
+    misses. Upstream measures 22% PALOC display + ~100% internal-name
+    coverage on the 221-key sample save.
+
+5b. **`FieldGimmickSaveDataKey` resolution.** Still no path —
+    looks like a spawn template ID (structured u32, not a localized
+    namespace reference). Probably needs a different data file
+    parsed; lower priority since most users don't care about
+    anonymous field gimmicks.
 
 6. ~~**`MissionKey` / `KnowledgeKey` / `QuestKey` proper names.**~~
    ✅ **Shipped** as part of the table-driven Key bridge wave (see
