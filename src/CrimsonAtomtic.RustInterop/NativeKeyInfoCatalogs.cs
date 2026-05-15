@@ -973,6 +973,58 @@ public sealed class NativeCharacterInfoCatalog : IDisposable
     }
 
     /// <summary>
+    /// Two-call enumerate over the loaded characterinfo entries by
+    /// insertion index. Returns <c>null</c> when <paramref name="index"/>
+    /// is past the catalog's end. The key is the lo24 row key (no
+    /// cat-byte); save-side <c>_characterKey</c> values still need the
+    /// strip before matching against these.
+    /// </summary>
+    public (uint Key, string Name)? GetEntry(int index)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentOutOfRangeException.ThrowIfNegative(index);
+        unsafe
+        {
+            uint outKey = 0;
+            nuint required = 0;
+            var rc = NativeMethods.CharacterInfoGetEntry(_handle, (uint)index,
+                out outKey, null, 0, out required);
+            if (rc == NativeMethods.OUT_OF_RANGE)
+            {
+                return null;
+            }
+            if (rc != NativeMethods.BUFFER_TOO_SMALL && rc != NativeMethods.OK)
+            {
+                throw new CrimsonSaveException(rc,
+                    $"crimson_characterinfo_get_entry({index}) size query failed: {NameBuffer.ErrorName(rc)}");
+            }
+            if (required <= 1)
+            {
+                return (outKey, string.Empty);
+            }
+            var rented = ArrayPool<byte>.Shared.Rent((int)required);
+            try
+            {
+                fixed (byte* b = rented)
+                {
+                    rc = NativeMethods.CharacterInfoGetEntry(_handle, (uint)index,
+                        out outKey, b, (nuint)rented.Length, out required);
+                }
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_characterinfo_get_entry({index}) fill failed: {NameBuffer.ErrorName(rc)}");
+                }
+                return (outKey, Encoding.UTF8.GetString(rented, 0, (int)required - 1));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
+    }
+
+    /// <summary>
     /// Resolve <paramref name="characterKey"/> to its best-scoring NPC
     /// portrait DDS path against <paramref name="portraitListBuffer"/>
     /// (the raw NUL-separated buffer from

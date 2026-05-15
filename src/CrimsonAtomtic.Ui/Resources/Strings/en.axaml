@@ -69,6 +69,20 @@
   <sys:String x:Key="ItemPickerCopyNameTip">Copy the English name to the clipboard</sys:String>
   <sys:String x:Key="ItemPickerCopyNameSecondaryTip">Copy the secondary-language name to the clipboard</sys:String>
 
+  <!-- Browse-characters dialog -->
+  <sys:String x:Key="MenuBrowseCharacters">Browse _Characters / NPCs…</sys:String>
+  <sys:String x:Key="CharacterPickerWindowTitle">Browse characters / NPCs</sys:String>
+  <sys:String x:Key="CharacterPickerSearchPlaceholder">Filter by CharacterKey, internal id, or localized name…</sys:String>
+  <sys:String x:Key="CharacterPickerColPortrait">Portrait</sys:String>
+  <sys:String x:Key="CharacterPickerColKey">CharKey</sys:String>
+  <sys:String x:Key="CharacterPickerColInternal">Internal id</sys:String>
+  <sys:String x:Key="CharacterPickerColNameEnglish">Name (eng)</sys:String>
+  <sys:String x:Key="CharacterPickerColCopy">Copy</sys:String>
+  <sys:String x:Key="CharacterPickerCopyKeyTip">Copy the numeric CharacterKey to the clipboard</sys:String>
+  <sys:String x:Key="CharacterPickerCopyInternalTip">Copy characterinfo's internal id (e.g. "Yann_Friendly") to the clipboard</sys:String>
+  <sys:String x:Key="CharacterPickerCopyNameTip">Copy the English display name to the clipboard</sys:String>
+  <sys:String x:Key="CharacterPickerCopyNameSecondaryTip">Copy the secondary-language display name to the clipboard</sys:String>
+
   <!-- Browse-localization dialog -->
   <sys:String x:Key="LocalizationWindowTitle">Browse localization</sys:String>
   <sys:String x:Key="LocalizationSearchPlaceholder">Filter by key or value…</sys:String>

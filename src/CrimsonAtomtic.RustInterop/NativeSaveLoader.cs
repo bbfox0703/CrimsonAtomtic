@@ -1815,6 +1815,14 @@ internal static partial class NativeMethods
         uint characterKey, uint lo32Namespace,
         byte* buf, nuint bufLen, out nuint required);
 
+    // Two-call enumerate over the loaded characterinfo entries by
+    // insertion index. The lo24 row key + internal name pair drives
+    // the Browse Characters dialog.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_characterinfo_get_entry")]
+    public static unsafe partial int CharacterInfoGetEntry(
+        CrimsonCharacterInfoHandle handle, uint idx, out uint outKey,
+        byte* buf, nuint bufLen, out nuint required);
+
     // High-level CharacterKey → portrait DDS path matcher. Chains the
     // display name + internal name against the portrait list returned
     // by PazListNpcPortraits, scores each candidate (0–100), and

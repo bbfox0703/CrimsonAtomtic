@@ -64,6 +64,8 @@
       <MenuItem Header="{StaticResource MenuTools}">
         <MenuItem Header="{StaticResource MenuBrowseItems}"
                   Click="OnBrowseItemsClick" />
+        <MenuItem Header="{StaticResource MenuBrowseCharacters}"
+                  Click="OnBrowseCharactersClick" />
         <MenuItem Header="{StaticResource MenuBrowseLocalization}"
                   Click="OnBrowseLocalizationClick" />
         <Separator />

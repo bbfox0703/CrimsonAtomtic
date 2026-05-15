@@ -487,6 +487,30 @@ public sealed partial class MainWindow : Window
         dialog.Show(this);
     }
 
+    /// <summary>
+    /// Tools → Browse Characters / NPCs… handler. Opens the character
+    /// picker dialog (mirror of Browse Items, but driven by
+    /// <c>characterinfo.pabgb</c> + the portrait pipeline). Read-only;
+    /// no Add-to-bag analog — characters aren't items.
+    /// </summary>
+    private void OnBrowseCharactersClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+        if (vm.Localization.CharacterCount == 0)
+        {
+            return;
+        }
+        var pickerVm = new CharacterPickerViewModel(vm.Localization);
+        var child = new CharacterPickerWindow
+        {
+            DataContext = pickerVm,
+        };
+        child.Show(this);
+    }
+
     private void OnBrowseItemsClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel vm)

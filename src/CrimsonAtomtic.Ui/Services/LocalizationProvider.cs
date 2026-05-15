@@ -734,6 +734,41 @@ public sealed class LocalizationProvider : IDisposable
         _itemInfo?.GetEntry(index);
 
     /// <summary>
+    /// Number of entries in the loaded <c>characterinfo.pabgb</c>.
+    /// <c>0</c> when the bridge isn't loaded.
+    /// </summary>
+    public int CharacterCount => _characterInfo?.EntryCount ?? 0;
+
+    /// <summary>
+    /// Get the <c>(CharacterKey, InternalName)</c> pair at insertion
+    /// index <paramref name="index"/>. Returns <c>null</c> when the
+    /// bridge isn't loaded or <paramref name="index"/> is out of range.
+    /// Drives the Browse Characters dialog. The key is the lo24 row
+    /// key; save-side <c>_characterKey</c> values with a cat-byte
+    /// still need the strip before they'll match.
+    /// </summary>
+    public (uint CharacterKey, string InternalName)? GetCharacter(int index) =>
+        _characterInfo?.GetEntry(index);
+
+    /// <summary>
+    /// Look up the localized display name for a <c>CharacterKey</c>
+    /// against the language whose PALOC is loaded under
+    /// <paramref name="langCode"/>. Returns <c>null</c> when:
+    /// <list type="bullet">
+    ///   <item>characterinfo.pabgb wasn't loaded;</item>
+    ///   <item>the language's PALOC isn't loaded;</item>
+    ///   <item>the key has no PALOC entry at <c>lo32 = 0x30</c>.</item>
+    /// </list>
+    /// </summary>
+    public string? LookupCharacterDisplayName(uint characterKey, string langCode)
+    {
+        if (_characterInfo is null) return null;
+        return _catalogs.TryGetValue(langCode, out var paloc)
+            ? _characterInfo.LookupDisplayName(characterKey, paloc)
+            : null;
+    }
+
+    /// <summary>
     /// Game-defined max_stack_count for an item. Returns <c>null</c>
     /// when the iteminfo bridge isn't loaded or the key isn't known.
     /// Drives the "Set to max stack" UX in the edit panel.

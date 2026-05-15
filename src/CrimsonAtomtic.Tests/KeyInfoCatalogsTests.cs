@@ -236,6 +236,16 @@ public sealed class KeyInfoCatalogsTests
         using var paloc = LoadEnglishPaloc(paz, p0020);
         Assert.Null(cat.LookupStringKey(uint.MaxValue));
         Assert.Null(cat.LookupDisplayName(uint.MaxValue, paloc));
+
+        // GetEntry: two-call enumerate. First entry must yield a
+        // non-empty internal name + non-zero key. Past-end returns null
+        // (the OUT_OF_RANGE path).
+        var first = cat.GetEntry(0);
+        Assert.NotNull(first);
+        Assert.NotEqual(0u, first!.Value.Key);
+        Assert.False(string.IsNullOrEmpty(first.Value.Name));
+        var pastEnd = cat.GetEntry(cat.EntryCount + 1000);
+        Assert.Null(pastEnd);
     }
 
     // ── Portrait pipeline (paz.list_npc_portraits + characterinfo.resolve_portrait) ──

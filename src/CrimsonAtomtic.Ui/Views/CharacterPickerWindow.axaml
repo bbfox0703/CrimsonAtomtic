@@ -1,0 +1,113 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        mc:Ignorable="d"
+        d:DesignWidth="1100"
+        d:DesignHeight="600"
+        x:Class="CrimsonAtomtic.Ui.Views.CharacterPickerWindow"
+        x:DataType="vm:CharacterPickerViewModel"
+        Title="{StaticResource CharacterPickerWindowTitle}"
+        Icon="/Assets/MainIcon.ico"
+        Width="1080" Height="600"
+        MinWidth="600" MinHeight="320">
+
+  <Grid RowDefinitions="Auto,Auto,*"
+        Margin="12">
+
+    <TextBox Grid.Row="0"
+             Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+             PlaceholderText="{StaticResource CharacterPickerSearchPlaceholder}" />
+
+    <TextBlock Grid.Row="1"
+               Text="{Binding ResultsCountText}"
+               Opacity="0.6"
+               Margin="2,6,0,8" />
+
+    <DataGrid Grid.Row="2"
+              ItemsSource="{Binding Results}"
+              IsReadOnly="True"
+              CanUserResizeColumns="True"
+              CanUserSortColumns="True"
+              GridLinesVisibility="Horizontal"
+              HeadersVisibility="Column"
+              AutoGenerateColumns="False">
+      <DataGrid.Columns>
+        <!-- Portrait column. Bound directly to the row's Portrait
+             property (populated asynchronously via StartPortraitLoad
+             on the thread pool). Cells stay blank until the load
+             completes or permanently when no portrait matched above
+             PortraitProvider.MinAcceptableScore. -->
+        <DataGridTemplateColumn Header="{StaticResource CharacterPickerColPortrait}" Width="60">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:CharacterPickerRow">
+              <Image Source="{Binding Portrait}"
+                     Width="48" Height="48"
+                     Stretch="Uniform"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTextColumn Header="{StaticResource CharacterPickerColKey}"
+                            Binding="{Binding CharacterKey}"
+                            Width="100" />
+        <DataGridTextColumn Header="{StaticResource CharacterPickerColInternal}"
+                            Binding="{Binding InternalName}"
+                            Width="280" />
+        <DataGridTextColumn Header="{StaticResource CharacterPickerColNameEnglish}"
+                            Binding="{Binding NameEnglish}"
+                            Width="*" />
+        <!-- Secondary name column: only visible when the user has
+             picked a secondary language. Header includes the lang
+             code so it's obvious which translation this is. -->
+        <DataGridTextColumn Header="{Binding $parent[Window].((vm:CharacterPickerViewModel)DataContext).SecondaryNameHeader}"
+                            Binding="{Binding NameSecondary}"
+                            Width="*"
+                            IsVisible="{Binding $parent[Window].((vm:CharacterPickerViewModel)DataContext).HasSecondary}" />
+        <!-- Per-row copy buttons: K = CharacterKey (the u32 the save
+             schema stores), S = internal name, N = English display
+             name, N₂ = secondary display name (hidden when no
+             secondary). Mirrors Browse Items copy semantics. -->
+        <DataGridTemplateColumn Header="{StaticResource CharacterPickerColCopy}"
+                                Width="140">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:CharacterPickerRow">
+              <StackPanel Orientation="Horizontal"
+                          Spacing="2"
+                          VerticalAlignment="Center"
+                          HorizontalAlignment="Left">
+                <Button Content="K"
+                        ToolTip.Tip="{StaticResource CharacterPickerCopyKeyTip}"
+                        Padding="6,2"
+                        MinHeight="0"
+                        Tag="{Binding CharacterKeyText}"
+                        Click="OnCopyButtonClick" />
+                <Button Content="S"
+                        ToolTip.Tip="{StaticResource CharacterPickerCopyInternalTip}"
+                        Padding="6,2"
+                        MinHeight="0"
+                        Tag="{Binding InternalName}"
+                        Click="OnCopyButtonClick" />
+                <Button Content="N"
+                        ToolTip.Tip="{StaticResource CharacterPickerCopyNameTip}"
+                        Padding="6,2"
+                        MinHeight="0"
+                        Tag="{Binding NameEnglish}"
+                        Click="OnCopyButtonClick" />
+                <Button Content="N₂"
+                        ToolTip.Tip="{StaticResource CharacterPickerCopyNameSecondaryTip}"
+                        Padding="6,2"
+                        MinHeight="0"
+                        Tag="{Binding NameSecondary}"
+                        Click="OnCopyButtonClick"
+                        IsVisible="{Binding $parent[Window].((vm:CharacterPickerViewModel)DataContext).HasSecondary}" />
+              </StackPanel>
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+      </DataGrid.Columns>
+    </DataGrid>
+  </Grid>
+</Window>
