@@ -1764,6 +1764,45 @@ internal static partial class NativeMethods
         CrimsonGimmickInfoHandle handle, uint idx, out uint outKey,
         byte* buf, nuint bufLen, out nuint required);
 
+    // ── CharacterInfo bridge (characterinfo.pabgb) ──────────────────────────
+    //
+    // Resolves save-side CharacterKey (u32) via three layers: internal
+    // name from the characterinfo entry, PALOC display name at
+    // `((charkey & 0x00FF_FFFF) << 32) | lo32` (default lo32 = 0x30 —
+    // 24-bit row key with cat-byte hi-byte STRIPPED, no Jenkins hash
+    // hop unlike Mission / Quest / Stage / Knowledge), and a high-level
+    // resolve_portrait matcher that chains the display name against
+    // the NPC portrait DDS list emitted by
+    // crimson_paz_list_npc_portraits. The bridge supersedes the
+    // generic PALOC byte-0x30 path for CharacterKey because it does
+    // the cat-byte strip we don't, and falls back to the internal
+    // name when PALOC misses.
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_characterinfo_load_from_file",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int CharacterInfoLoadFromFile(string path, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_characterinfo_load_from_bytes")]
+    public static unsafe partial int CharacterInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_characterinfo_free")]
+    public static partial void CharacterInfoFree(IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_characterinfo_entry_count")]
+    public static partial int CharacterInfoEntryCount(CrimsonCharacterInfoHandle handle, out uint count);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_characterinfo_lookup_string_key")]
+    public static unsafe partial int CharacterInfoLookupStringKey(
+        CrimsonCharacterInfoHandle handle, uint characterKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_characterinfo_lookup_display_name")]
+    public static unsafe partial int CharacterInfoLookupDisplayName(
+        CrimsonCharacterInfoHandle handle,
+        CrimsonPalocHandle palocHandle,
+        uint characterKey, uint lo32Namespace,
+        byte* buf, nuint bufLen, out nuint required);
+
     // ── SubLevelInfo bridge (sublevelinfo.pabgb) ────────────────────────────
     //
     // Pattern A only — no lookup_display_name exposed yet. SubLevelKey

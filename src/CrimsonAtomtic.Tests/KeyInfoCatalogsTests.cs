@@ -214,6 +214,30 @@ public sealed class KeyInfoCatalogsTests
         Assert.Null(cat.LookupDisplayName(uint.MaxValue, paloc));
     }
 
+    // ── CharacterInfo (cat-byte lo24 strip, PALOC chain at lo32=0x30) ───────
+
+    [Fact]
+    public void CharacterInfo_LiveInstall_LoadsAndLooksUp()
+    {
+        var live = LiveOrSkip();
+        if (live is null) return;
+        var (paz, p0008, p0020) = live.Value;
+
+        var bytes = paz.ExtractFile(p0008, ItemInfoDirectory, "characterinfo.pabgb");
+        using var cat = NativeCharacterInfoCatalog.LoadFromBytes(bytes);
+        Assert.True(cat.EntryCount > 100,
+                    $"expected >100 character entries, got {cat.EntryCount}");
+
+        // Internal-name + display-name miss path. Real lookups are
+        // exercised end-to-end by the live save's CharacterKey values
+        // via the editor's dispatch path; here we just smoke-test the
+        // bridge surface plus the obviously-missing key for both
+        // surfaces.
+        using var paloc = LoadEnglishPaloc(paz, p0020);
+        Assert.Null(cat.LookupStringKey(uint.MaxValue));
+        Assert.Null(cat.LookupDisplayName(uint.MaxValue, paloc));
+    }
+
     // ── SubLevelInfo (Pattern A) ────────────────────────────────────────────
 
     [Fact]

@@ -874,6 +874,130 @@ internal sealed class CrimsonGimmickInfoHandle : SafeHandle
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  CharacterInfo  (cat-byte lo24 strip, PALOC chain at lo32 = 0x30, no hash hop)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// <c>CharacterKey (u32)</c> → internal name or PALOC-localized display
+/// via the dedicated <c>characterinfo.pabgb</c> bridge. The lookup
+/// strips a "cat byte" (hi-byte, <c>0x02..=0xFE</c> region / variant /
+/// faction marker) before consulting the catalog — so any
+/// <c>_characterKey</c> with that high byte set (FieldNPC spawn rows
+/// in particular) resolves through this bridge but would have missed
+/// the legacy generic PALOC byte-0x30 path that uses the raw u32.
+///
+/// <para>
+/// Resolution preference at the editor's <c>ResolveByFieldTypeName</c>
+/// level: <c>LookupDisplayName</c> at <see cref="DisplayNameLo32"/>
+/// against the loaded PALOC → internal-name fallback via
+/// <c>LookupStringKey</c>. Upstream measured 22% PALOC display + ~100%
+/// internal-name coverage on the editor's 221-key sample save.
+/// </para>
+/// </summary>
+public sealed class NativeCharacterInfoCatalog : IDisposable
+{
+    /// <summary>
+    /// Default PALOC <c>lo32</c> for character display names. The vast
+    /// majority of named characters resolve at this namespace. Pearl
+    /// Abyss does ship a handful of characters with display entries at
+    /// other <c>lo32</c> values; surfacing them is part of the
+    /// "broader CharacterKey PALOC namespaces" follow-on documented in
+    /// <c>docs/status.md</c>.
+    /// </summary>
+    public const uint DisplayNameLo32 = 0x30;
+
+    private readonly CrimsonCharacterInfoHandle _handle;
+    private readonly int _entryCount;
+    private bool _disposed;
+
+    private NativeCharacterInfoCatalog(CrimsonCharacterInfoHandle handle, int entryCount)
+    {
+        _handle = handle;
+        _entryCount = entryCount;
+    }
+
+    public int EntryCount
+    {
+        get { ObjectDisposedException.ThrowIf(_disposed, this); return _entryCount; }
+    }
+
+    public static NativeCharacterInfoCatalog LoadFromBytes(ReadOnlySpan<byte> bytes)
+    {
+        unsafe
+        {
+            fixed (byte* p = bytes)
+            {
+                var rc = NativeMethods.CharacterInfoLoadFromBytes(p, (nuint)bytes.Length, out var raw);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_characterinfo_load_from_bytes(len={bytes.Length}) failed: {NameBuffer.ErrorName(rc)}");
+                }
+                var handle = CrimsonCharacterInfoHandle.FromOwnedPointer(raw);
+                var rcCount = NativeMethods.CharacterInfoEntryCount(handle, out var count);
+                if (rcCount != NativeMethods.OK)
+                {
+                    handle.Dispose();
+                    throw new CrimsonSaveException(rcCount,
+                        $"crimson_characterinfo_entry_count failed: {NameBuffer.ErrorName(rcCount)}");
+                }
+                return new NativeCharacterInfoCatalog(handle, (int)count);
+            }
+        }
+    }
+
+    public string? LookupStringKey(uint characterKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        unsafe
+        {
+            return NameBuffer.ReadString(
+                (byte* buf, nuint bufLen, out nuint required) =>
+                    NativeMethods.CharacterInfoLookupStringKey(_handle, characterKey, buf, bufLen, out required),
+                $"crimson_characterinfo_lookup_string_key({characterKey})");
+        }
+    }
+
+    public string? LookupDisplayName(uint characterKey, NativePalocCatalog paloc, uint lo32 = DisplayNameLo32)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(paloc);
+        unsafe
+        {
+            return NameBuffer.ReadString(
+                (byte* buf, nuint bufLen, out nuint required) =>
+                    NativeMethods.CharacterInfoLookupDisplayName(
+                        _handle, paloc.NativeHandle, characterKey, lo32, buf, bufLen, out required),
+                $"crimson_characterinfo_lookup_display_name({characterKey}, 0x{lo32:X})");
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _handle.Dispose();
+    }
+}
+
+internal sealed class CrimsonCharacterInfoHandle : SafeHandle
+{
+    public CrimsonCharacterInfoHandle() : base(IntPtr.Zero, ownsHandle: true) { }
+    public static CrimsonCharacterInfoHandle FromOwnedPointer(IntPtr ptr)
+    {
+        var h = new CrimsonCharacterInfoHandle();
+        h.SetHandle(ptr);
+        return h;
+    }
+    public override bool IsInvalid => handle == IntPtr.Zero;
+    protected override bool ReleaseHandle()
+    {
+        NativeMethods.CharacterInfoFree(handle);
+        return true;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  SubLevelInfo  (Pattern A only — no PALOC chain exposed)
 // ─────────────────────────────────────────────────────────────────────────────
 

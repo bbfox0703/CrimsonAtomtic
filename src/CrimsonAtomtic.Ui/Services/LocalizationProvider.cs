@@ -43,6 +43,7 @@ public sealed class LocalizationProvider : IDisposable
     private const string KnowledgeInfoFileName   = "knowledgeinfo.pabgb";
     private const string QuestGaugeInfoFileName  = "questgaugeinfo.pabgb";
     private const string GimmickInfoFileName     = "gimmickinfo.pabgb";
+    private const string CharacterInfoFileName   = "characterinfo.pabgb";
     private const string SubLevelInfoFileName    = "sublevelinfo.pabgb";
     private const string SkillPabgbFileName      = "skill.pabgb";
     private const string SkillPabghFileName      = "skill.pabgh";
@@ -147,19 +148,25 @@ public sealed class LocalizationProvider : IDisposable
     ///
     /// <para>
     /// <c>MissionKey</c> / <c>QuestKey</c> / <c>StageKey</c> /
-    /// <c>KnowledgeKey</c> / <c>QuestGaugeKey</c> / <c>SkillKey</c> are
-    /// resolved through dedicated <c>*.pabgb</c> bridges in the new
-    /// table-driven path (see <see cref="ResolveViaKeyTable"/>) — they
-    /// don't sit at a single PALOC type byte and are routed by
-    /// schema TypeName, not by integer namespace.
+    /// <c>KnowledgeKey</c> / <c>QuestGaugeKey</c> / <c>SkillKey</c> /
+    /// <c>CharacterKey</c> are resolved through dedicated
+    /// <c>*.pabgb</c> bridges in the new table-driven path (see
+    /// <see cref="ResolveViaKeyTable"/>) — they don't sit at a single
+    /// PALOC type byte and are routed by schema TypeName, not by
+    /// integer namespace. <c>CharacterKey</c> in particular: the
+    /// bridge strips a "cat byte" (hi-byte) the raw byte path can't,
+    /// so leaving it on the byte path would surface wrong-namespace
+    /// matches for FieldNPC spawn rows.
     /// </para>
     /// </summary>
     private static readonly Dictionary<string, byte> TypeNameToTypeByte =
         new(StringComparer.Ordinal)
         {
             ["ItemKey"]                        = ItemNameTypeByte,
+            // FactionKey shares PALOC byte 0x30 with character display
+            // names but lives outside characterinfo.pabgb — keep it on
+            // the raw byte path, no cat-byte strip needed.
             ["FactionKey"]                     = CharacterNameTypeByte,
-            ["CharacterKey"]                   = CharacterNameTypeByte,
             ["GimmickInfoKey"]                 = GimmickNameTypeByte,
             // Scene-object gimmicks (discovered interactables in the
             // open world) live at the same 0x00 byte as GimmickInfo.
@@ -196,6 +203,7 @@ public sealed class LocalizationProvider : IDisposable
         "GimmickInfoKey",
         "LevelGimmickSceneObjectInfoKey",
         "SubLevelKey",
+        "CharacterKey",
     };
 
     /// <summary>
@@ -240,6 +248,7 @@ public sealed class LocalizationProvider : IDisposable
     private NativeQuestGaugeInfoCatalog? _questGaugeInfo;
     private NativeSkillInfoCatalog? _skillInfo;
     private NativeGimmickInfoCatalog? _gimmickInfo;
+    private NativeCharacterInfoCatalog? _characterInfo;
     private NativeSubLevelInfoCatalog? _subLevelInfo;
     private string? _gameRoot;
     private string? _secondaryLanguage;
@@ -379,6 +388,8 @@ public sealed class LocalizationProvider : IDisposable
             NativeQuestGaugeInfoCatalog.LoadFromBytes, ref _questGaugeInfo);
         TryBootstrapKeyInfoCatalog(gameRoot, GimmickInfoFileName,
             NativeGimmickInfoCatalog.LoadFromBytes, ref _gimmickInfo);
+        TryBootstrapKeyInfoCatalog(gameRoot, CharacterInfoFileName,
+            NativeCharacterInfoCatalog.LoadFromBytes, ref _characterInfo);
         TryBootstrapKeyInfoCatalog(gameRoot, SubLevelInfoFileName,
             NativeSubLevelInfoCatalog.LoadFromBytes, ref _subLevelInfo);
         TryBootstrapSkillInfo(gameRoot);
@@ -991,6 +1002,12 @@ public sealed class LocalizationProvider : IDisposable
                                                 bridge => bridge.LookupStringKey(key)),
             // SubLevel: Pattern A only — internal name is the label.
             "SubLevelKey"   => _subLevelInfo?.LookupStringKey(key),
+            // Character: lo24 cat-byte strip + PALOC chain at lo32=0x30
+            // (NO hash hop unlike Mission/Quest/Stage/Knowledge). Bridge
+            // does the strip internally; we pass the raw u32 in.
+            "CharacterKey"  => DisplayOrFallback(_characterInfo, key, paloc,
+                                                bridge => bridge.LookupDisplayName(key, paloc!),
+                                                bridge => bridge.LookupStringKey(key)),
             _               => null,
         };
     }
@@ -1073,6 +1090,8 @@ public sealed class LocalizationProvider : IDisposable
         _skillInfo = null;
         _gimmickInfo?.Dispose();
         _gimmickInfo = null;
+        _characterInfo?.Dispose();
+        _characterInfo = null;
         _subLevelInfo?.Dispose();
         _subLevelInfo = null;
         foreach (var cat in _catalogs.Values)
