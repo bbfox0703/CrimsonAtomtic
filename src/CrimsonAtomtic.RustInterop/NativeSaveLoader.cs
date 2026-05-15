@@ -490,6 +490,206 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         }
     }
 
+    public void SetScalarFieldsPresentBatch(IReadOnlyList<ScalarPresentBatchOp> ops)
+    {
+        ArgumentNullException.ThrowIfNull(ops);
+        var count = ops.Count;
+        if (count == 0)
+        {
+            return;
+        }
+
+        var cached = RequireLoaded(nameof(SetScalarFieldsPresentBatch), invalidateDetailsCache: true);
+
+        // Per-op input checks mirror the single-op API's invariants so
+        // a bad input is caught with the same exception shape regardless
+        // of which entry point the caller picked.
+        for (var i = 0; i < count; i++)
+        {
+            var op = ops[i];
+            if (op.BlockIndex < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(ops),
+                    $"ops[{i}].BlockIndex must be non-negative, was {op.BlockIndex}.");
+            }
+            if (op.FieldIndex < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(ops),
+                    $"ops[{i}].FieldIndex must be non-negative, was {op.FieldIndex}.");
+            }
+        }
+
+        // Pack all paths into one PathStep[] arena and all init bytes
+        // into one byte[] arena, recording each op's offset. Same
+        // 3-pin pattern as SetScalarFieldsBatch — N=1300 ops still
+        // gives constant GC pin count.
+        var pathOffsets = new int[count];
+        var bytesOffsets = new int[count];
+        var totalPathSteps = 0;
+        var totalBytes = 0;
+        for (var i = 0; i < count; i++)
+        {
+            var op = ops[i];
+            pathOffsets[i] = totalPathSteps;
+            bytesOffsets[i] = totalBytes;
+            totalPathSteps += op.Path?.Length ?? 0;
+            // Absent ops have init bytes ignored on the Rust side; we
+            // still copy a zero-length slice so the arena stays clean.
+            if (op.MakePresent)
+            {
+                totalBytes += op.InitialBytes?.Length ?? 0;
+            }
+        }
+
+        var pathArena = totalPathSteps == 0 ? Array.Empty<PathStep>() : new PathStep[totalPathSteps];
+        var bytesArena = totalBytes == 0 ? Array.Empty<byte>() : new byte[totalBytes];
+        for (var i = 0; i < count; i++)
+        {
+            var op = ops[i];
+            if (op.Path is { Length: > 0 } path)
+            {
+                Array.Copy(path, 0, pathArena, pathOffsets[i], path.Length);
+            }
+            if (op.MakePresent && op.InitialBytes is { Length: > 0 } bytes)
+            {
+                Array.Copy(bytes, 0, bytesArena, bytesOffsets[i], bytes.Length);
+            }
+        }
+
+        var cOps = new NativeMethods.CrimsonScalarPresentBatchOp[count];
+        unsafe
+        {
+            fixed (PathStep* pPath = pathArena)
+            fixed (byte* pBytes = bytesArena)
+            {
+                for (var i = 0; i < count; i++)
+                {
+                    var op = ops[i];
+                    var pathLen = op.Path?.Length ?? 0;
+                    var bytesLen = op.MakePresent ? (op.InitialBytes?.Length ?? 0) : 0;
+                    cOps[i] = new NativeMethods.CrimsonScalarPresentBatchOp
+                    {
+                        BlockIdx    = (uint)op.BlockIndex,
+                        FieldIdx    = (uint)op.FieldIndex,
+                        Path        = pathLen == 0 ? null : pPath + pathOffsets[i],
+                        PathLen     = (nuint)pathLen,
+                        MakePresent = op.MakePresent ? 1 : 0,
+                        Bytes       = bytesLen == 0 ? null : pBytes + bytesOffsets[i],
+                        BytesLen    = (nuint)bytesLen,
+                    };
+                }
+
+                fixed (NativeMethods.CrimsonScalarPresentBatchOp* pOps = cOps)
+                {
+                    var rc = NativeMethods.SetScalarFieldsPresentBatch(
+                        cached, pOps, (nuint)count, out var failedIdx);
+                    if (rc != NativeMethods.OK)
+                    {
+                        int? failedOpIdx = failedIdx == nuint.MaxValue
+                            ? null
+                            : checked((int)failedIdx);
+                        throw new CrimsonSaveException(
+                            rc,
+                            failedOpIdx is { } fi
+                                ? $"crimson_save_set_scalar_fields_present_batch failed at op {fi}/{count}: {ErrorName(rc)}"
+                                : $"crimson_save_set_scalar_fields_present_batch failed: {ErrorName(rc)}",
+                            failedOpIdx);
+                    }
+                }
+            }
+        }
+    }
+
+    public void ListRemoveElementsBatch(IReadOnlyList<ListRemoveBatchOp> ops)
+    {
+        ArgumentNullException.ThrowIfNull(ops);
+        var count = ops.Count;
+        if (count == 0)
+        {
+            return;
+        }
+
+        var cached = RequireLoaded(nameof(ListRemoveElementsBatch), invalidateDetailsCache: true);
+
+        for (var i = 0; i < count; i++)
+        {
+            var op = ops[i];
+            if (op.BlockIndex < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(ops),
+                    $"ops[{i}].BlockIndex must be non-negative, was {op.BlockIndex}.");
+            }
+            if (op.FieldIndex < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(ops),
+                    $"ops[{i}].FieldIndex must be non-negative, was {op.FieldIndex}.");
+            }
+            if (op.ElementIndex < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(ops),
+                    $"ops[{i}].ElementIndex must be non-negative, was {op.ElementIndex}.");
+            }
+        }
+
+        // Same arena pattern as SetScalarFieldsPresentBatch, sans the
+        // bytes side (list-remove has no payload).
+        var pathOffsets = new int[count];
+        var totalPathSteps = 0;
+        for (var i = 0; i < count; i++)
+        {
+            pathOffsets[i] = totalPathSteps;
+            totalPathSteps += ops[i].Path?.Length ?? 0;
+        }
+
+        var pathArena = totalPathSteps == 0 ? Array.Empty<PathStep>() : new PathStep[totalPathSteps];
+        for (var i = 0; i < count; i++)
+        {
+            if (ops[i].Path is { Length: > 0 } path)
+            {
+                Array.Copy(path, 0, pathArena, pathOffsets[i], path.Length);
+            }
+        }
+
+        var cOps = new NativeMethods.CrimsonListRemoveBatchOp[count];
+        unsafe
+        {
+            fixed (PathStep* pPath = pathArena)
+            {
+                for (var i = 0; i < count; i++)
+                {
+                    var op = ops[i];
+                    var pathLen = op.Path?.Length ?? 0;
+                    cOps[i] = new NativeMethods.CrimsonListRemoveBatchOp
+                    {
+                        BlockIdx   = (uint)op.BlockIndex,
+                        FieldIdx   = (uint)op.FieldIndex,
+                        Path       = pathLen == 0 ? null : pPath + pathOffsets[i],
+                        PathLen    = (nuint)pathLen,
+                        ElementIdx = (uint)op.ElementIndex,
+                    };
+                }
+
+                fixed (NativeMethods.CrimsonListRemoveBatchOp* pOps = cOps)
+                {
+                    var rc = NativeMethods.ListRemoveElementsBatch(
+                        cached, pOps, (nuint)count, out var failedIdx);
+                    if (rc != NativeMethods.OK)
+                    {
+                        int? failedOpIdx = failedIdx == nuint.MaxValue
+                            ? null
+                            : checked((int)failedIdx);
+                        throw new CrimsonSaveException(
+                            rc,
+                            failedOpIdx is { } fi
+                                ? $"crimson_save_list_remove_elements_batch failed at op {fi}/{count}: {ErrorName(rc)}"
+                                : $"crimson_save_list_remove_elements_batch failed: {ErrorName(rc)}",
+                            failedOpIdx);
+                    }
+                }
+            }
+        }
+    }
+
     /// <summary>
     /// Validate a save is loaded and return its cached handle, optionally
     /// dropping the per-block details cache atomically with the handle
@@ -991,6 +1191,54 @@ internal static partial class NativeMethods
         uint insertAt,
         byte* bytes,
         nuint bytesLen);
+
+    /// <summary>
+    /// Mirror of <c>CrimsonScalarPresentBatchOp</c> in
+    /// <c>vendor/crimson-rs/src/c_abi/mod.rs</c>. Layout-compatible
+    /// repr(C) — passed across the FFI by pointer + length pair to
+    /// <see cref="SetScalarFieldsPresentBatch"/>.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public unsafe struct CrimsonScalarPresentBatchOp
+    {
+        public uint BlockIdx;
+        public uint FieldIdx;
+        public PathStep* Path;
+        public nuint PathLen;
+        public int MakePresent;
+        public byte* Bytes;
+        public nuint BytesLen;
+    }
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_set_scalar_fields_present_batch")]
+    public static unsafe partial int SetScalarFieldsPresentBatch(
+        CrimsonSaveHandle handle,
+        CrimsonScalarPresentBatchOp* ops,
+        nuint opCount,
+        out nuint failedOpIndex);
+
+    /// <summary>
+    /// Mirror of <c>CrimsonListRemoveBatchOp</c> in
+    /// <c>vendor/crimson-rs/src/c_abi/mod.rs</c>. Layout-compatible
+    /// repr(C) — passed across the FFI by pointer + length pair to
+    /// <see cref="ListRemoveElementsBatch"/>.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public unsafe struct CrimsonListRemoveBatchOp
+    {
+        public uint BlockIdx;
+        public uint FieldIdx;
+        public PathStep* Path;
+        public nuint PathLen;
+        public uint ElementIdx;
+    }
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_list_remove_elements_batch")]
+    public static unsafe partial int ListRemoveElementsBatch(
+        CrimsonSaveHandle handle,
+        CrimsonListRemoveBatchOp* ops,
+        nuint opCount,
+        out nuint failedOpIndex);
 
     // ── PALOC catalog ───────────────────────────────────────────────────────
 

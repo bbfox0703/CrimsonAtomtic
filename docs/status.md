@@ -3,7 +3,41 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-14 (Add-to-bag unblocked + nav perf + absent↔present + challenge guards).
+> Last updated: 2026-05-15 (length-changing batch FFI for bulk-completion perf).
+>
+> ## ✅ Length-changing batch FFI shipped (2026-05-15)
+>
+> Two new C ABI entry points land the perf primitive a "Complete all
+> challenges + drop artifacts" Tools-menu action will need to stay
+> usable. Both mirror the existing
+> `crimson_save_set_scalar_fields_batch` (PR #27) shape — validate-and-
+> apply per op, all-or-nothing rollback via the existing
+> `apply_length_changing_mutation` snapshot helper, one re-emit + one
+> `decode_blocks` at the end regardless of N.
+>
+> - **`crimson_save_set_scalar_fields_present_batch`** — flip N scalar
+>   `_completedTime`-style presence bits in one round trip. The bulk
+>   challenge-completion flow (~1300 `MissionStateData` blocks) goes
+>   from ~20 min (N × encode + decode) to seconds. C# surface:
+>   [`ISaveLoader.SetScalarFieldsPresentBatch(IReadOnlyList<ScalarPresentBatchOp>)`](../src/CrimsonAtomtic.RustInterop/ISaveLoader.cs).
+> - **`crimson_save_list_remove_elements_batch`** — drop N
+>   `_itemList` elements in one round trip. Caller pre-sorts ops
+>   targeting the same list by descending `element_idx`. C# surface:
+>   [`ISaveLoader.ListRemoveElementsBatch(IReadOnlyList<ListRemoveBatchOp>)`](../src/CrimsonAtomtic.RustInterop/ISaveLoader.cs).
+>
+> Both refactored the existing single-op closures (`set_scalar_field_present`,
+> `list_remove_element`) into shared mutator helpers
+> (`toggle_one_scalar_presence_in_place`,
+> `remove_one_list_element_in_place`) so the batch + single-op paths
+> share validation + mutation logic verbatim. crimson-rs commit
+> `bdf4b4e` (on `dev`, mirrored into `vendor/crimson-rs`). 5 new Rust
+> tests + the existing C# 151 tests still pass.
+>
+> **Not yet wired to a UI consumer.** `ChallengeBulkOpService` /
+> `ChallengeBulkOpProgressDialog.axaml.cs` are still to be built — the
+> batch primitives just sit on `ISaveLoader` waiting for them. When
+> the consumer lands the Tools-menu action should drop from ~20 min to
+> under 5 seconds.
 >
 > ## ✅ Beer Add-to-bag works end-to-end
 >
@@ -42,7 +76,7 @@
 > | **Backup retention 3 → 6** | `SaveBackupService.MaxVersionsPerSlot = 6` (was 3). Reason: Restore from backup itself triggers another pre-write snapshot, so 5 normal edits + 1 restore already consume 6 slots. Test renamed `FourthVersion → OverRetention`, drives the loop off `MaxVersionsPerSlot + 1` so future cap tweaks don't desync. |
 > | **Add-to-bag container blocklist — added then removed** | Mid-session: blocked `+ Bag` into Quest Artifacts (InventoryKey 5) and Kuku Pot (13) with an alert dialog. **User reverted the policy**: protection off, user accepts consequences. The `AlertRequested` plumbing + `ConfirmDialog.ShowAlertAsync` infrastructure stays (used elsewhere). |
 >
-> Health: **151 / 151 C# tests pass** (was 119; +4 cache tests + 28 InferTypeTag tests). AOT publish clean at 24.3 MB exe + 1.4 MB `crimson_rs.dll`. No new Rust changes this session; `vendor/crimson-rs` still pinned at `ab815e6`.
+> Health: **151 / 151 C# tests pass** (was 119; +4 cache tests + 28 InferTypeTag tests). AOT publish clean at 24.3 MB exe + 1.4 MB `crimson_rs.dll`. No new Rust changes this session; `vendor/crimson-rs` still pinned at `ab815e6`. (Superseded by 2026-05-15: vendor now pinned at `bdf4b4e` with the batch FFI.)
 >
 > ## 🆕 Verified facts to remember
 >
