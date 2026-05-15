@@ -175,10 +175,10 @@ public interface ISaveLoader
         ReadOnlySpan<byte> initialBytes);
 
     /// <summary>
-    /// Apply many <see cref="ScalarPresentBatchOp"/> mutations in one
-    /// FFI round trip, sharing a single post-batch re-emit + re-decode.
-    /// All-or-nothing: if any op fails validation the save body is
-    /// left exactly as it was before the call, and the thrown
+    /// Apply many <see cref="ScalarPresentBatchOp"/> presence-flips in
+    /// one FFI round trip, sharing a single post-batch re-emit + re-decode.
+    /// All-or-nothing: if any op fails validation the save body is left
+    /// exactly as it was before the call, and the thrown
     /// <see cref="CrimsonSaveException"/> carries
     /// <see cref="CrimsonSaveException.FailedOpIndex"/> pinpointing the
     /// offending op. An empty <paramref name="ops"/> list is a no-op.
@@ -186,14 +186,17 @@ public interface ISaveLoader
     /// <remarks>
     /// <para>
     /// Per-op validation rules match the single-op
-    /// <see cref="SetScalarFieldPresent(int, ReadOnlySpan{PathStep}, int, bool, ReadOnlySpan{byte})"/>
-    /// exactly — same <c>NOT_SCALAR_FIELD_KIND</c> /
-    /// <c>LENGTH_MISMATCH</c> / <c>OUT_OF_RANGE</c> /
-    /// <c>NOT_NAVIGABLE</c> codes. The batch path exists for
-    /// performance: applying N ops one-at-a-time pays
-    /// N × re-emit + re-decode cost (~20 minutes for the
-    /// 1300-challenge bulk-completion flow on a 1100-block save),
-    /// while the batch amortises to a single re-emit at the end.
+    /// <see cref="SetScalarFieldPresent"/> exactly — same
+    /// <c>NOT_SCALAR_FIELD_KIND</c> / <c>LENGTH_MISMATCH</c> /
+    /// <c>OUT_OF_RANGE</c> / <c>NOT_NAVIGABLE</c> codes.
+    /// </para>
+    /// <para>
+    /// This is the <b>perf-critical</b> path for bulk presence flips.
+    /// Each per-call <see cref="SetScalarFieldPresent"/> re-emits the
+    /// entire body and re-decodes every block (~1 s on a 1100-block
+    /// save). Promoting <c>_completedTime</c> on 1300+ challenges
+    /// one-at-a-time costs ~20 minutes; the batch amortizes to a single
+    /// re-emit + re-decode (~seconds).
     /// </para>
     /// <para>
     /// Requires a prior <see cref="Load"/> call. Throws
@@ -203,30 +206,22 @@ public interface ISaveLoader
     void SetScalarFieldsPresentBatch(IReadOnlyList<ScalarPresentBatchOp> ops);
 
     /// <summary>
-    /// Apply many <see cref="ListRemoveBatchOp"/> mutations in one FFI
-    /// round trip, sharing a single post-batch re-emit + re-decode.
-    /// All-or-nothing: if any op fails validation the save body is
-    /// left exactly as it was before the call, and the thrown
-    /// <see cref="CrimsonSaveException"/> carries
-    /// <see cref="CrimsonSaveException.FailedOpIndex"/> pinpointing the
-    /// offending op. An empty <paramref name="ops"/> list is a no-op.
+    /// Apply many <see cref="ListRemoveBatchOp"/> element drops in one
+    /// FFI round trip. All-or-nothing on validation failure (same
+    /// <see cref="CrimsonSaveException.FailedOpIndex"/> protocol as the
+    /// scalar batches).
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Per-op validation rules match the single-op
-    /// <see cref="ListRemoveElement(int, ReadOnlySpan{PathStep}, int, int)"/>
-    /// exactly — same <c>NOT_SCALAR</c> / <c>OUT_OF_RANGE</c> /
-    /// <c>LIST_VARIANT_UNSUPPORTED</c> / <c>NOT_NAVIGABLE</c> codes.
+    /// <b>Caller pre-sorts.</b> Ops are applied in input order and
+    /// earlier removes shift later element indexes within the same
+    /// list. Sort by <c>(blockIndex, listPath, descending elementIndex)</c>
+    /// before calling.
     /// </para>
     /// <para>
-    /// Ops are applied in input order, so earlier removes targeting
-    /// the same list shift later indexes. Callers must pre-sort ops
-    /// against the same list by descending
-    /// <see cref="ListRemoveBatchOp.ElementIndex"/> so the indexes
-    /// stay valid throughout the batch — a later op whose
-    /// <see cref="ListRemoveBatchOp.ElementIndex"/> outruns the
-    /// post-remove length fails with <c>OUT_OF_RANGE</c> and rolls
-    /// back the entire batch.
+    /// Single re-emit + re-decode at the end regardless of <c>ops</c>
+    /// size — replaces what was N × <c>ListRemoveElement</c> with
+    /// N × decode_blocks.
     /// </para>
     /// <para>
     /// Requires a prior <see cref="Load"/> call. Throws
@@ -234,6 +229,55 @@ public interface ISaveLoader
     /// </para>
     /// </remarks>
     void ListRemoveElementsBatch(IReadOnlyList<ListRemoveBatchOp> ops);
+
+    /// <summary>
+    /// Wholesale-replace the contents of a <c>dynamic_array&lt;u32&gt;</c>
+    /// field reached at <c>(blockIndex, path, fieldIndex)</c>. The
+    /// existing element bytes are dropped and replaced with
+    /// <paramref name="newElements"/> (each element written little-endian);
+    /// the variant header's count slot is rewritten to match. The body
+    /// is re-emitted + re-decoded once at the end.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// To append/insert: read the current elements via
+    /// <see cref="LoadBlockDetails"/>, build the desired sequence in
+    /// the caller, then pass the whole sequence here.
+    /// </para>
+    /// <para>
+    /// Restricted to <c>u32</c> element width (the schema's
+    /// <c>meta_size == 4</c> case). Other widths are rejected with
+    /// <c>LENGTH_MISMATCH</c>.
+    /// </para>
+    /// <para>
+    /// Errors: <c>NOT_SCALAR</c> when the field isn't a dynamic_array;
+    /// <c>LENGTH_MISMATCH</c> when meta_size != 4;
+    /// <c>OUT_OF_RANGE</c> when newCount exceeds the variant header's
+    /// count slot (<c>0x10000</c> for compact / prefix / marker variants);
+    /// <c>BODY_PARSE</c> when the variant header is malformed or unknown.
+    /// </para>
+    /// </remarks>
+    void DynamicArraySetU32Elements(
+        int blockIndex,
+        ReadOnlySpan<PathStep> path,
+        int fieldIndex,
+        ReadOnlySpan<uint> newElements);
+
+    /// <summary>
+    /// Read the contents of a <c>dynamic_array&lt;u32&gt;</c> field at
+    /// <c>(blockIndex, path, fieldIndex)</c> as a flat <see cref="uint"/>
+    /// array. Returns an empty array when the field is empty.
+    /// </summary>
+    /// <remarks>
+    /// Same field validation as
+    /// <see cref="DynamicArraySetU32Elements"/> (must be a dynamic_array
+    /// of u32). Internally uses the standard two-call buffer pattern
+    /// against the C ABI.
+    /// </remarks>
+    uint[] DynamicArrayGetU32Elements(
+        int blockIndex,
+        ReadOnlySpan<PathStep> path,
+        int fieldIndex);
 
     /// <summary>
     /// Produce the minimal valid bytes for a list element of

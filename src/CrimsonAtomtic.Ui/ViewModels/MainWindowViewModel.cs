@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using CrimsonAtomtic.Core;
 using CrimsonAtomtic.RustInterop;
 using CrimsonAtomtic.SaveModel;
+using CrimsonAtomtic.Ui.Platform;
 using CrimsonAtomtic.Ui.Services;
 
 namespace CrimsonAtomtic.Ui.ViewModels;
@@ -111,6 +112,41 @@ public sealed partial class MainWindowViewModel(
     /// Open Item Picker windows aren't refreshed here — they hold
     /// their own VMs and need close + reopen for the new icons.
     /// </summary>
+    /// <summary>
+    /// Persist a user-picked Crimson Desert install folder + re-bootstrap
+    /// the localization provider against it. Validates the witness file
+    /// (<c>0020\0.pamt</c>) before writing settings so a misclick can't
+    /// poison <c>game_install_root</c>; returns <c>false</c> on validation
+    /// failure so the caller can surface an error dialog. The override
+    /// takes precedence over auto-probe (Steam libraryfolders.vdf / Epic
+    /// manifest) on next launch and on every subsequent
+    /// <see cref="IPlatformPaths.GameInstallRoot"/> access.
+    /// </summary>
+    public bool SetGameInstallRoot(string installRoot)
+    {
+        if (string.IsNullOrWhiteSpace(installRoot)
+            || !SteamLibraryProbe.LooksLikeCrimsonDesertInstall(installRoot))
+        {
+            return false;
+        }
+        var existing = AppSettingsStore.Load(paths.LocalAppDataDirectory);
+        AppSettingsStore.TrySave(paths.LocalAppDataDirectory,
+            existing with { GameInstallRoot = installRoot });
+        // Re-bootstrap localization against the new root. Best-effort:
+        // failure leaves the provider in whatever state the previous
+        // bootstrap left it (degraded or otherwise).
+        localization.TryBootstrapFromGameRoot(installRoot);
+        OnPropertyChanged(nameof(LocalizationStatus));
+        OnPropertyChanged(nameof(IconStatus));
+        // Repaint any open save view so resolved-name columns pick up
+        // the fresh catalog data.
+        if (_navStack.Count > 0)
+        {
+            RebuildFromTop();
+        }
+        return true;
+    }
+
     public void RefreshIconCache()
     {
         localization.ConfigureIconProvider(
@@ -158,17 +194,31 @@ public sealed partial class MainWindowViewModel(
     }
 
     /// <summary>
-    /// Best initial folder for the Open Save dialog. Drills into the
-    /// single user-id subfolder (e.g. <c>save\102190433\</c>) when
-    /// exactly one exists, otherwise stops at the save root, falling
-    /// back to the root path even when it doesn't exist so the dialog
-    /// has a defined starting point.
+    /// Best initial folder for the Open Save dialog. Picks one save root
+    /// across all detected platforms (Steam / Epic / Game Pass) using
+    /// the rule:
+    /// <list type="number">
+    ///   <item><b>Preferred platform from settings</b> — if the user has
+    ///         previously opened a save successfully, the platform of
+    ///         that save is persisted to <c>preferred_platform</c> and
+    ///         honoured here when it still exists on disk.</item>
+    ///   <item><b>Most-recently-modified save</b> — when no preference is
+    ///         stored, or the preferred platform's root has since
+    ///         disappeared, the platform whose latest <c>save.save</c>
+    ///         was written most recently wins (proxy for "actively
+    ///         being played").</item>
+    ///   <item><b>Static fallback</b> — when no platform is detected at
+    ///         all, returns the Steam path so the picker has a defined
+    ///         starting point and the user can browse manually.</item>
+    /// </list>
+    /// Within the chosen platform, drills into the single user-id
+    /// subfolder when exactly one exists; otherwise stops at the root.
     /// </summary>
     public string DefaultOpenSaveStartingPath
     {
         get
         {
-            var root = paths.GameSaveRoot;
+            var root = ResolveDefaultOpenSaveRoot();
             if (!Directory.Exists(root))
             {
                 return root;
@@ -177,6 +227,86 @@ public sealed partial class MainWindowViewModel(
             var users = Directory.EnumerateDirectories(root).Take(2).ToArray();
             return users.Length == 1 ? users[0] : root;
         }
+    }
+
+    /// <summary>
+    /// Implementation detail of <see cref="DefaultOpenSaveStartingPath"/> —
+    /// returns the platform-scoped save root to anchor the picker at.
+    /// </summary>
+    private string ResolveDefaultOpenSaveRoot()
+    {
+        var discovered = paths.DiscoverSaveRoots();
+        if (discovered.Count == 0)
+        {
+            // No platform installed (or none with an existing save folder).
+            // Synthesize the canonical Steam path so the picker has somewhere
+            // to anchor; the user can navigate from there if their saves
+            // live somewhere unusual.
+            return Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Pearl Abyss", "CD", "save");
+        }
+
+        var preferred = AppSettingsStore.Load(paths.LocalAppDataDirectory).PreferredPlatform;
+        if (!string.IsNullOrEmpty(preferred)
+            && Enum.TryParse<SavePlatform>(preferred, ignoreCase: true, out var preferredEnum))
+        {
+            var match = discovered.FirstOrDefault(r => r.Platform == preferredEnum);
+            if (match is not null)
+            {
+                return match.RootPath;
+            }
+        }
+        // discovered is already ordered most-recent-first.
+        return discovered[0].RootPath;
+    }
+
+    /// <summary>
+    /// Find the on-disk save root that matches a backup entry's
+    /// platform. Returns <c>null</c> when the launcher that owned the
+    /// backed-up save is no longer installed on this machine (rare but
+    /// possible — user reinstalled, switched platforms, etc.). Legacy
+    /// backups (<see cref="SavePlatform.Unknown"/>) restore into the
+    /// first available save root as a best-effort fallback so the
+    /// pre-multi-platform history isn't stranded.
+    /// </summary>
+    private string? ResolveSaveRootForBackup(BackupEntry entry)
+    {
+        var discovered = paths.DiscoverSaveRoots();
+        if (discovered.Count == 0)
+        {
+            return null;
+        }
+        if (entry.Platform == SavePlatform.Unknown)
+        {
+            return discovered[0].RootPath;
+        }
+        var match = discovered.FirstOrDefault(r => r.Platform == entry.Platform);
+        return match?.RootPath;
+    }
+
+    /// <summary>
+    /// Persist the loaded save's platform to <c>preferred_platform</c>
+    /// so future Open dialogs default to the same launcher. No-op when
+    /// the path doesn't sit under any known platform root (e.g. user
+    /// Browse-opened a save from an unusual location — we don't want
+    /// to anchor a sticky preference on a one-off).
+    /// </summary>
+    private void PersistLoadedSavePlatform(string savePath)
+    {
+        var platform = paths.ClassifySavePath(savePath);
+        if (platform == SavePlatform.Unknown)
+        {
+            return;
+        }
+        var existing = AppSettingsStore.Load(paths.LocalAppDataDirectory);
+        var serialized = platform.ToString();
+        if (string.Equals(existing.PreferredPlatform, serialized, StringComparison.Ordinal))
+        {
+            return; // already at this value; skip the write
+        }
+        AppSettingsStore.TrySave(paths.LocalAppDataDirectory,
+            existing with { PreferredPlatform = serialized });
     }
 
     private string? _loadedPath;
@@ -312,18 +442,17 @@ public sealed partial class MainWindowViewModel(
     public Func<string, string, Task>? AlertRequested { get; set; }
 
     /// <summary>
-    /// Path of the save for which the first-time "challenge completion
-    /// edit → achievement impact" warning has already been shown and
-    /// confirmed this run. Null before any challenge has been edited.
-    /// On every challenge-completion edit we compare against
-    /// <see cref="_loadedPath"/>: a match means "already warned for
-    /// this save — skip the first-time prose, just show the recurring
-    /// artifact warning". A mismatch (different save loaded since
-    /// the last confirm) re-arms the first-time warning. No explicit
-    /// reset hook needed; the comparison naturally resets when the
-    /// user loads a different save.
+    /// Open the modal artifact-bulk-op progress dialog and return the
+    /// final (or partial-on-cancel) <see cref="ArtifactBulkOpResult"/>.
+    /// Wired by <c>MainWindow</c>'s code-behind to
+    /// <see cref="ChallengeBulkOpProgressDialog.RunAsync"/> so the VM
+    /// doesn't depend on Avalonia Window types. Null when no view is
+    /// attached (headless tests) — in that case the bulk-op command
+    /// aborts after the confirm step.
     /// </summary>
-    private string? _challengeWarningAcknowledgedForPath;
+    public Func<ISaveLoader, LocalizationProvider, string, IReadOnlyList<BlockSummary>,
+                Task<ArtifactBulkOpResult?>>? ArtifactBulkOpRequested
+    { get; set; }
 
     /// <summary>
     /// Status footer text for the most recent bulk operation —
@@ -687,6 +816,7 @@ public sealed partial class MainWindowViewModel(
         SaveCommand.NotifyCanExecuteChanged();
         SaveAsCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(WindowTitle));
+        PersistLoadedSavePlatform(path);
     }
 
     /// <summary>
@@ -968,15 +1098,12 @@ public sealed partial class MainWindowViewModel(
     /// <see cref="FieldRowViewModel.EditError"/>.
     /// </summary>
     /// <remarks>
-    /// Edits that flip a <c>MissionStateData</c> field to "completed"
-    /// (either <c>_state ← 5</c> or <c>_completedTime</c> going from
-    /// absent to present) are routed through
-    /// <see cref="ConfirmChallengeCompletionEditAsync"/> first — the
-    /// engine cross-checks mission state with the matching quest-reward
-    /// item, and an edit here can leave the artifact in a stuck state
-    /// (un-claimable AND un-deletable). The user explicitly confirms
-    /// per edit, with an extra "may affect achievement progress"
-    /// preamble the first time per save in this session.
+    /// No special-case guard for <c>MissionStateData._state ← 5</c> /
+    /// <c>_completedTime</c> promotions any more — the dedicated
+    /// "Mark Challenge Complete" command (with the engine-faithful
+    /// alertHistory recipe) carries its own warning, and bare-row
+    /// edits to those fields are now treated as expert-mode raw edits
+    /// without an extra prompt.
     /// </remarks>
     [RelayCommand]
     private async Task CommitFieldEditAsync(FieldRowViewModel? row)
@@ -991,15 +1118,7 @@ public sealed partial class MainWindowViewModel(
             row.EditError = err;
             return;
         }
-        // Challenge-completion guard. Detected before the FFI mutation so
-        // a "cancel" in the dialog leaves the save body fully untouched.
-        if (IsChallengeCompletionEdit(row))
-        {
-            if (!await ConfirmChallengeCompletionEditAsync())
-            {
-                return;
-            }
-        }
+        await Task.CompletedTask; // keep async signature; no awaits remain
         try
         {
             // Path-addressed FFI: empty path collapses to a top-level mutation,
@@ -1090,125 +1209,722 @@ public sealed partial class MainWindowViewModel(
     }
 
     /// <summary>
-    /// True when applying <paramref name="row"/>'s pending edit would
-    /// mark a <c>MissionStateData</c> as completed — either
-    /// <c>_state ← 5</c> (when not already 5) or <c>_completedTime</c>
-    /// promoting from absent to present. Used to gate
-    /// <see cref="CommitFieldEditAsync"/> on the confirmation dialog.
+    /// Magic StringInfoKey hash that marks a Sealed Abyss Artifact
+    /// challenge as <b>visible</b> in the in-game UI. Verified universal
+    /// across all 12 solved-or-visible SA challenges in slot102 (Shield
+    /// II / III / VI; Spear I; Sword III / IV; Bow I / III; Battle V;
+    /// Operation VI; Living III; Hunting I; Crime I / VIII;
+    /// ChallengeAndChange III). Always appears at <c>_usedTagList[1]</c>
+    /// when the engine has discovered the challenge.
+    /// </summary>
+    private const uint VisibleTagHash = 3938836851u;
+
+    // Note: there's also a "completed" magic tag (4104166156u) that the
+    // engine writes to the catalog row's _usedTagList only AFTER the
+    // user claims the reward in-game. Pattern B v1 doesn't write the
+    // catalog at all, so we don't need that constant here — the engine
+    // adds it when it processes the reward pickup.
+
+    /// <summary>
+    /// Append <paramref name="addTags"/> to <paramref name="existing"/>,
+    /// preserving order and deduping (so repeated Mark-Complete clicks
+    /// don't grow the list unbounded). Returns a fresh array suitable
+    /// for <see cref="ISaveLoader.DynamicArraySetU32Elements"/>.
+    /// </summary>
+    private static uint[] MergeTags(IReadOnlyList<uint> existing, params uint[] addTags)
+    {
+        var seen = new HashSet<uint>(existing.Count + addTags.Length);
+        var result = new List<uint>(existing.Count + addTags.Length);
+        foreach (var t in existing)
+        {
+            if (seen.Add(t)) result.Add(t);
+        }
+        foreach (var t in addTags)
+        {
+            if (seen.Add(t)) result.Add(t);
+        }
+        return result.ToArray();
+    }
+
+    /// <summary>
+    /// True when the current top-of-stack frame is a
+    /// <c>MissionStateData</c> catalog row (positive <c>_key</c>,
+    /// <c>_state != 5</c>) with an engine-shaped completion infrastructure
+    /// in place — adjacent visibility twin at <c>catalog_idx + 1</c> in
+    /// "visible" state AND a matching FAR tracker further down the list —
+    /// AND the player currently holds at least one Sealed Abyss Artifact
+    /// item in inventory. Drives the visibility / CanExecute of the
+    /// "Mark Challenge Complete" block-action button.
     /// </summary>
     /// <remarks>
-    /// Detection is intentionally narrow: only the two shapes the
-    /// engine itself uses to mark completion (per the slot102 → slot103
-    /// engine-natural transition). Lesser state transitions
-    /// (<c>_state 2 → 3</c>, etc.) and unrelated MissionStateData
-    /// edits proceed without prompting.
+    /// <para>
+    /// The held-artifact gate is the recipe's safety net. Pure placeholder
+    /// challenges (the user has never encountered them in-game, no
+    /// artifact was ever picked up) become visible / unlock only when the
+    /// engine processes the artifact pickup sequence. Flipping their
+    /// catalog state without that pickup leaves the engine in an
+    /// inconsistent state and the card stays hidden in the UI. By
+    /// requiring at least one SA artifact in the user's inventory we
+    /// short-circuit the button on saves where the engine has done none
+    /// of the discovery bookkeeping yet. <b>We do not match this specific
+    /// challenge → its specific artifact</b> — the user is responsible
+    /// for selecting the right catalog row.
+    /// </para>
+    /// <para>
+    /// The original category restriction (only <c>Challenge_*</c> /
+    /// <c>Mission_MiniGame_*</c> string-keys) has been removed. Non-SA
+    /// challenges that happen to share the FAR-tracker shape now show
+    /// the button too — the user takes responsibility for the FAR-shape
+    /// match and the warning dialog reinforces the artifact-in-bag
+    /// requirement.
+    /// </para>
+    /// <para>
+    /// Re-evaluated lazily on every property read. Cached cheaply via
+    /// <see cref="OnPropertyChanged"/> from <see cref="NotifyNavigationChanged"/>
+    /// and from the post-edit refresh — keeps the UI in sync after the
+    /// _state field changes.
+    /// </para>
     /// </remarks>
-    private bool IsChallengeCompletionEdit(FieldRowViewModel row)
+    public bool IsCurrentChallengeMarkable => TryReadCurrentChallengeContext(out _);
+
+    /// <summary>
+    /// Mark the currently-displayed catalog <c>MissionStateData</c>
+    /// challenge as completed using the engine-faithful <b>Pattern B v1</b>
+    /// recipe — exactly the shape the engine writes for an in-game
+    /// completion that hasn't been claimed yet (verified against the
+    /// slot102 → live slot103 Hooves II transition):
+    /// <list type="number">
+    ///   <item>FAR tracker (negative-keyed entry at <c>_key =
+    ///         adjacent_twin._key - 1</c>): <c>_state ← 5</c>,
+    ///         <c>_completedTime</c> stamped, <c>_usedTagList</c> grown
+    ///         to <c>[base, visible]</c>.</item>
+    ///   <item>NEW <c>MissionStateData</c> entry appended to
+    ///         <c>_missionStateList</c> with <c>_key = X_2 sub-mission
+    ///         catalog key</c> ("Use the sealed Abyss artifact"
+    ///         follow-up). Implemented as <c>ListCloneElement</c> of
+    ///         the FAR tracker (the clone inherits state=2, branched=
+    ///         present, tags=[base] — the right shape) followed by a
+    ///         <c>_key</c> + <c>_branchedTime</c> patch.</item>
+    ///   <item><b>Catalog row + adjacent twin: NOT TOUCHED.</b> The
+    ///         engine writes those (and the alertHistory entry) only
+    ///         when the user actually claims the reward in-game (uses
+    ///         the artifact item). After this edit + reload, the
+    ///         engine sees the pre-completed state and offers the
+    ///         user the reward pickup, which then triggers the rest
+    ///         of the bookkeeping naturally.</item>
+    /// </list>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Gate</b>: the button only enables when (a) the adjacent twin
+    /// is in "visible" state (state=5 + _completedTime present +
+    /// tags ≥ 2), (b) the FAR tracker exists and isn't already at
+    /// state=5, and (c) the player currently holds at least one Sealed
+    /// Abyss Artifact item in inventory. (a)+(b) require the user to
+    /// have already picked up the reward artifact for this challenge
+    /// in-game — which is what creates the FAR tracker. (c) is a
+    /// global safety net: if the user has zero SA artifacts at all,
+    /// the recipe's engine-side reconciliation has nothing to attach
+    /// to. The category restriction has been removed — any
+    /// MissionStateData row with the right shape is eligible.
+    /// </para>
+    /// <para>
+    /// Pattern B v1 is the result of a long iterative debug. Earlier
+    /// patterns (A v1 / v2 / v3) tried to write the post-claim state
+    /// directly to the catalog row + adjacent twin + alertHistory; all
+    /// three regressed previously-visible challenge cards into the
+    /// "unknown / locked" UI state because some piece we couldn't
+    /// fully reverse-engineer was missing. Pattern B v1 sidesteps that
+    /// by writing only what the engine writes pre-claim and letting
+    /// the engine fill in the rest on next load.
+    /// </para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(IsCurrentChallengeMarkable))]
+    private async Task MarkCurrentChallengeCompleteAsync()
     {
+        BulkOpStatus = null;
+        if (!TryReadCurrentChallengeContext(out var ctx)
+            || ConfirmRequested is not { } ask
+            || _loadedPath is null)
+        {
+            return;
+        }
+
+        var farTagsAfter = MergeTags(ctx.FarUsedTagList, VisibleTagHash).Length;
+        var msg =
+            $"Mark this challenge as completed using the Pattern B v1 recipe?\n\n" +
+            $"  Challenge key: {ctx.CatalogKey}\n" +
+            $"  Internal name: {ctx.InternalName}\n" +
+            $"  Adjacent visibility twin key: {ctx.TwinKey}\n" +
+            $"  FAR tracker: idx {ctx.FarElementIdx}, key {ctx.TwinKey - 1u}\n" +
+            $"  X_2 sub-mission to {(ctx.FollowUpAlreadyExists ? "update" : "create")}: " +
+            $"key {ctx.FollowUpKey} ({ctx.FollowUpInternalName})\n\n" +
+            "What this writes:\n" +
+            "  • FAR tracker _state ← 5 + _completedTime stamped.\n" +
+            $"  • FAR tracker _usedTagList: {ctx.FarUsedTagList.Count} → {farTagsAfter} entries " +
+            "(adds visible magic tag).\n" +
+            (ctx.FollowUpAlreadyExists
+                ? "  • X_2 sub-mission entry already exists; skipped insert.\n"
+                : "  • NEW MissionStateData entry appended (cloned from FAR tracker, " +
+                  "_key + _branchedTime patched to the X_2 sub-mission shape).\n") +
+            "  • Catalog row + adjacent twin: UNTOUCHED. Engine handles those at reward pickup.\n\n" +
+            "[!! HOLD THE MATCHING ARTIFACT] Confirm that the Sealed Abyss Artifact for THIS " +
+            "specific challenge is currently in your inventory. The button only enables when " +
+            "you hold at least one SA artifact (any variant), but the in-game reward-claim " +
+            "flow on next reload only completes if the matching artifact for this challenge " +
+            "is in your bag. Pattern B v1 on its own is not enough — the artifact pickup is " +
+            "the engine's gating signal.\n\n" +
+            "[!! VERIFIED ON Shield II / Spear I / Hooves II / Slash III IN SLOT102] " +
+            "Pattern B v1 is reverse-engineered from the engine's natural Hooves II " +
+            "completion (slot102 → live slot103 transition). The recipe writes the " +
+            "pre-claim state and lets the engine finish bookkeeping on next load. " +
+            "Earlier patterns that tried to write the post-claim state directly all " +
+            "corrupted the in-game UI. CONFIRM YOUR SAVE IS BACKED UP before proceeding " +
+            "(auto-backup at %LOCALAPPDATA%\\CrimsonAtomtic\\Backups\\ — File → " +
+            "Restore from Backup… can roll back).\n\n" +
+            "[!! WILL AFFECT GAME PROGRESSION] Forcing the FAR tracker to state=5 tells the " +
+            "engine the challenge is complete; downstream content / NPC dialogues that " +
+            "depend on this challenge being done will trigger.\n\n" +
+            "[!! ACHIEVEMENTS WILL NOT UNLOCK] Steam / platform achievements only fire on " +
+            "a real in-game completion. Marking via file edit will not trigger the " +
+            "achievement, and once the challenge is in this state the engine won't re-fire " +
+            "it on subsequent legitimate completion. Do not use this for challenges you " +
+            "intend to complete legitimately later.\n\n" +
+            "Proceed?";
+        var ok = await ask("Mark challenge complete (Pattern B v1)?", msg);
+        if (!ok)
+        {
+            BulkOpStatus = "Mark cancelled.";
+            return;
+        }
+
+        BulkOpStatus = $"Applying Pattern B v1 (FAR tracker + X_2 sub-mission)…";
+        // Compute timestamp watermark — engine-natural completions
+        // always sort after older ones.
+        var maxCt = await Task.Run(() => ScanMaxMissionCompletedTime());
+        var newCt = maxCt == 0UL ? 1UL : maxCt + 1UL;
+        var ctBytes = BitConverter.GetBytes(newCt);
+
+        var farPath = new[] { new PathStep((uint)ctx.MissionListFieldIdx, (uint)ctx.FarElementIdx) };
+        var newElementIdx = ctx.MissionStateListCount; // append index (= old count)
+        var newPath = new[] { new PathStep((uint)ctx.MissionListFieldIdx, (uint)newElementIdx) };
+
+        // Capture FAR tracker's _key field index — needed to patch the
+        // clone's _key once it's inserted.
+        var farKeyFieldIdx = -1;
+        try
+        {
+            var top = loader.LoadBlockDetails(_loadedPath, ctx.MissionTopBlockIdx);
+            var listField = top.Fields[ctx.MissionListFieldIdx];
+            var far = listField.Elements![ctx.FarElementIdx];
+            foreach (var f in far.Fields)
+            {
+                if (f.Name == "_key") { farKeyFieldIdx = f.FieldIndex; break; }
+            }
+        }
+        catch (CrimsonSaveException ex)
+        {
+            BulkOpStatus = $"Mark failed (could not re-read FAR tracker): {ex.Message}";
+            return;
+        }
+        if (farKeyFieldIdx < 0)
+        {
+            BulkOpStatus = "Mark failed: FAR tracker lacks a _key field — recipe can't continue.";
+            return;
+        }
+
+        CrimsonSaveException? error = null;
+        await Task.Run(() =>
+        {
+            try
+            {
+                // Phase 1: clone FAR tracker to end of list (only when
+                // the X_2 entry doesn't already exist). The clone
+                // inherits FAR's CURRENT shape (state=2, branched=
+                // present, tags=[base]) — perfect template for the
+                // new X_2 sub-mission entry.
+                if (!ctx.FollowUpAlreadyExists)
+                {
+                    loader.ListCloneElement(
+                        ctx.MissionTopBlockIdx,
+                        Array.Empty<PathStep>(),
+                        ctx.MissionListFieldIdx,
+                        ctx.FarElementIdx,
+                        newElementIdx);
+                }
+                // Phase 2: update the FAR tracker — state=5 + _completedTime
+                // stamped + _usedTagList grown to add the visible tag.
+                loader.SetScalarField(
+                    ctx.MissionTopBlockIdx, farPath,
+                    ctx.FarStateFieldIdx, new byte[] { 5 });
+                if (ctx.FarCompletedTimeAlreadyPresent)
+                {
+                    loader.SetScalarField(
+                        ctx.MissionTopBlockIdx, farPath,
+                        ctx.FarCompletedTimeFieldIdx, ctBytes);
+                }
+                else
+                {
+                    loader.SetScalarFieldPresent(
+                        ctx.MissionTopBlockIdx, farPath,
+                        ctx.FarCompletedTimeFieldIdx,
+                        makePresent: true, ctBytes);
+                }
+                var farTarget = MergeTags(ctx.FarUsedTagList, VisibleTagHash);
+                loader.DynamicArraySetU32Elements(
+                    ctx.MissionTopBlockIdx, farPath,
+                    ctx.FarUsedTagListFieldIdx, farTarget);
+
+                // Phase 3: patch the clone's _key + _branchedTime so it
+                // becomes the X_2 sub-mission entry. Field indices are
+                // the same on the clone (per-class schema is stable).
+                if (!ctx.FollowUpAlreadyExists)
+                {
+                    var keyBytes = BitConverter.GetBytes(ctx.FollowUpKey);
+                    loader.SetScalarField(
+                        ctx.MissionTopBlockIdx, newPath,
+                        farKeyFieldIdx, keyBytes);
+                    loader.SetScalarField(
+                        ctx.MissionTopBlockIdx, newPath,
+                        ctx.FarBranchedTimeFieldIdx, ctBytes);
+                }
+            }
+            catch (CrimsonSaveException ex)
+            {
+                error = ex;
+            }
+        });
+
+        RefreshSelectedBlockSilently();
+
+        if (error is null)
+        {
+            IsDirty = true;
+            OnPropertyChanged(nameof(WindowTitle));
+            BulkOpStatus = ctx.FollowUpAlreadyExists
+                ? $"Marked {ctx.CatalogKey} ({ctx.InternalName}) complete via Pattern B v1 — "
+                  + $"FAR tracker idx {ctx.FarElementIdx} flipped (X_2 sub-mission already existed)."
+                : $"Marked {ctx.CatalogKey} ({ctx.InternalName}) complete via Pattern B v1 — "
+                  + $"FAR tracker idx {ctx.FarElementIdx} flipped, "
+                  + $"X_2 sub-mission entry created at idx {newElementIdx}.";
+        }
+        else
+        {
+            BulkOpStatus = $"Mark failed: {error.Message}. "
+                           + "Save state may be partial — reload without writing to revert.";
+        }
+        OnPropertyChanged(nameof(IsCurrentChallengeMarkable));
+        MarkCurrentChallengeCompleteCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// Find the largest <c>_completedTime</c> present across every
+    /// <c>MissionStateData</c> entry in the loaded save. Used by the
+    /// Pattern B v1 recipe to stamp the FAR tracker with a value that
+    /// sorts after every prior engine-natural completion.
+    /// </summary>
+    private ulong ScanMaxMissionCompletedTime()
+    {
+        if (_loadedPath is null || Summary is not { Blocks: { } blocks })
+        {
+            return 0UL;
+        }
+        ulong max = 0;
+        foreach (var b in blocks)
+        {
+            if (!string.Equals(b.ClassName, "QuestSaveData", StringComparison.Ordinal))
+            {
+                continue;
+            }
+            BlockDetails top;
+            try { top = loader.LoadBlockDetails(_loadedPath, b.Index); }
+            catch (CrimsonSaveException) { continue; }
+            foreach (var listField in top.Fields)
+            {
+                if (!string.Equals(listField.Name, "_missionStateList", StringComparison.Ordinal)
+                    || listField.Elements is not { Count: > 0 } missions)
+                {
+                    continue;
+                }
+                foreach (var m in missions)
+                {
+                    foreach (var f in m.Fields)
+                    {
+                        if (f.Name != "_completedTime") continue;
+                        if (f.Present
+                            && TryParseScalarUInt(f.Value, out var v)
+                            && v > max)
+                        {
+                            max = v;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        return max;
+    }
+
+    /// <summary>
+    /// Inspect the current top-of-stack <see cref="BlockFrame"/>; when
+    /// it's a catalog <c>MissionStateData</c> challenge currently at
+    /// <c>_state != 5</c>, populate <paramref name="ctx"/> with the
+    /// addressing info needed by
+    /// <see cref="MarkCurrentChallengeCompleteAsync"/>.
+    /// Returns false (with default <paramref name="ctx"/>) when any
+    /// precondition fails.
+    /// </summary>
+    private bool TryReadCurrentChallengeContext(out CurrentChallengeContext ctx)
+    {
+        ctx = default;
         if (_navStack.Count == 0
-            || _navStack.Peek() is not BlockFrame bf
-            || !string.Equals(bf.Block.ClassName, "MissionStateData", StringComparison.Ordinal))
+            || _navStack.Peek() is not BlockFrame frame
+            || !string.Equals(frame.Block.ClassName, "MissionStateData", StringComparison.Ordinal)
+            || SelectedBlock is not { } topBlock
+            || _loadedPath is null
+            // Path must be exactly one step (the missionStateList element).
+            || frame.Path is not { Count: 1 } path1)
         {
             return false;
         }
-        // Pattern 1: _state ← 5 (when not already 5).
-        if (row.Name == "_state")
+        DecodedFieldRow? keyFld = null, stateFld = null;
+        foreach (var f in frame.Block.Fields)
         {
-            if (!int.TryParse(row.RawText.Trim(),
-                              System.Globalization.NumberStyles.Integer,
-                              System.Globalization.CultureInfo.InvariantCulture,
-                              out var newState)
-                || newState != 5)
-            {
-                return false;
-            }
-            // Skip when already 5 — pure no-op.
-            if (TryParseScalarUInt(row.DisplayValue, out var current) && current == 5UL)
-            {
-                return false;
-            }
-            return true;
+            if (keyFld is null && f.Name == "_key") keyFld = f;
+            else if (stateFld is null && f.Name == "_state") stateFld = f;
         }
-        // Pattern 2: _completedTime going from absent to present.
-        // The engine sets this u64 timestamp exactly when it marks
-        // completion, so any promote-to-present qualifies.
-        if (row.Name == "_completedTime" && !row.Present)
+        if (keyFld is null || stateFld is null) return false;
+        if (!TryParseScalarUInt(keyFld.Value, out var keyU64)
+            || keyU64 == 0
+            || keyU64 > uint.MaxValue
+            || !TryParseScalarUInt(stateFld.Value, out var stateU64))
         {
-            return true;
+            return false;
+        }
+        // Catalog-only: negative-encoded engine-internal keys (0xFFFFxxxx) are
+        // out of scope — the user is meant to be ON the catalog row.
+        if (keyU64 >= 0xFFFF0000UL) return false;
+        if (stateU64 == 5UL) return false;
+        var name = localization.MissionInfoStringKey((uint)keyU64);
+        // Category restriction (Challenge_* / Mission_MiniGame_* only)
+        // has been removed — user takes responsibility for matching the
+        // FAR-tracker shape to non-standard mission categories. We still
+        // require `name` because the recipe computes the X_2 follow-up
+        // sub-mission key from `name + "_2"`.
+        if (name is null)
+        {
+            return false;
+        }
+
+        // Walk the parent _missionStateList ONCE to gather everything we need:
+        // - the adjacent twin (catalog_idx + 1) and its visibility check
+        // - the FAR tracker (key = adjacent_twin.key - 1) — search by key
+        // - whether the X_2 follow-up sub-mission already exists
+        BlockDetails parentTop;
+        try
+        {
+            parentTop = loader.LoadBlockDetails(_loadedPath, topBlock.Index);
+        }
+        catch (CrimsonSaveException)
+        {
+            return false;
+        }
+        var pathStep = path1[0];
+        var listFieldIdx = (int)pathStep.FieldIndex;
+        var catalogElementIdx = (int)pathStep.ElementIndex;
+        if (listFieldIdx < 0 || listFieldIdx >= parentTop.Fields.Count) return false;
+        var listField = parentTop.Fields[listFieldIdx];
+        var siblings = listField.Elements;
+        if (siblings is null) return false;
+
+        // 1. Adjacent twin
+        var twinElementIdx = catalogElementIdx + 1;
+        if (twinElementIdx >= siblings.Count) return false;
+        var twin = siblings[twinElementIdx];
+        if (!string.Equals(twin.ClassName, "MissionStateData", StringComparison.Ordinal))
+        {
+            return false;
+        }
+        DecodedFieldRow? twinKeyFld = null, twinStateFld = null, twinCtFld = null, twinTagsFld = null;
+        foreach (var f in twin.Fields)
+        {
+            if (twinKeyFld is null && f.Name == "_key") twinKeyFld = f;
+            else if (twinStateFld is null && f.Name == "_state") twinStateFld = f;
+            else if (twinCtFld is null && f.Name == "_completedTime") twinCtFld = f;
+            else if (twinTagsFld is null && f.Name == "_usedTagList") twinTagsFld = f;
+        }
+        if (twinKeyFld is null || twinStateFld is null || twinCtFld is null || twinTagsFld is null) return false;
+        if (!TryParseScalarUInt(twinKeyFld.Value, out var twinKeyU64)
+            || twinKeyU64 < 0xFFFF0000UL
+            || twinKeyU64 > uint.MaxValue)
+        {
+            return false;
+        }
+        // Visibility gate: twin must be at state=5 + _completedTime present + 2+ tags.
+        // That's the engine's "user has picked up the artifact" marker —
+        // without it the recipe is unsafe (likely to leave the card hidden).
+        if (!TryParseScalarUInt(twinStateFld.Value, out var twinStateU64)
+            || twinStateU64 != 5UL
+            || !twinCtFld.Present)
+        {
+            return false;
+        }
+        var twinKey = (uint)twinKeyU64;
+        uint[] twinTags;
+        var twinPath = new[] { new PathStep(pathStep.FieldIndex, (uint)twinElementIdx) };
+        try
+        {
+            twinTags = loader.DynamicArrayGetU32Elements(
+                topBlock.Index, twinPath, twinTagsFld.FieldIndex);
+        }
+        catch (CrimsonSaveException)
+        {
+            return false;
+        }
+        if (twinTags.Length < 2) return false;
+
+        // 2. X_2 follow-up sub-mission key (catalog name + "_2")
+        var followUpName = name + "_2";
+        var followUpKeyOpt = localization.LookupMissionKeyByInternalName(followUpName);
+        if (followUpKeyOpt is not { } followUpKey) return false;
+
+        // 3. FAR tracker — walk the list for entry with _key = twinKey - 1
+        var farKey = twinKey - 1u;
+        int? farElementIdx = null;
+        bool followUpExists = false;
+        for (var i = 0; i < siblings.Count; i++)
+        {
+            var sib = siblings[i];
+            if (!string.Equals(sib.ClassName, "MissionStateData", StringComparison.Ordinal))
+            {
+                continue;
+            }
+            foreach (var f in sib.Fields)
+            {
+                if (f.Name != "_key") continue;
+                if (!f.Present
+                    || !TryParseScalarUInt(f.Value, out var k)
+                    || k > uint.MaxValue)
+                {
+                    break;
+                }
+                if (k == farKey)
+                {
+                    farElementIdx = i;
+                }
+                else if (k == followUpKey)
+                {
+                    followUpExists = true;
+                }
+                break;
+            }
+        }
+        if (farElementIdx is not { } farIdx) return false;
+
+        // Locate FAR tracker's field indices for the writes we'll do.
+        var far = siblings[farIdx];
+        DecodedFieldRow? farStateFld = null, farCtFld = null, farTagsFld = null, farBranchedFld = null;
+        foreach (var f in far.Fields)
+        {
+            if (farStateFld is null && f.Name == "_state") farStateFld = f;
+            else if (farCtFld is null && f.Name == "_completedTime") farCtFld = f;
+            else if (farTagsFld is null && f.Name == "_usedTagList") farTagsFld = f;
+            else if (farBranchedFld is null && f.Name == "_branchedTime") farBranchedFld = f;
+        }
+        if (farStateFld is null || farCtFld is null || farTagsFld is null || farBranchedFld is null) return false;
+        // Skip if FAR is already at state=5 (engine has already marked completion;
+        // user just needs to claim the reward in-game to push it to catalog).
+        if (TryParseScalarUInt(farStateFld.Value, out var farStateU64) && farStateU64 == 5UL)
+        {
+            return false;
+        }
+        // FAR's _branchedTime must already be present (engine sets it on
+        // artifact pickup); the cloned X_2 entry needs this field to
+        // exist so we can patch its value to the new ct.
+        if (!farBranchedFld.Present) return false;
+
+        var farPath = new[] { new PathStep(pathStep.FieldIndex, (uint)farIdx) };
+        uint[] farTags;
+        try
+        {
+            farTags = loader.DynamicArrayGetU32Elements(
+                topBlock.Index, farPath, farTagsFld.FieldIndex);
+        }
+        catch (CrimsonSaveException)
+        {
+            return false;
+        }
+
+        // Safety gate: user must hold at least one Sealed Abyss Artifact
+        // item somewhere in their inventory. Pattern B v1 writes the
+        // pre-claim FAR-tracker state that the engine reconciles against
+        // an artifact pickup; with zero artifacts in inventory there's
+        // nothing for the engine to reconcile against on next load.
+        // We don't try to match THIS challenge → THE specific artifact —
+        // the user is responsible for selecting the right catalog row.
+        if (!HoldsAnySealedAbyssArtifact()) return false;
+
+        ctx = new CurrentChallengeContext(
+            CatalogKey: (uint)keyU64,
+            InternalName: name,
+            MissionTopBlockIdx: topBlock.Index,
+            MissionListFieldIdx: listFieldIdx,
+            CatalogElementIdx: catalogElementIdx,
+            TwinKey: twinKey,
+            FarElementIdx: farIdx,
+            FarStateFieldIdx: farStateFld.FieldIndex,
+            FarCompletedTimeFieldIdx: farCtFld.FieldIndex,
+            FarCompletedTimeAlreadyPresent: farCtFld.Present,
+            FarUsedTagListFieldIdx: farTagsFld.FieldIndex,
+            FarUsedTagList: farTags,
+            FarBranchedTimeFieldIdx: farBranchedFld.FieldIndex,
+            FollowUpKey: followUpKey,
+            FollowUpInternalName: followUpName,
+            FollowUpAlreadyExists: followUpExists,
+            MissionStateListCount: siblings.Count);
+        return true;
+    }
+
+    /// <summary>
+    /// True when at least one Sealed Abyss Artifact item
+    /// (string-key prefix <c>Sealed_Abyss_Artifact</c>) is present
+    /// somewhere in the loaded save's <c>_inventorylist[*]._itemList[*]</c>.
+    /// Walks every <c>InventorySaveData</c> top block and returns on
+    /// first match. Relies on the NativeSaveLoader block cache so
+    /// repeated calls cost a hash lookup per block, not a full
+    /// FFI re-decode.
+    /// </summary>
+    private bool HoldsAnySealedAbyssArtifact()
+    {
+        if (_loadedPath is null || Summary is not { Blocks: { } blocks })
+        {
+            return false;
+        }
+        var artifactItemKeys = new HashSet<uint>(
+            localization.EnumerateItemsByStringKeyPrefix("Sealed_Abyss_Artifact")
+                        .Select(p => p.ItemKey));
+        if (artifactItemKeys.Count == 0)
+        {
+            return false;
+        }
+        foreach (var b in blocks)
+        {
+            if (!string.Equals(b.ClassName, "InventorySaveData", StringComparison.Ordinal))
+            {
+                continue;
+            }
+            BlockDetails top;
+            try { top = loader.LoadBlockDetails(_loadedPath, b.Index); }
+            catch (CrimsonSaveException) { continue; }
+            foreach (var invList in top.Fields)
+            {
+                if (!string.Equals(invList.Name, "_inventorylist", StringComparison.Ordinal)
+                    || invList.Elements is not { Count: > 0 } bags)
+                {
+                    continue;
+                }
+                foreach (var bag in bags)
+                {
+                    foreach (var itemListField in bag.Fields)
+                    {
+                        if (!string.Equals(itemListField.Name, "_itemList", StringComparison.Ordinal)
+                            || itemListField.Elements is not { Count: > 0 } items)
+                        {
+                            continue;
+                        }
+                        foreach (var item in items)
+                        {
+                            foreach (var inner in item.Fields)
+                            {
+                                if (inner.Name != "_itemKey") continue;
+                                if (inner.Present
+                                    && TryParseScalarUInt(inner.Value, out var ikVal)
+                                    && ikVal <= uint.MaxValue
+                                    && artifactItemKeys.Contains((uint)ikVal))
+                                {
+                                    return true;
+                                }
+                                // _itemKey is the first scalar; stop the inner walk.
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
         }
         return false;
     }
 
     /// <summary>
-    /// Show the challenge-completion confirmation dialog. Returns
-    /// <c>true</c> when the user accepts the edit, <c>false</c> when
-    /// they cancel.
+    /// Addressing info for the in-focus catalog challenge plus its
+    /// engine-side completion infrastructure (adjacent visibility twin
+    /// at <c>catalog_idx + 1</c>, FAR tracker at
+    /// <c>_key = adjacent_twin._key - 1</c>, and the X_2 follow-up
+    /// sub-mission catalog key) needed by the Pattern B v1 recipe.
     /// </summary>
     /// <remarks>
-    /// First call per save in this session shows the combined
-    /// "Sealed Abyss Artifact + achievement impact" message and, on
-    /// accept, stamps <see cref="_challengeWarningAcknowledgedForPath"/>
-    /// with the current <see cref="_loadedPath"/>. Subsequent calls on
-    /// the same save show only the artifact warning (the achievement
-    /// preamble is one-time). Loading a different save naturally
-    /// re-arms the first-time message because the path comparison no
-    /// longer matches.
+    /// <para>
+    /// <b>Engine completion shape</b> (verified slot102 → live slot103
+    /// engine-natural Hooves II completion + slot102 Shield III static
+    /// reference):
+    /// </para>
+    /// <list type="bullet">
+    ///   <item>Catalog row: NEVER touched by completion. Engine writes
+    ///         it only when the user CLAIMS the reward (uses the
+    ///         artifact item).</item>
+    ///   <item>Adjacent twin (<c>catalog_idx + 1</c>, key
+    ///         <c>0xFFFFxxxx</c>): set to
+    ///         <c>state=5 + _completedTime + tags=[base, visible]</c>
+    ///         when the user PICKS UP the artifact (visibility marker).
+    ///         Stays at that state through challenge completion.</item>
+    ///   <item>FAR tracker (key = <c>adjacent_twin.key - 1</c>, lives
+    ///         far away in the list — typically idx 3600-3900 range):
+    ///         exists only after artifact pickup. Starts as
+    ///         <c>state=2, _branchedTime=present, _usedTagList=[base]</c>;
+    ///         on completion the engine flips it to
+    ///         <c>state=5 + _completedTime + _usedTagList=[base, visible]</c>.</item>
+    ///   <item>NEW <c>MissionStateData</c> with <c>_key = X_2 sub-mission
+    ///         catalog key</c> ("Use the sealed Abyss artifact"
+    ///         follow-up): inserted at end of <c>_missionStateList</c>
+    ///         on engine completion, shape mirrors a fresh FAR-tracker
+    ///         template (state=2, branched=now, tags=[base]).</item>
+    /// </list>
+    /// <para>
+    /// <b>Pattern B v1 gate</b>: only enable when the adjacent twin is
+    /// in "visible" state (state=5 + _completedTime + tags ≥ 2 items).
+    /// That requires the user to have already picked up the reward
+    /// artifact in-game — engine-discovery has happened and we just
+    /// need to mark progression complete. AND the FAR tracker must
+    /// exist (catches edge cases where twin is at state=5 but FAR
+    /// wasn't created).
+    /// </para>
     /// </remarks>
-    private async Task<bool> ConfirmChallengeCompletionEditAsync()
-    {
-        var ask = ConfirmRequested;
-        if (ask is null)
-        {
-            // Headless / test scenarios — no dialog wired. Proceed
-            // without prompting so unit tests aren't blocked.
-            return true;
-        }
-        var firstTimeForThisSave = !string.Equals(
-            _challengeWarningAcknowledgedForPath,
-            _loadedPath,
-            StringComparison.OrdinalIgnoreCase);
-        string title = "Marking challenge as completed";
-        string msg;
-        if (firstTimeForThisSave)
-        {
-            msg =
-                "You're about to mark a challenge as completed.\n\n" +
-                "[Quest item warning] If this challenge rewards a Sealed " +
-                "Abyss Artifact (or similar quest item), the in-game item " +
-                "will become un-claimable AND un-deletable — the engine " +
-                "cross-references mission state with item state on the " +
-                "'claim reward' path, and a file-edit creates a mismatch " +
-                "the engine can't unwind. The editor cannot reliably " +
-                "detect the artifact link yet, so this warning fires for " +
-                "every challenge-completion edit.\n\n" +
-                "[Achievement warning — shown once per save] Marking " +
-                "missions complete via file edit may also break in-game " +
-                "achievement progress. This preamble is shown only on " +
-                "the first challenge edit per save in this session; " +
-                "subsequent challenge edits on this save will only show " +
-                "the artifact warning.\n\n" +
-                "Recommended: confirm in-game (close + reopen the save) " +
-                "before deciding how to proceed.\n\n" +
-                "Proceed with the edit?";
-        }
-        else
-        {
-            msg =
-                "You're about to mark another challenge as completed.\n\n" +
-                "Reminder: if this challenge rewards a Sealed Abyss " +
-                "Artifact (or similar quest item), the in-game item " +
-                "will become un-claimable AND un-deletable. The editor " +
-                "cannot reliably detect the artifact link yet, so this " +
-                "warning fires for every challenge-completion edit.\n\n" +
-                "Proceed?";
-        }
-        var ok = await ask(title, msg);
-        if (ok && firstTimeForThisSave)
-        {
-            _challengeWarningAcknowledgedForPath = _loadedPath;
-        }
-        return ok;
-    }
+    private readonly record struct CurrentChallengeContext(
+        uint CatalogKey,
+        string InternalName,
+        int MissionTopBlockIdx,
+        // Path from QuestSaveData top-block to the catalog
+        // MissionStateData (one step: list_field_idx + catalog_element_idx).
+        int MissionListFieldIdx,
+        int CatalogElementIdx,
+        // Adjacent twin — only used for visibility validation in the gate.
+        uint TwinKey,
+        // FAR tracker (engine's progression target).
+        int FarElementIdx,
+        int FarStateFieldIdx,
+        int FarCompletedTimeFieldIdx,
+        bool FarCompletedTimeAlreadyPresent,
+        int FarUsedTagListFieldIdx,
+        IReadOnlyList<uint> FarUsedTagList,
+        int FarBranchedTimeFieldIdx,
+        // X_2 follow-up sub-mission catalog key + whether it already
+        // exists in the list (skip the insert in that case).
+        uint FollowUpKey,
+        string FollowUpInternalName,
+        bool FollowUpAlreadyExists,
+        // Total element count so we can address the "insert at end"
+        // position without re-fetching after the FAR clone.
+        int MissionStateListCount);
 
     /// <summary>
     /// Walk a top-level <see cref="BlockDetails"/> down a descent path.
@@ -1292,6 +2008,10 @@ public sealed partial class MainWindowViewModel(
                 _allFields[i].ApplyCommittedValue(top.Block.Fields[i]);
             }
         }
+        // Block-action visibility may have changed (e.g. _state on the
+        // current MissionStateData was just promoted to 5).
+        OnPropertyChanged(nameof(IsCurrentChallengeMarkable));
+        MarkCurrentChallengeCompleteCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>
@@ -2083,6 +2803,345 @@ public sealed partial class MainWindowViewModel(
         return true;
     }
 
+    /// <summary>
+    /// Tools menu: walk every <c>InventorySaveData</c> block in the save
+    /// and fill <c>_stackCount</c> to max for every <c>ItemSaveData</c>
+    /// reachable through <c>_inventorylist[N]._itemList[M]</c>. One
+    /// confirm gates the whole sweep — unlike the per-row "Fill stack(s)"
+    /// button, the user doesn't have to drill into each container first.
+    /// </summary>
+    /// <remarks>
+    /// Implemented as a single
+    /// <see cref="ISaveLoader.SetScalarFieldsBatch"/> spanning every
+    /// matched item. Per-item target rules are the same as the per-row
+    /// path (see <see cref="TryComputeTargetStack"/>): items with
+    /// <c>max_stack_count &gt; 100</c> fill to max; items with
+    /// <c>max_stack_count ≤ 100</c> round up to the next full stack.
+    /// Items already at-target are skipped (no-op), so re-running is
+    /// idempotent.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(HasSave))]
+    private async Task FillAllStacksAcrossInventoriesAsync()
+    {
+        BulkOpStatus = null;
+        if (_loadedPath is null || Summary is not { Blocks: { } blocks })
+        {
+            return;
+        }
+        if (ConfirmRequested is not { } ask)
+        {
+            return;
+        }
+
+        // Phase 1: walk every InventorySaveData block, collect every
+        // (item, target stackCount) pair. Heavy reads → Task.Run keeps
+        // the UI responsive even on 1112-block saves.
+        BulkOpStatus = "Scanning inventories…";
+        var savePath = _loadedPath;
+        var (allOps, containerCount) = await Task.Run(() =>
+        {
+            var ops = new List<ScalarBatchOp>();
+            var seenContainers = 0;
+            foreach (var b in blocks)
+            {
+                if (!string.Equals(b.ClassName, "InventorySaveData", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                BlockDetails top;
+                try
+                {
+                    top = loader.LoadBlockDetails(savePath, b.Index);
+                }
+                catch (CrimsonSaveException)
+                {
+                    continue;
+                }
+                for (var f = 0; f < top.Fields.Count; f++)
+                {
+                    var listField = top.Fields[f];
+                    if (!string.Equals(listField.Name, "_inventorylist", StringComparison.Ordinal)
+                        || listField.Elements is not { Count: > 0 } bags)
+                    {
+                        continue;
+                    }
+                    for (var bagIdx = 0; bagIdx < bags.Count; bagIdx++)
+                    {
+                        seenContainers++;
+                        var bag = bags[bagIdx];
+                        for (var g = 0; g < bag.Fields.Count; g++)
+                        {
+                            var itemListField = bag.Fields[g];
+                            if (!string.Equals(itemListField.Name, "_itemList", StringComparison.Ordinal)
+                                || itemListField.Elements is not { Count: > 0 } items)
+                            {
+                                continue;
+                            }
+                            for (var itemIdx = 0; itemIdx < items.Count; itemIdx++)
+                            {
+                                var itemPath = new[]
+                                {
+                                    new PathStep((uint)f, (uint)bagIdx),
+                                    new PathStep((uint)g, (uint)itemIdx),
+                                };
+                                if (TryBuildSingleCandidate(items[itemIdx], itemPath, out var c))
+                                {
+                                    ops.Add(new ScalarBatchOp(b.Index, c.Path, c.FieldIndex, c.Bytes));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return (ops, seenContainers);
+        });
+
+        if (allOps.Count == 0)
+        {
+            BulkOpStatus = $"Nothing to fill — every stack across {containerCount} container(s) "
+                           + "is already at target.";
+            return;
+        }
+
+        var msg = $"Fill _stackCount to max for {allOps.Count} item(s) "
+                  + $"across {containerCount} container(s) (every InventorySaveData block)?\n\n"
+                  + "Items with max_stack_count > 100 fill to max.\n"
+                  + "Items with max_stack_count ≤ 100 round up to the next full stack "
+                  + "(e.g. count 120, max 50 → 150). Items already at a stack-boundary are skipped.\n\n"
+                  + "Reversible by reloading the save without writing.";
+        var ok = await ask("Fill ALL stacks across every inventory?", msg);
+        if (!ok)
+        {
+            BulkOpStatus = "Fill cancelled.";
+            return;
+        }
+
+        BulkOpStatus = $"Filling {allOps.Count} stack(s) across {containerCount} container(s)…";
+        var (applied, firstError) = await Task.Run<(int, CrimsonSaveException?)>(() =>
+        {
+            try
+            {
+                loader.SetScalarFieldsBatch(allOps);
+                return (allOps.Count, null);
+            }
+            catch (CrimsonSaveException ex)
+            {
+                return (0, ex);
+            }
+        });
+
+        // If the user happens to have a block on top of the nav stack,
+        // refresh it so any displayed _stackCount values update in place.
+        RefreshSelectedBlockSilently();
+
+        if (applied > 0)
+        {
+            IsDirty = true;
+            OnPropertyChanged(nameof(WindowTitle));
+        }
+        BulkOpStatus = firstError is null
+            ? $"Filled {applied} stack(s) across {containerCount} container(s)."
+            : $"Failed after {applied}/{allOps.Count}: {firstError.Message}";
+    }
+
+    /// <summary>
+    /// Tools menu: drop every Sealed Abyss Artifact (any iteminfo entry
+    /// whose <c>stringKey</c> starts with <c>Sealed_Abyss_Artifact</c>)
+    /// from every inventory in the save.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An earlier iteration of this command also bulk-flipped catalog
+    /// <c>MissionStateData._state ← 5</c> + <c>_completedTime</c> on
+    /// challenges in the Mastery / Combat / Life / Minigame categories.
+    /// That feature was verified to corrupt save state — writing
+    /// catalog state=5 without a matching
+    /// <c>ContentsMiscSaveData._alertHistorySaveDataList</c> entry
+    /// makes the engine refuse to display the challenge in-game (cards
+    /// regress from "visible / in progress" to "unknown / locked").
+    /// Tested against slot103 (manual single flip) and slot104 (batch
+    /// flip): both regressed previously-visible challenge cards.
+    /// </para>
+    /// <para>
+    /// The artifact-removal half is unaffected — clean, safe, and
+    /// useful by itself for users who want to clear stuck Sealed Abyss
+    /// Artifact items.
+    /// </para>
+    /// <para>
+    /// Confirmation gate first, then opens
+    /// <see cref="Views.ChallengeBulkOpProgressDialog"/> via
+    /// <see cref="ArtifactBulkOpRequested"/>. The dialog drives
+    /// <see cref="ArtifactBulkOpService.RunAsync"/> on a background
+    /// task. Sub-second total wall-time on a 1,100-block save (one
+    /// batch FFI call covers every artifact).
+    /// </para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(HasSave))]
+    private async Task DropAllSealedAbyssArtifactsAsync()
+    {
+        BulkOpStatus = null;
+        if (_loadedPath is null
+            || Summary is not { Blocks: { } blocks }
+            || ConfirmRequested is not { } ask
+            || ArtifactBulkOpRequested is not { } openDialog)
+        {
+            return;
+        }
+
+        // Pre-flight scan so the confirm dialog can show real counts.
+        var preview = await Task.Run(() => ScanArtifactBulkOpPreview(blocks));
+
+        if (preview.ArtifactsInInventory == 0)
+        {
+            BulkOpStatus = preview.ArtifactItemKeysKnown == 0
+                ? "Nothing to do — iteminfo bridge not loaded; can't identify Sealed Abyss Artifacts."
+                : "Nothing to do — no Sealed Abyss Artifacts in inventory.";
+            return;
+        }
+
+        var msg = $"Drop {preview.ArtifactsInInventory} Sealed Abyss Artifact(s) from inventory? "
+                  + $"({preview.ArtifactItemKeysKnown} known artifact item key(s) in iteminfo.)\n\n"
+                  + "Why drop them: when an Sealed Abyss Artifact's source challenge has gotten "
+                  + "into a stuck state (e.g. via earlier file edits), the artifact in inventory "
+                  + "becomes un-claimable AND un-deletable in-game because the engine cross-"
+                  + "references mission state with item state on the 'claim reward' path. "
+                  + "Removing the artifacts here clears that stuck condition.\n\n"
+                  + "Reversible by reloading the save without writing.\n\n"
+                  + "Proceed?";
+        var ok = await ask("Drop all Sealed Abyss Artifacts?", msg);
+        if (!ok)
+        {
+            BulkOpStatus = "Cancelled.";
+            return;
+        }
+
+        var result = await openDialog(loader, localization, _loadedPath, blocks);
+
+        RefreshSelectedBlockSilently();
+
+        if (result is { } r && r.ArtifactsRemoved > 0)
+        {
+            IsDirty = true;
+            OnPropertyChanged(nameof(WindowTitle));
+            BulkOpStatus = $"Done: {r.ArtifactsRemoved:N0} Sealed Abyss Artifact(s) removed.";
+        }
+        else if (result is null)
+        {
+            BulkOpStatus = "Bulk operation cancelled or failed — see dialog for partial counts. "
+                           + "Reload the save without writing to revert.";
+        }
+        else
+        {
+            BulkOpStatus = "Bulk operation completed with zero changes applied.";
+        }
+    }
+
+    /// <summary>
+    /// Cheap pre-flight pass — count Sealed Abyss Artifact items in
+    /// every inventory so the confirm dialog can show real numbers.
+    /// Single block read per InventorySaveData top-level block.
+    /// </summary>
+    private ArtifactBulkOpPreview ScanArtifactBulkOpPreview(IReadOnlyList<BlockSummary> blocks)
+    {
+        if (_loadedPath is null)
+        {
+            return default;
+        }
+        var artifactItemKeys = new HashSet<uint>(
+            localization.EnumerateItemsByStringKeyPrefix("Sealed_Abyss_Artifact")
+                        .Select(p => p.ItemKey));
+
+        var artifactsCount = 0;
+
+        foreach (var b in blocks)
+        {
+            if (!string.Equals(b.ClassName, "InventorySaveData", StringComparison.Ordinal)
+                || artifactItemKeys.Count == 0)
+            {
+                continue;
+            }
+            BlockDetails top;
+            try
+            {
+                top = loader.LoadBlockDetails(_loadedPath, b.Index);
+            }
+            catch (CrimsonSaveException)
+            {
+                continue;
+            }
+            foreach (var invList in top.Fields)
+            {
+                if (!string.Equals(invList.Name, "_inventorylist", StringComparison.Ordinal)
+                    || invList.Elements is not { Count: > 0 } bags)
+                {
+                    continue;
+                }
+                foreach (var bag in bags)
+                {
+                    foreach (var itemListField in bag.Fields)
+                    {
+                        if (!string.Equals(itemListField.Name, "_itemList", StringComparison.Ordinal)
+                            || itemListField.Elements is not { Count: > 0 } items)
+                        {
+                            continue;
+                        }
+                        foreach (var item in items)
+                        {
+                            foreach (var inner in item.Fields)
+                            {
+                                if (inner.Name != "_itemKey")
+                                {
+                                    continue;
+                                }
+                                if (inner.Present
+                                    && TryParseScalarUInt(inner.Value, out var ikVal)
+                                    && ikVal <= uint.MaxValue
+                                    && artifactItemKeys.Contains((uint)ikVal))
+                                {
+                                    artifactsCount++;
+                                }
+                                // _itemKey is the first scalar in
+                                // ItemSaveData; stop the inner walk.
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return new ArtifactBulkOpPreview(
+            ArtifactsInInventory: artifactsCount,
+            ArtifactItemKeysKnown: artifactItemKeys.Count);
+    }
+
+    private readonly record struct ArtifactBulkOpPreview(
+        int ArtifactsInInventory,
+        int ArtifactItemKeysKnown);
+
+    /// <summary>
+    /// Re-fetch the currently-selected top-level block and refresh the
+    /// nav stack so any open view picks up post-mutation values.
+    /// No-op when nothing is selected; swallows FFI errors so a stale
+    /// view (re-fetched on next click) is the worst case.
+    /// </summary>
+    private void RefreshSelectedBlockSilently()
+    {
+        if (_loadedPath is null || SelectedBlock is not { } sb || _navStack.Count == 0)
+        {
+            return;
+        }
+        try
+        {
+            var freshTop = loader.LoadBlockDetails(_loadedPath, sb.Index);
+            RefreshNavStack(freshTop);
+            RebuildFromTop();
+        }
+        catch (CrimsonSaveException)
+        {
+            // Ignored — next nav re-fetches.
+        }
+    }
+
     /// <summary>Revert the in-progress edit on a row to its last committed value.</summary>
     [RelayCommand]
     private void RevertFieldEdit(FieldRowViewModel? row)
@@ -2204,12 +3263,24 @@ public sealed partial class MainWindowViewModel(
             return;
         }
 
-        var gameSaveRoot = paths.GameSaveRoot;
+        // Restore target = the discovered save root for the BACKUP'S
+        // platform, NOT the currently-loaded save's platform. A user
+        // might have a Steam save open and be restoring an Epic
+        // backup; the restore has to land in Epic's tree.
+        var gameSaveRoot = ResolveSaveRootForBackup(entry);
+        if (gameSaveRoot is null)
+        {
+            BulkOpStatus =
+                $"Restore failed: no {entry.Platform} save root is detected on this machine. "
+                + "The launcher that wrote the original save may not be installed here.";
+            return;
+        }
         var targetSlotDir = Path.Combine(gameSaveRoot, entry.UserId, entry.SlotName);
         var targetSavePath = Path.Combine(targetSlotDir, "save.save");
 
         var msg = $"Restore {entry.SlotName} from backup taken at "
                   + $"{SaveBackupService.FormatTimestamp(entry.Timestamp)}?\n\n"
+                  + $"Platform: {entry.Platform}\n"
                   + $"Files: {string.Join(", ", entry.FileNames)} ({entry.TotalBytes:N0} bytes)\n"
                   + $"Target: {targetSlotDir}\n\n"
                   + "The current contents of the slot folder will be backed up first.";
@@ -2465,6 +3536,10 @@ public sealed partial class MainWindowViewModel(
         OnPropertyChanged(nameof(UndecodedRangesText));
         OnPropertyChanged(nameof(FieldsFilterCountText));
         OnPropertyChanged(nameof(ElementsCountText));
+        // Block-action visibility — depends on current frame's class +
+        // resolved field values, so re-check on every nav change.
+        OnPropertyChanged(nameof(IsCurrentChallengeMarkable));
+        MarkCurrentChallengeCompleteCommand.NotifyCanExecuteChanged();
     }
 
     // ── Navigation frame types ──────────────────────────────────────────────

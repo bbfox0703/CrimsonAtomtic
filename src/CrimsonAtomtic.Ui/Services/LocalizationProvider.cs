@@ -711,6 +711,22 @@ public sealed class LocalizationProvider : IDisposable
         _itemInfo?.LookupIconPathHash(itemKey);
 
     /// <summary>
+    /// Catalog <c>MissionKey</c> (u32) the iteminfo entry's
+    /// <c>look_detail_mission_info</c> field points at. Returns
+    /// <c>null</c> when the bridge isn't loaded OR the item has no
+    /// mission link (the field is 0 — vanilla items).
+    /// </summary>
+    /// <remarks>
+    /// Quest-reward items (the Sealed Abyss Artifact series) point at
+    /// the catalog mission key of the challenge that rewards them.
+    /// Drives the "Mark Challenge Complete" button's gating predicate
+    /// — only enables when an item with this mission link is currently
+    /// in the player's inventory.
+    /// </remarks>
+    public uint? GetItemLookDetailMissionInfo(uint itemKey) =>
+        _itemInfo?.LookupLookDetailMissionInfo(itemKey);
+
+    /// <summary>
     /// True when the stringinfo bridge is loaded. Lets the icon-extraction
     /// pipeline gate its action UI cheaply — without this, the only
     /// signal would be a null return from <see cref="ResolveStringInfoHash"/>
@@ -728,6 +744,99 @@ public sealed class LocalizationProvider : IDisposable
     /// </summary>
     public string? ResolveStringInfoHash(uint hash) =>
         _stringInfo?.LookupByHash(hash);
+
+    /// <summary>
+    /// Internal ASCII identifier for <paramref name="missionKey"/>
+    /// (e.g. <c>Challenge_SealedArtifact_Vehicle_II</c> or
+    /// <c>Mission_Intro_Tutorial_I</c>). <c>null</c> when the
+    /// missioninfo bridge isn't loaded or the key isn't in the table —
+    /// engine-internal negative-encoded keys (<c>0xFFFFxxxx</c>) always
+    /// miss because they live outside the catalog namespace.
+    /// </summary>
+    public string? MissionInfoStringKey(uint missionKey) =>
+        _missionInfo?.LookupStringKey(missionKey);
+
+    /// <summary>
+    /// Reverse lookup: missioninfo internal name → catalog
+    /// <c>MissionKey</c>. Returns <c>null</c> when the bridge isn't
+    /// loaded or the name isn't in the table.
+    /// </summary>
+    /// <remarks>
+    /// Driven by the per-row "Mark Challenge Complete" recipe: given a
+    /// catalog challenge name (e.g.
+    /// <c>Challenge_SealedArtifact_Mastery_Shield_II</c>), the recipe
+    /// looks up the corresponding <c>_2</c> follow-up sub-mission key
+    /// (<c>Challenge_SealedArtifact_Mastery_Shield_II_2</c>) via this
+    /// method to populate the new <c>MissionStateData</c> entry it
+    /// creates. The reverse map is built lazily on first call (one
+    /// pass over <see cref="NativeMissionInfoCatalog.EntryCount"/>
+    /// entries — a few thousand u32→string pairs, ~10 ms one-time)
+    /// and cached for subsequent lookups.
+    /// </remarks>
+    public uint? LookupMissionKeyByInternalName(string internalName)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(internalName);
+        var bridge = _missionInfo;
+        if (bridge is null)
+        {
+            return null;
+        }
+        var map = _missionNameToKey ??= BuildMissionNameToKeyMap(bridge);
+        return map.TryGetValue(internalName, out var k) ? k : null;
+    }
+
+    private Dictionary<string, uint>? _missionNameToKey;
+
+    private static Dictionary<string, uint> BuildMissionNameToKeyMap(
+        NativeMissionInfoCatalog bridge)
+    {
+        var n = bridge.EntryCount;
+        var map = new Dictionary<string, uint>(n, StringComparer.Ordinal);
+        for (var i = 0; i < n; i++)
+        {
+            var entry = bridge.GetEntry(i);
+            if (entry is { } e && !string.IsNullOrEmpty(e.Name))
+            {
+                // First-wins on duplicate names (anchor-scan parser may
+                // emit names containing U+FFFD — see the GetEntry
+                // caveat in NativeKeyInfoCatalogs).
+                map.TryAdd(e.Name, e.Key);
+            }
+        }
+        return map;
+    }
+
+    /// <summary>
+    /// Walk every iteminfo entry and return the <c>(itemKey, stringKey)</c>
+    /// pairs whose <c>stringKey</c> starts with <paramref name="prefix"/>
+    /// (ordinal). Empty result when the iteminfo bridge isn't loaded.
+    /// O(n) over <see cref="ItemCount"/> — used by the bulk-edit
+    /// "drop all Sealed Abyss Artifacts" path to harvest the artifact
+    /// itemKey universe in one pass.
+    /// </summary>
+    public IReadOnlyList<(uint ItemKey, string StringKey)>
+        EnumerateItemsByStringKeyPrefix(string prefix)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(prefix);
+        var list = new List<(uint, string)>();
+        var info = _itemInfo;
+        if (info is null)
+        {
+            return list;
+        }
+        var count = info.EntryCount;
+        for (var i = 0; i < count; i++)
+        {
+            var entry = info.GetEntry(i);
+            if (entry is { } e
+                && e.StringKey is { Length: > 0 } sk
+                && sk.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                list.Add((e.ItemKey, sk));
+            }
+        }
+        return list;
+    }
 
     /// <summary>
     /// True when the given save-schema field <c>TypeName</c> has a

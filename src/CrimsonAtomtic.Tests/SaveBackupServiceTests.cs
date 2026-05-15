@@ -22,7 +22,7 @@ public sealed class SaveBackupServiceTests : IDisposable
         Directory.CreateDirectory(_root);
         _paths = new FakePaths(
             localAppData: Path.Combine(_root, "AppData"),
-            gameSaveRoot: Path.Combine(_root, "GameSave"));
+            steamSaveRoot: Path.Combine(_root, "GameSave"));
         Directory.CreateDirectory(_paths.LocalAppDataDirectory);
         Directory.CreateDirectory(_paths.GameSaveRoot);
         _service = new SaveBackupService(_paths);
@@ -73,12 +73,70 @@ public sealed class SaveBackupServiceTests : IDisposable
         var entry = outcome.Entry!;
         Assert.Equal("102190433", entry.UserId);
         Assert.Equal("slot0", entry.SlotName);
+        Assert.Equal(SavePlatform.Steam, entry.Platform);
         Assert.Equal(2, entry.FileNames.Count);
         Assert.Contains("save.save", entry.FileNames);
         Assert.Contains("lobby.save", entry.FileNames);
         Assert.True(Directory.Exists(entry.BackupDirectory));
         Assert.True(File.Exists(Path.Combine(entry.BackupDirectory, "save.save")));
         Assert.True(File.Exists(Path.Combine(entry.BackupDirectory, "lobby.save")));
+    }
+
+    [Fact]
+    public void BackupBeforeWrite_PlacesEntryUnderPlatformSubdirectory()
+    {
+        var savePath = CreateSaveFile("102190433", "slot0");
+
+        var outcome = _service.BackupBeforeWrite(savePath);
+
+        Assert.True(outcome.IsSuccess);
+        // The on-disk path must include a platform layer between
+        // BackupRoot and the userId — this is the multi-launcher
+        // invariant the schema rests on.
+        var rel = Path.GetRelativePath(_service.BackupRoot, outcome.Entry!.BackupDirectory);
+        var parts = rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        Assert.Equal("Steam", parts[0]);
+        Assert.Equal("102190433", parts[1]);
+        Assert.Equal("slot0", parts[2]);
+        // parts[3] is the timestamp folder.
+    }
+
+    [Fact]
+    public void BackupBeforeWrite_UnknownPlatformPath_TagsAsUnknown()
+    {
+        // Source is under _root but not under any FakePaths-known
+        // save root → ClassifySavePath returns Unknown.
+        var detachedSlot = Path.Combine(_root, "ad-hoc-copy", "u9", "slotX");
+        Directory.CreateDirectory(detachedSlot);
+        var savePath = Path.Combine(detachedSlot, "save.save");
+        File.WriteAllBytes(savePath, new byte[] { 0x42 });
+
+        var outcome = _service.BackupBeforeWrite(savePath);
+
+        Assert.True(outcome.IsSuccess);
+        Assert.Equal(SavePlatform.Unknown, outcome.Entry!.Platform);
+        var rel = Path.GetRelativePath(_service.BackupRoot, outcome.Entry.BackupDirectory);
+        Assert.StartsWith("Unknown" + Path.DirectorySeparatorChar, rel);
+    }
+
+    [Fact]
+    public void BackupBeforeWrite_EpicPath_TagsAsEpic()
+    {
+        // Set up a second platform root under the same fake and back up
+        // a save inside it. Schema layer must isolate Epic from Steam.
+        var epicRoot = Path.Combine(_root, "EpicSave");
+        _paths.AddPlatform(SavePlatform.Epic, epicRoot);
+        var slotDir = Path.Combine(epicRoot, "epic-user-1", "slot0");
+        Directory.CreateDirectory(slotDir);
+        var savePath = Path.Combine(slotDir, "save.save");
+        File.WriteAllBytes(savePath, new byte[] { 0xEE });
+
+        var outcome = _service.BackupBeforeWrite(savePath);
+
+        Assert.True(outcome.IsSuccess);
+        Assert.Equal(SavePlatform.Epic, outcome.Entry!.Platform);
+        var rel = Path.GetRelativePath(_service.BackupRoot, outcome.Entry.BackupDirectory);
+        Assert.StartsWith("Epic" + Path.DirectorySeparatorChar, rel);
     }
 
     [Fact]
@@ -105,27 +163,6 @@ public sealed class SaveBackupServiceTests : IDisposable
         Assert.False(outcome.IsSuccess);
         Assert.Equal(BackupOutcomeKind.SkippedNoSource, outcome.Kind);
         Assert.Null(outcome.Entry);
-    }
-
-    [Fact]
-    public void BackupBeforeWrite_BadPath_SkipsCleanly()
-    {
-        // A path that doesn't have the {userId}/{slotName}/save.save shape
-        // — only one level of parent. Must be skipped, not crashed.
-        var weird = Path.Combine(_paths.GameSaveRoot, "save.save");
-        File.WriteAllBytes(weird, new byte[] { 0xFF });
-
-        var outcome = _service.BackupBeforeWrite(weird);
-
-        // The path-shape check goes by directory structure, not name.
-        // A direct child of GameSaveRoot has parent = GameSaveRoot and
-        // grandparent = _root → TryDeriveSlotCoordinates returns true
-        // with userId = "GameSave", slotName = (parent's name) — which
-        // is a valid shape, just a weird one. So this case actually
-        // succeeds rather than failing. We test the truly-bad case
-        // (single-component path) separately.
-        Assert.True(outcome.Kind == BackupOutcomeKind.Ok
-                    || outcome.Kind == BackupOutcomeKind.SkippedBadPath);
     }
 
     [Fact]
@@ -211,6 +248,53 @@ public sealed class SaveBackupServiceTests : IDisposable
         Assert.Contains(listed, b => b.UserId == "u1" && b.SlotName == "slot0");
         Assert.Contains(listed, b => b.UserId == "u1" && b.SlotName == "slot1");
         Assert.Contains(listed, b => b.UserId == "u2" && b.SlotName == "slot0");
+        Assert.All(listed, b => Assert.Equal(SavePlatform.Steam, b.Platform));
+    }
+
+    [Fact]
+    public void ListBackups_LegacyLayoutTaggedAsSteam_StillReadable()
+    {
+        // Simulate a pre-multi-platform backup tree: drop a snapshot
+        // directly under BackupRoot\<userId>\<slot>\<stamp>\ without a
+        // platform layer. ListBackups should surface it, tagged Steam
+        // (the only platform supported before this change).
+        var legacyStamp = Path.Combine(_service.BackupRoot, "legacy-user", "slot0",
+                                        "2020-01-02_03-04-05");
+        Directory.CreateDirectory(legacyStamp);
+        File.WriteAllBytes(Path.Combine(legacyStamp, "save.save"), new byte[] { 0x77 });
+
+        var listed = _service.ListBackups();
+
+        var legacy = listed.Single(b => b.UserId == "legacy-user");
+        Assert.Equal("slot0", legacy.SlotName);
+        Assert.Equal(SavePlatform.Steam, legacy.Platform);
+        Assert.Equal(legacyStamp, legacy.BackupDirectory);
+    }
+
+    [Fact]
+    public void ListBackups_MixedLayouts_BothSurface()
+    {
+        // Legacy entry + a fresh platform-scoped entry should coexist.
+        var legacyStamp = Path.Combine(_service.BackupRoot, "legacy-user", "slot0",
+                                        "2020-01-02_03-04-05");
+        Directory.CreateDirectory(legacyStamp);
+        File.WriteAllBytes(Path.Combine(legacyStamp, "save.save"), new byte[] { 0x99 });
+
+        var savePath = CreateSaveFile("modern-user", "slot0");
+        Assert.True(_service.BackupBeforeWrite(savePath).IsSuccess);
+
+        var listed = _service.ListBackups();
+
+        Assert.Equal(2, listed.Count);
+        var legacy = listed.Single(b => b.UserId == "legacy-user");
+        var modern = listed.Single(b => b.UserId == "modern-user");
+        Assert.Equal(SavePlatform.Steam, legacy.Platform);
+        Assert.Equal(SavePlatform.Steam, modern.Platform);
+        // The modern entry is platform-scoped on disk; the legacy isn't.
+        Assert.Contains(Path.DirectorySeparatorChar + "Steam" + Path.DirectorySeparatorChar,
+                        modern.BackupDirectory);
+        Assert.DoesNotContain(Path.DirectorySeparatorChar + "Steam" + Path.DirectorySeparatorChar,
+                              legacy.BackupDirectory);
     }
 
     [Fact]
@@ -264,19 +348,135 @@ public sealed class SaveBackupServiceTests : IDisposable
         Assert.False(SaveBackupService.TryParseTimestamp(string.Empty, out _));
     }
 
+    [Fact]
+    public void DiscoverSaveRoots_ReturnsConfiguredPlatforms_MostRecentFirst()
+    {
+        // Wire up an Epic root and write one save under each.
+        var epicRoot = Path.Combine(_root, "EpicSave");
+        _paths.AddPlatform(SavePlatform.Epic, epicRoot);
+        Directory.CreateDirectory(epicRoot);
+
+        var steam = CreateSaveFile("steam-user", "slot0");
+        File.SetLastWriteTimeUtc(steam, new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        var epicDir = Path.Combine(epicRoot, "epic-user", "slot0");
+        Directory.CreateDirectory(epicDir);
+        var epicSave = Path.Combine(epicDir, "save.save");
+        File.WriteAllBytes(epicSave, new byte[] { 0xEE });
+        File.SetLastWriteTimeUtc(epicSave, new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        var roots = _paths.DiscoverSaveRoots();
+
+        Assert.Equal(2, roots.Count);
+        Assert.Equal(SavePlatform.Epic, roots[0].Platform); // more recent
+        Assert.Equal(SavePlatform.Steam, roots[1].Platform);
+    }
+
+    [Fact]
+    public void ClassifySavePath_RecognisesConfiguredRoots()
+    {
+        var epicRoot = Path.Combine(_root, "EpicSave");
+        _paths.AddPlatform(SavePlatform.Epic, epicRoot);
+
+        var steamPath = Path.Combine(_paths.GameSaveRoot, "u", "slot0", "save.save");
+        var epicPath = Path.Combine(epicRoot, "u", "slot0", "save.save");
+        var unknownPath = Path.Combine(_root, "elsewhere", "save.save");
+
+        Assert.Equal(SavePlatform.Steam, _paths.ClassifySavePath(steamPath));
+        Assert.Equal(SavePlatform.Epic, _paths.ClassifySavePath(epicPath));
+        Assert.Equal(SavePlatform.Unknown, _paths.ClassifySavePath(unknownPath));
+    }
+
+    /// <summary>
+    /// Fake <see cref="IPlatformPaths"/> that mimics the multi-launcher
+    /// behaviour without doing any real probing — tests configure the
+    /// platforms they care about and the fake reports them faithfully.
+    /// </summary>
     private sealed class FakePaths : IPlatformPaths
     {
-        public FakePaths(string localAppData, string gameSaveRoot)
+        private readonly List<(SavePlatform Platform, string Root)> _platformRoots = new();
+
+        public FakePaths(string localAppData, string steamSaveRoot)
         {
             LocalAppDataDirectory = localAppData;
             LogDirectory = Path.Combine(localAppData, "Logs");
-            GameSaveRoot = gameSaveRoot;
+            GameSaveRoot = steamSaveRoot;
             GameInstallRoot = null;
+            _platformRoots.Add((SavePlatform.Steam, steamSaveRoot));
+        }
+
+        /// <summary>
+        /// Per-test helper: register an additional platform → root mapping.
+        /// Real <see cref="WindowsPlatformPaths"/> discovers these via
+        /// directory probing under <c>%LOCALAPPDATA%\Pearl Abyss\</c>.
+        /// </summary>
+        public void AddPlatform(SavePlatform platform, string root)
+        {
+            _platformRoots.RemoveAll(p => p.Platform == platform);
+            _platformRoots.Add((platform, root));
         }
 
         public string LocalAppDataDirectory { get; }
         public string LogDirectory { get; }
-        public string GameSaveRoot { get; }
         public string? GameInstallRoot { get; }
+
+        /// <summary>
+        /// Convenience handle to the Steam root (back-compat for tests
+        /// written before multi-platform). Not part of the
+        /// <see cref="IPlatformPaths"/> contract.
+        /// </summary>
+        public string GameSaveRoot { get; }
+
+        public IReadOnlyList<DiscoveredSaveRoot> DiscoverSaveRoots()
+        {
+            var found = new List<DiscoveredSaveRoot>(_platformRoots.Count);
+            foreach (var (platform, root) in _platformRoots)
+            {
+                if (!Directory.Exists(root))
+                {
+                    continue;
+                }
+                DateTime? mtime = null;
+                foreach (var path in Directory.EnumerateFiles(root, "save.save", SearchOption.AllDirectories))
+                {
+                    var t = File.GetLastWriteTimeUtc(path);
+                    if (mtime is null || t > mtime) mtime = t;
+                }
+                found.Add(new DiscoveredSaveRoot(platform, root, mtime));
+            }
+            found.Sort((a, b) =>
+            {
+                var aT = a.MostRecentSaveMtime ?? DateTime.MinValue;
+                var bT = b.MostRecentSaveMtime ?? DateTime.MinValue;
+                return bT.CompareTo(aT);
+            });
+            return found;
+        }
+
+        public SavePlatform ClassifySavePath(string savePath)
+        {
+            if (string.IsNullOrWhiteSpace(savePath))
+            {
+                return SavePlatform.Unknown;
+            }
+            string normalized;
+            try
+            {
+                normalized = Path.GetFullPath(savePath);
+            }
+            catch
+            {
+                return SavePlatform.Unknown;
+            }
+            foreach (var (platform, root) in _platformRoots)
+            {
+                var prefix = Path.GetFullPath(root) + Path.DirectorySeparatorChar;
+                if (normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    return platform;
+                }
+            }
+            return SavePlatform.Unknown;
+        }
     }
 }

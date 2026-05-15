@@ -187,6 +187,7 @@ public sealed partial class MainWindow : Window
             prev.ElementScrollRequested -= ScrollElementIntoView;
             prev.ConfirmRequested = null;
             prev.AlertRequested = null;
+            prev.ArtifactBulkOpRequested = null;
             _wiredVm = null;
         }
         if (DataContext is not MainWindowViewModel vm)
@@ -200,6 +201,11 @@ public sealed partial class MainWindow : Window
         // Window type — keeps the MVVM boundary intact.
         vm.ConfirmRequested = (title, msg) => ConfirmDialog.ShowAsync(this, title, msg);
         vm.AlertRequested = (title, msg) => ConfirmDialog.ShowAlertAsync(this, title, msg);
+        // Same trick for the artifact-drop bulk op: the VM collects
+        // intent, the dialog drives the worker + reports progress +
+        // handles cancel.
+        vm.ArtifactBulkOpRequested = (loader, loc, savePath, blocks) =>
+            ChallengeBulkOpProgressDialog.RunAsync(this, loader, loc, savePath, blocks);
         _wiredVm = vm;
         var menu = SecondaryLanguageMenu;
         // Clear any dynamic entries (everything past the static "English
@@ -560,6 +566,59 @@ public sealed partial class MainWindow : Window
         if (result is not null && result.Written > 0)
         {
             vm.RefreshIconCache();
+        }
+    }
+
+    /// <summary>
+    /// Tools → Set Game Install Folder. Opens an Avalonia folder picker
+    /// for the user to point at their Crimson Desert install when the
+    /// auto-probe didn't find it (e.g. Steam library in an unusual
+    /// location, Epic install elsewhere, or assets copied out of the
+    /// Game Pass WindowsApps tree). Validates the witness file before
+    /// persisting; on success, the localization provider re-bootstraps
+    /// against the new root so resolved-name columns light up
+    /// immediately without restarting.
+    /// </summary>
+    private async void OnSetGameInstallFolderClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+        // Anchor the picker at the currently-resolved game install when
+        // there is one, so the user can adjust an existing override
+        // without re-navigating from drive C:\.
+        IStorageFolder? startLocation = null;
+        var current = vm.Localization.GameRoot;
+        if (!string.IsNullOrEmpty(current) && Directory.Exists(current))
+        {
+            startLocation = await StorageProvider.TryGetFolderFromPathAsync(current);
+        }
+        var picked = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "Select Crimson Desert install folder",
+            AllowMultiple = false,
+            SuggestedStartLocation = startLocation,
+        });
+        if (picked.Count == 0)
+        {
+            return;
+        }
+        var folder = picked[0];
+        var path = folder.TryGetLocalPath();
+        if (string.IsNullOrEmpty(path))
+        {
+            return;
+        }
+
+        var ok = vm.SetGameInstallRoot(path);
+        if (!ok)
+        {
+            var title = (string?)this.FindResource("SetGameInstallFolderInvalidTitle")
+                        ?? "Invalid install folder";
+            var body = (string?)this.FindResource("SetGameInstallFolderInvalidBody")
+                       ?? "The selected folder doesn't look like a Crimson Desert install.";
+            await ConfirmDialog.ShowAlertAsync(this, title, body);
         }
     }
 

@@ -2,14 +2,14 @@
 
 > "Pave the foundation well, so we don't have to wonder later if it's a data issue."
 
-This is the contract for how data flows into and through this project. It exists because the old reference repo violated all of these rules, producing the kind of inconsistency we refuse to inherit.
+This is the contract for how data flows into and through this project. The rules below keep the codebase coherent over time and avoid the data-drift failure modes that compound silently otherwise.
 
 ## 1. Old reference repo is one-time mining only
 
 - **Repo**: `D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS`.
 - **Permitted use**: read it once to understand a format, copy icon assets, or extract parser logic that we then rewrite cleanly.
 - **Forbidden**: importing from it at runtime, depending on its scripts or data, syncing updates from it.
-- After we have mined what we need, this repo is dead to the codebase.
+- After we have mined what we need, this repo is no longer a dependency of the codebase.
 
 ## 2. The only ongoing external dependency is `vendor/crimson-rs`
 
@@ -19,12 +19,12 @@ This is the contract for how data flows into and through this project. It exists
 
 ## 3. No derived data in git
 
-The old repo's worst hygiene failure was committing both:
+A classic failure mode is committing both an extracted source AND a file generated from it — for example:
 
 - `data/iteminfo_dump/items.jsonl` (extracted from game)
 - `data/item_templates.json` (generated from the JSONL)
 
-…and then letting them drift. We do not do this.
+…and then letting them drift over time. We do not do this.
 
 - For each generated artifact, **only the source** goes in git.
 - Derived files live in `.gitignore` and are produced by a documented generator.
@@ -48,9 +48,8 @@ If you're tempted to add `if value == "weird_legacy_thing": handle specially` in
 
 ## 6. Images: copy once, reprocess, then own
 
-- Icon WebP files in the old repo (`icons_local/`, `icons_mercenary/`) are mined **once** into our pipeline.
-- They run through a thumbnail/cache step before the UI ever sees them (the old UI loaded full-size icons at 32px display — we will not).
-- Going forward, new icons come from extracting game assets via `crimson-rs` directly, not from the old repo.
+- Any icon WebP files mined once from the reference repo run through a thumbnail/cache step before the UI ever sees them — full-size icons displayed at 32 px are wasteful.
+- Going forward, new icons come from extracting game assets via `crimson-rs` directly.
 - See `docs/ui-design.md` for the asset pipeline plan.
 
 ## 7. Game version is metadata, not a build-time constant

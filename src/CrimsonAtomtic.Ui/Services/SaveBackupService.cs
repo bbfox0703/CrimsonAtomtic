@@ -4,34 +4,46 @@ using CrimsonAtomtic.Core;
 namespace CrimsonAtomtic.Ui.Services;
 
 /// <summary>
-/// Per-slot rolling backup of save.save (+ lobby.save) snapshots.
+/// Per-slot rolling backup of save.save (+ lobby.save) snapshots,
+/// scoped per launcher (Steam / Epic / Game Pass).
 ///
 /// <para>
 /// Wired into <see cref="ViewModels.MainWindowViewModel"/>'s Save and
 /// Save As commands: before each on-disk write, the existing target
 /// file is copied into <see cref="BackupRoot"/> under
-/// <c>{userId}/{slotName}/{timestamp}/</c>. Restore reverses the
-/// pairing — picks a backup folder, copies it back to the original
+/// <c>{platform}/{userId}/{slotName}/{timestamp}/</c>. Restore reverses
+/// the pairing — picks a backup folder, copies it back to the original
 /// slot folder, and (transitively) re-backs up the about-to-be-
 /// overwritten current state so undo is itself undoable.
 /// </para>
 ///
 /// <para>
-/// Path layout:
+/// Path layout (current):
 /// <code>
 /// %LOCALAPPDATA%\CrimsonAtomtic\Backups\
-///   {userId}\                  e.g. 102190433
-///     {slotName}\              e.g. slot100
-///       {timestamp}\           e.g. 2026-05-14_15-30-45
-///         save.save
-///         lobby.save           (only when the source slot has one)
+///   {platform}\               e.g. Steam / Epic / GamePass / Unknown
+///     {userId}\               e.g. 102190433
+///       {slotName}\           e.g. slot100
+///         {timestamp}\        e.g. 2026-05-14_15-30-45
+///           save.save
+///           lobby.save        (only when the source slot has one)
 /// </code>
+/// </para>
+/// <para>
+/// Legacy layout (still readable): pre-multi-platform builds wrote
+/// <c>Backups\{userId}\{slotName}\{timestamp}\</c> directly under
+/// <see cref="BackupRoot"/>. <see cref="ListBackups"/> still surfaces
+/// those entries tagged as <see cref="SavePlatform.Steam"/> (the only
+/// launcher supported before this change). New backups always use the
+/// platform-scoped layout; legacy entries are pruned on their natural
+/// retention cycle but never recreated.
+/// </para>
+/// <para>
 /// Retention: at most <see cref="MaxVersionsPerSlot"/> timestamp
-/// folders per (userId, slotName). New backups land first; the
-/// oldest are deleted afterwards so a mid-write failure leaves the
+/// folders per (platform, userId, slotName). New backups land first;
+/// the oldest are deleted afterwards so a mid-write failure leaves the
 /// previous version intact.
 /// </para>
-///
 /// <para>
 /// Failures during backup are reported via the returned
 /// <see cref="BackupOutcome"/> but never bubble up as exceptions —
@@ -63,6 +75,15 @@ public sealed class SaveBackupService
     /// the service captures whichever subset exists.
     /// </summary>
     private static readonly string[] BackupFileNames = ["save.save", "lobby.save"];
+
+    /// <summary>
+    /// Directory names used for the platform layer of the backup tree.
+    /// Match <see cref="SavePlatform.ToString()"/> exactly so the
+    /// directory name round-trips back to the enum via
+    /// <see cref="Enum.TryParse{TEnum}(string, bool, out TEnum)"/>.
+    /// </summary>
+    private static readonly HashSet<string> KnownPlatformDirNames =
+        new(Enum.GetNames<SavePlatform>(), StringComparer.OrdinalIgnoreCase);
 
     private readonly IPlatformPaths _paths;
 
@@ -113,10 +134,17 @@ public sealed class SaveBackupService
                 $"Path doesn't match the expected ...\\<userId>\\<slotName>\\save.save shape: {targetSavePath}");
         }
 
+        // Tag the backup with whichever launcher's save tree the source
+        // path lives under. Saves opened from non-standard locations
+        // (a copied .save somewhere else on disk) land in the "Unknown"
+        // bucket so they're still recoverable without polluting any
+        // platform's history.
+        var platform = _paths.ClassifySavePath(targetSavePath);
+
         var sourceDir = Path.GetDirectoryName(targetSavePath)!;
         var timestamp = DateTime.Now;
         var stamp = FormatTimestamp(timestamp);
-        var slotDir = Path.Combine(BackupRoot, userId, slotName);
+        var slotDir = SlotBackupDirectory(platform, userId, slotName);
         var destDir = Path.Combine(slotDir, stamp);
 
         try
@@ -148,9 +176,10 @@ public sealed class SaveBackupService
 
             // Prune AFTER the new copy lands so a partial-prune failure
             // can't leave us with zero backups for the slot.
-            var pruned = PruneBackups(userId, slotName);
+            var pruned = PruneBackups(platform, userId, slotName);
 
             return BackupOutcome.Ok(new BackupEntry(
+                Platform: platform,
                 UserId: userId,
                 SlotName: slotName,
                 Timestamp: timestamp,
@@ -167,9 +196,10 @@ public sealed class SaveBackupService
     }
 
     /// <summary>
-    /// All backups currently on disk, newest-first. Walks the entire
-    /// <see cref="BackupRoot"/>; cheap (a handful of dirs per slot,
-    /// a handful of slots per user).
+    /// All backups currently on disk, newest-first. Walks both the
+    /// current platform-scoped layout and the legacy un-platformed
+    /// layout — legacy entries are tagged as <see cref="SavePlatform.Steam"/>
+    /// (the only launcher supported before this change).
     /// </summary>
     public IReadOnlyList<BackupEntry> ListBackups()
     {
@@ -179,46 +209,82 @@ public sealed class SaveBackupService
             return Array.Empty<BackupEntry>();
         }
         var entries = new List<BackupEntry>();
-        foreach (var userDir in Directory.EnumerateDirectories(root))
+        foreach (var childDir in Directory.EnumerateDirectories(root))
         {
-            var userId = Path.GetFileName(userDir);
-            foreach (var slotDir in Directory.EnumerateDirectories(userDir))
+            var childName = Path.GetFileName(childDir);
+            if (KnownPlatformDirNames.Contains(childName)
+                && Enum.TryParse<SavePlatform>(childName, ignoreCase: true, out var platform))
             {
-                var slotName = Path.GetFileName(slotDir);
-                foreach (var stampDir in Directory.EnumerateDirectories(slotDir))
-                {
-                    var stamp = Path.GetFileName(stampDir);
-                    if (!TryParseTimestamp(stamp, out var when))
-                    {
-                        continue;
-                    }
-                    var files = new List<string>(BackupFileNames.Length);
-                    long bytes = 0;
-                    foreach (var name in BackupFileNames)
-                    {
-                        var p = Path.Combine(stampDir, name);
-                        if (File.Exists(p))
-                        {
-                            files.Add(name);
-                            bytes += new FileInfo(p).Length;
-                        }
-                    }
-                    if (files.Count == 0)
-                    {
-                        continue;
-                    }
-                    entries.Add(new BackupEntry(
-                        UserId: userId,
-                        SlotName: slotName,
-                        Timestamp: when,
-                        BackupDirectory: stampDir,
-                        FileNames: files.ToArray(),
-                        TotalBytes: bytes));
-                }
+                // Current layout: BackupRoot\<platform>\<userId>\<slot>\<stamp>\
+                ScanUserDirs(childDir, platform, entries);
+            }
+            else
+            {
+                // Legacy layout: BackupRoot\<userId>\<slot>\<stamp>\
+                // — pre-multi-platform builds. Tag as Steam since that
+                // was the only supported launcher before this change.
+                ScanSlotDirs(parentUserDir: childDir, platform: SavePlatform.Steam,
+                             userId: childName, entries);
             }
         }
         entries.Sort((a, b) => b.Timestamp.CompareTo(a.Timestamp));
         return entries;
+    }
+
+    /// <summary>
+    /// Walk one <c>BackupRoot\&lt;platform&gt;\</c> subtree, appending
+    /// one <see cref="BackupEntry"/> per timestamp folder.
+    /// </summary>
+    private static void ScanUserDirs(string platformDir, SavePlatform platform, List<BackupEntry> entries)
+    {
+        foreach (var userDir in Directory.EnumerateDirectories(platformDir))
+        {
+            var userId = Path.GetFileName(userDir);
+            ScanSlotDirs(userDir, platform, userId, entries);
+        }
+    }
+
+    /// <summary>
+    /// Walk one <c>...\&lt;userId&gt;\</c> subtree, appending one
+    /// <see cref="BackupEntry"/> per timestamp folder under each slot.
+    /// </summary>
+    private static void ScanSlotDirs(string parentUserDir, SavePlatform platform, string userId, List<BackupEntry> entries)
+    {
+        foreach (var slotDir in Directory.EnumerateDirectories(parentUserDir))
+        {
+            var slotName = Path.GetFileName(slotDir);
+            foreach (var stampDir in Directory.EnumerateDirectories(slotDir))
+            {
+                var stamp = Path.GetFileName(stampDir);
+                if (!TryParseTimestamp(stamp, out var when))
+                {
+                    continue;
+                }
+                var files = new List<string>(BackupFileNames.Length);
+                long bytes = 0;
+                foreach (var name in BackupFileNames)
+                {
+                    var p = Path.Combine(stampDir, name);
+                    if (File.Exists(p))
+                    {
+                        files.Add(name);
+                        bytes += new FileInfo(p).Length;
+                    }
+                }
+                if (files.Count == 0)
+                {
+                    continue;
+                }
+                entries.Add(new BackupEntry(
+                    Platform: platform,
+                    UserId: userId,
+                    SlotName: slotName,
+                    Timestamp: when,
+                    BackupDirectory: stampDir,
+                    FileNames: files.ToArray(),
+                    TotalBytes: bytes));
+            }
+        }
     }
 
     /// <summary>
@@ -227,6 +293,12 @@ public sealed class SaveBackupService
     /// Returns the target save.save path on success; throws on
     /// failure (the UI surfaces the error in a confirm dialog).
     ///
+    /// <para>
+    /// <paramref name="gameSaveRoot"/> is platform-specific — the caller
+    /// looks up the right save root for <c>entry.Platform</c> before
+    /// invoking. We pass it as a raw string (not <see cref="IPlatformPaths"/>)
+    /// so this stays unit-testable against a temp-directory fake.
+    /// </para>
     /// <para>
     /// Atomicity model: the restore happens via straightforward
     /// <see cref="File.Copy(string, string, bool)"/>. We don't take a
@@ -255,13 +327,16 @@ public sealed class SaveBackupService
     }
 
     /// <summary>
-    /// Delete oldest timestamp folders for <c>(userId, slotName)</c>
-    /// until at most <see cref="MaxVersionsPerSlot"/> remain. Returns
-    /// the number of folders deleted.
+    /// Delete oldest timestamp folders for
+    /// <c>(platform, userId, slotName)</c> until at most
+    /// <see cref="MaxVersionsPerSlot"/> remain. Returns the number of
+    /// folders deleted. Does NOT prune legacy un-platformed backups —
+    /// those age out on their original (pre-change) retention cycle and
+    /// are never written to again.
     /// </summary>
-    public int PruneBackups(string userId, string slotName)
+    public int PruneBackups(SavePlatform platform, string userId, string slotName)
     {
-        var slotDir = Path.Combine(BackupRoot, userId, slotName);
+        var slotDir = SlotBackupDirectory(platform, userId, slotName);
         if (!Directory.Exists(slotDir))
         {
             return 0;
@@ -285,6 +360,13 @@ public sealed class SaveBackupService
         }
         return pruned;
     }
+
+    /// <summary>
+    /// The <c>BackupRoot\&lt;platform&gt;\&lt;userId&gt;\&lt;slotName&gt;\</c>
+    /// folder where new backups for one (platform, user, slot) tuple land.
+    /// </summary>
+    private string SlotBackupDirectory(SavePlatform platform, string userId, string slotName) =>
+        Path.Combine(BackupRoot, platform.ToString(), userId, slotName);
 
     /// <summary>
     /// Split a save.save path into (userId, slotName), checking it
@@ -362,10 +444,11 @@ public sealed class SaveBackupService
 }
 
 /// <summary>
-/// One backup snapshot on disk: which slot it came from, when it was
-/// taken, where the files live, and what they're called.
+/// One backup snapshot on disk: which slot it came from (with launcher),
+/// when it was taken, where the files live, and what they're called.
 /// </summary>
 public sealed record BackupEntry(
+    SavePlatform Platform,
     string UserId,
     string SlotName,
     DateTime Timestamp,

@@ -3,41 +3,107 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-15 (length-changing batch FFI for bulk-completion perf).
+> Last updated: 2026-05-15 (Auto-find saves + multi-launcher game-install probe + Tools-menu manual override).
 >
-> ## ✅ Length-changing batch FFI shipped (2026-05-15)
+> ## ✅ This session — what shipped (2026-05-15 part 3)
 >
-> Two new C ABI entry points land the perf primitive a "Complete all
-> challenges + drop artifacts" Tools-menu action will need to stay
-> usable. Both mirror the existing
-> `crimson_save_set_scalar_fields_batch` (PR #27) shape — validate-and-
-> apply per op, all-or-nothing rollback via the existing
-> `apply_length_changing_mutation` snapshot helper, one re-emit + one
-> `decode_blocks` at the end regardless of N.
+> Game-install auto-detection generalised + user override. Follows
+> directly from the save-discovery work earlier in the session.
 >
-> - **`crimson_save_set_scalar_fields_present_batch`** — flip N scalar
->   `_completedTime`-style presence bits in one round trip. The bulk
->   challenge-completion flow (~1300 `MissionStateData` blocks) goes
->   from ~20 min (N × encode + decode) to seconds. C# surface:
->   [`ISaveLoader.SetScalarFieldsPresentBatch(IReadOnlyList<ScalarPresentBatchOp>)`](../src/CrimsonAtomtic.RustInterop/ISaveLoader.cs).
-> - **`crimson_save_list_remove_elements_batch`** — drop N
->   `_itemList` elements in one round trip. Caller pre-sorts ops
->   targeting the same list by descending `element_idx`. C# surface:
->   [`ISaveLoader.ListRemoveElementsBatch(IReadOnlyList<ListRemoveBatchOp>)`](../src/CrimsonAtomtic.RustInterop/ISaveLoader.cs).
+> | Area | Scope |
+> |---|---|
+> | **Steam libraryfolders.vdf parser** ([SteamLibraryProbe.cs](../src/CrimsonAtomtic.Ui/Platform/SteamLibraryProbe.cs)) | Replaces the previous 5-path hardcoded probe with a real walk of every Steam library the user has mounted. Reads `<Steam>\config\libraryfolders.vdf` from the two standard Steam install locations, extracts every `"path"` value with a single regex, unescapes `\\` → `\`, and walks each library's `steamapps\common\Crimson Desert` looking for the `0020\0.pamt` witness file. AOT-safe via `[GeneratedRegex]`. |
+> | **Epic manifest probe** ([EpicManifestProbe.cs](../src/CrimsonAtomtic.Ui/Platform/EpicManifestProbe.cs)) | Enumerates `%PROGRAMDATA%\Epic\EpicGamesLauncher\Data\Manifests\*.item`, deserialises each via a source-generated `JsonSerializerContext`, matches `DisplayName` containing "Crimson Desert" or `AppName` containing "CrimsonDesert" (case-insensitive), then validates the manifest's `InstallLocation` against the same witness file. Returns null silently when Epic isn't installed. |
+> | **Game Pass install probe — DEFERRED** | `%PROGRAMFILES%\WindowsApps\` is ACL-locked even for admins. Even if we detected a Game Pass install, we couldn't read the PAMT/PALOC out of it. Game Pass users use the manual-override path below to point at an asset folder they manually extracted. |
+> | **`game_install_root` settings field** ([AppSettings.cs](../src/CrimsonAtomtic.Ui/Services/AppSettings.cs)) | Optional user override. Wins over every auto-probe. Validated against the witness file before being persisted, so an accidental pick can't poison the setting. |
+> | **`WindowsPlatformPaths.GameInstallRoot` rewrite** | Probe chain: stored override → Steam VDF → Epic manifest → null. Silent degrade unchanged — `LocalizationProvider.TryBootstrapFromGameRoot(null)` is still the no-install path. |
+> | **Tools → Set Game Install Folder…** | Avalonia folder picker anchored at the currently-resolved game root when one exists. On valid pick: persists to `game_install_root` + immediately re-bootstraps `LocalizationProvider` against the new path (catalogs reload, status footer refreshes, open save's resolved-name columns repaint). On invalid pick: alert dialog with guidance, settings untouched. Covers Game Pass + unusual Steam library layouts + asset folders copied out for any reason. |
 >
-> Both refactored the existing single-op closures (`set_scalar_field_present`,
-> `list_remove_element`) into shared mutator helpers
-> (`toggle_one_scalar_presence_in_place`,
-> `remove_one_list_element_in_place`) so the batch + single-op paths
-> share validation + mutation logic verbatim. crimson-rs commit
-> `bdf4b4e` (on `dev`, mirrored into `vendor/crimson-rs`). 5 new Rust
-> tests + the existing C# 151 tests still pass.
+> Tests: **170/170 pass** (was 157; +13 covering VDF parser happy path, empty / no-libraries VDF, `\\` unescape, witness-file validation positive / negative / partial, Epic manifest matching by DisplayName / case-insensitive / AppName fallback / unrelated game / empty entry).
 >
-> **Not yet wired to a UI consumer.** `ChallengeBulkOpService` /
-> `ChallengeBulkOpProgressDialog.axaml.cs` are still to be built — the
-> batch primitives just sit on `ISaveLoader` waiting for them. When
-> the consumer lands the Tools-menu action should drop from ~20 min to
-> under 5 seconds.
+> ### Why no auto-prompt on probe failure
+>
+> Discussed and rejected — silent degrade matches existing behaviour
+> (the LocalizationProvider already degrades when no install is found).
+> Tools menu is the discoverable escape hatch; status footer surfaces the
+> "no install" state via existing `LocalizationStatus` / `IconStatus`.
+> Adding a startup prompt would mean tracking a "user has dismissed"
+> bit and risk being annoying on every fresh launch.
+>
+> ## ✅ This session — what shipped (2026-05-15 part 2)
+>
+> Pick #1 of the porting roadmap — **Auto-find saves on launch** — plus the
+> mandatory backup/restore migration that the multi-launcher schema forced.
+>
+> | Area | Scope |
+> |---|---|
+> | **`IPlatformPaths` multi-platform API** | `GameSaveRoot` (single string) replaced by `DiscoverSaveRoots()` (returns `IReadOnlyList<DiscoveredSaveRoot>` of `{Platform, RootPath, MostRecentSaveMtime}`, most-recent-first) + `ClassifySavePath(path) → SavePlatform`. New `SavePlatform` enum in Core: `Steam` / `Epic` / `GamePass` / `Unknown`. |
+> | **Windows probe** | `WindowsPlatformPaths.DiscoverSaveRoots()` walks the three known Pearl-Abyss save trees under `%LOCALAPPDATA%\Pearl Abyss\`: `CD\save` (Steam), `CD_Epic\save` (Epic), `CD_GamePass\save` (Game Pass plain fallback). For each existing root, scans every `save.save` once at discovery time to derive `MostRecentSaveMtime`. The real UWP wgs container at `%LOCALAPPDATA%\Packages\PearlAbyss.CrimsonDesert*\SystemAppData\wgs\` is out of scope for v1 (sync-locked + GUID-named binary blobs, deferred). |
+> | **`DefaultOpenSaveStartingPath` rewrite** | Selection rule: (1) honour `AppSettings.PreferredPlatform` when it still exists on disk, (2) fall back to the most-recently-modified platform, (3) static Steam path when no platform is detected. After picking the platform root, the existing single-user auto-drill applies. |
+> | **`preferred_platform` settings field** | New string field in `AppSettings` (`"Steam"` / `"Epic"` / `"GamePass"` / null). Persisted automatically every time the user opens a save successfully — `LoadSave` calls `paths.ClassifySavePath(path)` and writes the result to settings. Browse-opening a save from an unusual location yields `Unknown` and the field is NOT updated, so the sticky preference is never anchored on a one-off. |
+> | **`SaveBackupService` platform-scoped layout** | New path schema: `Backups\<platform>\<userId>\<slot>\<timestamp>\` (was: `Backups\<userId>\<slot>\<timestamp>\`). `BackupEntry` gained a `Platform` field; `BackupBeforeWrite` derives platform via `_paths.ClassifySavePath` at write time. `PruneBackups` takes `SavePlatform` and only prunes within its own platform's tree. |
+> | **Legacy backup migration** | `ListBackups` walks BOTH layouts: directories under `BackupRoot` whose name matches a `SavePlatform` enum value are descended as the new layout; everything else (legacy un-platformed `<userId>\` directly under `BackupRoot`) is surfaced tagged `SavePlatform.Steam` — the only launcher supported before this change. Legacy entries are never re-prune-targeted; they age out on their original cycle and don't accumulate. |
+> | **Restore picks the right platform root** | `MainWindowViewModel.RestoreFromBackupAsync` now calls `ResolveSaveRootForBackup(entry)` which probes `DiscoverSaveRoots()` for a root matching the entry's `Platform`. When the launcher that wrote the original save is no longer installed (user switched platforms), the dialog surfaces an explicit error instead of silently writing to the wrong tree. Legacy `Unknown`-platform entries fall back to the first available save root. |
+>
+> Tests: **157/157 pass** (was 151; +6 covering platform-scoped backup placement, Epic-tagged backups, Unknown-platform fallback, mixed-layout `ListBackups`, legacy-layout migration, multi-platform discovery ordering by mtime). Build clean.
+>
+> ### Next picks (still on the roadmap)
+>
+> #2 Item Pack import, #3 Pet rename + Equipment-set duplicator, #4 Sockets editor, #5 Dye editor, #6 Unlock All Abyss Gates. See the "Pick up here" section below for the full table.
+>
+> Last updated (prior milestone): 2026-05-15 (Sealed Abyss Artifact bulk drop + Pattern B v1 single-challenge mark complete).
+>
+> ## ✅ This session — what shipped (2026-05-15)
+>
+> Two related Sealed Abyss Artifact (SA) tooling changes, after a multi-iteration debug
+> that taught us a lot about the engine's completion bookkeeping. Pinned at
+> CrimsonAtomtic `b7eed65` + crimson-rs `7a800e4`.
+>
+> | Area | Scope |
+> |---|---|
+> | **Tools → Drop All Sealed Abyss Artifacts From Inventory…** | Single confirm → walks every `InventorySaveData`, drops every item whose iteminfo `string_key` starts with `Sealed_Abyss_Artifact` (12 known item key variants in slot102). Single FFI batch via `crimson_save_list_remove_elements_batch`. Sub-second on a 1100-block save. Clean and useful by itself for clearing stuck artifact items. |
+> | **Per-row "✓ Mark Challenge Complete (Pattern B v1)" button** | Appears in the field-detail panel when the current frame is a catalog `MissionStateData` row whose corresponding "FAR tracker" exists AND the user currently holds at least one Sealed Abyss Artifact item in inventory. Writes the engine-natural pre-claim completion state. **Verified to work for slot102 Shield II + Spear I + Hooves II + Slash III** (4 challenges across 3 series). Category restriction (Challenge_* / Mission_MiniGame_* prefixes only) has been removed — the user takes responsibility for matching non-standard categories to the FAR-tracker shape. The held-artifact gate replaces it as the safety net. |
+> | **Bulk challenge-flipping feature removed** | Earlier sessions tried bulk catalog flips of `_state=5 + _completedTime` (Pattern A v1/v2/v3); all three corrupted the in-game UI by hiding previously-visible challenge cards. Removed entirely — single-row Pattern B v1 is the only safe path until we understand more. |
+> | **Per-row challenge-completion warning guard removed** | The pre-existing prompt on bare `_state ← 5` / `_completedTime` edits is gone — those are now expert-mode raw edits. The Mark Challenge Complete button carries its own (long) warning, and the bulk flow that needed the guard is gone. |
+>
+> Three new upstream crimson-rs C ABI entry points landed and shipped to vendor:
+>
+> | crimson-rs entry point | What it does |
+> |---|---|
+> | `crimson_save_dynamic_array_set_u32_elements` | Wholesale-replace a `dynamic_array<u32>` field's contents; auto-updates the variant header's count slot (4 known variants supported). |
+> | `crimson_save_dynamic_array_get_u32_elements` | Two-call buffer-pattern reader for `dynamic_array<u32>` contents (paired with the setter). |
+> | `crimson_iteminfo_lookup_look_detail_mission_info` | Per-item lookup: `ItemKey → MissionKey` from the iteminfo `look_detail_mission_info` field. Quest-reward items (specifically the SA series) point at the catalog mission key of the challenge that rewards them. |
+>
+> ### Engine-natural completion shape — fully decoded
+>
+> Sealed Abyss Artifact challenges have a **catalog row + adjacent visibility twin + FAR tracker + X_2 follow-up sub-mission** four-piece structure inside `QuestSaveData._missionStateList`. Verified via slot102 → engine-natural slot103 (Hooves II completion) field diff:
+>
+> | Piece | Shape | When written by engine |
+> |---|---|---|
+> | **Catalog row** (positive key, e.g. 1000898 Hooves II) at idx N | minimal — `state=2, uiState=1, newAlarm=1, _usedTagList=[base]` | Save creation |
+> | **Adjacent visibility twin** (negative key, e.g. 4294966810) at idx N+1 | `state=2, _usedTagList=[base]` initially. On artifact pickup → `state=5 + _completedTime + _usedTagList=[base, visible]` | Artifact pickup |
+> | **FAR tracker** (negative key = `adjacent_twin._key - 1`) at idx 3600-3900 range | Only created on artifact pickup. `state=2, _branchedTime=present, _usedTagList=[base]` initially. On engine-natural completion → `state=5 + _completedTime + _usedTagList=[base, visible]` | Artifact pickup → engine-natural completion |
+> | **X_2 follow-up** ("Use the sealed Abyss artifact", e.g. key 1003337 = `Vehicle_II_2`) appended at end of list | `state=2, _branchedTime=present, _usedTagList=[base]` | Engine-natural completion |
+> | **alertHistorySaveData entry** in `ContentsMiscSaveData._alertHistorySaveDataList` | Pattern A1 (Shield III): `alertType=3, _missionKey=catalog_key`. Pattern A2 (Hooves II): `alertType=30, _missionKey=adjacent_twin_key` | Reward CLAIM (using the artifact item) |
+> | **Catalog row + adjacent twin → completed state** | catalog `state=5 + _completedTime + tags=[base, visible, completed]`; twin `_usedTagList` adds `visible` if not already there | Reward CLAIM |
+>
+> **Pattern B v1** (the recipe we ship) writes only what the engine writes pre-claim: FAR tracker flip + X_2 sub-mission insert. Catalog + alertHistory get filled in naturally when the user reloads + claims the reward in-game.
+>
+> ### Universal magic StringInfoKey hashes for `_usedTagList` (verified across all 12 solved SA challenges in slot102)
+>
+> ```
+> base_tag        = 2267378118  (every MissionStateData starts with this)
+> visible_tag     = 3938836851  (added when discovered)
+> completed_tag   = 4104166156  (added on catalog when solved — engine writes this, NOT us)
+> ```
+>
+> ### Why Pattern A v1/v2/v3 all failed (record for the next session)
+>
+> Earlier patterns tried to write the post-claim catalog state directly. Tested on slot102 → slot103 (manual single flip) and slot104 (batch flip) and slot106 (full v3 with alertHistory + tags): **every save regressed previously-visible challenge cards into the "unknown / locked" UI state**. Likely the engine cross-references the catalog flip against runtime state we can't observe directly, and refuses to display when it sees an inconsistency. Pattern B v1 sidesteps the problem by writing only the engine's own pre-claim shape.
+>
+> ### Where this leaves the SA bulk-completion idea
+>
+> Bulk completion of all SA challenges in one menu click is **off the table** for now. The only safe per-challenge recipe (Pattern B v1) requires the user to have picked up the matching artifact item in-game first — which is the exact gating signal the engine itself uses. There's no way to bypass that without re-creating engine state we can't reliably reproduce (the FAR tracker key is engine-assigned). Per-row clicks are the path forward; bulk would just batch the same per-row recipe over every eligible row.
 >
 > ## ✅ Beer Add-to-bag works end-to-end
 >
@@ -76,7 +142,7 @@
 > | **Backup retention 3 → 6** | `SaveBackupService.MaxVersionsPerSlot = 6` (was 3). Reason: Restore from backup itself triggers another pre-write snapshot, so 5 normal edits + 1 restore already consume 6 slots. Test renamed `FourthVersion → OverRetention`, drives the loop off `MaxVersionsPerSlot + 1` so future cap tweaks don't desync. |
 > | **Add-to-bag container blocklist — added then removed** | Mid-session: blocked `+ Bag` into Quest Artifacts (InventoryKey 5) and Kuku Pot (13) with an alert dialog. **User reverted the policy**: protection off, user accepts consequences. The `AlertRequested` plumbing + `ConfirmDialog.ShowAlertAsync` infrastructure stays (used elsewhere). |
 >
-> Health: **151 / 151 C# tests pass** (was 119; +4 cache tests + 28 InferTypeTag tests). AOT publish clean at 24.3 MB exe + 1.4 MB `crimson_rs.dll`. No new Rust changes this session; `vendor/crimson-rs` still pinned at `ab815e6`. (Superseded by 2026-05-15: vendor now pinned at `bdf4b4e` with the batch FFI.)
+> Health: **151 / 151 C# tests pass** (was 119; +4 cache tests + 28 InferTypeTag tests). AOT publish clean at 24.3 MB exe + 1.4 MB `crimson_rs.dll`. No new Rust changes this session; `vendor/crimson-rs` still pinned at `ab815e6`.
 >
 > ## 🆕 Verified facts to remember
 >
@@ -576,16 +642,57 @@ is on PATH (the script `#requires -Version 7`).
 
 ## Pick up here (next concrete task)
 
-The icon-extraction pipeline (item #1 below) and the batch
-`SetScalarField` C ABI (item #3) are **both complete** — kept
-in this doc as historical context + a reference for the
-data-flow, file layout, and per-phase decisions. **The actual
-next tasks live in the deferred-items list (#2, #4–#14)**; pick
-whichever matches your appetite. `skill_info` bridge (#4) and
-`Mission/Quest` name resolution (#6) are now the most
-user-visible follow-ons.
+Pattern B v1 has been verified end-to-end on slot102 against four
+challenges across three series: **Shield II, Spear I, Hooves II, and
+Slash III**. The recipe writes the pre-claim FAR-tracker shape; the
+in-game UI shows the challenge as "completed, reward not claimed"
+after reload, the user can pick up the artifact reward, and the
+catalog row + alertHistory fill in naturally. **Category restriction
+removed** — any MissionStateData row with the right FAR-tracker shape
+is eligible (user takes responsibility for the FAR-shape match).
+**Inventory safety gate added** — the button only enables when at
+least one Sealed Abyss Artifact item is currently in the user's
+inventory; the warning dialog reinforces "you must hold the matching
+artifact for THIS challenge". See the SA work above for full context.
 
-## Sealed Abyss Artifact investigation (PAUSED)
+**Next session — pick by appetite from the porting roadmap below.**
+The 5 features were surveyed against the predecessor save editor
+(`D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS`, mined once for
+ideas per CLAUDE.md rule 11) and ordered EASY → MEDIUM. No need to
+do them all at once.
+
+### Porting roadmap — 5 picks (EASY → MEDIUM)
+
+| # | Feature | Difficulty | Notes |
+|---|---|---|---|
+| 1 | ~~**Auto-find saves on launch**~~ | ~~EASY~~ | ✅ **Shipped 2026-05-15 part 2.** Steam / Epic / Game Pass plain-folder probe + most-recent-mtime preference + `preferred_platform` settings persistence + platform-scoped backup tree with legacy migration. Game Pass wgs UWP container deferred. Linux Proton prefix detection (appid `3321460`) deferred. |
+| 2 | **Item Pack import** | EASY | Apply curated JSON bundles (dyes / Kuku set / enchant scrolls / gem packs) on top of the existing Add-to-bag pipeline. Reference data: `CrimsonGameMods/dropset_packs/*.json` + `CrimsonSaveEditor/knowledge_packs/*.json` ready to mine. UI: Tools menu → Apply Item Pack… → file picker over `packs/` folder. |
+| 3 | **Pet rename + Equipment-set duplicator** | EASY | Two quick wins. Pet rename is a scalar string edit; equipment-set duplicate is a list-clone-element + per-slot patch. Both reuse existing primitives. |
+| 4 | **Sockets editor (fill / clear / swap gems, up to 5 sockets/item)** | MEDIUM | Highest-impact save-editor feature still missing. Needs a typed UI atop the existing scalar/element + ItemPicker plumbing. Per-gear schema lookup + gem-key catalog. |
+| 5 | **Dye editor (RGB / material / grime)** | MEDIUM | Reference data: `CrimsonGameMods/data/All_Dyes.json` + `dye_slot_db.json` + `dyeable_items_full.json` mineable. Needs a dye-slot lookup + RGB picker UI. |
+| 6 | **Unlock All Abyss Gates (Knowledge bulk-append)** | EASY | One-button Tools menu action that appends every `Knowledge_AbyssRuins_*` key (or a verified-safe subset) to `KnowledgeSaveData._list`. Mirrors the `ArtifactBulkOpService` shape: pre-flight count → confirm dialog → batch FFI → status footer. No JSON pack vendoring needed — keyset enumerated live from `knowledgeinfo.pabgb` via the existing C ABI bridge. **Caveat**: same engine-cross-reference risk pattern as SA Pattern A — start with abyss-gate prefix only (proven by the predecessor at 398 keys), defer per-key Browse Knowledge UI to a MEDIUM follow-up. |
+
+**Lower-priority deferred items** (the older list — none blocking; pick by appetite):
+- `skill_info` bridge (#4) and `Mission/Quest` name resolution (#6)
+  are still the most user-visible follow-ons not tied to SA work.
+- Items #2, #4–#14 from the original list below.
+
+## Sealed Abyss Artifact investigation (HISTORICAL — superseded by 2026-05-15)
+
+> **NOTE**: this whole investigation has been superseded by the
+> 2026-05-15 work documented at the top of this file (Pattern B v1).
+> Key findings:
+> - The original "edit `_chargedUseableCount`" approach was operating on
+>   the wrong layer entirely — it modifies the artifact ITEM, not the
+>   challenge progression bookkeeping that the engine actually reads.
+> - The engine's completion bookkeeping uses a four-piece structure
+>   (catalog row + adjacent twin + FAR tracker + X_2 follow-up) plus
+>   alertHistory. Documented in detail at the top of this file.
+> - Pattern B v1 (FAR tracker flip + X_2 sub-mission insert, leaving
+>   catalog + alertHistory for the engine to fill in at reward claim)
+>   is the safe per-challenge recipe. Per-row button only.
+> - Section kept below for historical context — don't use any of the
+>   recipes / hypotheses in it directly.
 
 ### Symptom
 

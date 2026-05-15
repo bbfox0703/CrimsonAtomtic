@@ -27,19 +27,19 @@ CrimsonAtomtic/
 
 ## Why this project exists
 
-There is an existing community save editor for Crimson Desert
-(`CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS`). It works but it is slow,
-cluttered, and structurally messy. We build from the ground up:
+A fresh save editor for Crimson Desert, built around a few clear architectural choices:
 
-- Native AOT C# / Avalonia UI for performance and a usable startup path.
+- Native AOT C# / Avalonia UI for performance and a fast startup path.
 - A single Rust core (`vendor/crimson-rs`, our fork) owns all binary-format
   knowledge. No format logic is duplicated into C# or Python.
 - Hygienic data flow: only sources are committed; derived files are
   regenerated, not stored. See [docs/data-policy.md](docs/data-policy.md).
-- The old repo is a one-time reference; nothing in this project depends on it
-  going forward.
 
 For the full architectural rationale see [docs/architecture.md](docs/architecture.md).
+
+## Thanks
+
+Thanks to the community save editor `CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS` for being a useful reference point during early reverse-engineering.
 
 ## First-time setup
 
@@ -69,5 +69,5 @@ Every script in `tools/` prints full usage when run with no arguments. See
 
 ## License
 
-TBD. The old reference repo is MPL-2.0; this project does not derive from its
-code, only from a one-time reading of its parsers.
+TBD. This project does not derive from any other editor's code; the Rust core
+under `vendor/crimson-rs` is our own work.

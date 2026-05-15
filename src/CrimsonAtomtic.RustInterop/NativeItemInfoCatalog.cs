@@ -157,6 +157,22 @@ public sealed class NativeItemInfoCatalog : IItemInfoCatalog
         return hash;
     }
 
+    public uint? LookupLookDetailMissionInfo(uint itemKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var rc = NativeMethods.ItemInfoLookupLookDetailMissionInfo(_handle, itemKey, out var mk);
+        if (rc == NativeMethods.NOT_FOUND)
+        {
+            return null;
+        }
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_iteminfo_lookup_look_detail_mission_info({itemKey}) failed: {ErrorName(rc)}");
+        }
+        return mk;
+    }
+
     public (uint ItemKey, string StringKey)? GetEntry(int index)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

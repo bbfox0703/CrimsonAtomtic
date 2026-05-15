@@ -54,4 +54,21 @@ public interface IItemInfoCatalog : IDisposable
     /// it, appends <c>.dds</c>, and PAZ-extracts it.
     /// </summary>
     uint? LookupIconPathHash(uint itemKey);
+
+    /// <summary>
+    /// Resolve <paramref name="itemKey"/> to its
+    /// <c>look_detail_mission_info</c> (a catalog <c>MissionKey</c>
+    /// u32). Returns <c>null</c> when the key isn't in the loaded
+    /// table OR the item ships without a mission link (the field is 0
+    /// — the overwhelming majority case for vanilla items).
+    /// </summary>
+    /// <remarks>
+    /// Items where this returns non-null are typically quest-reward
+    /// items. The Sealed Abyss Artifact series in particular points at
+    /// the catalog mission key of the challenge that rewards them
+    /// (verified across all 12 SA item samples in slot102 — itemKey
+    /// 1002011 (<c>Sealed_Abyss_Artifact_0083</c>) →
+    /// <c>look_detail_mission_info = 1000898</c> = Hooves II catalog).
+    /// </remarks>
+    uint? LookupLookDetailMissionInfo(uint itemKey);
 }

@@ -15,6 +15,11 @@
   <sys:String x:Key="MenuBrowseLocalization">_Browse Localization…</sys:String>
   <sys:String x:Key="MenuBrowseItems">Browse _Items…</sys:String>
   <sys:String x:Key="MenuExtractIcons">_Extract Icons from Game Data…</sys:String>
+  <sys:String x:Key="MenuSetGameInstallFolder">Set _Game Install Folder…</sys:String>
+  <sys:String x:Key="SetGameInstallFolderInvalidTitle">Folder doesn't look like a Crimson Desert install</sys:String>
+  <sys:String x:Key="SetGameInstallFolderInvalidBody">The selected folder doesn't contain the required asset file (0020\0.pamt). Pick the directory that contains the game's 0000\, 0020\, … pack groups — typically &lt;Steam library&gt;\steamapps\common\Crimson Desert or the Epic / asset folder you copied out for Game Pass.</sys:String>
+  <sys:String x:Key="MenuFillAllStacks">Fill _All Stacks Across Every Inventory…</sys:String>
+  <sys:String x:Key="MenuDropAllArtifacts">Drop All Sealed Abyss _Artifacts From Inventory…</sys:String>
   <sys:String x:Key="MenuFontSize">_Font Size</sys:String>
   <sys:String x:Key="SummaryToggleTip">Show / hide the Save Summary panel — claim more room for the main grids.</sys:String>
   <sys:String x:Key="MenuLanguage">_Secondary Language</sys:String>
@@ -102,6 +107,8 @@
   <sys:String x:Key="EditPanelFillMaxStackTip">Fill this field with the item's max_stack_count (from iteminfo). Pre-fills the textbox — review then click Apply.</sys:String>
   <sys:String x:Key="EditPanelMakeAbsent">Make absent</sys:String>
   <sys:String x:Key="EditPanelMakeAbsentTip">Flip this scalar's presence bit off — the field is removed from the block (mask bit cleared, payload bytes dropped). Reverse it by typing a value and clicking Apply.</sys:String>
+  <sys:String x:Key="MarkChallengeCompleteButton">✓ Mark Challenge Complete (Pattern B v1)</sys:String>
+  <sys:String x:Key="MarkChallengeCompleteTip">Engine-faithful single-challenge completion (Pattern B v1). Only enables when the engine has already done discovery for this challenge (you've picked up the reward artifact in-game). Writes the FAR tracker (_state=5 + _completedTime + visible tag) and creates the X_2 sub-mission entry — exactly what the engine writes for an unclaimed completion. Catalog + adjacent twin are NOT touched; the engine fills those in when you claim the reward in-game. NOT FULLY TESTED — back up your save first.</sys:String>
   <sys:String x:Key="ConfirmDialogYes">Yes</sys:String>
   <sys:String x:Key="ConfirmDialogNo">No</sys:String>
   <sys:String x:Key="ElementsColBulkFill">Bulk</sys:String>

@@ -17,7 +17,7 @@
 +-------------------------v--------------------------+
 | crimson_rs.dll (C ABI, cdylib)                     |
 |   vendor/crimson-rs (Rust, OUR fork)               |
-|   - Save crypto/parse (ported from old Python)     |
+|   - Save crypto / parse                            |
 |   - PABGB family parse/serialize                   |
 |   - PAZ/PAMT/PAPGT/PALOC archive ops               |
 |   - ChaCha20, Jenkins hashlittle2                  |
@@ -43,7 +43,7 @@
 
 ### Why not B (Python + new UI) or C (Rust-native UI)
 
-- **B (Python)** is the shortest path but conflicts with the AOT rule and yields the same class of runtime issues the old reference repo has.
+- **B (Python)** is the shortest path but conflicts with the AOT rule and brings the usual runtime-cost / packaging trade-offs of a Python UI app.
 - **C (Rust UI)** is fastest at runtime but means a different UI toolchain (egui / Slint / Tauri) and more research. Reserved as a fallback if Avalonia AOT proves blocking.
 
 ## Layers
@@ -54,9 +54,8 @@
 - Two integration surfaces:
   - **PyO3** (already exists) — consumed by `tools/`.
   - **C ABI** (new, to add) — feature-gated `extern "C"` exports for the C# app.
-- New responsibility: **save file crypto + parser**. The old reference repo's
-  `save_crypto.py` (ChaCha20 + HMAC + LZ4) and `save_parser.py` (TOC, items,
-  stats) port into this crate, not into C#.
+- New responsibility: **save file crypto + parser** (ChaCha20 + HMAC + LZ4
+  header, plus TOC / items / stats decoding) lives in this crate, not in C#.
 
 ### C# Core — `src/CrimsonAtomtic.Core`
 

@@ -13,7 +13,7 @@
 - **save-body-format.md** — decompressed body: schema, TOC, per-block decoder, meta_kind dispatch, Python-↔-Rust naming map
 - **pabgb-formats.md** — `.pabgb` family (iteminfo, skill, store, field, etc.)
 - **paz-containers.md** — asset archives: `.paz`, `.pamt`, `.papgt`, `.paloc`, trie buffers
-- **ui-design.md** — UI/UX principles for the new editor; explicit anti-patterns from the old reference repo
+- **ui-design.md** — UI/UX principles for the editor, with the design constraints they derive from
 - **crimsonforge-coverage-gaps.md** — what NattKh's CrimsonForge modding tool can decode that we can't (yet); the canonical "look here when you don't know how to parse format X" pointer
 
 ## How to extend

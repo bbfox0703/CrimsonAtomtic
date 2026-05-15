@@ -69,6 +69,17 @@
         <Separator />
         <MenuItem Header="{StaticResource MenuExtractIcons}"
                   Click="OnExtractIconsClick" />
+        <MenuItem Header="{StaticResource MenuSetGameInstallFolder}"
+                  Click="OnSetGameInstallFolderClick" />
+        <Separator />
+        <!-- Bulk-edit sweeps. Both gate on HasSave via the VM's
+             RelayCommand CanExecute, so the menu items disable when
+             no save is loaded. Each command shows its own confirm
+             dialog before mutating anything. -->
+        <MenuItem Header="{StaticResource MenuFillAllStacks}"
+                  Command="{Binding FillAllStacksAcrossInventoriesCommand}" />
+        <MenuItem Header="{StaticResource MenuDropAllArtifacts}"
+                  Command="{Binding DropAllSealedAbyssArtifactsCommand}" />
         <Separator />
         <!-- Font size submenu. Each entry sets the Window's FontSize
              via the VM, which cascades to every child control. The
@@ -320,20 +331,37 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
 
-          <!-- Loaded-block state: metadata row. Visible only when a
-               BlockFrame is on top (not when showing an element list). -->
-          <Grid Grid.Row="2"
-                IsVisible="{Binding IsShowingFields}"
-                ColumnDefinitions="Auto,*,Auto,*,Auto,*"
-                ColumnSpacing="8"
-                Margin="0,0,0,4">
-            <TextBlock Grid.Column="0" Text="{StaticResource FieldsMask}" Opacity="0.6" />
-            <TextBlock Grid.Column="1" Text="{Binding MaskBytesText}" FontFamily="Cascadia Code,Consolas,monospace" />
-            <TextBlock Grid.Column="2" Text="{StaticResource FieldsTrailingPad}" Opacity="0.6" />
-            <TextBlock Grid.Column="3" Text="{Binding TrailingPadText}" FontFamily="Cascadia Code,Consolas,monospace" />
-            <TextBlock Grid.Column="4" Text="{StaticResource FieldsUndecoded}" Opacity="0.6" />
-            <TextBlock Grid.Column="5" Text="{Binding UndecodedRangesText}" FontFamily="Cascadia Code,Consolas,monospace" />
-          </Grid>
+          <!-- Loaded-block state: metadata row + (conditional) block-action
+               bar. Both visible only when a BlockFrame is on top (not when
+               showing an element list). -->
+          <StackPanel Grid.Row="2"
+                      IsVisible="{Binding IsShowingFields}"
+                      Orientation="Vertical"
+                      Spacing="4"
+                      Margin="0,0,0,4">
+            <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,*"
+                  ColumnSpacing="8">
+              <TextBlock Grid.Column="0" Text="{StaticResource FieldsMask}" Opacity="0.6" />
+              <TextBlock Grid.Column="1" Text="{Binding MaskBytesText}" FontFamily="Cascadia Code,Consolas,monospace" />
+              <TextBlock Grid.Column="2" Text="{StaticResource FieldsTrailingPad}" Opacity="0.6" />
+              <TextBlock Grid.Column="3" Text="{Binding TrailingPadText}" FontFamily="Cascadia Code,Consolas,monospace" />
+              <TextBlock Grid.Column="4" Text="{StaticResource FieldsUndecoded}" Opacity="0.6" />
+              <TextBlock Grid.Column="5" Text="{Binding UndecodedRangesText}" FontFamily="Cascadia Code,Consolas,monospace" />
+            </Grid>
+            <!-- Block-action bar: "Mark Challenge Complete" appears when the
+                 current frame is a catalog MissionStateData challenge that
+                 isn't already at _state=5. The VM gates IsCurrentChallengeMarkable
+                 on class + key + state checks; the bar's IsVisible binds to
+                 the same flag, so it disappears as soon as the user navigates
+                 elsewhere or the edit lands. -->
+            <Button Content="{StaticResource MarkChallengeCompleteButton}"
+                    ToolTip.Tip="{StaticResource MarkChallengeCompleteTip}"
+                    Command="{Binding MarkCurrentChallengeCompleteCommand}"
+                    IsVisible="{Binding IsCurrentChallengeMarkable}"
+                    HorizontalAlignment="Left"
+                    Padding="10,4"
+                    MinHeight="0" />
+          </StackPanel>
 
           <!-- Filter box: shown only when fields are being displayed. -->
           <TextBox Grid.Row="3"

@@ -54,7 +54,7 @@ The docstring is what `--help` prints as the description. Keep it usable.
 
 - No code at module top level beyond imports, constants, and function/class definitions.
 - All work happens inside `main()`, called from `if __name__ == "__main__":`.
-- Reason: the old reference repo's `main.py` constructed a Qt application on import, which broke every kind of static analysis and unit test.
+- Reason: side effects at import time break static analysis, unit testing, and tool composition (e.g. constructing a UI / network client at import time is a common offender).
 
 ### 4. Type hints everywhere
 
@@ -95,7 +95,7 @@ The `_proto_` prefix marks scratch code that **will be deleted**, not maintained
 
 ## Removing a tool
 
-If a script is no longer used, **delete it** along with its `README.md` entry. The old reference repo's worst sin was keeping `_test_*` and `diag_*` files around indefinitely.
+If a script is no longer used, **delete it** along with its `README.md` entry. Don't let `_test_*` / `diag_*` files accumulate in the tree indefinitely.
 
 ## Running
 
