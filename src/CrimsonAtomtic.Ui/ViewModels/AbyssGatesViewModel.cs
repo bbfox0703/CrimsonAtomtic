@@ -10,15 +10,17 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 
 /// <summary>
 /// VM for the per-gate "Edit Abyss Gates" dialog. Walks every
-/// top-level <c>FieldGimmickSaveData</c> block in the loaded save,
-/// filters down to the abyss-gate / hyperspace-ruin subset by
-/// cross-referencing each block's <c>_gimmickInfoKey</c> against the
-/// allowlist built from <c>gimmickinfo.pabgb</c>, and exposes a
-/// per-row Lock/Unlock toggle.
+/// top-level <c>FieldSaveData</c> block in the loaded save, drills
+/// into its <c>_fieldGimmickSaveDataList</c> object-list field,
+/// filters the elements down to the abyss-gate / hyperspace-ruin
+/// subset by cross-referencing each element's <c>_gimmickInfoKey</c>
+/// against the allowlist built from <c>gimmickinfo.pabgb</c>, and
+/// exposes a per-row Lock/Unlock toggle.
 ///
 /// <para>
 /// Touches the <b>gate state</b> layer of unlock: writes
-/// <c>_initStateNameHash</c> via the existing scalar setter. The
+/// <c>_initStateNameHash</c> via the path-addressed scalar setter
+/// (path = <c>[(_fieldGimmickSaveDataList, elementIdx)]</c>). The
 /// companion <b>discovery flag</b> layer (gates show up on the map)
 /// is handled by Tools → Unlock All Abyss Gates which writes
 /// <c>KnowledgeSaveData._list</c>.
@@ -26,23 +28,24 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 ///
 /// <para>
 /// Per the upstream survey at
-/// <c>vendor/crimson-rs/docs/abyss-gate-map.md</c>: only three
-/// <c>_initStateNameHash</c> values appear across all observed abyss
-/// gates — <see cref="DefaultUntouched"/> (player hasn't interacted),
+/// <c>vendor/crimson-rs/docs/abyss-gate-map.md</c>: three
+/// <c>_initStateNameHash</c> values were originally documented —
+/// <see cref="DefaultUntouched"/> (player hasn't interacted),
 /// <see cref="ActivatedCrossed"/> (player has crossed / activated),
-/// and <see cref="IdleDecoration"/> (standstones / scenery that
-/// never transitions). The toggle flips between Default and
-/// Activated; Idle and Unknown rows are read-only.
+/// and <see cref="IdleDecoration"/> (scenery that never transitions).
+/// Slot probes against 1.05–1.07 saves surface additional rarer
+/// values (~3 more across thousands of rows) — those are treated as
+/// Unknown and stay read-only, identical to how Idle is handled.
+/// The toggle only flips between Default and Activated.
 /// </para>
 ///
 /// <para>
-/// <b>v1 limitation:</b> walks top-level <c>FieldGimmickSaveData</c>
-/// blocks only. Nested <c>FieldGimmickSaveData</c> elements inside
-/// container <c>ObjectList</c> fields are not currently surfaced;
-/// the upstream probe found 4,264 total <c>FieldGimmickSaveData</c>
-/// of which 356 are abyss-related, but the top-level vs nested
-/// split isn't quantified. If a known abyss gate is missing from
-/// the dialog, that's the gap.
+/// <b>History note:</b> the v1 of this dialog (shipped 2026-05-15)
+/// looked for top-level <c>FieldGimmickSaveData</c> blocks, of
+/// which real saves have zero — every gate sits nested under
+/// <c>FieldSaveData._fieldGimmickSaveDataList</c>. This v2 walks
+/// the correct shape and surfaces gates across both
+/// <c>FieldSaveData</c> roots (typically 2 per save) at once.
 /// </para>
 /// </summary>
 public sealed partial class AbyssGatesViewModel : ObservableObject
@@ -51,10 +54,16 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
     public const uint ActivatedCrossed = 0xe300acfe;
     public const uint IdleDecoration   = 0x150b14d0;
 
-    /// <summary>Class name of the per-gimmick save block.</summary>
-    private const string FieldGimmickClass = "FieldGimmickSaveData";
+    /// <summary>Class name of the per-field container block.</summary>
+    private const string FieldSaveDataClass = "FieldSaveData";
 
-    /// <summary>Field names we read off each block.</summary>
+    /// <summary>
+    /// Object-list field on <c>FieldSaveData</c> that holds every
+    /// per-gimmick save record (gates + scenery + miscellaneous).
+    /// </summary>
+    private const string FieldGimmickListFieldName = "_fieldGimmickSaveDataList";
+
+    /// <summary>Field names read off each nested gimmick element.</summary>
     private const string GimmickInfoKeyField     = "_gimmickInfoKey";
     private const string InitStateNameHashField  = "_initStateNameHash";
     private const string OwnerLevelNameField     = "_ownerLevelName";
@@ -95,7 +104,7 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
     /// <summary>
     /// Build a VM by walking the save asynchronously. Reports
     /// progress through <paramref name="progress"/>; the dialog
-    /// shows a "Scanning N/Total blocks…" footer while this runs.
+    /// shows a "Scanning N/Total roots…" footer while this runs.
     /// </summary>
     public static async Task<AbyssGatesViewModel> CreateAsync(
         ISaveLoader loader,
@@ -125,39 +134,68 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
             return vm;
         }
 
-        // Collect candidate top-level blocks first so the progress
-        // total is accurate.
-        var candidates = new List<BlockSummary>();
+        // Collect candidate roots first so the progress total is accurate.
+        var roots = new List<BlockSummary>();
         foreach (var b in blocks)
         {
-            if (string.Equals(b.ClassName, FieldGimmickClass, StringComparison.Ordinal))
+            if (string.Equals(b.ClassName, FieldSaveDataClass, StringComparison.Ordinal))
             {
-                candidates.Add(b);
+                roots.Add(b);
             }
         }
 
         var built = new List<AbyssGateRow>();
+        var scannedElements = 0;
         await Task.Run(() =>
         {
-            for (var i = 0; i < candidates.Count; i++)
+            for (var i = 0; i < roots.Count; i++)
             {
-                progress?.Report((i, candidates.Count));
+                progress?.Report((i, roots.Count));
                 BlockDetails details;
                 try
                 {
-                    details = loader.LoadBlockDetails(savePath, candidates[i].Index);
+                    details = loader.LoadBlockDetails(savePath, roots[i].Index);
                 }
                 catch (CrimsonSaveException)
                 {
                     continue;
                 }
-                if (TryBuildRow(vm, candidates[i].Index, details, allowlist, localization,
-                                out var row))
+
+                // Find the gimmick list field on this FieldSaveData root.
+                DecodedFieldRow? listField = null;
+                foreach (var f in details.Fields)
                 {
-                    built.Add(row);
+                    if (string.Equals(f.Name, FieldGimmickListFieldName, StringComparison.Ordinal)
+                        && f.Present)
+                    {
+                        listField = f;
+                        break;
+                    }
+                }
+                if (listField is null || listField.Elements is not { } elements)
+                {
+                    continue;
+                }
+
+                var listFieldIdx = (uint)listField.FieldIndex;
+                for (var elemIdx = 0; elemIdx < elements.Count; elemIdx++)
+                {
+                    scannedElements++;
+                    if (TryBuildRow(
+                            vm,
+                            roots[i].Index,
+                            listFieldIdx,
+                            (uint)elemIdx,
+                            elements[elemIdx],
+                            allowlist,
+                            localization,
+                            out var row))
+                    {
+                        built.Add(row);
+                    }
                 }
             }
-            progress?.Report((candidates.Count, candidates.Count));
+            progress?.Report((roots.Count, roots.Count));
         }).ConfigureAwait(true);
 
         // Sort: owner level (alphabetical), then by gimmick internal
@@ -173,18 +211,22 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
             vm.Rows.Add(r);
         }
         vm.StatusMessage = built.Count == 0
-            ? $"Scanned {candidates.Count} top-level {FieldGimmickClass} block(s) — "
+            ? $"Scanned {scannedElements} nested gimmick element(s) across "
+              + $"{roots.Count} {FieldSaveDataClass} root(s) — "
               + "no abyss-gate gimmicks matched the allowlist."
-            : $"Loaded {built.Count} abyss-gate row(s) from {candidates.Count} "
-              + $"top-level {FieldGimmickClass} block(s). "
-              + "Toggle the Lock state to flip _initStateNameHash; reload the save to revert.";
+            : $"Loaded {built.Count} abyss-gate row(s) from {scannedElements} "
+              + $"nested gimmick element(s) across {roots.Count} {FieldSaveDataClass} "
+              + "root(s). Toggle the Lock state to flip _initStateNameHash; "
+              + "reload the save to revert.";
         return vm;
     }
 
     private static bool TryBuildRow(
         AbyssGatesViewModel parent,
-        int blockIdx,
-        BlockDetails details,
+        int rootBlockIdx,
+        uint listFieldIdx,
+        uint elementIdx,
+        BlockDetails element,
         HashSet<uint> abyssGimmickKeys,
         LocalizationProvider localization,
         out AbyssGateRow row)
@@ -198,7 +240,7 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
         string ownerLevelName = string.Empty;
         uint fieldGimmickSaveKey = 0;
 
-        foreach (var f in details.Fields)
+        foreach (var f in element.Fields)
         {
             if (string.Equals(f.Name, GimmickInfoKeyField, StringComparison.Ordinal)
                 && TryParseScalarUInt(f.Value, out var gk) && gk <= uint.MaxValue)
@@ -242,9 +284,11 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
             gimmickName = $"GimmickInfoKey 0x{gimmickInfoKey:X8}";
         }
 
+        var path = new[] { new PathStep(listFieldIdx, elementIdx) };
         row = new AbyssGateRow(
             parent,
-            blockIdx,
+            rootBlockIdx,
+            path,
             stateHashFieldIdx,
             gimmickInfoKey,
             gimmickName,
@@ -267,7 +311,7 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
         var bytes = BitConverter.GetBytes(targetHash);
         try
         {
-            _loader.SetScalarField(row.BlockIndex, row.StateHashFieldIndex, bytes);
+            _loader.SetScalarField(row.BlockIndex, row.Path, row.StateHashFieldIndex, bytes);
         }
         catch (CrimsonSaveException ex)
         {
@@ -345,10 +389,12 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
 public sealed partial class AbyssGateRow : ObservableObject
 {
     private readonly AbyssGatesViewModel _parent;
+    private readonly PathStep[] _path;
 
     public AbyssGateRow(
         AbyssGatesViewModel parent,
         int blockIndex,
+        PathStep[] path,
         int stateHashFieldIndex,
         uint gimmickInfoKey,
         string gimmickName,
@@ -358,6 +404,7 @@ public sealed partial class AbyssGateRow : ObservableObject
     {
         _parent = parent;
         BlockIndex = blockIndex;
+        _path = path;
         StateHashFieldIndex = stateHashFieldIndex;
         GimmickInfoKey = gimmickInfoKey;
         GimmickName = gimmickName;
@@ -366,7 +413,20 @@ public sealed partial class AbyssGateRow : ObservableObject
         _currentStateHash = currentStateHash;
     }
 
+    /// <summary>
+    /// Top-level block index (the owning <c>FieldSaveData</c>).
+    /// </summary>
     public int BlockIndex { get; }
+
+    /// <summary>
+    /// Path from <see cref="BlockIndex"/> down to the nested gimmick
+    /// element this row represents. One step today
+    /// (<c>(_fieldGimmickSaveDataList, elementIdx)</c>); kept as
+    /// <see cref="PathStep"/>[] so the toggle goes through the same
+    /// path-addressed scalar setter every other nested editor uses.
+    /// </summary>
+    public PathStep[] Path => _path;
+
     public int StateHashFieldIndex { get; }
     public uint GimmickInfoKey { get; }
     public string GimmickName { get; }

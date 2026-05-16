@@ -3,7 +3,25 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-16 part 12 (Tools → Complete All Held Sealed Abyss Artifact Challenges — bulk Pattern B v1 sweep).
+> Last updated: 2026-05-16 part 13 (Abyss Gates bugfix sweep — per-gate dialog walks nested gimmicks; bulk inject rewritten for object_list).
+>
+> ## ✅ This session — what shipped (2026-05-16 part 13)
+>
+> Both Tools → Abyss Gates entry points reported empty / wrong data on
+> the user's 1.07 save (and, as cross-version probes against slots
+> 102 / 103 / 104 confirmed, on every prior 1.05–1.06 save too). The
+> shipped v1 of each made the wrong shape assumption; both rewritten
+> against ground-truth shapes.
+>
+> | Area | Scope |
+> |---|---|
+> | **Per-gate dialog — walks nested `FieldSaveData._fieldGimmickSaveDataList`** | v1 looked for top-level `FieldGimmickSaveData` blocks (always 0 across all probed saves) and reported "no abyss gates in this save." v2 walks every top-level `FieldSaveData` root, drills into `_fieldGimmickSaveDataList` via the existing `DecodedFieldRow.Elements` path, filters elements by `_gimmickInfoKey` against the abyss/hyperspace allowlist from `gimmickinfo.pabgb`, and exposes the toggle via the path-addressed `SetScalarField` (path = `[(_fieldGimmickSaveDataList, elemIdx)]`). The 4,200-ish nested elements per save take ~1 s to scan. Header / not-available strings updated. |
+> | **Bulk inject — rewritten for `object_list<KnowledgeElementSaveData>`** | v1 assumed `KnowledgeSaveData._list` was `dynamic_array<u32>` and called `DynamicArrayGetU32Elements` / `DynamicArraySetU32Elements`. The probes confirmed `_list` is always an object_list of full `KnowledgeElementSaveData` records (~1,740 per save) with `{ _key:u32, _level:u8, _learnedFieldTime:u64, _isNewMark:bool }`. The shipped read silently failed → "0 already present" regardless of progression; the shipped write would have stuffed u32 bytes into an object_list field (potential save corruption). v2 reads existing `_key`s out of the elements to build the "already have" set, then for each missing key clones element 0 + patches `_key` / `_learnedFieldTime=0` / `_isNewMark=0` via `ListCloneElement` + `SetScalarField` — same primitives as the bulk Sealed Abyss Artifact sweep. Aborts on first failure (list may now be inconsistent) and surfaces the failing key in the status footer. |
+> | **2 new shape regressions in `NativeSaveLoaderTests`** | `KnowledgeSaveData_List_IsObjectListWithKeyedElements` and `FieldGimmickSaveData_NestedUnderFieldSaveDataNotTopLevel`. Pure read assertions on the live save — they pin the shapes the rewrites depend on so a future schema drift (1.08?) surfaces here as a typed test failure instead of as silent UX breakage. |
+>
+> Defensive guards added to both flows: per-gate dialog reports "no FieldSaveData root yet (very early-game)" when the walk finds 0 roots; bulk inject refuses to run when `_list.Kind != "object_list"` (calls out the schema drift instead of attempting the wrong write).
+>
+> Tests: **183/183 pass** (was 181; +2 schema regressions covering both Abyss Gates flows). Debug build clean. No `vendor/crimson-rs` changes needed.
 >
 > ## ✅ This session — what shipped (2026-05-16 part 12)
 >
