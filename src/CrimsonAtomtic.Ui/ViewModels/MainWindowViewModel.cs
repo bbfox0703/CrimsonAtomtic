@@ -50,6 +50,24 @@ public sealed partial class MainWindowViewModel(
     internal ISaveLoader GetSaveLoader() => loader;
 
     /// <summary>
+    /// Expose the platform-paths singleton for child dialogs that need
+    /// to read / write <c>AppSettings</c> (e.g. the custom-gem-sets
+    /// editor). Same instance the VM uses internally.
+    /// </summary>
+    internal IPlatformPaths GetPlatformPaths() => paths;
+
+    /// <summary>
+    /// Load the user's persisted custom gem sets from settings.json.
+    /// Returns an empty list when the field is absent or the settings
+    /// file doesn't exist yet.
+    /// </summary>
+    internal IReadOnlyList<CustomGemSet> LoadCustomGemSets()
+    {
+        var settings = AppSettingsStore.Load(paths.LocalAppDataDirectory);
+        return settings.CustomGemSets ?? Array.Empty<CustomGemSet>();
+    }
+
+    /// <summary>
     /// Flip <see cref="IsDirty"/> + refresh window-title chrome when a
     /// child dialog (e.g. Rename Mercenary) has mutated the save body.
     /// Mirrors the post-edit notifications the main edit panel emits

@@ -1,0 +1,86 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        mc:Ignorable="d"
+        d:DesignWidth="700"
+        d:DesignHeight="320"
+        x:Class="CrimsonAtomtic.Ui.Views.CustomGemSetsEditorWindow"
+        x:DataType="vm:CustomGemSetsEditorViewModel"
+        Title="{StaticResource CustomGemSetsWindowTitle}"
+        Icon="/Assets/MainIcon.ico"
+        Width="780" Height="360"
+        MinWidth="640" MinHeight="280"
+        WindowStartupLocation="CenterOwner"
+        FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
+
+  <DockPanel LastChildFill="True" Margin="14">
+    <TextBlock DockPanel.Dock="Top"
+               Text="{StaticResource CustomGemSetsHeader}"
+               TextWrapping="Wrap"
+               Opacity="0.7"
+               Margin="0,0,0,10" />
+
+    <StackPanel DockPanel.Dock="Bottom"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="8"
+                Margin="0,10,0,0">
+      <TextBlock Text="{Binding StatusMessage}"
+                 Opacity="0.65"
+                 VerticalAlignment="Center"
+                 Margin="0,0,12,0"
+                 TextTrimming="CharacterEllipsis" />
+      <Button Content="{StaticResource CustomGemSetsClose}"
+              Click="OnCloseClick"
+              MinWidth="80" />
+      <Button Content="{StaticResource CustomGemSetsSave}"
+              Command="{Binding SaveCommand}"
+              Classes="accent"
+              MinWidth="80" />
+    </StackPanel>
+
+    <!-- 3 rows, each with a label + 5 ItemKey TextBoxes. -->
+    <ItemsControl ItemsSource="{Binding Rows}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate DataType="vm:CustomGemSetEditorRow">
+          <Border BorderBrush="#33808080" BorderThickness="0,0,0,1"
+                  Padding="0,6,0,8">
+            <Grid ColumnDefinitions="80,200,*,*,*,*,*"
+                  ColumnSpacing="6">
+              <TextBlock Grid.Column="0"
+                         Text="{Binding Index, StringFormat='Set {0}'}"
+                         FontWeight="SemiBold"
+                         VerticalAlignment="Center" />
+              <TextBox Grid.Column="1"
+                       Text="{Binding Label, Mode=TwoWay}"
+                       PlaceholderText="Label"
+                       VerticalAlignment="Center" />
+              <TextBox Grid.Column="2"
+                       Text="{Binding Cells[0].KeyText, Mode=TwoWay}"
+                       PlaceholderText="ItemKey #1"
+                       VerticalAlignment="Center" />
+              <TextBox Grid.Column="3"
+                       Text="{Binding Cells[1].KeyText, Mode=TwoWay}"
+                       PlaceholderText="ItemKey #2"
+                       VerticalAlignment="Center" />
+              <TextBox Grid.Column="4"
+                       Text="{Binding Cells[2].KeyText, Mode=TwoWay}"
+                       PlaceholderText="ItemKey #3"
+                       VerticalAlignment="Center" />
+              <TextBox Grid.Column="5"
+                       Text="{Binding Cells[3].KeyText, Mode=TwoWay}"
+                       PlaceholderText="ItemKey #4"
+                       VerticalAlignment="Center" />
+              <TextBox Grid.Column="6"
+                       Text="{Binding Cells[4].KeyText, Mode=TwoWay}"
+                       PlaceholderText="ItemKey #5"
+                       VerticalAlignment="Center" />
+            </Grid>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </DockPanel>
+</Window>

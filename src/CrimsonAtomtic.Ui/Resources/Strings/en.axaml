@@ -36,6 +36,17 @@
   <sys:String x:Key="SocketEditorFillGemTip">Open the gem picker and fill this empty slot. Auto-bumps _validSocketCount on the parent item if needed so the slot becomes visible in-game.</sys:String>
   <sys:String x:Key="SocketEditorClearGemTip">Demote this socket back to empty. Both _currentEndurance and _itemKey become absent; mask flips to [0x00].</sys:String>
   <sys:String x:Key="SocketEditorColState">State</sys:String>
+  <sys:String x:Key="SocketEditorApplySetItemLabel">Apply set to:</sys:String>
+  <sys:String x:Key="SocketEditorApplySetSetLabel">Set:</sys:String>
+  <sys:String x:Key="SocketEditorApplySetApply">Apply</sys:String>
+  <sys:String x:Key="SocketEditorApplySetEditCustom">Edit custom sets…</sys:String>
+  <sys:String x:Key="SocketEditorApplySetEditCustomTip">Define / rename the three user-custom gem sets. Saved to settings.json.</sys:String>
+
+  <!-- Custom gem sets editor (launched from Sockets editor toolbar) -->
+  <sys:String x:Key="CustomGemSetsWindowTitle">Edit custom gem sets</sys:String>
+  <sys:String x:Key="CustomGemSetsHeader">Three user-definable gem sets surfaced alongside the built-in three in the Sockets editor's Apply-Set toolbar. Each set has a label + up to 5 ItemKey entries (blank cells are skipped). Applying a set with N entries overwrites slots 0..N-1 of the target item and leaves slots [N..max] alone. Saves to settings.json on click.</sys:String>
+  <sys:String x:Key="CustomGemSetsSave">Save</sys:String>
+  <sys:String x:Key="CustomGemSetsClose">Close</sys:String>
   <sys:String x:Key="SocketEditorClose">Close</sys:String>
   <sys:String x:Key="SocketEditorNotAvailableTitle">No filled sockets in this save</sys:String>
   <sys:String x:Key="SocketEditorNotAvailableBody">The loaded save has no items with filled sockets (or no items with a _socketSaveDataList at all). Filled sockets appear here once you've embedded a gem in-game.</sys:String>

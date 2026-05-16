@@ -65,6 +65,17 @@ public sealed record AppSettings
     [JsonPropertyName("game_install_root")]
     public string? GameInstallRoot { get; init; }
 
+    /// <summary>
+    /// Three user-defined gem sets surfaced in the Sockets editor's
+    /// "Apply Set" toolbar alongside the built-in 3. Slot order is
+    /// stable; <c>null</c> entries (or fewer than 3) are treated as
+    /// "this slot is undefined — don't show". Each set has 1..5
+    /// <c>GemKeys</c>; applying it overwrites slots 0..N-1 of the
+    /// target item, leaving slots [N..max] alone.
+    /// </summary>
+    [JsonPropertyName("custom_gem_sets")]
+    public CustomGemSet[]? CustomGemSets { get; init; }
+
     /// <summary>Default font size when the settings field is unset.</summary>
     public const double DefaultFontSize = 14.0;
 
@@ -76,6 +87,21 @@ public sealed record AppSettings
 }
 
 /// <summary>
+/// JSON-persisted form of a user-defined gem set. Mirrors
+/// <see cref="GemSet"/> but with a fixed schema (string + uint[])
+/// for AOT-safe deserialization. Empty <see cref="GemKeys"/> = the
+/// slot is "undefined" (won't appear in the Apply-Set dropdown).
+/// </summary>
+public sealed record CustomGemSet
+{
+    [JsonPropertyName("label")]
+    public string Label { get; init; } = string.Empty;
+
+    [JsonPropertyName("gem_keys")]
+    public uint[] GemKeys { get; init; } = Array.Empty<uint>();
+}
+
+/// <summary>
 /// Source-generated JSON context for <see cref="AppSettings"/>.
 /// Required for AOT — System.Text.Json otherwise reflects at runtime.
 /// </summary>
@@ -84,6 +110,8 @@ public sealed record AppSettings
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(AppSettings))]
+[JsonSerializable(typeof(CustomGemSet))]
+[JsonSerializable(typeof(CustomGemSet[]))]
 public sealed partial class AppSettingsJsonContext : JsonSerializerContext;
 
 /// <summary>

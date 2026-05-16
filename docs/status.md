@@ -3,7 +3,22 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-16 part 10 (ChangeJournal + close-on-dirty confirm + Tools → Review changes).
+> Last updated: 2026-05-16 part 11 (Sockets editor v2 — Fill/Change/Clear + endurance reset + _validSocketCount bump + built-in & custom gem sets with Apply-Set toolbar).
+>
+> ## ✅ This session — what shipped (2026-05-16 part 11)
+>
+> Three commits consuming the latest `vendor/crimson-rs` iteminfo
+> additions and rebuilding the Sockets editor end-to-end:
+>
+> | Area | Scope |
+> |---|---|
+> | **iteminfo socket + canonical-gem bindings** | 4 new C ABI exports bound: `lookup_socket_caps`, `socket_allows_gem`, `canonical_gem_count`, `canonical_gem_at`. Exposed on both `IItemInfoCatalog` and `NativeItemInfoCatalog`. The canonical gem set is the sorted-ascending union of every weapon's allowed-gem list — authoritative replacement for the prefix-heuristic gem filter (kept in place for the picker, which still works against the existing `Item_Stat_AbyssGear_*` / `Item_Skill_AbyssGear_*` prefix scope). |
+> | **Sockets editor v2 (Fill / Change / Clear)** | Surfaces every slot in `_socketSaveDataList` (empty + filled), not just filled. Per-row routes by state: empty → Fill (batch-promote `_currentEndurance` + `_itemKey`), filled → Change (in-place overwrite both fields, **resets endurance to 0xFFFF** so greater gems start fresh) and Clear (batch-demote to absent). `_validSocketCount` auto-bumps when filling a slot past the current cap; no gamedata-cap enforcement (you can fill any slot the underlying list pre-allocates, ~5 typical, per user request). Status column surfaces per-row errors so failures stay visible. |
+> | **Built-in + user-custom gem sets + Apply-Set toolbar** | Three hardcoded built-in sets (the user-provided keysets), three user-definable sets persisted to `AppSettings.CustomGemSets`. Sockets editor toolbar: pick item → pick set → Apply. Apply rule per the user contract: a set with N gems overwrites slots `0..N-1` only (slots `[N..max]` left alone); auto-bumps `_validSocketCount` per slot as needed. Dropdown labels resolve each gem key through PALOC at runtime so users see "Built-in Set 1 — Sapphire / Ruby / …" instead of just numbers. Custom-set editor launched from the toolbar "Edit custom sets…" button — 3 rows × (Label + 5 ItemKey TextBoxes), writes settings.json on Save. |
+>
+> Endurance handling note: there's no `crimson_iteminfo_lookup_max_endurance` C ABI today, so the editor uses `0xFFFF` (u16 max) as the "fresh gem" sentinel for Fill + Change. Safe for both gem kinds — durability-bearing greater gems get full durability, no-durability gems have the field ignored by the engine. If upstream adds a per-gem max getter later, the editor can swap to that without touching anything else.
+>
+> Tests: **181/181 pass** (was 180; +1 SocketCaps_AndCanonicalGemSet_LiveInstall covering the 4 new APIs against the live install). Debug build clean. Rebuilt `crimson_rs.dll` to expose the new exports.
 >
 > ## ✅ This session — what shipped (2026-05-16 part 10)
 >

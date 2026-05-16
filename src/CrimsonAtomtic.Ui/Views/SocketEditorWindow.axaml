@@ -15,6 +15,42 @@
                Opacity="0.7"
                Margin="0,0,0,8" />
 
+    <!-- Apply-Set toolbar: pick an item, pick a set, click Apply.
+         Set overwrites slots 0..N-1 (N = set's gem count); slots
+         past N are left alone. -->
+    <Grid DockPanel.Dock="Top"
+          ColumnDefinitions="Auto,*,Auto,2*,Auto,Auto"
+          ColumnSpacing="8"
+          Margin="0,0,0,10">
+      <TextBlock Grid.Column="0"
+                 Text="{StaticResource SocketEditorApplySetItemLabel}"
+                 VerticalAlignment="Center"
+                 Opacity="0.8" />
+      <ComboBox Grid.Column="1"
+                ItemsSource="{Binding ApplySetTargets}"
+                SelectedItem="{Binding SelectedTarget}"
+                DisplayMemberBinding="{Binding DisplayName}"
+                HorizontalAlignment="Stretch" />
+      <TextBlock Grid.Column="2"
+                 Text="{StaticResource SocketEditorApplySetSetLabel}"
+                 VerticalAlignment="Center"
+                 Opacity="0.8" />
+      <ComboBox Grid.Column="3"
+                ItemsSource="{Binding AvailableGemSets}"
+                SelectedItem="{Binding SelectedSet}"
+                DisplayMemberBinding="{Binding DisplayName}"
+                HorizontalAlignment="Stretch" />
+      <Button Grid.Column="4"
+              Content="{StaticResource SocketEditorApplySetApply}"
+              Command="{Binding ApplyGemSetCommand}"
+              MinWidth="80" />
+      <Button Grid.Column="5"
+              Content="{StaticResource SocketEditorApplySetEditCustom}"
+              ToolTip.Tip="{StaticResource SocketEditorApplySetEditCustomTip}"
+              Click="OnEditCustomGemSetsClick"
+              MinWidth="120" />
+    </Grid>
+
     <Grid DockPanel.Dock="Bottom"
           ColumnDefinitions="*,Auto"
           ColumnSpacing="12"

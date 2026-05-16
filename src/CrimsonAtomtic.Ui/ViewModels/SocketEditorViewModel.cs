@@ -116,6 +116,25 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     public ObservableCollection<SocketRow> Sockets { get; } = new();
 
     /// <summary>
+    /// Distinct items present in the editor — drives the Apply-Set
+    /// "target item" dropdown. Each entry collapses every SocketRow
+    /// that belongs to the same physical item into a single picker
+    /// option so the user picks an item, not a slot.
+    /// </summary>
+    public ObservableCollection<GemSetTargetItem> ApplySetTargets { get; } = new();
+
+    /// <summary>Full gem-set catalog (built-in + user-custom).</summary>
+    public ObservableCollection<GemSetOption> AvailableGemSets { get; } = new();
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ApplyGemSetCommand))]
+    private GemSetTargetItem? _selectedTarget;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ApplyGemSetCommand))]
+    private GemSetOption? _selectedSet;
+
+    /// <summary>
     /// Becomes true after the first successful Apply. The hosting
     /// MainWindowViewModel reads this on dialog close to flip its own
     /// dirty flag so the user gets a "*" in the title until Save.
@@ -152,7 +171,8 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         LocalizationProvider localization,
         ChangeJournal journal,
         string savePath,
-        IReadOnlyList<BlockSummary> blocks)
+        IReadOnlyList<BlockSummary> blocks,
+        IReadOnlyList<CustomGemSet>? customSets = null)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(localization);
@@ -182,10 +202,142 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         {
             return null;
         }
-        vm.StatusMessage = $"{vm.Sockets.Count} filled socket(s) across "
-            + $"{CountDistinctItems(vm.Sockets)} item(s).";
+        vm.BuildApplySetState(customSets);
+        var filledCount = 0;
+        foreach (var r in vm.Sockets) if (r.IsFilled) filledCount++;
+        vm.StatusMessage =
+            $"{vm.Sockets.Count} slot(s) across {CountDistinctItems(vm.Sockets)} item(s) "
+            + $"({filledCount} filled).";
         return vm;
     }
+
+    /// <summary>
+    /// Build the Apply-Set dropdown state from the collected sockets +
+    /// the user's custom-set persistence. Distinct items become
+    /// target dropdown rows; built-in + custom sets become set
+    /// dropdown rows (custom sets with empty <c>GemKeys</c> are
+    /// skipped as "undefined").
+    /// </summary>
+    private void BuildApplySetState(IReadOnlyList<CustomGemSet>? customSets)
+    {
+        // Distinct items: collapse SocketRows sharing the same physical
+        // (block, bag, item) tuple into one entry. Preserve insertion
+        // order so the dropdown matches the user's mental scroll order
+        // in the main DataGrid.
+        var seen = new HashSet<(int Block, int Bag, int Item)>();
+        foreach (var r in Sockets)
+        {
+            var triple = (r.BlockIndex, r.BagIndex, r.ItemIndex);
+            if (seen.Add(triple))
+            {
+                ApplySetTargets.Add(new GemSetTargetItem(
+                    r.BlockIndex, r.BagIndex, r.ItemIndex,
+                    DisplayName: $"{r.BagLabel} · {r.ItemName} ({r.MaxSocketCount} slot{(r.MaxSocketCount == 1 ? "" : "s")})",
+                    MaxSocketCount: r.MaxSocketCount));
+            }
+        }
+        // Built-in sets.
+        foreach (var bi in BuiltInGemSets.All)
+        {
+            AvailableGemSets.Add(GemSetOption.From(bi, _localization));
+        }
+        // Custom sets — skip undefined slots.
+        if (customSets is { Count: > 0 })
+        {
+            foreach (var cs in customSets)
+            {
+                if (cs.GemKeys is null || cs.GemKeys.Length == 0) continue;
+                var label = string.IsNullOrWhiteSpace(cs.Label)
+                    ? $"Custom Set ({cs.GemKeys.Length} gem{(cs.GemKeys.Length == 1 ? "" : "s")})"
+                    : cs.Label;
+                AvailableGemSets.Add(GemSetOption.From(
+                    new GemSet(label, cs.GemKeys), _localization));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Re-build the custom-set portion of <see cref="AvailableGemSets"/>
+    /// after the user edits / saves them via the custom-set editor
+    /// dialog. Keeps the 3 built-in entries in place + replaces every
+    /// subsequent entry with the freshly-persisted custom set list.
+    /// </summary>
+    public void RefreshCustomGemSets(IReadOnlyList<CustomGemSet> customSets)
+    {
+        // Drop everything past the built-in section.
+        while (AvailableGemSets.Count > BuiltInGemSets.All.Count)
+        {
+            AvailableGemSets.RemoveAt(AvailableGemSets.Count - 1);
+        }
+        // Re-add custom sets (skipping undefined slots).
+        if (customSets is not null)
+        {
+            foreach (var cs in customSets)
+            {
+                if (cs.GemKeys is null || cs.GemKeys.Length == 0) continue;
+                var label = string.IsNullOrWhiteSpace(cs.Label)
+                    ? $"Custom Set ({cs.GemKeys.Length} gem{(cs.GemKeys.Length == 1 ? "" : "s")})"
+                    : cs.Label;
+                AvailableGemSets.Add(GemSetOption.From(
+                    new GemSet(label, cs.GemKeys), _localization));
+            }
+        }
+        StatusMessage =
+            $"Custom gem sets refreshed — {AvailableGemSets.Count} set(s) available in the Apply-Set dropdown.";
+    }
+
+    /// <summary>
+    /// Apply the selected set to the selected target item.
+    /// Per-slot routing: empty → Fill, filled-different → Change,
+    /// filled-same → no-op. Slots past <c>set.GemKeys.Count</c> are
+    /// left alone (per user contract: "1-entry set overwrites slot
+    /// 0 only").
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanApplyGemSet))]
+    private void ApplyGemSet()
+    {
+        if (SelectedTarget is not { } target || SelectedSet is not { } set)
+        {
+            return;
+        }
+        // Find every SocketRow for this target — iterate in
+        // SocketIndex order so the per-slot apply maps cleanly.
+        var rows = new SortedDictionary<int, SocketRow>();
+        foreach (var r in Sockets)
+        {
+            if (r.BlockIndex == target.BlockIndex
+                && r.BagIndex == target.BagIndex
+                && r.ItemIndex == target.ItemIndex)
+            {
+                rows[r.SocketIndex] = r;
+            }
+        }
+        var applyCount = Math.Min(set.GemKeys.Count, target.MaxSocketCount);
+        var changed = 0;
+        for (var i = 0; i < applyCount; i++)
+        {
+            if (!rows.TryGetValue(i, out var row)) continue;
+            var newKey = set.GemKeys[i];
+            if (row.IsFilled && row.CurrentGemKey == newKey)
+            {
+                continue; // already what we want
+            }
+            ApplyGemPick(row, newKey);
+            changed++;
+        }
+        if (changed == 0)
+        {
+            StatusMessage = $"Apply Set: {set.Label} — no changes (every targeted slot already matches).";
+            return;
+        }
+        _journal.Log("Sockets",
+            $"Applied set \"{set.Label}\" to {target.DisplayName} — {changed} slot(s) changed");
+        StatusMessage =
+            $"Applied set \"{set.Label}\" to {target.DisplayName}: {changed} slot(s) changed.";
+    }
+
+    private bool CanApplyGemSet =>
+        SelectedTarget is not null && SelectedSet is not null;
 
     private static int CountDistinctItems(IEnumerable<SocketRow> rows)
     {
@@ -762,4 +914,51 @@ public sealed partial class SocketRow : ObservableObject
 
     [RelayCommand(CanExecute = nameof(IsFilled))]
     private void ClearGem() => _parent.ApplyClear(this);
+}
+
+/// <summary>
+/// Apply-Set target dropdown row — one entry per distinct item in
+/// the editor. Used by <see cref="SocketEditorViewModel.SelectedTarget"/>
+/// to route a gem-set apply to every socket of that one item.
+/// </summary>
+public sealed record GemSetTargetItem(
+    int BlockIndex,
+    int BagIndex,
+    int ItemIndex,
+    string DisplayName,
+    int MaxSocketCount);
+
+/// <summary>
+/// Apply-Set "gem set" dropdown row. <see cref="DisplayName"/> is
+/// pre-built at construction (resolved gem names joined with
+/// commas) so the dropdown stays cheap to render. Holds the source
+/// <see cref="GemSet"/> for the Apply path.
+/// </summary>
+public sealed record GemSetOption(
+    string Label,
+    IReadOnlyList<uint> GemKeys,
+    string DisplayName)
+{
+    public static GemSetOption From(GemSet set, Services.LocalizationProvider localization)
+    {
+        // Resolve each gem key to a human-readable name. Falls back
+        // to iteminfo string_key, then raw decimal — same shape the
+        // Sockets editor's per-row gem label uses, so the dropdown
+        // matches the column visually.
+        var names = new string[set.GemKeys.Count];
+        for (var i = 0; i < set.GemKeys.Count; i++)
+        {
+            var key = set.GemKeys[i];
+            var resolved = localization.ResolveItemNameFormatted(key);
+            if (string.IsNullOrEmpty(resolved))
+            {
+                resolved = localization.ItemInfoStringKey(key)
+                           ?? key.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+            names[i] = resolved;
+        }
+        return new GemSetOption(
+            set.Label, set.GemKeys,
+            DisplayName: $"{set.Label} — {string.Join(" / ", names)}");
+    }
 }

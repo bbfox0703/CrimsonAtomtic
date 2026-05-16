@@ -982,7 +982,8 @@ public sealed partial class MainWindow : Window
             vm.Localization,
             vm.Journal,
             path,
-            blocks);
+            blocks,
+            vm.LoadCustomGemSets());
         if (socketsVm is null)
         {
             var title = (string?)this.FindResource("SocketEditorNotAvailableTitle")
