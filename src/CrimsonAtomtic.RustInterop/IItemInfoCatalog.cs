@@ -71,4 +71,45 @@ public interface IItemInfoCatalog : IDisposable
     /// <c>look_detail_mission_info = 1000898</c> = Hooves II catalog).
     /// </remarks>
     uint? LookupLookDetailMissionInfo(uint itemKey);
+
+    /// <summary>
+    /// Gamedata-defined socket caps for <paramref name="itemKey"/>.
+    /// Returns <c>null</c> when the item isn't in iteminfo. Otherwise:
+    /// <see cref="ValueTuple{T1,T2}.Item1"/> = <c>UseSocket</c>
+    /// (non-zero when the item is socket-capable) and
+    /// <see cref="ValueTuple{T1,T2}.Item2"/> = <c>ValidCount</c>
+    /// (gamedata-defined max sockets — only meaningful when
+    /// <c>UseSocket != 0</c>).
+    /// </summary>
+    /// <remarks>
+    /// Save's <c>_validSocketCount</c> may legitimately diverge from
+    /// gamedata's <c>ValidCount</c> (CE-bumped overflows); the editor
+    /// surfaces both but doesn't enforce the gamedata cap — per user
+    /// request, the v2 editor lets you fill the underlying slot list's
+    /// actual capacity regardless of gamedata.
+    /// </remarks>
+    (byte UseSocket, byte ValidCount)? LookupSocketCaps(uint itemKey);
+
+    /// <summary>
+    /// Advisory check — does <paramref name="itemKey"/>'s
+    /// gamedata-defined allowed-gem list contain
+    /// <paramref name="gemKey"/>? Returns <c>null</c> when the item
+    /// is missing from iteminfo; <c>true</c> / <c>false</c> when
+    /// known. CE-bypassed gem placements load cleanly in-game even
+    /// when this is <c>false</c>; callers decide whether to warn.
+    /// </summary>
+    bool? SocketAllowsGem(uint itemKey, uint gemKey);
+
+    /// <summary>
+    /// Number of itemkeys in the canonical gem set (sorted-ascending
+    /// union of every item's <c>socket_item_list</c>). Drives the
+    /// authoritative gem-picker dropdown.
+    /// </summary>
+    int CanonicalGemCount { get; }
+
+    /// <summary>
+    /// Read the canonical gem itemkey at sorted-ascending index
+    /// <paramref name="index"/>. Returns <c>null</c> past the end.
+    /// </summary>
+    uint? GetCanonicalGemKey(int index);
 }

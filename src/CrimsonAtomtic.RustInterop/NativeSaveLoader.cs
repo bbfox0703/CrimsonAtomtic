@@ -1572,6 +1572,42 @@ internal static partial class NativeMethods
         uint itemKey,
         out uint outMissionKey);
 
+    // ── ItemInfo socket caps + canonical gem set ────────────────────────────
+    //
+    // Gamedata-side answers for the Sockets editor v2: how many sockets
+    // is this item allowed to have, and what's the canonical gem set
+    // (used both as the gem-picker fallback source and the
+    // gem-id-validation lookup). Save's `_validSocketCount` /
+    // `_maxSocketCount` may legitimately diverge from these (CE-bumped
+    // overflow); the editor surfaces the gamedata view but doesn't
+    // enforce it — per user request, fills are allowed up to the slot
+    // list's actual capacity regardless of gamedata.
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_iteminfo_lookup_socket_caps")]
+    public static partial int ItemInfoLookupSocketCaps(
+        CrimsonItemInfoHandle handle,
+        uint itemKey,
+        out byte outUseSocket,
+        out byte outValidCount);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_iteminfo_socket_allows_gem")]
+    public static partial int ItemInfoSocketAllowsGem(
+        CrimsonItemInfoHandle handle,
+        uint itemKey,
+        uint gemKey,
+        out byte outAllowed);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_iteminfo_canonical_gem_count")]
+    public static partial int ItemInfoCanonicalGemCount(
+        CrimsonItemInfoHandle handle,
+        out uint outCount);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_iteminfo_canonical_gem_at")]
+    public static partial int ItemInfoCanonicalGemAt(
+        CrimsonItemInfoHandle handle,
+        uint idx,
+        out uint outGemKey);
+
     // ── StringInfo bridge (stringinfo.pabgb) ────────────────────────────────
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_string_info_load_from_file",

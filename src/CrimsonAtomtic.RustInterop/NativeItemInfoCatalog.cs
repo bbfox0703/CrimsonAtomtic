@@ -173,6 +173,98 @@ public sealed class NativeItemInfoCatalog : IItemInfoCatalog
         return mk;
     }
 
+    /// <summary>
+    /// Gamedata socket caps for <paramref name="itemKey"/>. Returns
+    /// <c>null</c> when the item isn't in iteminfo; otherwise
+    /// <c>(UseSocket, ValidCount)</c> — <c>UseSocket</c> is non-zero
+    /// when the item is socket-capable, <c>ValidCount</c> is the
+    /// gamedata-defined max socket count (only meaningful when
+    /// <c>UseSocket != 0</c>).
+    /// </summary>
+    public (byte UseSocket, byte ValidCount)? LookupSocketCaps(uint itemKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var rc = NativeMethods.ItemInfoLookupSocketCaps(
+            _handle, itemKey, out var useSocket, out var validCount);
+        if (rc == NativeMethods.NOT_FOUND)
+        {
+            return null;
+        }
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_iteminfo_lookup_socket_caps({itemKey}) failed: {ErrorName(rc)}");
+        }
+        return (useSocket, validCount);
+    }
+
+    /// <summary>
+    /// Advisory check — does <paramref name="itemKey"/>'s
+    /// gamedata-defined allowed-gem list contain
+    /// <paramref name="gemKey"/>? Returns <c>null</c> when
+    /// <paramref name="itemKey"/> is missing from iteminfo; <c>true</c>
+    /// / <c>false</c> when known. CE-bypassed gems load cleanly in
+    /// the game even when this returns false; callers decide whether
+    /// to warn.
+    /// </summary>
+    public bool? SocketAllowsGem(uint itemKey, uint gemKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var rc = NativeMethods.ItemInfoSocketAllowsGem(
+            _handle, itemKey, gemKey, out var allowed);
+        if (rc == NativeMethods.NOT_FOUND)
+        {
+            return null;
+        }
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_iteminfo_socket_allows_gem({itemKey},{gemKey}) failed: {ErrorName(rc)}");
+        }
+        return allowed != 0;
+    }
+
+    /// <summary>
+    /// Number of itemkeys in the canonical gem set (sorted-ascending
+    /// union of every item's <c>socket_item_list</c>). Drives the
+    /// gem-picker dropdown.
+    /// </summary>
+    public int CanonicalGemCount
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            var rc = NativeMethods.ItemInfoCanonicalGemCount(_handle, out var count);
+            if (rc != NativeMethods.OK)
+            {
+                throw new CrimsonSaveException(rc,
+                    $"crimson_iteminfo_canonical_gem_count failed: {ErrorName(rc)}");
+            }
+            return (int)count;
+        }
+    }
+
+    /// <summary>
+    /// Read the canonical gem itemkey at sorted-ascending index
+    /// <paramref name="index"/>. Returns <c>null</c> past the end.
+    /// </summary>
+    public uint? GetCanonicalGemKey(int index)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentOutOfRangeException.ThrowIfNegative(index);
+        var rc = NativeMethods.ItemInfoCanonicalGemAt(_handle, (uint)index, out var k);
+        if (rc == NativeMethods.OUT_OF_RANGE)
+        {
+            return null;
+        }
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_iteminfo_canonical_gem_at({index}) failed: {ErrorName(rc)}");
+        }
+        return k;
+    }
+
     public (uint ItemKey, string StringKey)? GetEntry(int index)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

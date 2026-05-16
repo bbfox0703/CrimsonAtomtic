@@ -96,6 +96,46 @@ public sealed class ItemInfoCatalogTests
     }
 
     [Fact]
+    public void SocketCaps_AndCanonicalGemSet_LiveInstall()
+    {
+        if (!File.Exists("crimson_rs.dll")) return;
+        var pamt = FindIteminfoPamt();
+        if (pamt is null) return;
+        var extractor = new NativePazExtractor();
+        var bytes = extractor.ExtractFile(
+            pamt, "gamedata/binary__/client/bin", "iteminfo.pabgb");
+        using var cat = NativeItemInfoCatalog.LoadFromBytes(bytes);
+
+        // Unknown item → null (the LookupSocketCaps NOT_FOUND path).
+        Assert.Null(cat.LookupSocketCaps(uint.MaxValue));
+
+        // Canonical gem set is non-empty and enumeration works.
+        var gemCount = cat.CanonicalGemCount;
+        Assert.True(gemCount > 50,
+                    $"expected >50 canonical gems, got {gemCount}");
+        var firstGemKey = cat.GetCanonicalGemKey(0);
+        Assert.NotNull(firstGemKey);
+        Assert.True(firstGemKey!.Value > 0);
+        // Past-end → null
+        Assert.Null(cat.GetCanonicalGemKey(gemCount + 1000));
+
+        // Sample gem from the upstream survey (1002979 = greater gem
+        // verified durability-bearing) should be in the canonical
+        // set. Walk to find it.
+        const uint sampleGem = 1002979;
+        var found = false;
+        for (var i = 0; i < gemCount; i++)
+        {
+            if (cat.GetCanonicalGemKey(i) == sampleGem) { found = true; break; }
+        }
+        Assert.True(found,
+                    $"sample gem {sampleGem} should be in canonical gem set");
+
+        // SocketAllowsGem on an unknown item → null
+        Assert.Null(cat.SocketAllowsGem(uint.MaxValue, sampleGem));
+    }
+
+    [Fact]
     public void LookupStringKey_AfterDispose_Throws()
     {
         if (!File.Exists("crimson_rs.dll"))
