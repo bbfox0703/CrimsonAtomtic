@@ -213,6 +213,19 @@ public sealed class LocalizationProvider : IDisposable
         "LevelGimmickSceneObjectInfoKey",
         "SubLevelKey",
         "CharacterKey",
+        // Dye color group: bridge is already loaded for the Dye editor's
+        // dropdown; routing it here lights up the resolved-name column
+        // for ItemDyeSaveData._dyeColorGroupInfoKey (and any future
+        // fields typed the same way).
+        "DyeColorGroupInfoKey",
+        // StringInfoKey scalars: pre-computed Jenkins hashes. The
+        // already-loaded stringinfo bridge reverses them in one hop —
+        // covers UseItemReserveSlotElementSaveData._specialNameKey,
+        // FactionNodeSubInnerEnableElementSaveData._levelNameKey, etc.
+        // (Dynamic-array StringInfoKey fields like _usedTagList stay on
+        // their original raw-array display path; only scalar fields
+        // route through here.)
+        "StringInfoKey",
     };
 
     /// <summary>
@@ -1312,6 +1325,14 @@ public sealed class LocalizationProvider : IDisposable
             "CharacterKey"  => DisplayOrFallback(_characterInfo, key, paloc,
                                                 bridge => bridge.LookupDisplayName(key, paloc!),
                                                 bridge => bridge.LookupStringKey(key)),
+            // Dye color group: internal name only. Same across all
+            // languages, so the secondary column intentionally mirrors
+            // the primary (matches QuestGauge / Skill convention).
+            "DyeColorGroupInfoKey" => _dyeColorGroupInfo?.LookupName(key),
+            // StringInfoKey scalar: u32 Jenkins hash → reversed via the
+            // already-loaded stringinfo bridge. Internal name only —
+            // stringinfo doesn't ship localized titles.
+            "StringInfoKey" => _stringInfo?.LookupByHash(key),
             _               => null,
         };
     }
