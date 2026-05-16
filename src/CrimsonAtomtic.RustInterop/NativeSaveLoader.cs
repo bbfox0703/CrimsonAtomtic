@@ -1848,6 +1848,42 @@ internal static partial class NativeMethods
         CrimsonSkillInfoHandle handle, uint idx, out uint outKey,
         byte* buf, nuint bufLen, out nuint required);
 
+    // ── StoreInfo bridge (storeinfo.pabgb + storeinfo.pabgh — two files) ────
+    //
+    // Resolves save-side StoreKey (u16-widened-u32) → row internal name
+    // ("Store_Her_General", "Store_BlackMarket", …). 292 rows in 1.07.
+    // Name-only — no PALOC chain (no LookupDisplayName entry point).
+    // Same load/free/entry_count/lookup_string_key/get_entry shape as
+    // QuestGaugeInfo / SubLevelInfo, but two-file like Skill because the
+    // .pabgh index is required to find each row in the .pabgb body.
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_store_info_load_from_file",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int StoreInfoLoadFromFile(
+        string pabgbPath, string pabghPath, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_store_info_load_from_bytes")]
+    public static unsafe partial int StoreInfoLoadFromBytes(
+        byte* pabgbData, nuint pabgbLen,
+        byte* pabghData, nuint pabghLen,
+        out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_store_info_free")]
+    public static partial void StoreInfoFree(IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_store_info_entry_count")]
+    public static partial int StoreInfoEntryCount(CrimsonStoreInfoHandle handle, out uint count);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_store_info_lookup_string_key")]
+    public static unsafe partial int StoreInfoLookupStringKey(
+        CrimsonStoreInfoHandle handle, uint storeKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_store_info_get_entry")]
+    public static unsafe partial int StoreInfoGetEntry(
+        CrimsonStoreInfoHandle handle, uint idx, out uint outKey,
+        byte* buf, nuint bufLen, out nuint required);
+
     // ── Checksum helper (Jenkins hashlittle2_c) ─────────────────────────────
     //
     // Exposed for callers that need to compose the hash hop themselves

@@ -818,6 +818,153 @@ internal sealed class CrimsonSkillInfoHandle : SafeHandle
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  StoreInfo  (two-file load — pabgb + pabgh — and no PALOC chain)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// <c>StoreKey (u16-widened-u32)</c> → row internal name
+/// (e.g. <c>"Store_Her_General"</c>, <c>"Store_BlackMarket"</c>). 292
+/// rows in 1.07. Name-only — no <c>LookupDisplayName</c> entry point,
+/// stores aren't (yet) on a PALOC chain. The internal template name is
+/// what the editor surfaces; future work could probe PALOC for
+/// localized store titles.
+/// </summary>
+public sealed class NativeStoreInfoCatalog : IDisposable
+{
+    private readonly CrimsonStoreInfoHandle _handle;
+    private readonly int _entryCount;
+    private bool _disposed;
+
+    private NativeStoreInfoCatalog(CrimsonStoreInfoHandle handle, int entryCount)
+    {
+        _handle = handle;
+        _entryCount = entryCount;
+    }
+
+    public int EntryCount
+    {
+        get { ObjectDisposedException.ThrowIf(_disposed, this); return _entryCount; }
+    }
+
+    public static NativeStoreInfoCatalog LoadFromBytes(
+        ReadOnlySpan<byte> pabgb, ReadOnlySpan<byte> pabgh)
+    {
+        unsafe
+        {
+            fixed (byte* pb = pabgb)
+            fixed (byte* ph = pabgh)
+            {
+                var rc = NativeMethods.StoreInfoLoadFromBytes(
+                    pb, (nuint)pabgb.Length, ph, (nuint)pabgh.Length, out var raw);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_store_info_load_from_bytes(pabgb={pabgb.Length},pabgh={pabgh.Length}) " +
+                        $"failed: {NameBuffer.ErrorName(rc)}");
+                }
+                var handle = CrimsonStoreInfoHandle.FromOwnedPointer(raw);
+                var rcCount = NativeMethods.StoreInfoEntryCount(handle, out var count);
+                if (rcCount != NativeMethods.OK)
+                {
+                    handle.Dispose();
+                    throw new CrimsonSaveException(rcCount,
+                        $"crimson_store_info_entry_count failed: {NameBuffer.ErrorName(rcCount)}");
+                }
+                return new NativeStoreInfoCatalog(handle, (int)count);
+            }
+        }
+    }
+
+    public string? LookupStringKey(uint storeKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        unsafe
+        {
+            return NameBuffer.ReadString(
+                (byte* buf, nuint bufLen, out nuint required) =>
+                    NativeMethods.StoreInfoLookupStringKey(_handle, storeKey, buf, bufLen, out required),
+                $"crimson_store_info_lookup_string_key({storeKey})");
+        }
+    }
+
+    /// <summary>
+    /// Two-call enumeration by insertion index. Returns <c>null</c> when
+    /// <paramref name="index"/> is past the catalog's end. Drives the
+    /// Vendor Buyback dialog's distinct-store dropdown.
+    /// </summary>
+    public (uint Key, string Name)? GetEntry(int index)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentOutOfRangeException.ThrowIfNegative(index);
+        unsafe
+        {
+            uint outKey = 0;
+            nuint required = 0;
+            var rc = NativeMethods.StoreInfoGetEntry(_handle, (uint)index,
+                out outKey, null, 0, out required);
+            if (rc == NativeMethods.OUT_OF_RANGE)
+            {
+                return null;
+            }
+            if (rc != NativeMethods.BUFFER_TOO_SMALL && rc != NativeMethods.OK)
+            {
+                throw new CrimsonSaveException(rc,
+                    $"crimson_store_info_get_entry({index}) size query failed: " +
+                    $"{NameBuffer.ErrorName(rc)}");
+            }
+            if (required <= 1)
+            {
+                return (outKey, string.Empty);
+            }
+            var rented = ArrayPool<byte>.Shared.Rent((int)required);
+            try
+            {
+                fixed (byte* b = rented)
+                {
+                    rc = NativeMethods.StoreInfoGetEntry(_handle, (uint)index,
+                        out outKey, b, (nuint)rented.Length, out required);
+                }
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_store_info_get_entry({index}) fill failed: " +
+                        $"{NameBuffer.ErrorName(rc)}");
+                }
+                return (outKey, Encoding.UTF8.GetString(rented, 0, (int)required - 1));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _handle.Dispose();
+    }
+}
+
+internal sealed class CrimsonStoreInfoHandle : SafeHandle
+{
+    public CrimsonStoreInfoHandle() : base(IntPtr.Zero, ownsHandle: true) { }
+    public static CrimsonStoreInfoHandle FromOwnedPointer(IntPtr ptr)
+    {
+        var h = new CrimsonStoreInfoHandle();
+        h.SetHandle(ptr);
+        return h;
+    }
+    public override bool IsInvalid => handle == IntPtr.Zero;
+    protected override bool ReleaseHandle()
+    {
+        NativeMethods.StoreInfoFree(handle);
+        return true;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  GimmickInfo
 // ─────────────────────────────────────────────────────────────────────────────
 

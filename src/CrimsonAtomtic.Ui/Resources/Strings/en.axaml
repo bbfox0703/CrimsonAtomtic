@@ -74,7 +74,28 @@
   <sys:String x:Key="MenuBulkCompleteHeldSAChallenges">_Complete All Held Sealed Abyss Artifact Challenges…</sys:String>
   <sys:String x:Key="MenuEditAbyssGates">_Edit Abyss Gates (Lock/Unlock per gate)…</sys:String>
   <sys:String x:Key="MenuEditItemDyes">Edit Item _Dyes…</sys:String>
+  <sys:String x:Key="MenuVendorBuyback">_Vendor Buyback…</sys:String>
   <sys:String x:Key="MenuReviewChanges">_Review Pending Changes…</sys:String>
+
+  <!-- Vendor Buyback dialog (Tools menu) -->
+  <sys:String x:Key="VendorBuybackWindowTitle">Vendor Buyback</sys:String>
+  <sys:String x:Key="VendorBuybackHeader">View + Remove items the player has sold to vendors. Each row maps to one StoreDataSaveData._storeSoldItemDataList element. The Remove button deletes the entry from that store's buyback queue (frees the slot); subsequent siblings in the same store shift down by 1 automatically. "Move back to inventory" is a planned follow-up. Saves to file on next File → Save.</sys:String>
+  <sys:String x:Key="VendorBuybackFilterLabel">Filter:</sys:String>
+  <sys:String x:Key="VendorBuybackFilterWatermark">Type to filter — store name / store key shows every sold item in that store; item name / item key narrows per-row…</sys:String>
+  <sys:String x:Key="VendorBuybackColStore">Store</sys:String>
+  <sys:String x:Key="VendorBuybackColStoreKey">StoreKey</sys:String>
+  <sys:String x:Key="VendorBuybackColItem">Item</sys:String>
+  <sys:String x:Key="VendorBuybackColItemKey">ItemKey</sys:String>
+  <sys:String x:Key="VendorBuybackColStack">Stack</sys:String>
+  <sys:String x:Key="VendorBuybackColEndurance">Endurance</sys:String>
+  <sys:String x:Key="VendorBuybackColSoldAt">SoldAt (ticks)</sys:String>
+  <sys:String x:Key="VendorBuybackColAction">Action</sys:String>
+  <sys:String x:Key="VendorBuybackColStatus">Status</sys:String>
+  <sys:String x:Key="VendorBuybackRemove">Remove</sys:String>
+  <sys:String x:Key="VendorBuybackRemoveTip">Delete this entry from the store's buyback queue. The slot frees up so other items can age in. Cannot be undone within the session; reload the save without writing to revert.</sys:String>
+  <sys:String x:Key="VendorBuybackClose">Close</sys:String>
+  <sys:String x:Key="VendorBuybackNotAvailableTitle">No vendor buyback entries</sys:String>
+  <sys:String x:Key="VendorBuybackNotAvailableBody">The loaded save has no StoreDataSaveData entry with a non-empty _storeSoldItemDataList. Sell items to a vendor in-game to populate the buyback queue.</sys:String>
 
   <!-- Change summary dialog (review pending edits + close-on-dirty confirm) -->
   <sys:String x:Key="ChangeSummaryWindowTitle">Pending changes</sys:String>
