@@ -3,7 +3,25 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-16 part 11 (Sockets editor v2 — Fill/Change/Clear + endurance reset + _validSocketCount bump + built-in & custom gem sets with Apply-Set toolbar).
+> Last updated: 2026-05-16 part 12 (Tools → Complete All Held Sealed Abyss Artifact Challenges — bulk Pattern B v1 sweep).
+>
+> ## ✅ This session — what shipped (2026-05-16 part 12)
+>
+> Bulk variant of the per-row "Mark Challenge Complete" button.
+> Enabled by the latest `vendor/crimson-rs` refresh: the new
+> `iteminfo_lookup_artifact_for_mission` cements the 1:1 mapping
+> invariant (141 challenges / 141 artifacts in 1.07, all named
+> `Challenge_SealedArtifact_*`) so iterating from the held-artifact
+> side cleanly identifies every gateable challenge.
+>
+> | Area | Scope |
+> |---|---|
+> | **`artifact_for_mission` binding + Pattern B v1 helper extraction** | Native binding for the reverse lookup (`NativeMethods.ItemInfoLookupArtifactForMission` + `IItemInfoCatalog.LookupArtifactForMission`). Per-row apply logic refactored: `TryReadCurrentChallengeContext` becomes a thin nav-stack wrapper around the new addressable-by-coords `TryBuildChallengeContextFromCatalogRow`; the FFI write sequence extracted into `ApplyPatternBv1Writes(ctx, newCt, appendElementIdx, farKeyFieldIdx)`. Per-row button is byte-identical in behaviour. |
+> | **Tools → Complete All Held Sealed Abyss Artifact Challenges** | New `[RelayCommand]` `BulkCompleteHeldSealedArtifactChallengesAsync`. Pre-flight: walk every InventorySaveData → collect held SA artifact ItemKeys → map to mission keys via `iteminfo.look_detail_mission_info` → find matching catalog rows in every `QuestSaveData._missionStateList` → run each through `TryBuildChallengeContextFromCatalogRow`. Confirm dialog shows the breakdown (held / eligible / skipped-already-done / skipped-FAR-not-ready / skipped-no-mission / skipped-other). Apply loop iterates `ApplyPatternBv1Writes` per challenge, bumping `newCt` per call so timestamps sort distinctly + tracking per-block running append index so successive X_2 inserts land at the right slot. Partial-failure mid-sweep marks the save dirty with applied count + reports the failing challenge key. |
+>
+> Per-challenge cost is 5–6 length-changing FFI calls (each triggers a full body re-decode on the Rust side); for a player holding all 141 artifacts the whole sweep is on the order of 7–10 seconds. Sequential — no batch ABI for `list_clone_element` yet. Acceptable for a one-shot Tools menu action; backup-before-write still applies via the existing `BackupBeforeWriteSilent` on the next File → Save.
+>
+> Tests: **181/181 pass** (no new unit tests — bulk sweep is plumbing over the now-extracted Pattern B v1 primitives that have their own per-row coverage). Debug build clean. Rebuilt `crimson_rs.dll` to expose the new `lookup_artifact_for_mission` export.
 >
 > ## ✅ This session — what shipped (2026-05-16 part 11)
 >

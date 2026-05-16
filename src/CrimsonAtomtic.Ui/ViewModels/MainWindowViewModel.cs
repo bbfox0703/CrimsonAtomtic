@@ -1613,97 +1613,22 @@ public sealed partial class MainWindowViewModel(
         // always sort after older ones.
         var maxCt = await Task.Run(() => ScanMaxMissionCompletedTime());
         var newCt = maxCt == 0UL ? 1UL : maxCt + 1UL;
-        var ctBytes = BitConverter.GetBytes(newCt);
-
-        var farPath = new[] { new PathStep((uint)ctx.MissionListFieldIdx, (uint)ctx.FarElementIdx) };
         var newElementIdx = ctx.MissionStateListCount; // append index (= old count)
-        var newPath = new[] { new PathStep((uint)ctx.MissionListFieldIdx, (uint)newElementIdx) };
 
-        // Capture FAR tracker's _key field index — needed to patch the
-        // clone's _key once it's inserted.
-        var farKeyFieldIdx = -1;
-        try
+        var lookup = TryReadFarKeyFieldIdx(ctx);
+        if (lookup.Error is { } lookupErr)
         {
-            var top = loader.LoadBlockDetails(_loadedPath, ctx.MissionTopBlockIdx);
-            var listField = top.Fields[ctx.MissionListFieldIdx];
-            var far = listField.Elements![ctx.FarElementIdx];
-            foreach (var f in far.Fields)
-            {
-                if (f.Name == "_key") { farKeyFieldIdx = f.FieldIndex; break; }
-            }
-        }
-        catch (CrimsonSaveException ex)
-        {
-            BulkOpStatus = $"Mark failed (could not re-read FAR tracker): {ex.Message}";
+            BulkOpStatus = $"Mark failed (could not re-read FAR tracker): {lookupErr.Message}";
             return;
         }
-        if (farKeyFieldIdx < 0)
+        if (lookup.FarKeyFieldIdx < 0)
         {
             BulkOpStatus = "Mark failed: FAR tracker lacks a _key field — recipe can't continue.";
             return;
         }
 
-        CrimsonSaveException? error = null;
-        await Task.Run(() =>
-        {
-            try
-            {
-                // Phase 1: clone FAR tracker to end of list (only when
-                // the X_2 entry doesn't already exist). The clone
-                // inherits FAR's CURRENT shape (state=2, branched=
-                // present, tags=[base]) — perfect template for the
-                // new X_2 sub-mission entry.
-                if (!ctx.FollowUpAlreadyExists)
-                {
-                    loader.ListCloneElement(
-                        ctx.MissionTopBlockIdx,
-                        Array.Empty<PathStep>(),
-                        ctx.MissionListFieldIdx,
-                        ctx.FarElementIdx,
-                        newElementIdx);
-                }
-                // Phase 2: update the FAR tracker — state=5 + _completedTime
-                // stamped + _usedTagList grown to add the visible tag.
-                loader.SetScalarField(
-                    ctx.MissionTopBlockIdx, farPath,
-                    ctx.FarStateFieldIdx, new byte[] { 5 });
-                if (ctx.FarCompletedTimeAlreadyPresent)
-                {
-                    loader.SetScalarField(
-                        ctx.MissionTopBlockIdx, farPath,
-                        ctx.FarCompletedTimeFieldIdx, ctBytes);
-                }
-                else
-                {
-                    loader.SetScalarFieldPresent(
-                        ctx.MissionTopBlockIdx, farPath,
-                        ctx.FarCompletedTimeFieldIdx,
-                        makePresent: true, ctBytes);
-                }
-                var farTarget = MergeTags(ctx.FarUsedTagList, VisibleTagHash);
-                loader.DynamicArraySetU32Elements(
-                    ctx.MissionTopBlockIdx, farPath,
-                    ctx.FarUsedTagListFieldIdx, farTarget);
-
-                // Phase 3: patch the clone's _key + _branchedTime so it
-                // becomes the X_2 sub-mission entry. Field indices are
-                // the same on the clone (per-class schema is stable).
-                if (!ctx.FollowUpAlreadyExists)
-                {
-                    var keyBytes = BitConverter.GetBytes(ctx.FollowUpKey);
-                    loader.SetScalarField(
-                        ctx.MissionTopBlockIdx, newPath,
-                        farKeyFieldIdx, keyBytes);
-                    loader.SetScalarField(
-                        ctx.MissionTopBlockIdx, newPath,
-                        ctx.FarBranchedTimeFieldIdx, ctBytes);
-                }
-            }
-            catch (CrimsonSaveException ex)
-            {
-                error = ex;
-            }
-        });
+        var error = await Task.Run(() =>
+            ApplyPatternBv1Writes(ctx, newCt, newElementIdx, lookup.FarKeyFieldIdx));
 
         RefreshSelectedBlockSilently();
 
@@ -1728,6 +1653,498 @@ public sealed partial class MainWindowViewModel(
         OnPropertyChanged(nameof(IsCurrentChallengeMarkable));
         MarkCurrentChallengeCompleteCommand.NotifyCanExecuteChanged();
     }
+
+    /// <summary>
+    /// Look up the FAR tracker's <c>_key</c> field index — needed to
+    /// patch the freshly-cloned X_2 entry's key into the right shape.
+    /// Returns <c>(-1, ex)</c> on FFI failure, <c>(-1, null)</c> on
+    /// schema-shape failure, <c>(idx, null)</c> on success.
+    /// </summary>
+    private (int FarKeyFieldIdx, CrimsonSaveException? Error) TryReadFarKeyFieldIdx(
+        CurrentChallengeContext ctx)
+    {
+        if (_loadedPath is null) return (-1, null);
+        try
+        {
+            var top = loader.LoadBlockDetails(_loadedPath, ctx.MissionTopBlockIdx);
+            var listField = top.Fields[ctx.MissionListFieldIdx];
+            var far = listField.Elements![ctx.FarElementIdx];
+            foreach (var f in far.Fields)
+            {
+                if (f.Name == "_key") return (f.FieldIndex, null);
+            }
+            return (-1, null);
+        }
+        catch (CrimsonSaveException ex)
+        {
+            return (-1, ex);
+        }
+    }
+
+    /// <summary>
+    /// Apply the Pattern B v1 mutation set for one challenge. Shared
+    /// by the per-row "Mark Challenge Complete" button and the bulk
+    /// "Complete All Held Sealed Abyss Artifact Challenges" sweep.
+    /// Synchronous — wrap in <c>Task.Run</c> at the call site so the
+    /// 5–6 length-changing FFI calls don't freeze the UI.
+    /// </summary>
+    /// <param name="ctx">Pre-built context (catalog row + FAR tracker addressing).</param>
+    /// <param name="newCt">Timestamp watermark — must sort after every prior <c>_completedTime</c>.</param>
+    /// <param name="appendElementIdx">
+    /// Index where the cloned X_2 entry will land. Caller is
+    /// responsible for tracking running list size across bulk applies
+    /// (each successful apply with <c>!FollowUpAlreadyExists</c> grows
+    /// the list by 1).
+    /// </param>
+    /// <param name="farKeyFieldIdx">
+    /// FAR tracker's <c>_key</c> field index — must be looked up via
+    /// <see cref="TryReadFarKeyFieldIdx"/> before calling.
+    /// </param>
+    /// <returns><c>null</c> on success; the failing exception otherwise.</returns>
+    private CrimsonSaveException? ApplyPatternBv1Writes(
+        CurrentChallengeContext ctx, ulong newCt, int appendElementIdx, int farKeyFieldIdx)
+    {
+        var ctBytes = BitConverter.GetBytes(newCt);
+        var farPath = new[] { new PathStep((uint)ctx.MissionListFieldIdx, (uint)ctx.FarElementIdx) };
+        var newPath = new[] { new PathStep((uint)ctx.MissionListFieldIdx, (uint)appendElementIdx) };
+        try
+        {
+            // Phase 1: clone FAR tracker to end of list (only when the
+            // X_2 entry doesn't already exist). The clone inherits
+            // FAR's CURRENT shape (state=2, branched=present,
+            // tags=[base]) — perfect template for the new X_2 sub-
+            // mission entry.
+            if (!ctx.FollowUpAlreadyExists)
+            {
+                loader.ListCloneElement(
+                    ctx.MissionTopBlockIdx,
+                    Array.Empty<PathStep>(),
+                    ctx.MissionListFieldIdx,
+                    ctx.FarElementIdx,
+                    appendElementIdx);
+            }
+            // Phase 2: update the FAR tracker — state=5 + _completedTime
+            // stamped + _usedTagList grown to add the visible tag.
+            loader.SetScalarField(
+                ctx.MissionTopBlockIdx, farPath,
+                ctx.FarStateFieldIdx, new byte[] { 5 });
+            if (ctx.FarCompletedTimeAlreadyPresent)
+            {
+                loader.SetScalarField(
+                    ctx.MissionTopBlockIdx, farPath,
+                    ctx.FarCompletedTimeFieldIdx, ctBytes);
+            }
+            else
+            {
+                loader.SetScalarFieldPresent(
+                    ctx.MissionTopBlockIdx, farPath,
+                    ctx.FarCompletedTimeFieldIdx,
+                    makePresent: true, ctBytes);
+            }
+            var farTarget = MergeTags(ctx.FarUsedTagList, VisibleTagHash);
+            loader.DynamicArraySetU32Elements(
+                ctx.MissionTopBlockIdx, farPath,
+                ctx.FarUsedTagListFieldIdx, farTarget);
+
+            // Phase 3: patch the clone's _key + _branchedTime so it
+            // becomes the X_2 sub-mission entry. Field indices are
+            // the same on the clone (per-class schema is stable).
+            if (!ctx.FollowUpAlreadyExists)
+            {
+                var keyBytes = BitConverter.GetBytes(ctx.FollowUpKey);
+                loader.SetScalarField(
+                    ctx.MissionTopBlockIdx, newPath,
+                    farKeyFieldIdx, keyBytes);
+                loader.SetScalarField(
+                    ctx.MissionTopBlockIdx, newPath,
+                    ctx.FarBranchedTimeFieldIdx, ctBytes);
+            }
+            return null;
+        }
+        catch (CrimsonSaveException ex)
+        {
+            return ex;
+        }
+    }
+
+    /// <summary>
+    /// Tools menu: walk every Sealed Abyss Artifact item currently in
+    /// the user's inventory, look up the catalog mission each one
+    /// gates via <c>iteminfo.look_detail_mission_info</c>, and apply
+    /// Pattern B v1 to every challenge that's eligible (FAR tracker
+    /// present + not yet at state=5 + X_2 follow-up sub-mission key
+    /// known).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Bulk variant of the per-row "Mark Challenge Complete" button.
+    /// Per-challenge writes are the exact same Pattern B v1 mutation
+    /// set (5–6 length-changing FFI calls per challenge, sequential
+    /// — no batch ABI for the clone op yet). Failures on individual
+    /// challenges are reported but don't abort the sweep; partial
+    /// progress is captured in the journal.
+    /// </para>
+    /// <para>
+    /// <b>Why iterate by held artifact</b> (not by every catalog
+    /// SA row): we can only safely complete challenges whose matching
+    /// artifact the user actually holds (the engine's gating signal
+    /// at reward claim time). Iterating from the artifact side keeps
+    /// the "I hold X, complete the matching Y" invariant tight.
+    /// </para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(HasSave))]
+    private async Task BulkCompleteHeldSealedArtifactChallengesAsync()
+    {
+        BulkOpStatus = null;
+        if (_loadedPath is null
+            || Summary is not { Blocks: { } blocks }
+            || ConfirmRequested is not { } ask)
+        {
+            return;
+        }
+        if (localization.ItemCount == 0)
+        {
+            BulkOpStatus = "Nothing to do — iteminfo not loaded (no game install configured).";
+            return;
+        }
+
+        // Pre-flight on background thread: scan held artifacts → map
+        // to mission keys → find catalog rows → build contexts.
+        var preview = await Task.Run(() => ScanBulkSealedArtifactCandidates(blocks));
+
+        if (preview.HeldArtifactCount == 0)
+        {
+            BulkOpStatus = "Nothing to do — no Sealed Abyss Artifact items in inventory.";
+            return;
+        }
+        if (preview.Candidates.Count == 0)
+        {
+            BulkOpStatus =
+                $"Nothing to apply — {preview.HeldArtifactCount} artifact(s) held, but none has an "
+                + "eligible challenge: either the FAR tracker isn't present yet (artifact "
+                + "not picked up in-game), the catalog row is already at state=5, or the X_2 "
+                + "sub-mission key isn't in iteminfo. "
+                + $"({preview.SkippedNoMission} no-mission, {preview.SkippedNoFar} no-FAR, "
+                + $"{preview.SkippedAlreadyDone} already done, {preview.SkippedOther} other.)";
+            return;
+        }
+
+        var msg =
+            $"Mark {preview.Candidates.Count} Sealed Abyss Artifact challenge(s) complete "
+            + "using Pattern B v1?\n\n"
+            + $"  Held artifacts in inventory: {preview.HeldArtifactCount}\n"
+            + $"  Eligible challenges to mark: {preview.Candidates.Count}\n"
+            + $"  Skipped — already done: {preview.SkippedAlreadyDone}\n"
+            + $"  Skipped — FAR tracker not ready: {preview.SkippedNoFar}\n"
+            + $"  Skipped — no mission mapping: {preview.SkippedNoMission}\n"
+            + $"  Skipped — other (twin shape / X_2 lookup failed): {preview.SkippedOther}\n\n"
+            + "Per-challenge writes: FAR tracker _state ← 5 + _completedTime stamped + visible "
+            + "tag added; X_2 sub-mission entry cloned from FAR (when missing). Catalog row + "
+            + "adjacent twin: UNTOUCHED — engine fills those at reward pickup.\n\n"
+            + "[!! VERIFIED ON Shield II / Spear I / Hooves II / Slash III IN SLOT102] "
+            + "Same recipe the per-row button uses; the bulk variant just iterates it. "
+            + "Achievements still don't unlock (in-game completion only). Backed-up at "
+            + "%LOCALAPPDATA%\\CrimsonAtomtic\\Backups\\ before write; File → Restore from "
+            + "Backup… rolls back.\n\n"
+            + "Proceed?";
+        var ok = await ask("Bulk Mark Sealed Abyss Artifact Challenges Complete?", msg);
+        if (!ok)
+        {
+            BulkOpStatus = "Bulk Mark cancelled.";
+            return;
+        }
+
+        // Apply loop: read FAR key field per ctx (cheap — mutation_version
+        // cache handles repeat block reads), then run Pattern B v1
+        // writes on the thread pool. Track running list count across
+        // applies so successive X_2 inserts land at the right index.
+        BulkOpStatus = $"Applying Pattern B v1 to {preview.Candidates.Count} challenge(s)…";
+        var baseCt = await Task.Run(() => ScanMaxMissionCompletedTime());
+        var newCt = baseCt == 0UL ? 1UL : baseCt + 1UL;
+        // Per-block running append index — different QuestSaveData
+        // blocks have independent _missionStateList counts.
+        var perBlockCount = new Dictionary<int, int>();
+        foreach (var c in preview.Candidates)
+        {
+            if (!perBlockCount.ContainsKey(c.MissionTopBlockIdx))
+            {
+                perBlockCount[c.MissionTopBlockIdx] = c.MissionStateListCount;
+            }
+        }
+
+        var (applied, firstError, firstErrorKey) = await Task.Run<(int, CrimsonSaveException?, uint)>(() =>
+        {
+            var done = 0;
+            foreach (var c in preview.Candidates)
+            {
+                var lookup = TryReadFarKeyFieldIdx(c);
+                if (lookup.FarKeyFieldIdx < 0)
+                {
+                    return (done,
+                        lookup.Error ?? new CrimsonSaveException(0,
+                            $"Challenge {c.CatalogKey}: FAR tracker lacks _key field."),
+                        c.CatalogKey);
+                }
+                var appendIdx = perBlockCount[c.MissionTopBlockIdx];
+                var err = ApplyPatternBv1Writes(c, newCt, appendIdx, lookup.FarKeyFieldIdx);
+                if (err is not null)
+                {
+                    return (done, err, c.CatalogKey);
+                }
+                if (!c.FollowUpAlreadyExists)
+                {
+                    perBlockCount[c.MissionTopBlockIdx] = appendIdx + 1;
+                }
+                newCt++;
+                done++;
+            }
+            return (done, null, 0u);
+        });
+
+        RefreshSelectedBlockSilently();
+
+        if (firstError is null)
+        {
+            IsDirty = true;
+            Journal.Log("Mark Challenge",
+                $"Bulk-completed {applied} Sealed Abyss Artifact challenge(s) (Pattern B v1)");
+            OnPropertyChanged(nameof(WindowTitle));
+            BulkOpStatus =
+                $"Done: bulk-completed {applied} of {preview.Candidates.Count} eligible "
+                + $"Sealed Abyss Artifact challenge(s) via Pattern B v1.";
+        }
+        else
+        {
+            BulkOpStatus =
+                $"Bulk Mark failed at challenge {firstErrorKey} after {applied}/{preview.Candidates.Count} "
+                + $"applied: {firstError.Message}. Save state is partial — reload without writing to revert.";
+            // Even partial success counts as dirty so the user sees
+            // the title-bar warning + can still Save what landed.
+            if (applied > 0)
+            {
+                IsDirty = true;
+                Journal.Log("Mark Challenge",
+                    $"Bulk-completed {applied} Sealed Abyss Artifact challenge(s) (Pattern B v1, "
+                    + $"partial — failed at {firstErrorKey})");
+                OnPropertyChanged(nameof(WindowTitle));
+            }
+        }
+        OnPropertyChanged(nameof(IsCurrentChallengeMarkable));
+        MarkCurrentChallengeCompleteCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// Pre-flight scan for the bulk SA challenge sweep: enumerate
+    /// held SA artifacts, map each to its catalog mission key via
+    /// <see cref="LocalizationProvider.LookupItemLookDetailMissionInfo"/>,
+    /// then walk every <c>QuestSaveData._missionStateList</c> looking
+    /// for catalog rows that match. For each match, try to build a
+    /// Pattern B v1 context via
+    /// <see cref="TryBuildChallengeContextFromCatalogRow"/>; counters
+    /// track why each row was skipped so the confirm dialog can show
+    /// the breakdown.
+    /// </summary>
+    private BulkSaPreview ScanBulkSealedArtifactCandidates(IReadOnlyList<BlockSummary> blocks)
+    {
+        if (_loadedPath is null)
+        {
+            return default;
+        }
+        // 1. Held SA artifacts → set of ItemKeys → set of mission keys
+        //    via the forward look_detail_mission_info lookup.
+        var heldArtifacts = ScanHeldSealedArtifactItemKeys(blocks);
+        if (heldArtifacts.Count == 0)
+        {
+            return new BulkSaPreview(0, new List<CurrentChallengeContext>(), 0, 0, 0, 0);
+        }
+        var missionKeyToArtifact = new Dictionary<uint, uint>();
+        var skippedNoMission = 0;
+        foreach (var ik in heldArtifacts)
+        {
+            var mk = localization.GetItemLookDetailMissionInfo(ik);
+            if (mk is null)
+            {
+                skippedNoMission++;
+                continue;
+            }
+            // 1:1 invariant (verified upstream) — collisions shouldn't
+            // happen but defend just in case: keep first wins.
+            missionKeyToArtifact.TryAdd(mk.Value, ik);
+        }
+        if (missionKeyToArtifact.Count == 0)
+        {
+            return new BulkSaPreview(
+                heldArtifacts.Count, new List<CurrentChallengeContext>(),
+                skippedNoMission, 0, 0, 0);
+        }
+
+        // 2. Walk QuestSaveData blocks to find catalog rows whose
+        //    _key is in the held-mission-key set. For each match,
+        //    try to build a Pattern B v1 context.
+        var candidates = new List<CurrentChallengeContext>();
+        var skippedNoFar = 0;
+        var skippedAlreadyDone = 0;
+        var skippedOther = 0;
+        foreach (var b in blocks)
+        {
+            if (!string.Equals(b.ClassName, "QuestSaveData", StringComparison.Ordinal))
+            {
+                continue;
+            }
+            BlockDetails top;
+            try { top = loader.LoadBlockDetails(_loadedPath, b.Index); }
+            catch (CrimsonSaveException) { continue; }
+            for (var fi = 0; fi < top.Fields.Count; fi++)
+            {
+                var listField = top.Fields[fi];
+                if (!string.Equals(listField.Name, "_missionStateList", StringComparison.Ordinal)
+                    || listField.Elements is not { Count: > 0 } siblings)
+                {
+                    continue;
+                }
+                for (var ei = 0; ei < siblings.Count; ei++)
+                {
+                    var row = siblings[ei];
+                    if (!string.Equals(row.ClassName, "MissionStateData", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+                    // Quick filter: pull _key and check membership before
+                    // running the full context build.
+                    DecodedFieldRow? keyFld = null;
+                    DecodedFieldRow? stateFld = null;
+                    foreach (var f in row.Fields)
+                    {
+                        if (keyFld is null && f.Name == "_key") keyFld = f;
+                        else if (stateFld is null && f.Name == "_state") stateFld = f;
+                    }
+                    if (keyFld is null
+                        || !TryParseScalarUInt(keyFld.Value, out var kU64)
+                        || kU64 == 0
+                        || kU64 > uint.MaxValue
+                        || !missionKeyToArtifact.ContainsKey((uint)kU64))
+                    {
+                        continue;
+                    }
+                    // Already done: catalog state=5 is a separate skip
+                    // bucket from "context build failed".
+                    if (stateFld is not null
+                        && TryParseScalarUInt(stateFld.Value, out var stateU64)
+                        && stateU64 == 5UL)
+                    {
+                        skippedAlreadyDone++;
+                        continue;
+                    }
+                    if (!TryBuildChallengeContextFromCatalogRow(b.Index, fi, ei, out var ctx))
+                    {
+                        // Differentiate the common "FAR tracker absent" case
+                        // from other context-build failures via a cheap
+                        // peek at the adjacent twin.
+                        var twinIdx = ei + 1;
+                        if (twinIdx >= siblings.Count)
+                        {
+                            skippedOther++;
+                            continue;
+                        }
+                        var twinRow = siblings[twinIdx];
+                        DecodedFieldRow? twinKeyFld = null, twinStateFld = null;
+                        foreach (var f in twinRow.Fields)
+                        {
+                            if (twinKeyFld is null && f.Name == "_key") twinKeyFld = f;
+                            else if (twinStateFld is null && f.Name == "_state") twinStateFld = f;
+                        }
+                        if (twinKeyFld is null || twinStateFld is null
+                            || !TryParseScalarUInt(twinStateFld.Value, out var twinStateU64)
+                            || twinStateU64 != 5UL)
+                        {
+                            skippedNoFar++;
+                        }
+                        else
+                        {
+                            skippedOther++;
+                        }
+                        continue;
+                    }
+                    candidates.Add(ctx);
+                }
+            }
+        }
+        return new BulkSaPreview(
+            heldArtifacts.Count, candidates,
+            skippedNoMission, skippedNoFar, skippedAlreadyDone, skippedOther);
+    }
+
+    /// <summary>
+    /// Scan every <c>InventorySaveData</c> block for items whose
+    /// <c>_itemKey</c> matches the Sealed Abyss Artifact prefix.
+    /// Returns the distinct ItemKey set (so multiple stacked
+    /// artifacts of the same kind collapse to one entry).
+    /// </summary>
+    private HashSet<uint> ScanHeldSealedArtifactItemKeys(IReadOnlyList<BlockSummary> blocks)
+    {
+        var held = new HashSet<uint>();
+        var artifactItemKeys = new HashSet<uint>(
+            localization.EnumerateItemsByStringKeyPrefix("Sealed_Abyss_Artifact")
+                        .Select(p => p.ItemKey));
+        if (artifactItemKeys.Count == 0)
+        {
+            return held;
+        }
+        foreach (var b in blocks)
+        {
+            if (!string.Equals(b.ClassName, "InventorySaveData", StringComparison.Ordinal))
+            {
+                continue;
+            }
+            BlockDetails top;
+            try { top = loader.LoadBlockDetails(_loadedPath!, b.Index); }
+            catch (CrimsonSaveException) { continue; }
+            foreach (var invList in top.Fields)
+            {
+                if (!string.Equals(invList.Name, "_inventorylist", StringComparison.Ordinal)
+                    || invList.Elements is not { Count: > 0 } bags)
+                {
+                    continue;
+                }
+                foreach (var bag in bags)
+                {
+                    foreach (var itemListField in bag.Fields)
+                    {
+                        if (!string.Equals(itemListField.Name, "_itemList", StringComparison.Ordinal)
+                            || itemListField.Elements is not { Count: > 0 } items)
+                        {
+                            continue;
+                        }
+                        foreach (var item in items)
+                        {
+                            foreach (var inner in item.Fields)
+                            {
+                                if (inner.Name != "_itemKey") continue;
+                                if (inner.Present
+                                    && TryParseScalarUInt(inner.Value, out var ikVal)
+                                    && ikVal <= uint.MaxValue
+                                    && artifactItemKeys.Contains((uint)ikVal))
+                                {
+                                    held.Add((uint)ikVal);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return held;
+    }
+
+    /// <summary>Pre-flight result for the bulk SA challenge sweep.</summary>
+    private readonly record struct BulkSaPreview(
+        int HeldArtifactCount,
+        IReadOnlyList<CurrentChallengeContext> Candidates,
+        int SkippedNoMission,
+        int SkippedNoFar,
+        int SkippedAlreadyDone,
+        int SkippedOther);
 
     /// <summary>
     /// Find the largest <c>_completedTime</c> present across every
