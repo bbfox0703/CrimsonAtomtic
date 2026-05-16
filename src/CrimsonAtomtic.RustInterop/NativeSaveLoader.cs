@@ -1572,6 +1572,19 @@ internal static partial class NativeMethods
         uint itemKey,
         out uint outMissionKey);
 
+    // Reverse of look_detail_mission_info: given a MissionKey, find the
+    // ItemKey of the artifact whose pickup starts that challenge. 1:1
+    // mapping verified by upstream (141 missions / 141 items in 1.07,
+    // all named Challenge_SealedArtifact_*). Used by the catalog UI's
+    // "Sealed Artifact required" badge — not strictly needed for the
+    // bulk-complete-held flow (which goes artifact → mission via
+    // ItemInfoLookupLookDetailMissionInfo) but bound here for symmetry.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_iteminfo_lookup_artifact_for_mission")]
+    public static partial int ItemInfoLookupArtifactForMission(
+        CrimsonItemInfoHandle handle,
+        uint missionKey,
+        out uint outItemKey);
+
     // ── ItemInfo socket caps + canonical gem set ────────────────────────────
     //
     // Gamedata-side answers for the Sockets editor v2: how many sockets

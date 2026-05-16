@@ -73,6 +73,16 @@ public interface IItemInfoCatalog : IDisposable
     uint? LookupLookDetailMissionInfo(uint itemKey);
 
     /// <summary>
+    /// Reverse of <see cref="LookupLookDetailMissionInfo"/>: given a
+    /// <paramref name="missionKey"/>, return the artifact ItemKey
+    /// whose pickup triggers that challenge, or <c>null</c> for
+    /// missions that aren't artifact-gated. 1:1 invariant verified
+    /// upstream — every <c>Challenge_SealedArtifact_*</c> mission
+    /// has exactly one artifact.
+    /// </summary>
+    uint? LookupArtifactForMission(uint missionKey);
+
+    /// <summary>
     /// Gamedata-defined socket caps for <paramref name="itemKey"/>.
     /// Returns <c>null</c> when the item isn't in iteminfo. Otherwise:
     /// <see cref="ValueTuple{T1,T2}.Item1"/> = <c>UseSocket</c>

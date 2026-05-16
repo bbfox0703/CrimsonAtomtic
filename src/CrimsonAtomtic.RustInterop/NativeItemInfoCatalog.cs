@@ -174,6 +174,30 @@ public sealed class NativeItemInfoCatalog : IItemInfoCatalog
     }
 
     /// <summary>
+    /// Reverse of <see cref="LookupLookDetailMissionInfo"/>: given a
+    /// <paramref name="missionKey"/>, return the artifact ItemKey
+    /// whose pickup triggers that challenge. Returns <c>null</c> for
+    /// non-artifact-gated missions (the ~96% of missions that start
+    /// by dialogue / kills / exploration). 1:1 invariant verified
+    /// upstream against 1.07's 141 artifact-gated challenges.
+    /// </summary>
+    public uint? LookupArtifactForMission(uint missionKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var rc = NativeMethods.ItemInfoLookupArtifactForMission(_handle, missionKey, out var ik);
+        if (rc == NativeMethods.NOT_FOUND)
+        {
+            return null;
+        }
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_iteminfo_lookup_artifact_for_mission({missionKey}) failed: {ErrorName(rc)}");
+        }
+        return ik;
+    }
+
+    /// <summary>
     /// Gamedata socket caps for <paramref name="itemKey"/>. Returns
     /// <c>null</c> when the item isn't in iteminfo; otherwise
     /// <c>(UseSocket, ValidCount)</c> — <c>UseSocket</c> is non-zero

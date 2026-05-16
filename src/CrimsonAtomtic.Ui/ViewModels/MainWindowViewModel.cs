@@ -1793,14 +1793,55 @@ public sealed partial class MainWindowViewModel(
             || _navStack.Peek() is not BlockFrame frame
             || !string.Equals(frame.Block.ClassName, "MissionStateData", StringComparison.Ordinal)
             || SelectedBlock is not { } topBlock
-            || _loadedPath is null
             // Path must be exactly one step (the missionStateList element).
             || frame.Path is not { Count: 1 } path1)
         {
             return false;
         }
+        var pathStep = path1[0];
+        return TryBuildChallengeContextFromCatalogRow(
+            topBlock.Index, (int)pathStep.FieldIndex, (int)pathStep.ElementIndex, out ctx);
+    }
+
+    /// <summary>
+    /// Bulk-friendly variant of <see cref="TryReadCurrentChallengeContext"/>
+    /// addressed by (topBlockIdx, listFieldIdx, catalogElementIdx)
+    /// instead of the nav-stack. Used both by the per-row button
+    /// (wrapper above) and the Tools → Bulk Complete Held Sealed
+    /// Artifact Challenges sweep.
+    /// </summary>
+    private bool TryBuildChallengeContextFromCatalogRow(
+        int topBlockIdx,
+        int listFieldIdx,
+        int catalogElementIdx,
+        out CurrentChallengeContext ctx)
+    {
+        ctx = default;
+        if (_loadedPath is null) return false;
+
+        BlockDetails parentTop;
+        try
+        {
+            parentTop = loader.LoadBlockDetails(_loadedPath, topBlockIdx);
+        }
+        catch (CrimsonSaveException)
+        {
+            return false;
+        }
+        if (listFieldIdx < 0 || listFieldIdx >= parentTop.Fields.Count) return false;
+        var listField = parentTop.Fields[listFieldIdx];
+        var siblings = listField.Elements;
+        if (siblings is null || catalogElementIdx < 0 || catalogElementIdx >= siblings.Count)
+        {
+            return false;
+        }
+        var catalogRow = siblings[catalogElementIdx];
+        if (!string.Equals(catalogRow.ClassName, "MissionStateData", StringComparison.Ordinal))
+        {
+            return false;
+        }
         DecodedFieldRow? keyFld = null, stateFld = null;
-        foreach (var f in frame.Block.Fields)
+        foreach (var f in catalogRow.Fields)
         {
             if (keyFld is null && f.Name == "_key") keyFld = f;
             else if (stateFld is null && f.Name == "_state") stateFld = f;
@@ -1814,40 +1855,16 @@ public sealed partial class MainWindowViewModel(
             return false;
         }
         // Catalog-only: negative-encoded engine-internal keys (0xFFFFxxxx) are
-        // out of scope — the user is meant to be ON the catalog row.
+        // out of scope.
         if (keyU64 >= 0xFFFF0000UL) return false;
         if (stateU64 == 5UL) return false;
         var name = localization.MissionInfoStringKey((uint)keyU64);
-        // Category restriction (Challenge_* / Mission_MiniGame_* only)
-        // has been removed — user takes responsibility for matching the
-        // FAR-tracker shape to non-standard mission categories. We still
-        // require `name` because the recipe computes the X_2 follow-up
-        // sub-mission key from `name + "_2"`.
+        // The recipe computes the X_2 follow-up sub-mission key from
+        // `name + "_2"`, so we need a name.
         if (name is null)
         {
             return false;
         }
-
-        // Walk the parent _missionStateList ONCE to gather everything we need:
-        // - the adjacent twin (catalog_idx + 1) and its visibility check
-        // - the FAR tracker (key = adjacent_twin.key - 1) — search by key
-        // - whether the X_2 follow-up sub-mission already exists
-        BlockDetails parentTop;
-        try
-        {
-            parentTop = loader.LoadBlockDetails(_loadedPath, topBlock.Index);
-        }
-        catch (CrimsonSaveException)
-        {
-            return false;
-        }
-        var pathStep = path1[0];
-        var listFieldIdx = (int)pathStep.FieldIndex;
-        var catalogElementIdx = (int)pathStep.ElementIndex;
-        if (listFieldIdx < 0 || listFieldIdx >= parentTop.Fields.Count) return false;
-        var listField = parentTop.Fields[listFieldIdx];
-        var siblings = listField.Elements;
-        if (siblings is null) return false;
 
         // 1. Adjacent twin
         var twinElementIdx = catalogElementIdx + 1;
@@ -1883,11 +1900,11 @@ public sealed partial class MainWindowViewModel(
         }
         var twinKey = (uint)twinKeyU64;
         uint[] twinTags;
-        var twinPath = new[] { new PathStep(pathStep.FieldIndex, (uint)twinElementIdx) };
+        var twinPath = new[] { new PathStep((uint)listFieldIdx, (uint)twinElementIdx) };
         try
         {
             twinTags = loader.DynamicArrayGetU32Elements(
-                topBlock.Index, twinPath, twinTagsFld.FieldIndex);
+                topBlockIdx, twinPath, twinTagsFld.FieldIndex);
         }
         catch (CrimsonSaveException)
         {
@@ -1955,12 +1972,12 @@ public sealed partial class MainWindowViewModel(
         // exist so we can patch its value to the new ct.
         if (!farBranchedFld.Present) return false;
 
-        var farPath = new[] { new PathStep(pathStep.FieldIndex, (uint)farIdx) };
+        var farPath = new[] { new PathStep((uint)listFieldIdx, (uint)farIdx) };
         uint[] farTags;
         try
         {
             farTags = loader.DynamicArrayGetU32Elements(
-                topBlock.Index, farPath, farTagsFld.FieldIndex);
+                topBlockIdx, farPath, farTagsFld.FieldIndex);
         }
         catch (CrimsonSaveException)
         {
@@ -1979,7 +1996,7 @@ public sealed partial class MainWindowViewModel(
         ctx = new CurrentChallengeContext(
             CatalogKey: (uint)keyU64,
             InternalName: name,
-            MissionTopBlockIdx: topBlock.Index,
+            MissionTopBlockIdx: topBlockIdx,
             MissionListFieldIdx: listFieldIdx,
             CatalogElementIdx: catalogElementIdx,
             TwinKey: twinKey,
