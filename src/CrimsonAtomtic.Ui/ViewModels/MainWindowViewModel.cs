@@ -1714,6 +1714,14 @@ public sealed partial class MainWindowViewModel(
             // FAR's CURRENT shape (state=2, branched=present,
             // tags=[base]) — perfect template for the new X_2 sub-
             // mission entry.
+            //
+            // Each length-changing call (ListCloneElement,
+            // SetScalarFieldPresent toggling, DynamicArraySetU32Elements)
+            // forces a full body re-decode in crimson-rs — these are
+            // the dominant cost (~25ms each on a 5MB body). Trailing
+            // scalar setters get batched into one
+            // SetScalarFieldsBatch call to cut FFI roundtrips, even
+            // though the body re-decode count is unchanged.
             if (!ctx.FollowUpAlreadyExists)
             {
                 loader.ListCloneElement(
@@ -1723,18 +1731,11 @@ public sealed partial class MainWindowViewModel(
                     ctx.FarElementIdx,
                     appendElementIdx);
             }
-            // Phase 2: update the FAR tracker — state=5 + _completedTime
-            // stamped + _usedTagList grown to add the visible tag.
-            loader.SetScalarField(
-                ctx.MissionTopBlockIdx, farPath,
-                ctx.FarStateFieldIdx, new byte[] { 5 });
-            if (ctx.FarCompletedTimeAlreadyPresent)
-            {
-                loader.SetScalarField(
-                    ctx.MissionTopBlockIdx, farPath,
-                    ctx.FarCompletedTimeFieldIdx, ctBytes);
-            }
-            else
+
+            // Phase 2a: length-changing parts of the FAR tracker
+            // update — completedTime presence-promote (when absent)
+            // + usedTagList grow.
+            if (!ctx.FarCompletedTimeAlreadyPresent)
             {
                 loader.SetScalarFieldPresent(
                     ctx.MissionTopBlockIdx, farPath,
@@ -1746,19 +1747,34 @@ public sealed partial class MainWindowViewModel(
                 ctx.MissionTopBlockIdx, farPath,
                 ctx.FarUsedTagListFieldIdx, farTarget);
 
-            // Phase 3: patch the clone's _key + _branchedTime so it
-            // becomes the X_2 sub-mission entry. Field indices are
-            // the same on the clone (per-class schema is stable).
+            // Phase 2b + 3: every remaining scalar mutation in one
+            // batch. Saves up to 3 FFI roundtrips per challenge
+            // versus the old per-field SetScalarField pattern. The
+            // batch is all-or-nothing — if any op validates wrong,
+            // none are applied. Validation only fails on schema
+            // drift, which would have errored earlier in this method.
+            var batch = new List<ScalarBatchOp>(4)
+            {
+                new ScalarBatchOp(
+                    ctx.MissionTopBlockIdx, farPath,
+                    ctx.FarStateFieldIdx, new byte[] { 5 }),
+            };
+            if (ctx.FarCompletedTimeAlreadyPresent)
+            {
+                batch.Add(new ScalarBatchOp(
+                    ctx.MissionTopBlockIdx, farPath,
+                    ctx.FarCompletedTimeFieldIdx, ctBytes));
+            }
             if (!ctx.FollowUpAlreadyExists)
             {
-                var keyBytes = BitConverter.GetBytes(ctx.FollowUpKey);
-                loader.SetScalarField(
+                batch.Add(new ScalarBatchOp(
                     ctx.MissionTopBlockIdx, newPath,
-                    farKeyFieldIdx, keyBytes);
-                loader.SetScalarField(
+                    farKeyFieldIdx, BitConverter.GetBytes(ctx.FollowUpKey)));
+                batch.Add(new ScalarBatchOp(
                     ctx.MissionTopBlockIdx, newPath,
-                    ctx.FarBranchedTimeFieldIdx, ctBytes);
+                    ctx.FarBranchedTimeFieldIdx, ctBytes));
             }
+            loader.SetScalarFieldsBatch(batch);
             return null;
         }
         catch (CrimsonSaveException ex)
@@ -1858,7 +1874,15 @@ public sealed partial class MainWindowViewModel(
         // cache handles repeat block reads), then run Pattern B v1
         // writes on the thread pool. Track running list count across
         // applies so successive X_2 inserts land at the right index.
-        BulkOpStatus = $"Applying Pattern B v1 to {preview.Candidates.Count} challenge(s)…";
+        //
+        // Live progress: each per-challenge write triggers ~3 body
+        // re-decodes in crimson-rs (~25ms each on a 5MB body) — the
+        // sweep takes ~8–10s for the full 141-artifact set. An
+        // IProgress<T> callback marshals "N/total — challenge K"
+        // ticks back to the UI thread so the status footer animates
+        // instead of looking frozen.
+        var totalCandidates = preview.Candidates.Count;
+        BulkOpStatus = $"Applying Pattern B v1: 0 / {totalCandidates}…";
         var baseCt = await Task.Run(() => ScanMaxMissionCompletedTime());
         var newCt = baseCt == 0UL ? 1UL : baseCt + 1UL;
         // Per-block running append index — different QuestSaveData
@@ -1872,11 +1896,27 @@ public sealed partial class MainWindowViewModel(
             }
         }
 
+        // Progress<T> captures the UI SynchronizationContext at
+        // construction (this method runs on the UI thread), so
+        // ((IProgress<…>)progress).Report(...) from inside Task.Run
+        // posts the lambda back to the UI thread automatically.
+        var progress = new Progress<(int Done, int Total, uint CurrentKey)>(p =>
+        {
+            BulkOpStatus = p.CurrentKey == 0
+                ? $"Applying Pattern B v1: {p.Done} / {p.Total}…"
+                : $"Applying Pattern B v1: {p.Done} / {p.Total} — challenge 0x{p.CurrentKey:X8}";
+        });
+        var reporter = (IProgress<(int Done, int Total, uint CurrentKey)>)progress;
+
         var (applied, firstError, firstErrorKey) = await Task.Run<(int, CrimsonSaveException?, uint)>(() =>
         {
             var done = 0;
             foreach (var c in preview.Candidates)
             {
+                // Announce BEFORE applying so the user sees the
+                // current challenge key while the FFI is in flight
+                // (each apply is ~70ms — visible on-screen).
+                reporter.Report((done, totalCandidates, c.CatalogKey));
                 var lookup = TryReadFarKeyFieldIdx(c);
                 if (lookup.FarKeyFieldIdx < 0)
                 {
@@ -1898,6 +1938,7 @@ public sealed partial class MainWindowViewModel(
                 newCt++;
                 done++;
             }
+            reporter.Report((done, totalCandidates, 0u));
             return (done, null, 0u);
         });
 
