@@ -60,6 +60,7 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
 
     private readonly ISaveLoader _loader;
     private readonly LocalizationProvider _localization;
+    private readonly ChangeJournal _journal;
     /// <summary>
     /// Portrait resolver — same instance as <c>_localization.Portraits</c>.
     /// Captured separately so <see cref="MercenaryRow"/> can call it
@@ -79,6 +80,7 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
     private RenameMercenaryViewModel(
         ISaveLoader loader,
         LocalizationProvider localization,
+        ChangeJournal journal,
         string savePath,
         int topBlockIdx,
         int listFieldIdx,
@@ -86,6 +88,7 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
     {
         _loader = loader;
         _localization = localization;
+        _journal = journal;
         _savePath = savePath;
         _topBlockIdx = topBlockIdx;
         _listFieldIdx = listFieldIdx;
@@ -102,6 +105,7 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
     public static RenameMercenaryViewModel? TryCreate(
         ISaveLoader loader,
         LocalizationProvider localization,
+        ChangeJournal journal,
         string savePath,
         IReadOnlyList<BlockSummary> blocks)
     {
@@ -167,7 +171,7 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
         }
 
         var vm = new RenameMercenaryViewModel(
-            loader, localization, savePath, top.Index, listField.FieldIndex, nameFieldIdx);
+            loader, localization, journal, savePath, top.Index, listField.FieldIndex, nameFieldIdx);
 
         for (var i = 0; i < elements.Count; i++)
         {
@@ -256,6 +260,13 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
                 ? "(empty)"
                 : $"\"{newName}\" ({bytes.Length} bytes UTF-8)");
         IsDirty = true;
+        var identity = string.IsNullOrEmpty(row.ResolvedCharacterName)
+            ? $"MercNo {row.MercNo}"
+            : row.ResolvedCharacterName;
+        _journal.Log("Rename Mercenary",
+            string.IsNullOrEmpty(newName)
+                ? $"Cleared custom name on {identity}"
+                : $"Renamed {identity} → \"{newName}\"");
     }
 
     /// <summary>

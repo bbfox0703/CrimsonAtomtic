@@ -3,7 +3,24 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-16 part 9 (Dye editor — roadmap pick #5 — shipped: 3 gamedata bridges bound + master/child editor dialog).
+> Last updated: 2026-05-16 part 10 (ChangeJournal + close-on-dirty confirm + Tools → Review changes).
+>
+> ## ✅ This session — what shipped (2026-05-16 part 10)
+>
+> Two paired UX features the user asked for after picking up #11
+> "Save backup management" and deciding the more valuable half was
+> a confirm-on-close + change-log:
+>
+> | Area | Scope |
+> |---|---|
+> | **`ChangeJournal` service** | New `Services/ChangeJournal.cs` — singleton append-only log. Each entry: `(Timestamp, Category, Summary, Details?)`. Lifecycle mirrors `IsDirty`: cleared on every successful `Save` + `Load` + `SaveAs`. Exposed via `MainWindowViewModel.Journal`. Granularity = **per named operation** (sockets, dye slot, abyss gate toggle, etc.) — not per scalar field. Bigger Level B (raw before/after capture) deferred until the user actually demands it. |
+> | **Close-on-dirty confirm** | `MainWindow.Closing` event handler reads `vm.Journal.HasUnsavedChanges` and, if true, cancels the default close + opens `ChangeSummaryDialog` showing all pending entries. 3 buttons: Save (commits + closes), Discard & exit (closes without saving), Cancel (stays open). Save failure mid-flow re-prompts via an alert + leaves the app open. |
+> | **Tools → Review Pending Changes…** | Same `ChangeSummaryDialog` (different header text) on demand — user can browse the journal without closing. Discard here means "reload save without writing" (which clears the journal via the normal Load path). |
+> | **All mutation entry points instrumented** | 10 sites log per-operation summaries: main edit panel `CommitFieldEdit` + `MakeFieldAbsent`, `MarkChallengeComplete`, `BulkFillItemListMaxStack` (single + container variants), `FillAllStacksAcrossInventories`, `RemoveElement`, `AddItemToCurrentList`, `UnlockAllAbyssGates`, plus dialog VMs: `RenameMercenaryViewModel.ApplyRename`, `SocketEditorViewModel.ApplyGemPick`, `AbyssGatesViewModel.Apply`, `DyeSlotEditorViewModel` (one entry per per-slot Apply, listing which scalars flipped). Each dialog VM gained a `ChangeJournal` constructor parameter; MainWindow code-behind threads `vm.Journal` through at construction. |
+>
+> Tests: **180/180 pass** (no new unit tests — the journal is pure C# state-tracking; manual smoke-test path is "edit → File → exit → modal shows N entries → choose"). Debug build clean.
+>
+> Closes deferred item #11 (Save backup management — the "auto-backup on every load" half) by superseding rather than implementing: the user doesn't want load-time backups; the close-on-dirty confirm gives them the actual safety net they wanted ("warn me I'm about to lose edits"). Backup retention (the other #11 half — making `MaxVersionsPerSlot` user-configurable) stays deferred.
 >
 > ## ✅ This session — what shipped (2026-05-16 part 9)
 >
@@ -1335,9 +1352,13 @@ Open from earlier work, none blocking the icon pipeline:
     is a workaround for Avalonia DataGrid 12.0.0 internals. Drop
     when 12.1+ ships a trim-safe DataGrid.
 
-11. **Save backup management** — auto-backup on every load + every
-    write, configurable retention. Less critical now that mtime is
-    preserved, but still useful.
+11. 🟡 **Save backup management** — partially superseded by 2026-05-16
+    part 10 (ChangeJournal + close-on-dirty confirm). The
+    "auto-backup on every load" half is no longer pursued — the
+    user's actual concern ("warn me I'm about to lose edits") is
+    met by the close-on-dirty modal. The "configurable retention"
+    half (making `SaveBackupService.MaxVersionsPerSlot` adjustable
+    via `AppSettings`) is still deferred — no strong demand.
 
 12. **Mod awareness** — read `CDMods/cdumm.db` (SQLite) and
     `mods/_enabled/` to surface mod-added items without crashing

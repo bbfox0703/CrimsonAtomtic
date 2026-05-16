@@ -1,0 +1,74 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:svc="using:CrimsonAtomtic.Ui.Services"
+        mc:Ignorable="d"
+        d:DesignWidth="720"
+        d:DesignHeight="420"
+        x:Class="CrimsonAtomtic.Ui.Views.ChangeSummaryDialog"
+        Title="{StaticResource ChangeSummaryWindowTitle}"
+        Icon="/Assets/MainIcon.ico"
+        Width="720" Height="440"
+        MinWidth="540" MinHeight="280"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
+
+  <DockPanel LastChildFill="True" Margin="14">
+    <TextBlock x:Name="HeaderText"
+               DockPanel.Dock="Top"
+               FontWeight="Bold"
+               Margin="0,0,0,8" />
+
+    <TextBlock x:Name="SubHeaderText"
+               DockPanel.Dock="Top"
+               Opacity="0.7"
+               TextWrapping="Wrap"
+               Margin="0,0,0,12" />
+
+    <StackPanel DockPanel.Dock="Bottom"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="8"
+                Margin="0,12,0,0">
+      <Button x:Name="DiscardButton"
+              Content="{StaticResource ChangeSummaryDiscard}"
+              Click="OnDiscardClick"
+              MinWidth="120" />
+      <Button x:Name="CancelButton"
+              Content="{StaticResource ChangeSummaryCancel}"
+              Click="OnCancelClick"
+              MinWidth="80" />
+      <Button x:Name="SaveButton"
+              Content="{StaticResource ChangeSummarySave}"
+              Click="OnSaveClick"
+              MinWidth="100"
+              Classes="accent"
+              IsDefault="True" />
+    </StackPanel>
+
+    <!-- The journal entries. DataGrid because we want columns +
+         sortable; ItemsSource bound from code-behind once the host
+         passes the journal in. -->
+    <DataGrid x:Name="EntriesGrid"
+              AutoGenerateColumns="False"
+              CanUserResizeColumns="True"
+              CanUserSortColumns="True"
+              GridLinesVisibility="Horizontal"
+              HeadersVisibility="Column"
+              IsReadOnly="True">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="{StaticResource ChangeSummaryColTime}"
+                            Binding="{Binding TimestampText, DataType=svc:ChangeEntry}"
+                            Width="70" />
+        <DataGridTextColumn Header="{StaticResource ChangeSummaryColCategory}"
+                            Binding="{Binding Category, DataType=svc:ChangeEntry}"
+                            Width="120" />
+        <DataGridTextColumn Header="{StaticResource ChangeSummaryColSummary}"
+                            Binding="{Binding Summary, DataType=svc:ChangeEntry}"
+                            Width="*" />
+      </DataGrid.Columns>
+    </DataGrid>
+  </DockPanel>
+</Window>

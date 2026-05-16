@@ -29,6 +29,7 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
 
     private readonly ISaveLoader _loader;
     private readonly LocalizationProvider _localization;
+    private readonly ChangeJournal _journal;
     private readonly string _savePath;
     private readonly DyeEditorItemRow _itemRow;
 
@@ -51,15 +52,18 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
     public DyeSlotEditorViewModel(
         ISaveLoader loader,
         LocalizationProvider localization,
+        ChangeJournal journal,
         string savePath,
         DyeEditorItemRow itemRow)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(localization);
+        ArgumentNullException.ThrowIfNull(journal);
         ArgumentException.ThrowIfNullOrEmpty(savePath);
         ArgumentNullException.ThrowIfNull(itemRow);
         _loader = loader;
         _localization = localization;
+        _journal = journal;
         _savePath = savePath;
         _itemRow = itemRow;
 
@@ -189,6 +193,18 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
             }
         }
         return null;
+    }
+
+    /// <summary>
+    /// Aggregate journal log per Apply (one entry per slot, listing
+    /// which scalars flipped — better than per-scalar spam).
+    /// </summary>
+    internal void LogSlotApplied(DyeSlotRow row, IReadOnlyList<string> changedLabels)
+    {
+        if (changedLabels.Count == 0) return;
+        _journal.Log("Dye",
+            $"Edited dye on {_itemRow.ItemNameEnglish} slot {row.SlotIndex} "
+            + $"({string.Join(", ", changedLabels)})");
     }
 
     /// <summary>
@@ -438,6 +454,10 @@ public sealed partial class DyeSlotRow : ObservableObject
             }
             appliedLabels.Add(w.Label);
         }
+        // Single per-slot journal entry aggregates which scalars
+        // flipped, so the user's change list reads "Edited dye on
+        // Robe slot 1 (R,G,B,Material)" not 4 separate lines.
+        _parent.LogSlotApplied(this, appliedLabels);
         LastError = $"Applied: {string.Join(", ", appliedLabels)}.";
     }
 

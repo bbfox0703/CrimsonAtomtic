@@ -94,6 +94,10 @@
         <MenuItem Header="{StaticResource MenuEditItemDyes}"
                   Click="OnEditItemDyesClick"
                   IsEnabled="{Binding HasSave}" />
+        <Separator />
+        <MenuItem Header="{StaticResource MenuReviewChanges}"
+                  Click="OnReviewChangesClick"
+                  IsEnabled="{Binding HasSave}" />
         <MenuItem Header="{StaticResource MenuEditItemSockets}"
                   Click="OnEditItemSocketsClick"
                   IsEnabled="{Binding HasSave}" />

@@ -56,6 +56,101 @@ public sealed partial class MainWindow : Window
         _pendingWidth = Width;
         _pendingHeight = Height;
         _pendingPosition = Position;
+        // Close-on-dirty confirm — Closing fires before the window
+        // tears down so we can cancel + show the modal + re-close.
+        Closing += OnWindowClosing;
+    }
+
+    /// <summary>
+    /// Set true once the user has confirmed via the change-summary
+    /// dialog that they want to close (either Save+exit or Discard).
+    /// Subsequent Closing events bypass the confirm so the second
+    /// Close() call goes through.
+    /// </summary>
+    private bool _allowCloseWithoutPrompt;
+
+    private async void OnWindowClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (_allowCloseWithoutPrompt) return;
+        if (DataContext is not MainWindowViewModel vm) return;
+        if (!vm.Journal.HasUnsavedChanges) return;
+        // Cancel the default close — we'll re-trigger after the
+        // user makes a choice. Avalonia 12's Closing event allows
+        // this synchronously; the awaitable dialog continues after
+        // the early return.
+        e.Cancel = true;
+        var result = await ChangeSummaryDialog.ShowAsync(this, vm.Journal, closingContext: true);
+        switch (result)
+        {
+            case ChangeSummaryDialogResult.Save:
+                // Attempt save; on success the journal clears + we
+                // close. On failure the dialog stays implicitly
+                // dismissed but the close is aborted so the user
+                // can try again.
+                try
+                {
+                    if (vm.SaveCommand.CanExecute(null))
+                    {
+                        vm.SaveCommand.Execute(null);
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    await ConfirmDialog.ShowAlertAsync(this,
+                        "Save failed",
+                        $"Could not write save: {ex.Message}. The app stayed open so you can retry or use Discard.");
+                    return;
+                }
+                _allowCloseWithoutPrompt = true;
+                Close();
+                break;
+            case ChangeSummaryDialogResult.Discard:
+                _allowCloseWithoutPrompt = true;
+                Close();
+                break;
+            case ChangeSummaryDialogResult.Cancel:
+            default:
+                // Stay open — leave _allowCloseWithoutPrompt false
+                // so a subsequent close re-prompts.
+                break;
+        }
+    }
+
+    private async void OnReviewChangesClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm) return;
+        if (!vm.Journal.HasUnsavedChanges)
+        {
+            var title = (Application.Current?.FindResource("ChangeSummaryNoChangesTitle") as string)
+                        ?? "No pending changes";
+            var body = (Application.Current?.FindResource("ChangeSummaryNoChangesBody") as string)
+                       ?? "Nothing has been edited.";
+            await ConfirmDialog.ShowAlertAsync(this, title, body);
+            return;
+        }
+        var result = await ChangeSummaryDialog.ShowAsync(this, vm.Journal, closingContext: false);
+        // Review mode: Save fires the Save command; Discard is
+        // routed to "reload the save without writing" since the
+        // user explicitly opted into discarding edits without
+        // closing.
+        switch (result)
+        {
+            case ChangeSummaryDialogResult.Save:
+                if (vm.SaveCommand.CanExecute(null))
+                {
+                    vm.SaveCommand.Execute(null);
+                }
+                break;
+            case ChangeSummaryDialogResult.Discard:
+                if (vm.LoadedPath is { } path
+                    && vm.LoadSaveCommand.CanExecute(path))
+                {
+                    // Reload the save bytes from disk → journal +
+                    // IsDirty both clear via the normal Load flow.
+                    vm.LoadSaveCommand.Execute(path);
+                }
+                break;
+        }
     }
 
     private void OnPositionChanged(object? sender, PixelPointEventArgs e)
@@ -530,7 +625,7 @@ public sealed partial class MainWindow : Window
             try
             {
                 childVm = new DyeSlotEditorViewModel(
-                    vm.GetSaveLoader(), vm.Localization, loadedPath, row);
+                    vm.GetSaveLoader(), vm.Localization, vm.Journal, loadedPath, row);
             }
             catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex)
             {
@@ -583,7 +678,7 @@ public sealed partial class MainWindow : Window
         try
         {
             dialogVm = await AbyssGatesViewModel.CreateAsync(
-                vm.GetSaveLoader(), vm.Localization, loadedPath, blocks);
+                vm.GetSaveLoader(), vm.Localization, vm.Journal, loadedPath, blocks);
         }
         catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex)
         {
@@ -836,6 +931,7 @@ public sealed partial class MainWindow : Window
         var renameVm = ViewModels.RenameMercenaryViewModel.TryCreate(
             vm.GetSaveLoader(),
             vm.Localization,
+            vm.Journal,
             path,
             blocks);
         if (renameVm is null)
@@ -884,6 +980,7 @@ public sealed partial class MainWindow : Window
         var socketsVm = ViewModels.SocketEditorViewModel.TryCreate(
             vm.GetSaveLoader(),
             vm.Localization,
+            vm.Journal,
             path,
             blocks);
         if (socketsVm is null)

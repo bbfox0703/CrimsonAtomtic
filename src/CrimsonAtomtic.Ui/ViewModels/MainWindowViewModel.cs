@@ -34,6 +34,14 @@ public sealed partial class MainWindowViewModel(
     public LocalizationProvider Localization => localization;
 
     /// <summary>
+    /// Append-only journal of "what the user changed" since the last
+    /// Save / Load. Surfaced via Tools → Review changes + the
+    /// close-on-dirty confirm dialog so the user knows what they're
+    /// about to commit / discard.
+    /// </summary>
+    public ChangeJournal Journal { get; } = new ChangeJournal();
+
+    /// <summary>
     /// Expose the active save loader for child dialogs that mutate the
     /// same handle (e.g. Rename Mercenary). The handle lives on this VM
     /// for the lifetime of the app, so handing out the reference is
@@ -47,10 +55,23 @@ public sealed partial class MainWindowViewModel(
     /// Mirrors the post-edit notifications the main edit panel emits
     /// directly when the user applies a field change.
     /// </summary>
-    internal void MarkDirtyFromExternalEdit()
+    /// <remarks>
+    /// Child dialogs that own their own logging (Sockets, Rename
+    /// Mercenary, etc.) call <see cref="Journal"/>.Log directly with
+    /// a per-operation description, then call this method to flip
+    /// the title-bar * + Save command. Callers that don't have a
+    /// per-operation description can pass <paramref name="logCategory"/>
+    /// + <paramref name="logSummary"/> to log a generic line at the
+    /// same time.
+    /// </remarks>
+    internal void MarkDirtyFromExternalEdit(string? logCategory = null, string? logSummary = null)
     {
         IsDirty = true;
         OnPropertyChanged(nameof(WindowTitle));
+        if (!string.IsNullOrEmpty(logCategory) && !string.IsNullOrEmpty(logSummary))
+        {
+            Journal.Log(logCategory, logSummary);
+        }
     }
 
     /// <summary>
@@ -957,6 +978,7 @@ public sealed partial class MainWindowViewModel(
         _loadedPath = path;
         _loadedFileLastWriteTime = TryReadLastWriteTime(path);
         IsDirty = false;
+        Journal.Clear();
         ReplaceBlocks(Summary?.Blocks);
         SelectedBlock = null;
         ClearNavigation();
@@ -1306,6 +1328,13 @@ public sealed partial class MainWindowViewModel(
             return;
         }
 
+        // Capture the pre-mutation display value for the journal —
+        // FieldRowViewModel.DisplayValue carries the formatted "<val> <tag>"
+        // string that's about to be replaced. We log here (after the FFI
+        // call succeeded but before refreshing the row) so the journal
+        // captures the "before" exactly as the user saw it.
+        var preEditValue = row.DisplayValue;
+
         // Re-fetch the top-level block; refresh every nav frame so popping
         // back via breadcrumb shows fresh values (the mutation may ripple
         // across peer fields via the schema). Each existing FieldRowViewModel
@@ -1314,6 +1343,10 @@ public sealed partial class MainWindowViewModel(
         var freshTop = loader.LoadBlockDetails(_loadedPath, block.Index);
         RefreshNavStack(freshTop);
         IsDirty = true;
+        Journal.Log("Field edit",
+            row.Present
+                ? $"{block.ClassName}.{row.Name}: {preEditValue} → {row.RawText} <{row.TypeTag}>"
+                : $"{block.ClassName}.{row.Name}: absent → {row.RawText} <{row.TypeTag}>");
         OnPropertyChanged(nameof(WindowTitle));
         // The "(absent — Apply makes present)" suffix on SelectedFieldTypeHint
         // depends on SelectedField.Present, which may have just flipped from
@@ -1361,6 +1394,8 @@ public sealed partial class MainWindowViewModel(
         var freshTop = loader.LoadBlockDetails(_loadedPath, block.Index);
         RefreshNavStack(freshTop);
         IsDirty = true;
+        Journal.Log("Field edit",
+            $"{block.ClassName}.{row.Name}: made absent");
         OnPropertyChanged(nameof(WindowTitle));
         OnPropertyChanged(nameof(SelectedFieldTypeHint));
     }
@@ -1657,6 +1692,8 @@ public sealed partial class MainWindowViewModel(
         if (error is null)
         {
             IsDirty = true;
+            Journal.Log("Mark Challenge",
+                $"Marked challenge {ctx.CatalogKey} ({ctx.InternalName}) complete (Pattern B v1)");
             OnPropertyChanged(nameof(WindowTitle));
             BulkOpStatus = ctx.FollowUpAlreadyExists
                 ? $"Marked {ctx.CatalogKey} ({ctx.InternalName}) complete via Pattern B v1 — "
@@ -2309,6 +2346,10 @@ public sealed partial class MainWindowViewModel(
         if (applied > 0)
         {
             IsDirty = true;
+            Journal.Log("Bulk fill",
+                row.IsSingleFillCandidate
+                    ? $"Filled stack of {row.ResolvedName}"
+                    : $"Filled {applied} stack(s) in {row.ResolvedName}");
             OnPropertyChanged(nameof(WindowTitle));
         }
         BulkOpStatus = firstError is null
@@ -2405,6 +2446,8 @@ public sealed partial class MainWindowViewModel(
         if (error is null)
         {
             IsDirty = true;
+            Journal.Log("Remove element",
+                $"Removed {displayName} from {topBlock.ClassName} (index [{elementIdx}])");
             OnPropertyChanged(nameof(WindowTitle));
             BulkOpStatus = $"Removed element [{elementIdx}].";
         }
@@ -2670,6 +2713,11 @@ public sealed partial class MainWindowViewModel(
         if (error is null)
         {
             IsDirty = true;
+            var addedName = localization.LookupItemName(itemKey, LocalizationProvider.DefaultLanguage)
+                            ?? localization.ItemInfoStringKey(itemKey)
+                            ?? itemKey.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            Journal.Log("Add item",
+                $"Added {addedName} (ItemKey {itemKey}, qty {newStackCount}) to inventory");
             OnPropertyChanged(nameof(WindowTitle));
             BulkOpStatus = $"Added item {itemKey} from {cloneSourceLabel} "
                            + $"(qty {newStackCount}, slot {newSlotNo}, itemNo {newItemNo}).";
@@ -3094,6 +3142,8 @@ public sealed partial class MainWindowViewModel(
         if (applied > 0)
         {
             IsDirty = true;
+            Journal.Log("Bulk fill",
+                $"Filled {applied} stack(s) across {containerCount} container(s) (all inventories)");
             OnPropertyChanged(nameof(WindowTitle));
         }
         BulkOpStatus = firstError is null
@@ -3289,6 +3339,9 @@ public sealed partial class MainWindowViewModel(
         if (error is null)
         {
             IsDirty = true;
+            Journal.Log("Abyss gates",
+                $"Bulk-added {preview.ToAdd.Count} abyss-gate knowledge key(s) "
+                + $"to {KnowledgeSaveDataClass}._list (map discovery)");
             OnPropertyChanged(nameof(WindowTitle));
             BulkOpStatus = $"Done: added {preview.ToAdd.Count} abyss-gate knowledge key(s) "
                 + $"({merged.Count} total in {KnowledgeSaveDataClass}._list).";
@@ -3374,6 +3427,7 @@ public sealed partial class MainWindowViewModel(
         loader.WriteToFile(_loadedPath);
         PreserveOriginalTimestamp(_loadedPath);
         IsDirty = false;
+        Journal.Clear();
         OnPropertyChanged(nameof(WindowTitle));
     }
 
@@ -3409,6 +3463,7 @@ public sealed partial class MainWindowViewModel(
         _loadedPath = destinationPath;
         _loadedFileLastWriteTime = TryReadLastWriteTime(destinationPath);
         IsDirty = false;
+        Journal.Clear();
         ReplaceBlocks(Summary?.Blocks);
         SelectedBlock = null;
         ClearNavigation();

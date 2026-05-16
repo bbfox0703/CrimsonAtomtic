@@ -54,6 +54,23 @@
   <sys:String x:Key="MenuUnlockAllAbyssGates">_Unlock All Abyss Gates (Map Discovery)…</sys:String>
   <sys:String x:Key="MenuEditAbyssGates">_Edit Abyss Gates (Lock/Unlock per gate)…</sys:String>
   <sys:String x:Key="MenuEditItemDyes">Edit Item _Dyes…</sys:String>
+  <sys:String x:Key="MenuReviewChanges">_Review Pending Changes…</sys:String>
+
+  <!-- Change summary dialog (review pending edits + close-on-dirty confirm) -->
+  <sys:String x:Key="ChangeSummaryWindowTitle">Pending changes</sys:String>
+  <sys:String x:Key="ChangeSummaryHeaderClose">Unsaved changes — save before exiting?</sys:String>
+  <sys:String x:Key="ChangeSummarySubHeaderClose">The edits listed below haven't been written to disk yet. Save to commit them, Discard to exit without saving (the previous on-disk state is preserved), or Cancel to keep editing.</sys:String>
+  <sys:String x:Key="ChangeSummaryHeaderReview">Pending changes since last save</sys:String>
+  <sys:String x:Key="ChangeSummarySubHeaderReview">Read-only list of edits applied via the UI since the save was loaded (or since the last File → Save). Reload the save to drop all of them; File → Save to commit.</sys:String>
+  <sys:String x:Key="ChangeSummaryColTime">Time</sys:String>
+  <sys:String x:Key="ChangeSummaryColCategory">Area</sys:String>
+  <sys:String x:Key="ChangeSummaryColSummary">Change</sys:String>
+  <sys:String x:Key="ChangeSummarySave">Save</sys:String>
+  <sys:String x:Key="ChangeSummaryDiscard">Discard</sys:String>
+  <sys:String x:Key="ChangeSummaryDiscardExit">Discard &amp; exit</sys:String>
+  <sys:String x:Key="ChangeSummaryCancel">Cancel</sys:String>
+  <sys:String x:Key="ChangeSummaryNoChangesTitle">No pending changes</sys:String>
+  <sys:String x:Key="ChangeSummaryNoChangesBody">Nothing has been edited since the save was loaded (or since the last File → Save).</sys:String>
 
   <!-- Dye editor master dialog -->
   <sys:String x:Key="DyeEditorWindowTitle">Edit item dyes</sys:String>

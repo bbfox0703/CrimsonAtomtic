@@ -56,6 +56,7 @@ public sealed partial class SocketEditorViewModel : ObservableObject
 
     private readonly ISaveLoader _loader;
     private readonly LocalizationProvider _localization;
+    private readonly ChangeJournal _journal;
     private readonly string _savePath;
 
     /// <summary>
@@ -89,10 +90,12 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     private SocketEditorViewModel(
         ISaveLoader loader,
         LocalizationProvider localization,
+        ChangeJournal journal,
         string savePath)
     {
         _loader = loader;
         _localization = localization;
+        _journal = journal;
         _savePath = savePath;
     }
 
@@ -104,15 +107,17 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     public static SocketEditorViewModel? TryCreate(
         ISaveLoader loader,
         LocalizationProvider localization,
+        ChangeJournal journal,
         string savePath,
         IReadOnlyList<BlockSummary> blocks)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(localization);
+        ArgumentNullException.ThrowIfNull(journal);
         ArgumentException.ThrowIfNullOrEmpty(savePath);
         ArgumentNullException.ThrowIfNull(blocks);
 
-        var vm = new SocketEditorViewModel(loader, localization, savePath);
+        var vm = new SocketEditorViewModel(loader, localization, journal, savePath);
         foreach (var b in blocks)
         {
             if (!string.Equals(b.ClassName, InventorySaveDataClass, StringComparison.Ordinal))
@@ -297,6 +302,9 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         row.AppliedGemName = FormatItemDisplay(_localization, newGemKey);
         row.LastError = null;
         IsDirty = true;
+        _journal.Log("Sockets",
+            $"Set gem in {row.ItemName} socket {row.SocketIndex}: "
+            + $"{row.CurrentGemName} → {row.AppliedGemName}");
         StatusMessage = $"Swapped gem in {row.ItemName} socket {row.SocketIndex}: "
             + $"{row.CurrentGemName} → {row.AppliedGemName}.";
     }

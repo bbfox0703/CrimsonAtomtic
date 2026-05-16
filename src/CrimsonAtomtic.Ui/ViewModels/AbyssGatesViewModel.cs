@@ -74,6 +74,7 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
 
     private readonly ISaveLoader _loader;
     private readonly LocalizationProvider _localization;
+    private readonly ChangeJournal _journal;
     private readonly string _savePath;
 
     [ObservableProperty]
@@ -81,10 +82,13 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
 
     public ObservableCollection<AbyssGateRow> Rows { get; } = new();
 
-    private AbyssGatesViewModel(ISaveLoader loader, LocalizationProvider localization, string savePath)
+    private AbyssGatesViewModel(
+        ISaveLoader loader, LocalizationProvider localization,
+        ChangeJournal journal, string savePath)
     {
         _loader = loader;
         _localization = localization;
+        _journal = journal;
         _savePath = savePath;
     }
 
@@ -96,16 +100,18 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
     public static async Task<AbyssGatesViewModel> CreateAsync(
         ISaveLoader loader,
         LocalizationProvider localization,
+        ChangeJournal journal,
         string savePath,
         IReadOnlyList<BlockSummary> blocks,
         IProgress<(int Done, int Total)>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(localization);
+        ArgumentNullException.ThrowIfNull(journal);
         ArgumentException.ThrowIfNullOrEmpty(savePath);
         ArgumentNullException.ThrowIfNull(blocks);
 
-        var vm = new AbyssGatesViewModel(loader, localization, savePath);
+        var vm = new AbyssGatesViewModel(loader, localization, journal, savePath);
 
         // Build the abyss-gimmick allowlist from gimmickinfo. Lazy
         // walk — typically a few thousand entries, ~5 ms.
@@ -272,6 +278,9 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
         row.LastError = null;
         row.CurrentStateHash = targetHash;
         IsDirty = true;
+        _journal.Log("Abyss gates",
+            $"Set {row.OwnerLevelName} / {row.GimmickName} → "
+            + AbyssGateRow.LabelForHash(targetHash));
         StatusMessage =
             $"Set {row.OwnerLevelName} / {row.GimmickName} → {AbyssGateRow.LabelForHash(targetHash)}.";
     }
