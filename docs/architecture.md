@@ -103,11 +103,13 @@
 - **CrimsonAtomtic.RustInterop** — `[LibraryImport]` / `SafeHandle`
   wrappers around the C ABI in `vendor/crimson-rs`. Surface today:
   `ISaveLoader` + `NativeSaveLoader` (save load / scalar+path mutations /
-  mutation-version cache / inventory enumeration / write-to-file),
+  mutation-version cache / inventory enumeration / write-to-file /
+  **deferred-redecode batch** for bulk-mutation flows),
   `IItemInfoCatalog`, `NativeSkillInfoCatalog`, `NativeCharacterInfoCatalog`,
-  `NativeKnowledgeInfoCatalog`, `NativeGimmickInfoCatalog`, the three dye
-  catalogs, plus `NativePalocCatalog` and `NativePazExtractor`. Source-
-  generated marshalling, no reflection.
+  `NativeKnowledgeInfoCatalog`, `NativeGimmickInfoCatalog`,
+  `NativeStoreInfoCatalog`, the three dye catalogs, plus
+  `NativePalocCatalog` and `NativePazExtractor`. Source-generated
+  marshalling, no reflection.
 - **CrimsonAtomtic.Ui** — Avalonia 12 / .NET 10 app with `PublishAot=true`,
   `BuiltInComInteropSupport=false`, `AvaloniaUseCompiledBindingsByDefault=true`.
   Mutex-based single-instance guard on Windows. Left-rail navigator over
@@ -115,11 +117,12 @@
   present/absent toggle + close-on-dirty `ChangeJournal` confirm. Tools
   menu covers Find Items, Browse Items / Characters, Sockets editor,
   Dye editor, Mercenary rename, Abyss Gates (bulk + per-gate), Sealed
-  Abyss Artifact challenges (per-row + bulk), and the icon / portrait
-  caches under `%LOCALAPPDATA%\CrimsonAtomtic\`.
+  Abyss Artifact challenges (per-row + bulk via deferred-redecode
+  batch, ~0.1 s for the full 141-artifact sweep), Vendor Buyback,
+  and the icon / portrait caches under `%LOCALAPPDATA%\CrimsonAtomtic\`.
 - **CrimsonAtomtic.Tests** — xUnit 3 covering the RustInterop wrappers,
   the catalog bridges, and the save loader against a live save (skips
-  gracefully when none is present). Current count: **181/181 pass**.
+  gracefully when none is present). Current count: **190/190 pass**.
 
 For the running ledger of what shipped per session see
 [status.md](status.md).
