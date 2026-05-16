@@ -20,7 +20,7 @@
   <sys:String x:Key="SetGameInstallFolderInvalidBody">The selected folder doesn't contain the required asset file (0020\0.pamt). Pick the directory that contains the game's 0000\, 0020\, … pack groups — typically &lt;Steam library&gt;\steamapps\common\Crimson Desert or the Epic / asset folder you copied out for Game Pass.</sys:String>
   <sys:String x:Key="MenuRenameMercenary">Rename _Mercenary…</sys:String>
   <sys:String x:Key="MenuEditItemSockets">Edit Item _Sockets…</sys:String>
-  <sys:String x:Key="SocketEditorHeader">Filled sockets in the loaded save. Click Change Gem… to pick a replacement gem (Item_Stat_AbyssGear_* / Item_Skill_AbyssGear_*). Writes _itemKey in-place — no length-changing edits, no empty-socket fill, no socket-count changes. Saves to file on next File → Save.</sys:String>
+  <sys:String x:Key="SocketEditorHeader">Per-slot Fill / Change / Clear. Endurance is reset to 65535 (max) on Fill + Change so a fresh greater gem doesn't inherit the old slot's worn value. _validSocketCount auto-bumps when you fill a slot whose index is past the item's current cap (so the slot becomes visible in-game). You can fill any slot the underlying list pre-allocates (typically up to 5), regardless of the gamedata-defined limit. Saves to file on next File → Save.</sys:String>
   <sys:String x:Key="SocketEditorColBag">Bag</sys:String>
   <sys:String x:Key="SocketEditorColItem">Item</sys:String>
   <sys:String x:Key="SocketEditorColItemKey">ItemKey</sys:String>
@@ -28,8 +28,14 @@
   <sys:String x:Key="SocketEditorColCurrentGem">Current gem</sys:String>
   <sys:String x:Key="SocketEditorColCurrentGemKey">GemKey</sys:String>
   <sys:String x:Key="SocketEditorColAction">Action</sys:String>
-  <sys:String x:Key="SocketEditorColApplied">Applied gem</sys:String>
-  <sys:String x:Key="SocketEditorChangeGem">Change Gem…</sys:String>
+  <sys:String x:Key="SocketEditorColApplied">Status</sys:String>
+  <sys:String x:Key="SocketEditorChangeGem">Change…</sys:String>
+  <sys:String x:Key="SocketEditorFillGem">Fill…</sys:String>
+  <sys:String x:Key="SocketEditorClearGem">Clear</sys:String>
+  <sys:String x:Key="SocketEditorChangeGemTip">Open the gem picker and overwrite this filled slot. Resets _currentEndurance to 65535 (max) so greater gems start fresh.</sys:String>
+  <sys:String x:Key="SocketEditorFillGemTip">Open the gem picker and fill this empty slot. Auto-bumps _validSocketCount on the parent item if needed so the slot becomes visible in-game.</sys:String>
+  <sys:String x:Key="SocketEditorClearGemTip">Demote this socket back to empty. Both _currentEndurance and _itemKey become absent; mask flips to [0x00].</sys:String>
+  <sys:String x:Key="SocketEditorColState">State</sys:String>
   <sys:String x:Key="SocketEditorClose">Close</sys:String>
   <sys:String x:Key="SocketEditorNotAvailableTitle">No filled sockets in this save</sys:String>
   <sys:String x:Key="SocketEditorNotAvailableBody">The loaded save has no items with filled sockets (or no items with a _socketSaveDataList at all). Filled sockets appear here once you've embedded a gem in-game.</sys:String>

@@ -46,29 +46,52 @@
                             Width="2*" />
         <DataGridTextColumn Header="{StaticResource SocketEditorColItemKey}"
                             Binding="{Binding ItemKey}"
-                            Width="100" />
+                            Width="90" />
         <DataGridTextColumn Header="{StaticResource SocketEditorColSocket}"
                             Binding="{Binding SocketIndex}"
-                            Width="70" />
+                            Width="60" />
+        <DataGridTextColumn Header="{StaticResource SocketEditorColState}"
+                            Binding="{Binding StateLabel}"
+                            Width="170" />
         <DataGridTextColumn Header="{StaticResource SocketEditorColCurrentGem}"
                             Binding="{Binding DisplayGemName}"
                             Width="2*" />
         <DataGridTextColumn Header="{StaticResource SocketEditorColCurrentGemKey}"
-                            Binding="{Binding CurrentGemKey}"
-                            Width="100" />
+                            Binding="{Binding DisplayGemKeyText}"
+                            Width="90" />
+        <!-- Action column hosts three buttons whose IsVisible / CanExecute
+             route by row state. Fill (empty slots), Change + Clear
+             (filled slots). The picker callback is the same for Fill
+             and Change — the editor VM disambiguates by row.IsFilled
+             when the picked gem comes back. -->
         <DataGridTemplateColumn Header="{StaticResource SocketEditorColAction}"
-                                Width="120">
+                                Width="220">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate DataType="vm:SocketRow">
-              <Button Content="{StaticResource SocketEditorChangeGem}"
-                      Command="{Binding ChangeGemCommand}"
-                      HorizontalAlignment="Stretch" />
+              <StackPanel Orientation="Horizontal" Spacing="4"
+                          VerticalAlignment="Center">
+                <Button Content="{StaticResource SocketEditorFillGem}"
+                        ToolTip.Tip="{StaticResource SocketEditorFillGemTip}"
+                        Command="{Binding FillGemCommand}"
+                        IsVisible="{Binding !IsFilled}"
+                        Padding="6,2" MinHeight="0" />
+                <Button Content="{StaticResource SocketEditorChangeGem}"
+                        ToolTip.Tip="{StaticResource SocketEditorChangeGemTip}"
+                        Command="{Binding ChangeGemCommand}"
+                        IsVisible="{Binding IsFilled}"
+                        Padding="6,2" MinHeight="0" />
+                <Button Content="{StaticResource SocketEditorClearGem}"
+                        ToolTip.Tip="{StaticResource SocketEditorClearGemTip}"
+                        Command="{Binding ClearGemCommand}"
+                        IsVisible="{Binding IsFilled}"
+                        Padding="6,2" MinHeight="0" />
+              </StackPanel>
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
         <DataGridTextColumn Header="{StaticResource SocketEditorColApplied}"
-                            Binding="{Binding AppliedGemName}"
-                            Width="2*" />
+                            Binding="{Binding LastError}"
+                            Width="200" />
       </DataGrid.Columns>
     </DataGrid>
   </DockPanel>
