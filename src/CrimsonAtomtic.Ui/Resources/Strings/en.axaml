@@ -41,6 +41,8 @@
   <sys:String x:Key="SocketEditorApplySetApply">Apply</sys:String>
   <sys:String x:Key="SocketEditorApplySetEditCustom">Edit custom sets…</sys:String>
   <sys:String x:Key="SocketEditorApplySetEditCustomTip">Define / rename the three user-custom gem sets. Saved to settings.json.</sys:String>
+  <sys:String x:Key="SocketEditorFilterLabel">Filter:</sys:String>
+  <sys:String x:Key="SocketEditorFilterWatermark">Type to filter — item name (English / secondary), bag, item key, gem name, or gem key…</sys:String>
 
   <!-- Custom gem sets editor (launched from Sockets editor toolbar) -->
   <sys:String x:Key="CustomGemSetsWindowTitle">Edit custom gem sets</sys:String>
@@ -117,7 +119,7 @@
   <sys:String x:Key="DyeSlotApply">Apply</sys:String>
   <sys:String x:Key="DyeSlotEditorClose">Close</sys:String>
   <sys:String x:Key="AbyssGatesWindowTitle">Edit Abyss Gates</sys:String>
-  <sys:String x:Key="AbyssGatesHeader">Per-gate Lock/Unlock toggle. Writes _initStateNameHash on each FieldGimmickSaveData block (Default 0x866c7489 ↔ Activated 0xe300acfe). Idle (scenery) and Unknown rows are read-only to avoid destabilising non-gate gimmicks. v1 walks top-level FieldGimmickSaveData blocks only — nested ones inside container ObjectList fields are not surfaced. Saves to the file on next File → Save.</sys:String>
+  <sys:String x:Key="AbyssGatesHeader">Per-gate Lock/Unlock toggle. Writes _initStateNameHash on every nested FieldGimmickSaveData element inside FieldSaveData._fieldGimmickSaveDataList (Default 0x866c7489 ↔ Activated 0xe300acfe). Idle (scenery) and Unknown rows are read-only to avoid destabilising non-gate gimmicks. Saves to the file on next File → Save.</sys:String>
   <sys:String x:Key="AbyssGatesColOwnerLevel">Owner level</sys:String>
   <sys:String x:Key="AbyssGatesColGimmick">Gimmick</sys:String>
   <sys:String x:Key="AbyssGatesColSaveKey">SaveKey</sys:String>
@@ -130,7 +132,7 @@
   <sys:String x:Key="AbyssGatesLockTip">Activated (crossed) → Default (untouched). Sets _initStateNameHash back to 0x866c7489.</sys:String>
   <sys:String x:Key="AbyssGatesClose">Close</sys:String>
   <sys:String x:Key="AbyssGatesNotAvailableTitle">No abyss gates in this save</sys:String>
-  <sys:String x:Key="AbyssGatesNotAvailableBody">No top-level FieldGimmickSaveData blocks matched the abyss / hyperspace allowlist from gimmickinfo.pabgb. Either the save doesn't have any abyss gates loaded, or the game install is unconfigured so gimmickinfo isn't available.</sys:String>
+  <sys:String x:Key="AbyssGatesNotAvailableBody">No nested FieldGimmickSaveData elements inside FieldSaveData._fieldGimmickSaveDataList matched the abyss / hyperspace allowlist from gimmickinfo.pabgb. Either the save has no FieldSaveData root yet (very early-game), or the game install is unconfigured so gimmickinfo isn't available.</sys:String>
   <sys:String x:Key="MenuFontSize">_Font Size</sys:String>
   <sys:String x:Key="SummaryToggleTip">Show / hide the Save Summary panel — claim more room for the main grids.</sys:String>
   <sys:String x:Key="MenuLanguage">_Secondary Language</sys:String>

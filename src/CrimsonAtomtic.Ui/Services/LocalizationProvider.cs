@@ -964,6 +964,21 @@ public sealed class LocalizationProvider : IDisposable
     }
 
     /// <summary>
+    /// Internal name (string_key) for a <c>CharacterKey</c> from
+    /// <c>characterinfo.pabgb</c> — e.g. <c>"Damian"</c>,
+    /// <c>"Riding_Horse_Tiuta_Unique_2050_kliff"</c>,
+    /// <c>"NHM_Unique_Shane_OneHandBow_410"</c>. Useful as a fallback
+    /// label when the display PALOC misses, and as a category signal
+    /// (the Riding_*/Animal_*/NHM_*/NOM_* prefixes correspond to the
+    /// in-game mount / vehicle / wild-animal / NPC taxonomy).
+    ///
+    /// Returns <c>null</c> when the characterinfo bridge isn't loaded
+    /// or the key isn't in the catalog.
+    /// </summary>
+    public string? LookupCharacterInternalName(uint characterKey) =>
+        _characterInfo?.LookupStringKey(characterKey);
+
+    /// <summary>
     /// Game-defined max_stack_count for an item. Returns <c>null</c>
     /// when the iteminfo bridge isn't loaded or the key isn't known.
     /// Drives the "Set to max stack" UX in the edit panel.

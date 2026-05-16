@@ -1400,6 +1400,165 @@ public sealed class NativeSaveLoaderTests
         return (-1, -1, -1, -1);
     }
 
+    // ── Schema-shape regressions for the Abyss Gates tools ────────────────
+    //
+    // Both flows shipped 2026-05-15 assumed shapes the live save doesn't
+    // actually have; the 2026-05-16 part 13 rewrites switched to the
+    // correct shapes (nested-under-FieldSaveData for the per-gate
+    // dialog; object_list elements for the bulk knowledge inject).
+    // These tests pin those shapes so a future schema drift surfaces
+    // here rather than as a silent UX failure ("no abyss gates in this
+    // save" / "0 already present").
+
+    [Fact]
+    public void KnowledgeSaveData_List_IsObjectListWithKeyedElements()
+    {
+        var path = FindLiveSave();
+        if (path is null) return;
+
+        using var loader = new NativeSaveLoader();
+        var summary = loader.Load(path);
+
+        // KnowledgeSaveData is a singleton in every real save.
+        BlockSummary? root = null;
+        for (var i = 0; i < summary.Blocks.Count; i++)
+        {
+            if (string.Equals(summary.Blocks[i].ClassName,
+                              "KnowledgeSaveData", StringComparison.Ordinal))
+            {
+                root = summary.Blocks[i];
+                break;
+            }
+        }
+        if (root is null)
+        {
+            // Save genuinely has no knowledge block (extremely early
+            // game, near-impossible in practice) — soft skip.
+            return;
+        }
+
+        var details = loader.LoadBlockDetails(path, root.Index);
+        DecodedFieldRow? listField = null;
+        foreach (var f in details.Fields)
+        {
+            if (string.Equals(f.Name, "_list", StringComparison.Ordinal))
+            {
+                listField = f;
+                break;
+            }
+        }
+        Assert.NotNull(listField);
+
+        // Contract the bulk-inject rewrite depends on: object_list
+        // (not dynamic_array<u32>, which the shipped v1 assumed) with
+        // KnowledgeElementSaveData elements carrying a _key scalar.
+        Assert.Equal("object_list", listField!.Kind);
+        Assert.NotNull(listField.Elements);
+        Assert.NotEmpty(listField.Elements!);
+
+        var sample = listField.Elements![0];
+        Assert.Equal("KnowledgeElementSaveData", sample.ClassName);
+
+        DecodedFieldRow? keyField = null;
+        foreach (var f in sample.Fields)
+        {
+            if (string.Equals(f.Name, "_key", StringComparison.Ordinal))
+            {
+                keyField = f;
+                break;
+            }
+        }
+        Assert.NotNull(keyField);
+        Assert.True(keyField!.Present, "every existing knowledge element must carry a _key");
+    }
+
+    [Fact]
+    public void FieldGimmickSaveData_NestedUnderFieldSaveDataNotTopLevel()
+    {
+        var path = FindLiveSave();
+        if (path is null) return;
+
+        using var loader = new NativeSaveLoader();
+        var summary = loader.Load(path);
+
+        // (a) No top-level FieldGimmickSaveData blocks — the shipped
+        // v1 per-gate dialog looked for these and always found zero.
+        var topLevelCount = 0;
+        var fieldSaveDataIdx = -1;
+        for (var i = 0; i < summary.Blocks.Count; i++)
+        {
+            var cls = summary.Blocks[i].ClassName;
+            if (string.Equals(cls, "FieldGimmickSaveData", StringComparison.Ordinal))
+            {
+                topLevelCount++;
+            }
+            else if (fieldSaveDataIdx < 0
+                     && string.Equals(cls, "FieldSaveData", StringComparison.Ordinal))
+            {
+                fieldSaveDataIdx = i;
+            }
+        }
+        Assert.Equal(0, topLevelCount);
+
+        if (fieldSaveDataIdx < 0)
+        {
+            // Very early-game save with no FieldSaveData root yet —
+            // soft skip rather than fail (the dialog handles this too).
+            return;
+        }
+
+        // (b) The FieldSaveData root has a _fieldGimmickSaveDataList
+        // object_list whose elements are FieldGimmickSaveData with
+        // _gimmickInfoKey + _initStateNameHash scalars — the contract
+        // the v2 dialog walks.
+        var details = loader.LoadBlockDetails(path, fieldSaveDataIdx);
+        DecodedFieldRow? listField = null;
+        foreach (var f in details.Fields)
+        {
+            if (string.Equals(f.Name, "_fieldGimmickSaveDataList",
+                              StringComparison.Ordinal))
+            {
+                listField = f;
+                break;
+            }
+        }
+        Assert.NotNull(listField);
+        Assert.Equal("object_list", listField!.Kind);
+        Assert.NotNull(listField.Elements);
+        Assert.NotEmpty(listField.Elements!);
+        Assert.Equal("FieldGimmickSaveData", listField.Elements![0].ClassName);
+
+        // At least one element must carry _gimmickInfoKey + at least
+        // some elements must carry _initStateNameHash — the two
+        // signals the per-gate dialog uses to identify abyss gates.
+        var withGimmickKey = 0;
+        var withInitStateHash = 0;
+        foreach (var elem in listField.Elements!)
+        {
+            var hasGimmickKey = false;
+            var hasInitStateHash = false;
+            foreach (var f in elem.Fields)
+            {
+                if (string.Equals(f.Name, "_gimmickInfoKey", StringComparison.Ordinal)
+                    && f.Present)
+                {
+                    hasGimmickKey = true;
+                }
+                else if (string.Equals(f.Name, "_initStateNameHash", StringComparison.Ordinal)
+                         && f.Present)
+                {
+                    hasInitStateHash = true;
+                }
+            }
+            if (hasGimmickKey) withGimmickKey++;
+            if (hasInitStateHash) withInitStateHash++;
+        }
+        Assert.True(withGimmickKey > 0,
+            "expected at least one nested element with _gimmickInfoKey");
+        Assert.True(withInitStateHash > 0,
+            "expected at least one nested element with _initStateNameHash");
+    }
+
     [Fact]
     public void BlockDetailsCache_VersionBumps_InvalidatesAutomatically()
     {

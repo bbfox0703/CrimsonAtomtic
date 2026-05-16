@@ -3631,17 +3631,28 @@ public sealed partial class MainWindowViewModel(
     /// </summary>
     private const string KnowledgeSaveDataClass = "KnowledgeSaveData";
 
-    /// <summary>Name of the dynamic_array&lt;u32&gt; field on that block.</summary>
+    /// <summary>
+    /// Object-list field on <see cref="KnowledgeSaveDataClass"/> that
+    /// holds the player's known-knowledge entries. Each element is a
+    /// <c>KnowledgeElementSaveData</c> with scalar fields
+    /// <c>_key</c> (u32), <c>_level</c> (u8),
+    /// <c>_learnedFieldTime</c> (u64) and <c>_isNewMark</c> (bool).
+    /// </summary>
     private const string KnowledgeListFieldName = "_list";
 
+    /// <summary>Scalar field names on a <c>KnowledgeElementSaveData</c> element.</summary>
+    private const string KnowledgeElemKeyField = "_key";
+    private const string KnowledgeElemLearnedTimeField = "_learnedFieldTime";
+    private const string KnowledgeElemIsNewMarkField = "_isNewMark";
+
     /// <summary>
-    /// Tools menu: bulk-inject every abyss-gate knowledge key into
-    /// <c>KnowledgeSaveData._list</c> via the dedicated
-    /// <c>dynamic_array&lt;u32&gt;</c> setter. Touches only the
+    /// Tools menu: bulk-append every missing abyss-gate knowledge key
+    /// into <c>KnowledgeSaveData._list</c>. Touches only the
     /// **discovery flag** layer (gates show up on the map) — the
     /// gate-state layer (whether the bridge is actually crossable in
-    /// world) lives on <c>FieldGimmickSaveData._initStateNameHash</c>
-    /// and is handled by the per-gate Edit Abyss Gates dialog.
+    /// world) lives on each nested
+    /// <c>FieldGimmickSaveData._initStateNameHash</c> and is handled
+    /// by the per-gate Edit Abyss Gates dialog.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -3649,16 +3660,27 @@ public sealed partial class MainWindowViewModel(
     /// Unlock Only" pack flow (398 hand-curated keys) — but the
     /// keyset is harvested live from <c>knowledgeinfo.pabgb</c> via
     /// <see cref="LocalizationProvider.EnumerateKnowledgeByNamePrefix"/>
-    /// so no JSON pack is vendored. The harvested set is then unioned
-    /// with the user's current <c>_list</c> contents (deduped) before
-    /// writing back; already-discovered gates are left alone.
+    /// so no JSON pack is vendored. The harvested set is intersected
+    /// with the user's current <c>_list</c> element keys before
+    /// applying; already-discovered gates are left alone.
     /// </para>
     /// <para>
-    /// Implementation cost: one read FFI (<c>DynamicArrayGetU32Elements</c>),
-    /// up to a few thousand <see cref="LocalizationProvider.GetKnowledge"/>
-    /// calls for the catalog scan, and one write FFI
-    /// (<c>DynamicArraySetU32Elements</c>). End-to-end well under one
-    /// second on a 1.07-era save.
+    /// <b>Field shape note:</b> across slots probed from 1.05 / 1.06 /
+    /// 1.07 saves, <c>KnowledgeSaveData._list</c> is always an
+    /// <c>object_list&lt;KnowledgeElementSaveData&gt;</c> (~1,740
+    /// elements per save), <b>not</b> a <c>dynamic_array&lt;u32&gt;</c>.
+    /// Each new entry is therefore created by cloning element 0 and
+    /// patching <c>_key</c>, <c>_learnedFieldTime</c> and
+    /// <c>_isNewMark</c> on the clone. The shipped v1 used a u32-array
+    /// setter that silently read 0 elements and would have corrupted
+    /// the save on apply; this v2 replaces it entirely.
+    /// </para>
+    /// <para>
+    /// Implementation cost: ~3 length-changing FFI calls per missing
+    /// key (clone + 2 scalar patches; the bool defaults to 0). A
+    /// 98-key sweep takes a few seconds end-to-end on a 1.07-era
+    /// save — every length-changer triggers a body re-decode in
+    /// crimson-rs.
     /// </para>
     /// </remarks>
     [RelayCommand(CanExecute = nameof(HasSave))]
@@ -3701,6 +3723,45 @@ public sealed partial class MainWindowViewModel(
                 + "Bridge needs a new schema baseline.";
             return;
         }
+        // Reject the legacy dynamic_array shape — would mean a fresh
+        // schema we haven't designed for. The append path is built
+        // for object_list elements only.
+        if (!string.Equals(listField.Kind, "object_list", StringComparison.Ordinal)
+            || listField.Elements is not { } existingElements)
+        {
+            BulkOpStatus =
+                $"Schema drift: {KnowledgeSaveDataClass}.{KnowledgeListFieldName} "
+                + $"is '{listField.Kind}', expected object_list. "
+                + "Bridge needs an update.";
+            return;
+        }
+        if (existingElements.Count == 0)
+        {
+            BulkOpStatus = $"Refusing to bulk-append into an empty {KnowledgeSaveDataClass}._list "
+                + "(need at least one template element to clone). "
+                + "Discover any knowledge in-game first.";
+            return;
+        }
+
+        // Discover the per-element field indices from the first existing
+        // element — schema is uniform within a list.
+        int keyFieldIdx = -1, learnedTimeFieldIdx = -1, isNewMarkFieldIdx = -1;
+        foreach (var f in existingElements[0].Fields)
+        {
+            if (string.Equals(f.Name, KnowledgeElemKeyField, StringComparison.Ordinal))
+                keyFieldIdx = f.FieldIndex;
+            else if (string.Equals(f.Name, KnowledgeElemLearnedTimeField, StringComparison.Ordinal))
+                learnedTimeFieldIdx = f.FieldIndex;
+            else if (string.Equals(f.Name, KnowledgeElemIsNewMarkField, StringComparison.Ordinal))
+                isNewMarkFieldIdx = f.FieldIndex;
+        }
+        if (keyFieldIdx < 0)
+        {
+            BulkOpStatus =
+                $"Schema drift: KnowledgeElementSaveData has no '{KnowledgeElemKeyField}' field. "
+                + "Bridge needs an update.";
+            return;
+        }
 
         // Pre-flight: scan the catalog for matching prefixes + read the
         // current list contents. Both on a background thread because the
@@ -3711,17 +3772,20 @@ public sealed partial class MainWindowViewModel(
                 .EnumerateKnowledgeByNamePrefix(AbyssGateKnowledgePrefixes)
                 .Select(e => e.KnowledgeKey)
                 .ToHashSet();
-            uint[] existing;
-            try
+            var existingSet = new HashSet<uint>(existingElements.Count);
+            foreach (var elem in existingElements)
             {
-                existing = loader.DynamicArrayGetU32Elements(
-                    blockSummary.Index, ReadOnlySpan<PathStep>.Empty, listField.FieldIndex);
+                foreach (var f in elem.Fields)
+                {
+                    if (!string.Equals(f.Name, KnowledgeElemKeyField, StringComparison.Ordinal))
+                        continue;
+                    if (TryParseScalarUInt(f.Value, out var k) && k <= uint.MaxValue)
+                    {
+                        existingSet.Add((uint)k);
+                    }
+                    break;
+                }
             }
-            catch (CrimsonSaveException)
-            {
-                existing = Array.Empty<uint>();
-            }
-            var existingSet = new HashSet<uint>(existing);
             var alreadyHave = 0;
             var toAdd = new List<uint>(harvested.Count);
             foreach (var k in harvested)
@@ -3729,8 +3793,12 @@ public sealed partial class MainWindowViewModel(
                 if (existingSet.Contains(k)) alreadyHave++;
                 else toAdd.Add(k);
             }
+            // Sort the toAdd list for deterministic order — the diff
+            // against an unedited save stays minimal regardless of
+            // HashSet hash-seed variation.
+            toAdd.Sort();
             return (Harvested: harvested.Count, AlreadyHave: alreadyHave,
-                    ToAdd: toAdd, Existing: existing);
+                    ToAdd: toAdd, BaselineCount: existingElements.Count);
         });
 
         if (preview.Harvested == 0)
@@ -3764,44 +3832,103 @@ public sealed partial class MainWindowViewModel(
             return;
         }
 
-        // Build the union, preserving the user's existing order so the
-        // diff against an unedited save stays minimal.
-        var merged = new List<uint>(preview.Existing.Length + preview.ToAdd.Count);
-        merged.AddRange(preview.Existing);
-        merged.AddRange(preview.ToAdd);
-
         BulkOpStatus = $"Injecting {preview.ToAdd.Count} knowledge key(s)…";
-        var error = await Task.Run<CrimsonSaveException?>(() =>
+        var blockIdx = blockSummary.Index;
+        var listFieldIdx = listField.FieldIndex;
+        var baselineCount = preview.BaselineCount;
+        var keysToAdd = preview.ToAdd;
+        var applied = 0;
+        var failed = 0;
+        CrimsonSaveException? firstError = null;
+        uint? firstFailedKey = null;
+
+        await Task.Run(() =>
         {
-            try
+            for (var i = 0; i < keysToAdd.Count; i++)
             {
-                loader.DynamicArraySetU32Elements(
-                    blockSummary.Index, ReadOnlySpan<PathStep>.Empty,
-                    listField.FieldIndex, merged.ToArray());
-                return null;
-            }
-            catch (CrimsonSaveException ex)
-            {
-                return ex;
+                var newIdx = baselineCount + i;
+                var key = keysToAdd[i];
+                try
+                {
+                    // Clone element 0 as a fresh template at the tail.
+                    loader.ListCloneElement(
+                        blockIdx,
+                        ReadOnlySpan<PathStep>.Empty,
+                        listFieldIdx,
+                        sourceIndex: 0,
+                        destinationIndex: newIdx);
+
+                    var newPath = new[] { new PathStep((uint)listFieldIdx, (uint)newIdx) };
+
+                    // Patch _key → the abyss-gate knowledge key.
+                    loader.SetScalarField(
+                        blockIdx, newPath, keyFieldIdx, BitConverter.GetBytes(key));
+
+                    // Patch _learnedFieldTime → 0 (bulk-inject sentinel —
+                    // distinguishes editor-injected discoveries from
+                    // organically learned ones). Optional; only if the
+                    // field is part of the schema.
+                    if (learnedTimeFieldIdx >= 0)
+                    {
+                        loader.SetScalarField(
+                            blockIdx, newPath, learnedTimeFieldIdx,
+                            BitConverter.GetBytes((ulong)0));
+                    }
+                    // Patch _isNewMark → false so the bulk-injected
+                    // entries don't all flash as new in the player's
+                    // UI on the next load.
+                    if (isNewMarkFieldIdx >= 0)
+                    {
+                        loader.SetScalarField(
+                            blockIdx, newPath, isNewMarkFieldIdx, new byte[] { 0 });
+                    }
+                    applied++;
+                }
+                catch (CrimsonSaveException ex)
+                {
+                    failed++;
+                    firstError ??= ex;
+                    firstFailedKey ??= key;
+                    // Abort the sweep on first failure — the list shape
+                    // may now be inconsistent, and continuing risks
+                    // compounding the error. Reload without saving to
+                    // revert.
+                    return;
+                }
             }
         });
 
         RefreshSelectedBlockSilently();
 
-        if (error is null)
+        if (firstError is null)
         {
             IsDirty = true;
             Journal.Log("Abyss gates",
-                $"Bulk-added {preview.ToAdd.Count} abyss-gate knowledge key(s) "
+                $"Bulk-added {applied} abyss-gate knowledge key(s) "
                 + $"to {KnowledgeSaveDataClass}._list (map discovery)");
             OnPropertyChanged(nameof(WindowTitle));
-            BulkOpStatus = $"Done: added {preview.ToAdd.Count} abyss-gate knowledge key(s) "
-                + $"({merged.Count} total in {KnowledgeSaveDataClass}._list).";
+            BulkOpStatus = $"Done: added {applied} abyss-gate knowledge key(s) "
+                + $"({baselineCount + applied} total in {KnowledgeSaveDataClass}._list).";
         }
         else
         {
-            BulkOpStatus = $"Failed: {error.Message} (code {error.ErrorCode}). "
-                + "Reload the save without writing to revert.";
+            if (applied > 0)
+            {
+                // Partial-success path: some entries did land before
+                // the failure. The save is dirty either way — the
+                // user needs to decide whether to keep the partial
+                // progress or reload.
+                IsDirty = true;
+                Journal.Log("Abyss gates",
+                    $"Bulk-added {applied} of {keysToAdd.Count} abyss-gate knowledge key(s) "
+                    + $"before failure at key 0x{firstFailedKey:X8}");
+                OnPropertyChanged(nameof(WindowTitle));
+            }
+            BulkOpStatus = $"Failed after {applied}/{keysToAdd.Count}: "
+                + $"{firstError.Message} (code {firstError.ErrorCode}). "
+                + (applied > 0
+                    ? "Reload the save without writing to revert the partial progress."
+                    : "No changes written.");
         }
     }
 
