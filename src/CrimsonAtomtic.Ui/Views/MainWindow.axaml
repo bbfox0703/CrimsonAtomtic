@@ -96,6 +96,9 @@
         <MenuItem Header="{StaticResource MenuEditItemDyes}"
                   Click="OnEditItemDyesClick"
                   IsEnabled="{Binding HasSave}" />
+        <MenuItem Header="{StaticResource MenuVendorBuyback}"
+                  Click="OnVendorBuybackClick"
+                  IsEnabled="{Binding HasSave}" />
         <Separator />
         <MenuItem Header="{StaticResource MenuReviewChanges}"
                   Click="OnReviewChangesClick"

@@ -662,6 +662,48 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Tools → Vendor Buyback handler. Walks every
+    /// <c>StoreSaveData._storeDataList</c> store, drills into its
+    /// <c>_storeSoldItemDataList</c>, and surfaces a per-row Remove
+    /// action. v1 scope: view + remove; "move back to inventory" is a
+    /// planned follow-up. Read-only when no save is loaded (menu item
+    /// gated on HasSave).
+    /// </summary>
+    private async void OnVendorBuybackClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm
+            || vm.LoadedPath is not { } loadedPath
+            || vm.Summary is not { Blocks: { } blocks })
+        {
+            return;
+        }
+        var buybackVm = ViewModels.VendorBuybackViewModel.TryCreate(
+            vm.GetSaveLoader(),
+            vm.Localization,
+            vm.Journal,
+            loadedPath,
+            blocks);
+        if (buybackVm is null)
+        {
+            var title = (string?)this.FindResource("VendorBuybackNotAvailableTitle")
+                        ?? "No buyback entries";
+            var body = (string?)this.FindResource("VendorBuybackNotAvailableBody")
+                       ?? "No sold items in any store's buyback queue.";
+            await ConfirmDialog.ShowAlertAsync(this, title, body);
+            return;
+        }
+        var child = new VendorBuybackWindow { DataContext = buybackVm };
+        child.Closed += (_, _) =>
+        {
+            if (buybackVm.IsDirty)
+            {
+                vm.MarkDirtyFromExternalEdit();
+            }
+        };
+        child.Show(this);
+    }
+
+    /// <summary>
     /// Tools → Edit Abyss Gates… handler. Walks the loaded save
     /// asynchronously to build the per-gate list, then opens the
     /// dialog. Closes the dialog and flips the main VM's dirty flag

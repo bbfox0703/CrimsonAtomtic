@@ -1,0 +1,102 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        x:Class="CrimsonAtomtic.Ui.Views.VendorBuybackWindow"
+        x:DataType="vm:VendorBuybackViewModel"
+        Title="{StaticResource VendorBuybackWindowTitle}"
+        Width="1280" Height="600"
+        MinWidth="900" MinHeight="380"
+        FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
+
+  <DockPanel LastChildFill="True" Margin="12">
+    <TextBlock DockPanel.Dock="Top"
+               Text="{StaticResource VendorBuybackHeader}"
+               TextWrapping="Wrap"
+               Opacity="0.7"
+               Margin="0,0,0,8" />
+
+    <!-- Filter: two-pass (store-name match -> all rows of that store;
+         item name / item key narrows per-row). Same shape as Sockets v2. -->
+    <Grid DockPanel.Dock="Top"
+          ColumnDefinitions="Auto,*,Auto"
+          ColumnSpacing="8"
+          Margin="0,0,0,10">
+      <TextBlock Grid.Column="0"
+                 Text="{StaticResource VendorBuybackFilterLabel}"
+                 VerticalAlignment="Center"
+                 Opacity="0.8" />
+      <TextBox Grid.Column="1"
+               Text="{Binding SearchText, Mode=TwoWay}"
+               PlaceholderText="{StaticResource VendorBuybackFilterWatermark}"
+               HorizontalAlignment="Stretch" />
+      <TextBlock Grid.Column="2"
+                 Text="{Binding FilterCountText}"
+                 VerticalAlignment="Center"
+                 Opacity="0.6"
+                 MinWidth="200" />
+    </Grid>
+
+    <Grid DockPanel.Dock="Bottom"
+          ColumnDefinitions="*,Auto"
+          ColumnSpacing="12"
+          Margin="0,8,0,0">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding StatusMessage}"
+                 Opacity="0.7"
+                 VerticalAlignment="Center"
+                 TextTrimming="CharacterEllipsis" />
+      <Button Grid.Column="1"
+              Content="{StaticResource VendorBuybackClose}"
+              Click="OnCloseClick"
+              MinWidth="80" />
+    </Grid>
+
+    <DataGrid ItemsSource="{Binding Items}"
+              AutoGenerateColumns="False"
+              CanUserResizeColumns="True"
+              CanUserSortColumns="True"
+              GridLinesVisibility="Horizontal"
+              IsReadOnly="True"
+              HeadersVisibility="Column">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="{StaticResource VendorBuybackColStore}"
+                            Binding="{Binding StoreName}"
+                            Width="240" MinWidth="120" />
+        <DataGridTextColumn Header="{StaticResource VendorBuybackColStoreKey}"
+                            Binding="{Binding StoreKey}"
+                            Width="90" />
+        <DataGridTextColumn Header="{StaticResource VendorBuybackColItem}"
+                            Binding="{Binding ItemName}"
+                            Width="280" MinWidth="160" />
+        <DataGridTextColumn Header="{StaticResource VendorBuybackColItemKey}"
+                            Binding="{Binding ItemKey}"
+                            Width="90" />
+        <DataGridTextColumn Header="{StaticResource VendorBuybackColStack}"
+                            Binding="{Binding StackCount}"
+                            Width="70" />
+        <DataGridTextColumn Header="{StaticResource VendorBuybackColEndurance}"
+                            Binding="{Binding Endurance}"
+                            Width="90" />
+        <DataGridTextColumn Header="{StaticResource VendorBuybackColSoldAt}"
+                            Binding="{Binding SoldAtTicks}"
+                            Width="160"
+                            FontFamily="Consolas, Menlo, monospace" />
+        <DataGridTemplateColumn Header="{StaticResource VendorBuybackColAction}"
+                                Width="110">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate DataType="vm:VendorBuybackRow">
+              <Button Content="{StaticResource VendorBuybackRemove}"
+                      ToolTip.Tip="{StaticResource VendorBuybackRemoveTip}"
+                      Command="{Binding RemoveCommand}"
+                      Padding="6,2" MinHeight="0"
+                      HorizontalAlignment="Stretch" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTextColumn Header="{StaticResource VendorBuybackColStatus}"
+                            Binding="{Binding LastError}"
+                            Width="200" />
+      </DataGrid.Columns>
+    </DataGrid>
+  </DockPanel>
+</Window>
