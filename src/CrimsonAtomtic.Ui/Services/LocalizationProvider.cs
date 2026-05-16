@@ -47,6 +47,15 @@ public sealed class LocalizationProvider : IDisposable
     private const string SubLevelInfoFileName    = "sublevelinfo.pabgb";
     private const string SkillPabgbFileName      = "skill.pabgb";
     private const string SkillPabghFileName      = "skill.pabgh";
+    // Three dye gamedata tables, each .pabgb + .pabgh in the same
+    // group 0008 directory. Drive the Dye editor's color-group /
+    // material dropdowns + (future) per-prefab slot-count lookup.
+    private const string DyeColorGroupPabgbFileName = "dyecolorgroupinfo.pabgb";
+    private const string DyeColorGroupPabghFileName = "dyecolorgroupinfo.pabgh";
+    private const string DyeTexturePalletePabgbFileName = "partprefabdyetexturepalleteinfo.pabgb";
+    private const string DyeTexturePalletePabghFileName = "partprefabdyetexturepalleteinfo.pabgh";
+    private const string DyeSlotInfoPabgbFileName = "partprefabdyeslotinfo.pabgb";
+    private const string DyeSlotInfoPabghFileName = "partprefabdyeslotinfo.pabgh";
 
     /// <summary>
     /// Known PALOC language codes the game ships. Sourced authoritatively
@@ -250,6 +259,9 @@ public sealed class LocalizationProvider : IDisposable
     private NativeGimmickInfoCatalog? _gimmickInfo;
     private NativeCharacterInfoCatalog? _characterInfo;
     private NativeSubLevelInfoCatalog? _subLevelInfo;
+    private NativeDyeColorGroupInfoCatalog? _dyeColorGroupInfo;
+    private NativePartPrefabDyeTexturePalleteCatalog? _dyeTexturePalleteInfo;
+    private NativePartPrefabDyeSlotInfoCatalog? _dyeSlotInfo;
     private string? _gameRoot;
     private string? _secondaryLanguage;
 
@@ -423,6 +435,7 @@ public sealed class LocalizationProvider : IDisposable
         TryBootstrapKeyInfoCatalog(gameRoot, SubLevelInfoFileName,
             NativeSubLevelInfoCatalog.LoadFromBytes, ref _subLevelInfo);
         TryBootstrapSkillInfo(gameRoot);
+        TryBootstrapDyeGamedata(gameRoot);
 
         // ── Discover available PALOC languages by probing the well-known
         // group range. PAMT parses are fast (a few ms each); the probe
@@ -543,6 +556,51 @@ public sealed class LocalizationProvider : IDisposable
         catch (IOException)
         {
         }
+    }
+
+    /// <summary>
+    /// Load the three dye gamedata tables. Each is a separate
+    /// <c>.pabgb</c> + <c>.pabgh</c> pair in the same group 0008
+    /// directory as the other table-driven catalogs. Failures
+    /// degrade per-table — losing color-group resolution doesn't
+    /// blank material resolution and vice-versa.
+    /// </summary>
+    private void TryBootstrapDyeGamedata(string gameRoot)
+    {
+        var pamt = Path.Combine(gameRoot, "0008", "0.pamt");
+        if (!File.Exists(pamt))
+        {
+            return;
+        }
+        TryLoadDyeBridge(pamt, DyeColorGroupPabgbFileName, DyeColorGroupPabghFileName,
+            NativeDyeColorGroupInfoCatalog.LoadFromBytes, ref _dyeColorGroupInfo);
+        TryLoadDyeBridge(pamt, DyeTexturePalletePabgbFileName, DyeTexturePalletePabghFileName,
+            NativePartPrefabDyeTexturePalleteCatalog.LoadFromBytes,
+            ref _dyeTexturePalleteInfo);
+        TryLoadDyeBridge(pamt, DyeSlotInfoPabgbFileName, DyeSlotInfoPabghFileName,
+            NativePartPrefabDyeSlotInfoCatalog.LoadFromBytes, ref _dyeSlotInfo);
+    }
+
+    /// <summary>
+    /// Generic two-file loader for the dye bridges — extracts the
+    /// <c>.pabgb</c> + <c>.pabgh</c> pair and hands them to the
+    /// per-bridge factory. Failures degrade silently per-bridge.
+    /// </summary>
+    private void TryLoadDyeBridge<T>(
+        string pamt, string pabgbName, string pabghName,
+        Func<ReadOnlySpan<byte>, ReadOnlySpan<byte>, T> loader,
+        ref T? slot)
+        where T : class, IDisposable
+    {
+        try
+        {
+            var pabgb = _paz.ExtractFile(pamt, ItemInfoDirectory, pabgbName);
+            var pabgh = _paz.ExtractFile(pamt, ItemInfoDirectory, pabghName);
+            slot?.Dispose();
+            slot = loader(pabgb, pabgh);
+        }
+        catch (CrimsonSaveException) { }
+        catch (IOException) { }
     }
 
     private void DiscoverLanguages(string gameRoot)
@@ -770,6 +828,44 @@ public sealed class LocalizationProvider : IDisposable
     /// <c>0</c> when the bridge isn't loaded.
     /// </summary>
     public int GimmickCount => _gimmickInfo?.EntryCount ?? 0;
+
+    // ── Dye gamedata bridges ────────────────────────────────────────────────
+    //
+    // Exposed for the Dye editor: color-group dropdown (10 named
+    // groups) + material dropdown (11 palette tiers × 2-3 sub-records)
+    // + (future) per-prefab slot-count lookup. All three are loaded
+    // alongside the other catalogs in TryBootstrapDyeGamedata.
+
+    /// <summary>
+    /// True iff all three dye gamedata bridges are loaded. False
+    /// degrades the Dye editor to a "raw key" mode (no resolved
+    /// names in dropdowns).
+    /// </summary>
+    public bool HasDyeGamedata =>
+        _dyeColorGroupInfo is not null
+        && _dyeTexturePalleteInfo is not null
+        && _dyeSlotInfo is not null;
+
+    /// <summary>
+    /// Direct access to <c>dyecolorgroupinfo</c>. <c>null</c> when the
+    /// bridge isn't loaded.
+    /// </summary>
+    public NativeDyeColorGroupInfoCatalog? DyeColorGroupInfo => _dyeColorGroupInfo;
+
+    /// <summary>
+    /// Direct access to <c>partprefabdyetexturepalleteinfo</c>.
+    /// <c>null</c> when the bridge isn't loaded.
+    /// </summary>
+    public NativePartPrefabDyeTexturePalleteCatalog? DyeTexturePalleteInfo =>
+        _dyeTexturePalleteInfo;
+
+    /// <summary>
+    /// Direct access to <c>partprefabdyeslotinfo</c>. <c>null</c> when
+    /// the bridge isn't loaded. Not consumed by the Dye editor v1
+    /// (requires <c>_itemKey → _partPrefabKey</c> cross-reference,
+    /// still open upstream).
+    /// </summary>
+    public NativePartPrefabDyeSlotInfoCatalog? DyeSlotInfo => _dyeSlotInfo;
 
     /// <summary>
     /// Get the <c>(GimmickInfoKey, InternalName)</c> pair at insertion
@@ -1287,6 +1383,12 @@ public sealed class LocalizationProvider : IDisposable
         _characterInfo = null;
         _subLevelInfo?.Dispose();
         _subLevelInfo = null;
+        _dyeColorGroupInfo?.Dispose();
+        _dyeColorGroupInfo = null;
+        _dyeTexturePalleteInfo?.Dispose();
+        _dyeTexturePalleteInfo = null;
+        _dyeSlotInfo?.Dispose();
+        _dyeSlotInfo = null;
         foreach (var cat in _catalogs.Values)
         {
             cat.Dispose();

@@ -1940,4 +1940,150 @@ internal static partial class NativeMethods
     public static unsafe partial int SubLevelInfoGetEntry(
         CrimsonSubLevelInfoHandle handle, uint idx, out uint outKey,
         byte* buf, nuint bufLen, out nuint required);
+
+    // ── DyeColorGroupInfo bridge (dyecolorgroupinfo.pabgb + .pabgh) ─────────
+    //
+    // Resolves DyeColorGroupInfoKey (u32) → named color group
+    // ("Her_Color_Group_I", "Dem_Color_Group_I/II/III", …). 10 rows
+    // in 1.07. Drives the Dye editor's color-group dropdown.
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_dye_color_group_info_load_from_bytes")]
+    public static unsafe partial int DyeColorGroupInfoLoadFromBytes(
+        byte* pabgb, nuint pabgbLen, byte* pabgh, nuint pabghLen, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_dye_color_group_info_free")]
+    public static partial void DyeColorGroupInfoFree(IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_dye_color_group_info_entry_count")]
+    public static partial int DyeColorGroupInfoEntryCount(
+        CrimsonDyeColorGroupInfoHandle handle, out uint count);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_dye_color_group_info_lookup_name")]
+    public static unsafe partial int DyeColorGroupInfoLookupName(
+        CrimsonDyeColorGroupInfoHandle handle, uint colorGroupKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_dye_color_group_info_get_entry")]
+    public static unsafe partial int DyeColorGroupInfoGetEntry(
+        CrimsonDyeColorGroupInfoHandle handle, uint idx, out uint outKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    // ── PartPrefabDyeTexturePalleteInfo bridge ──────────────────────────────
+    //
+    // Resolves PartPrefabDyeTexturePalleteKey (u16, widened to u32 in
+    // the bridge) → material tier with 2–3 sub-records each carrying
+    // material name ("cloth"/"leather"/"metal"/…) + icon DDS path +
+    // texture DDS path + optional variant. 11 rows (keys 0..10) in
+    // 1.07. Drives the Dye editor's material dropdown.
+
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_texture_pallete_load_from_bytes")]
+    public static unsafe partial int PartPrefabDyeTexturePalleteLoadFromBytes(
+        byte* pabgb, nuint pabgbLen, byte* pabgh, nuint pabghLen, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_part_prefab_dye_texture_pallete_free")]
+    public static partial void PartPrefabDyeTexturePalleteFree(IntPtr handle);
+
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_texture_pallete_entry_count")]
+    public static partial int PartPrefabDyeTexturePalleteEntryCount(
+        CrimsonPartPrefabDyeTexturePalleteHandle handle, out uint count);
+
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_texture_pallete_lookup_sub_count")]
+    public static partial int PartPrefabDyeTexturePalleteLookupSubCount(
+        CrimsonPartPrefabDyeTexturePalleteHandle handle, uint paletteKey, out uint count);
+
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_texture_pallete_lookup_sub_material_name")]
+    public static unsafe partial int PartPrefabDyeTexturePalleteLookupSubMaterialName(
+        CrimsonPartPrefabDyeTexturePalleteHandle handle, uint paletteKey, uint subIdx,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_texture_pallete_lookup_sub_icon_path")]
+    public static unsafe partial int PartPrefabDyeTexturePalleteLookupSubIconPath(
+        CrimsonPartPrefabDyeTexturePalleteHandle handle, uint paletteKey, uint subIdx,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_texture_pallete_lookup_sub_texture_path")]
+    public static unsafe partial int PartPrefabDyeTexturePalleteLookupSubTexturePath(
+        CrimsonPartPrefabDyeTexturePalleteHandle handle, uint paletteKey, uint subIdx,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_texture_pallete_lookup_sub_variant_name")]
+    public static unsafe partial int PartPrefabDyeTexturePalleteLookupSubVariantName(
+        CrimsonPartPrefabDyeTexturePalleteHandle handle, uint paletteKey, uint subIdx,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_texture_pallete_lookup_sub_variant_value")]
+    public static partial int PartPrefabDyeTexturePalleteLookupSubVariantValue(
+        CrimsonPartPrefabDyeTexturePalleteHandle handle, uint paletteKey, uint subIdx,
+        out float value);
+
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_texture_pallete_get_entry_key")]
+    public static partial int PartPrefabDyeTexturePalleteGetEntryKey(
+        CrimsonPartPrefabDyeTexturePalleteHandle handle, uint idx, out uint outKey);
+
+    // ── PartPrefabDyeSlotInfo bridge ────────────────────────────────────────
+    //
+    // PartPrefabKey (u32) → per-prefab slot count + per-slot default
+    // material / mask / tail-name detail. 1,105 rows in 1.07.
+    // Replaces the PyQt5 editor's dye_slot_counts.json — once the
+    // _itemKey → _partPrefabKey cross-reference lands. Bound here for
+    // future use; v1 Dye editor doesn't consume this bridge yet.
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_part_prefab_dye_slot_info_load_from_bytes")]
+    public static unsafe partial int PartPrefabDyeSlotInfoLoadFromBytes(
+        byte* pabgb, nuint pabgbLen, byte* pabgh, nuint pabghLen, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_part_prefab_dye_slot_info_free")]
+    public static partial void PartPrefabDyeSlotInfoFree(IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_part_prefab_dye_slot_info_entry_count")]
+    public static partial int PartPrefabDyeSlotInfoEntryCount(
+        CrimsonPartPrefabDyeSlotInfoHandle handle, out uint count);
+
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_slot_info_lookup_slot_count")]
+    public static partial int PartPrefabDyeSlotInfoLookupSlotCount(
+        CrimsonPartPrefabDyeSlotInfoHandle handle, uint prefabKey, out uint count);
+
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_slot_info_lookup_prefab_name")]
+    public static unsafe partial int PartPrefabDyeSlotInfoLookupPrefabName(
+        CrimsonPartPrefabDyeSlotInfoHandle handle, uint prefabKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_slot_info_lookup_slot_default_material")]
+    public static unsafe partial int PartPrefabDyeSlotInfoLookupSlotDefaultMaterial(
+        CrimsonPartPrefabDyeSlotInfoHandle handle, uint prefabKey, uint slotIdx, uint matIdx,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_slot_info_lookup_slot_tail_name")]
+    public static unsafe partial int PartPrefabDyeSlotInfoLookupSlotTailName(
+        CrimsonPartPrefabDyeSlotInfoHandle handle, uint prefabKey, uint slotIdx,
+        byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_slot_info_lookup_slot_mat_indices")]
+    public static unsafe partial int PartPrefabDyeSlotInfoLookupSlotMatIndices(
+        CrimsonPartPrefabDyeSlotInfoHandle handle, uint prefabKey, uint slotIdx,
+        byte* outIndices);
+
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_slot_info_lookup_slot_mask")]
+    public static unsafe partial int PartPrefabDyeSlotInfoLookupSlotMask(
+        CrimsonPartPrefabDyeSlotInfoHandle handle, uint prefabKey, uint slotIdx,
+        byte* outMask);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_part_prefab_dye_slot_info_get_entry_key")]
+    public static partial int PartPrefabDyeSlotInfoGetEntryKey(
+        CrimsonPartPrefabDyeSlotInfoHandle handle, uint idx, out uint outKey);
 }

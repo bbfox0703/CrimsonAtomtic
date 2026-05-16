@@ -307,6 +307,102 @@ public sealed class KeyInfoCatalogsTests
         Assert.Null(cat.LookupStringKey(uint.MaxValue));
     }
 
+    // ── Dye gamedata bridges (color group / texture pallete / slot info) ───
+
+    [Fact]
+    public void DyeColorGroupInfo_LiveInstall_LoadsAndLooksUp()
+    {
+        var live = LiveOrSkip();
+        if (live is null) return;
+        var (paz, p0008, _) = live.Value;
+
+        var pabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "dyecolorgroupinfo.pabgb");
+        var pabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "dyecolorgroupinfo.pabgh");
+        using var cat = NativeDyeColorGroupInfoCatalog.LoadFromBytes(pabgb, pabgh);
+        // Upstream survey pinned 10 rows in 1.07.
+        Assert.True(cat.EntryCount >= 5,
+                    $"expected ≥5 color groups, got {cat.EntryCount}");
+
+        // First entry enumerable + non-empty name.
+        var first = cat.GetEntry(0);
+        Assert.NotNull(first);
+        Assert.NotEqual(0u, first!.Value.Key);
+        Assert.False(string.IsNullOrEmpty(first.Value.Name));
+
+        // Same key resolves via LookupName.
+        Assert.Equal(first.Value.Name, cat.LookupName(first.Value.Key));
+        // Miss returns null.
+        Assert.Null(cat.LookupName(uint.MaxValue));
+        // Past-end returns null.
+        Assert.Null(cat.GetEntry(cat.EntryCount + 1000));
+    }
+
+    [Fact]
+    public void PartPrefabDyeTexturePallete_LiveInstall_LoadsAndLooksUpSubRecords()
+    {
+        var live = LiveOrSkip();
+        if (live is null) return;
+        var (paz, p0008, _) = live.Value;
+
+        var pabgb = paz.ExtractFile(p0008, ItemInfoDirectory,
+                                     "partprefabdyetexturepalleteinfo.pabgb");
+        var pabgh = paz.ExtractFile(p0008, ItemInfoDirectory,
+                                     "partprefabdyetexturepalleteinfo.pabgh");
+        using var cat = NativePartPrefabDyeTexturePalleteCatalog.LoadFromBytes(pabgb, pabgh);
+        Assert.True(cat.EntryCount >= 5,
+                    $"expected ≥5 palette rows, got {cat.EntryCount}");
+
+        // First key + its sub-records.
+        var firstKey = cat.GetEntryKey(0);
+        Assert.NotNull(firstKey);
+        var subCount = cat.LookupSubCount(firstKey!.Value);
+        Assert.NotNull(subCount);
+        Assert.InRange(subCount!.Value, 1, 10);
+        // Each sub yields a non-empty material name + texture path.
+        var matName = cat.LookupSubMaterialName(firstKey.Value, 0);
+        Assert.False(string.IsNullOrEmpty(matName));
+        var texPath = cat.LookupSubTexturePath(firstKey.Value, 0);
+        Assert.False(string.IsNullOrEmpty(texPath));
+        // Variant value is well-defined (-1.0 sentinel or a real strength).
+        var variant = cat.LookupSubVariantValue(firstKey.Value, 0);
+        Assert.NotNull(variant);
+    }
+
+    [Fact]
+    public void PartPrefabDyeSlotInfo_LiveInstall_LoadsAndLooksUpSlotCount()
+    {
+        var live = LiveOrSkip();
+        if (live is null) return;
+        var (paz, p0008, _) = live.Value;
+
+        var pabgb = paz.ExtractFile(p0008, ItemInfoDirectory,
+                                     "partprefabdyeslotinfo.pabgb");
+        var pabgh = paz.ExtractFile(p0008, ItemInfoDirectory,
+                                     "partprefabdyeslotinfo.pabgh");
+        using var cat = NativePartPrefabDyeSlotInfoCatalog.LoadFromBytes(pabgb, pabgh);
+        // Upstream survey pinned 1,105 prefabs in 1.07.
+        Assert.True(cat.EntryCount >= 100,
+                    $"expected ≥100 prefab rows, got {cat.EntryCount}");
+
+        var firstKey = cat.GetEntryKey(0);
+        Assert.NotNull(firstKey);
+        var slotCount = cat.LookupSlotCount(firstKey!.Value);
+        Assert.NotNull(slotCount);
+        Assert.InRange(slotCount!.Value, 1, 32);
+
+        // Prefab name is non-empty.
+        var prefabName = cat.LookupPrefabName(firstKey.Value);
+        Assert.False(string.IsNullOrEmpty(prefabName));
+
+        // Slot 0 has 3 mask bytes + 3 mat-index bytes available.
+        var mask = cat.LookupSlotMask(firstKey.Value, 0);
+        Assert.NotNull(mask);
+        Assert.Equal(3, mask!.Length);
+        var matIdx = cat.LookupSlotMatIndices(firstKey.Value, 0);
+        Assert.NotNull(matIdx);
+        Assert.Equal(3, matIdx!.Length);
+    }
+
     // ── Lifecycle: post-Dispose lookup raises ObjectDisposedException ───────
 
     [Fact]
