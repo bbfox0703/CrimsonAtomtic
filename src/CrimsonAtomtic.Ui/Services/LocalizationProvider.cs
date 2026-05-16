@@ -56,6 +56,11 @@ public sealed class LocalizationProvider : IDisposable
     private const string DyeTexturePalletePabghFileName = "partprefabdyetexturepalleteinfo.pabgh";
     private const string DyeSlotInfoPabgbFileName = "partprefabdyeslotinfo.pabgb";
     private const string DyeSlotInfoPabghFileName = "partprefabdyeslotinfo.pabgh";
+    // storeinfo: two-file load (.pabgb body + .pabgh index, custom 6-byte
+    // shape). Resolves StoreKey → internal template name; drives the
+    // Vendor Buyback dialog.
+    private const string StoreInfoPabgbFileName  = "storeinfo.pabgb";
+    private const string StoreInfoPabghFileName  = "storeinfo.pabgh";
 
     /// <summary>
     /// Known PALOC language codes the game ships. Sourced authoritatively
@@ -218,6 +223,11 @@ public sealed class LocalizationProvider : IDisposable
         // for ItemDyeSaveData._dyeColorGroupInfoKey (and any future
         // fields typed the same way).
         "DyeColorGroupInfoKey",
+        // StoreKey: storeinfo.pabgb internal template name
+        // ("Store_Her_General", "Store_BlackMarket", …). Lights up
+        // StoreDataSaveData._storeKey rows in the resolved-name column +
+        // labels the Vendor Buyback dialog's per-store header.
+        "StoreKey",
         // StringInfoKey scalars: pre-computed Jenkins hashes. The
         // already-loaded stringinfo bridge reverses them in one hop —
         // covers UseItemReserveSlotElementSaveData._specialNameKey,
@@ -275,6 +285,7 @@ public sealed class LocalizationProvider : IDisposable
     private NativeDyeColorGroupInfoCatalog? _dyeColorGroupInfo;
     private NativePartPrefabDyeTexturePalleteCatalog? _dyeTexturePalleteInfo;
     private NativePartPrefabDyeSlotInfoCatalog? _dyeSlotInfo;
+    private NativeStoreInfoCatalog? _storeInfo;
     private string? _gameRoot;
     private string? _secondaryLanguage;
 
@@ -449,6 +460,7 @@ public sealed class LocalizationProvider : IDisposable
             NativeSubLevelInfoCatalog.LoadFromBytes, ref _subLevelInfo);
         TryBootstrapSkillInfo(gameRoot);
         TryBootstrapDyeGamedata(gameRoot);
+        TryBootstrapStoreInfo(gameRoot);
 
         // ── Discover available PALOC languages by probing the well-known
         // group range. PAMT parses are fast (a few ms each); the probe
@@ -611,6 +623,31 @@ public sealed class LocalizationProvider : IDisposable
             var pabgh = _paz.ExtractFile(pamt, ItemInfoDirectory, pabghName);
             slot?.Dispose();
             slot = loader(pabgb, pabgh);
+        }
+        catch (CrimsonSaveException) { }
+        catch (IOException) { }
+    }
+
+    /// <summary>
+    /// Load the <c>storeinfo</c> two-file pair (.pabgb body + .pabgh
+    /// index) from group 0008. Drives StoreKey resolution in the
+    /// resolved-name column + the Vendor Buyback dialog. Failures
+    /// degrade silently — the editor still works, just without
+    /// store-name resolution.
+    /// </summary>
+    private void TryBootstrapStoreInfo(string gameRoot)
+    {
+        var pamt = Path.Combine(gameRoot, "0008", "0.pamt");
+        if (!File.Exists(pamt))
+        {
+            return;
+        }
+        try
+        {
+            var pabgb = _paz.ExtractFile(pamt, ItemInfoDirectory, StoreInfoPabgbFileName);
+            var pabgh = _paz.ExtractFile(pamt, ItemInfoDirectory, StoreInfoPabghFileName);
+            _storeInfo?.Dispose();
+            _storeInfo = NativeStoreInfoCatalog.LoadFromBytes(pabgb, pabgh);
         }
         catch (CrimsonSaveException) { }
         catch (IOException) { }
@@ -864,6 +901,14 @@ public sealed class LocalizationProvider : IDisposable
     /// bridge isn't loaded.
     /// </summary>
     public NativeDyeColorGroupInfoCatalog? DyeColorGroupInfo => _dyeColorGroupInfo;
+
+    /// <summary>
+    /// Direct access to <c>storeinfo</c>. <c>null</c> when the bridge
+    /// isn't loaded (no game install configured, or storeinfo.pabgb
+    /// missing from the install). Consumed by the Vendor Buyback
+    /// dialog to enumerate distinct stores + label rows.
+    /// </summary>
+    public NativeStoreInfoCatalog? StoreInfo => _storeInfo;
 
     /// <summary>
     /// Direct access to <c>partprefabdyetexturepalleteinfo</c>.
@@ -1325,6 +1370,10 @@ public sealed class LocalizationProvider : IDisposable
             "CharacterKey"  => DisplayOrFallback(_characterInfo, key, paloc,
                                                 bridge => bridge.LookupDisplayName(key, paloc!),
                                                 bridge => bridge.LookupStringKey(key)),
+            // Store: internal name only — no PALOC chain yet for stores.
+            // Same convention as QuestGauge / Skill (secondary language
+            // intentionally echoes English).
+            "StoreKey"      => _storeInfo?.LookupStringKey(key),
             // Dye color group: internal name only. Same across all
             // languages, so the secondary column intentionally mirrors
             // the primary (matches QuestGauge / Skill convention).
@@ -1425,6 +1474,8 @@ public sealed class LocalizationProvider : IDisposable
         _dyeTexturePalleteInfo = null;
         _dyeSlotInfo?.Dispose();
         _dyeSlotInfo = null;
+        _storeInfo?.Dispose();
+        _storeInfo = null;
         foreach (var cat in _catalogs.Values)
         {
             cat.Dispose();
