@@ -1591,4 +1591,189 @@ public sealed class NativeSaveLoaderTests
         var after = loader.LoadBlockDetails(path, blockIdx);
         Assert.NotSame(before, after);
     }
+
+    // ── Deferred-redecode batch ────────────────────────────────────────────
+    //
+    // Contract from vendor/crimson-rs/docs/save-deferred-redecode.md:
+    // - begin doesn't nest (BATCH_IN_PROGRESS on second open).
+    // - end / abort with no batch open returns BATCH_NOT_OPEN.
+    // - end commits + bumps mutation_version exactly once for the
+    //   whole batch.
+    // - abort restores blocks + mutation_version to pre-begin state.
+    // - WriteToFile is rejected mid-batch (BATCH_IN_PROGRESS).
+    //
+    // These tests pin the C# wiring against the live save; the
+    // crimson-rs side already has its own Rust-level coverage of the
+    // same invariants.
+
+    [Fact]
+    public void DeferredRedecode_AbortRestoresPreBeginState()
+    {
+        var path = FindLiveSave();
+        if (path is null) return;
+        using var loader = new NativeSaveLoader();
+        loader.Load(path);
+
+        var versionBefore = loader.GetMutationVersion();
+        var before = loader.LoadBlockDetails(path, 0);
+        var beforeValue = before.Fields[0].Value;
+
+        loader.BeginDeferredRedecode();
+        Assert.True(loader.IsDeferredRedecodeOpen());
+
+        // Apply a scalar mutation inside the batch.
+        ReadOnlySpan<byte> sentinel = [0xAB, 0xCD, 0xEF, 0x01];
+        loader.SetScalarField(0, 0, sentinel);
+
+        loader.AbortDeferredRedecode();
+        Assert.False(loader.IsDeferredRedecodeOpen());
+
+        // mutation_version + block 0 field 0 must be back to pre-begin.
+        Assert.Equal(versionBefore, loader.GetMutationVersion());
+        var after = loader.LoadBlockDetails(path, 0);
+        Assert.Equal(beforeValue, after.Fields[0].Value);
+    }
+
+    [Fact]
+    public void DeferredRedecode_EndBumpsVersionExactlyOnce()
+    {
+        var path = FindLiveSave();
+        if (path is null) return;
+        using var loader = new NativeSaveLoader();
+        loader.Load(path);
+        var versionBefore = loader.GetMutationVersion();
+
+        loader.BeginDeferredRedecode();
+        // Three separate scalar mutations — in normal mode each
+        // bumps the version (so versionAfter == versionBefore + 3).
+        // Inside a deferred batch, end_* bumps once.
+        ReadOnlySpan<byte> a = [0xAB, 0xCD, 0xEF, 0x01];
+        ReadOnlySpan<byte> b = [0x12, 0x34, 0x56, 0x78];
+        ReadOnlySpan<byte> c = [0xDE, 0xAD, 0xBE, 0xEF];
+        loader.SetScalarField(0, 0, a);
+        loader.SetScalarField(0, 0, b);
+        loader.SetScalarField(0, 0, c);
+        loader.EndDeferredRedecode();
+
+        var versionAfter = loader.GetMutationVersion();
+        Assert.Equal(versionBefore + 1, versionAfter);
+
+        // Last write wins — the committed body should reflect c, not a/b.
+        var after = loader.LoadBlockDetails(path, 0);
+        // 0xDEADBEEF as u32 LE = 0xEFBEADDE = 4022250974
+        Assert.Equal("4022250974 <u32>", after.Fields[0].Value);
+
+        // Cleanup: revert. (Not strictly required since we never write
+        // to disk, but it keeps the handle in a predictable state for
+        // any test that runs after.)
+        loader.SetScalarField(0, 0, BitConverter.GetBytes(uint.Parse(
+            after.Fields[0].Value[..after.Fields[0].Value.IndexOf(' ')],
+            System.Globalization.CultureInfo.InvariantCulture)));
+        _ = a; _ = b;
+    }
+
+    [Fact]
+    public void DeferredRedecode_NestedBeginReturnsBatchInProgress()
+    {
+        var path = FindLiveSave();
+        if (path is null) return;
+        using var loader = new NativeSaveLoader();
+        loader.Load(path);
+        loader.BeginDeferredRedecode();
+        try
+        {
+            var ex = Assert.Throws<CrimsonSaveException>(() => loader.BeginDeferredRedecode());
+            Assert.Equal(-21, ex.ErrorCode);   // BATCH_IN_PROGRESS
+        }
+        finally
+        {
+            loader.AbortDeferredRedecode();
+        }
+    }
+
+    [Fact]
+    public void DeferredRedecode_EndOrAbortWithNoBatch_ReturnsBatchNotOpen()
+    {
+        var path = FindLiveSave();
+        if (path is null) return;
+        using var loader = new NativeSaveLoader();
+        loader.Load(path);
+        Assert.False(loader.IsDeferredRedecodeOpen());
+
+        var endEx = Assert.Throws<CrimsonSaveException>(() => loader.EndDeferredRedecode());
+        Assert.Equal(-22, endEx.ErrorCode);   // BATCH_NOT_OPEN
+
+        var abortEx = Assert.Throws<CrimsonSaveException>(() => loader.AbortDeferredRedecode());
+        Assert.Equal(-22, abortEx.ErrorCode);
+    }
+
+    [Fact]
+    public void DeferredRedecode_WriteToFileRejectedMidBatch()
+    {
+        var path = FindLiveSave();
+        if (path is null) return;
+        using var loader = new NativeSaveLoader();
+        loader.Load(path);
+        loader.BeginDeferredRedecode();
+        try
+        {
+            var tempPath = Path.Combine(Path.GetTempPath(),
+                $"crimsonatomtic_deferred_{Guid.NewGuid():N}.save");
+            var ex = Assert.Throws<CrimsonSaveException>(() => loader.WriteToFile(tempPath));
+            Assert.Equal(-21, ex.ErrorCode);   // BATCH_IN_PROGRESS
+            if (File.Exists(tempPath)) File.Delete(tempPath);
+        }
+        finally
+        {
+            loader.AbortDeferredRedecode();
+        }
+    }
+
+    [Fact]
+    public void RunDeferred_AutoCommitsOnNormalReturn()
+    {
+        var path = FindLiveSave();
+        if (path is null) return;
+        using var loader = new NativeSaveLoader();
+        loader.Load(path);
+        var versionBefore = loader.GetMutationVersion();
+
+        loader.RunDeferred(() =>
+        {
+            ReadOnlySpan<byte> sentinel = [0xAB, 0xCD, 0xEF, 0x01];
+            loader.SetScalarField(0, 0, sentinel);
+        });
+
+        Assert.False(loader.IsDeferredRedecodeOpen());
+        Assert.Equal(versionBefore + 1, loader.GetMutationVersion());
+    }
+
+    [Fact]
+    public void RunDeferred_AutoAbortsOnException()
+    {
+        var path = FindLiveSave();
+        if (path is null) return;
+        using var loader = new NativeSaveLoader();
+        loader.Load(path);
+        var versionBefore = loader.GetMutationVersion();
+        var before = loader.LoadBlockDetails(path, 0);
+        var beforeValue = before.Fields[0].Value;
+
+        var thrown = Assert.Throws<InvalidOperationException>(() =>
+        {
+            loader.RunDeferred(() =>
+            {
+                ReadOnlySpan<byte> sentinel = [0xAB, 0xCD, 0xEF, 0x01];
+                loader.SetScalarField(0, 0, sentinel);
+                throw new InvalidOperationException("synthetic mid-batch failure");
+            });
+        });
+        Assert.Equal("synthetic mid-batch failure", thrown.Message);
+
+        // Abort rolled the mutation back: version + field 0 unchanged.
+        Assert.False(loader.IsDeferredRedecodeOpen());
+        Assert.Equal(versionBefore, loader.GetMutationVersion());
+        var after = loader.LoadBlockDetails(path, 0);
+        Assert.Equal(beforeValue, after.Fields[0].Value);
+    }
 }

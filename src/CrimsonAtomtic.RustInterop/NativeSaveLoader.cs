@@ -150,6 +150,96 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         return v;
     }
 
+    public void BeginDeferredRedecode()
+    {
+        var cached = RequireLoaded(nameof(BeginDeferredRedecode));
+        var rc = NativeMethods.BeginDeferredRedecode(cached);
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_save_begin_deferred_redecode failed: {ErrorName(rc)}");
+        }
+    }
+
+    public void EndDeferredRedecode()
+    {
+        var cached = RequireLoaded(nameof(EndDeferredRedecode));
+        var rc = NativeMethods.EndDeferredRedecode(cached);
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_save_end_deferred_redecode failed: {ErrorName(rc)}");
+        }
+    }
+
+    public void AbortDeferredRedecode()
+    {
+        var cached = RequireLoaded(nameof(AbortDeferredRedecode));
+        var rc = NativeMethods.AbortDeferredRedecode(cached);
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_save_abort_deferred_redecode failed: {ErrorName(rc)}");
+        }
+    }
+
+    public bool IsDeferredRedecodeOpen()
+    {
+        var cached = RequireLoaded(nameof(IsDeferredRedecodeOpen));
+        var rc = NativeMethods.IsDeferredRedecodeOpen(cached, out var openFlag);
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_save_is_deferred_redecode_open failed: {ErrorName(rc)}");
+        }
+        return openFlag != 0;
+    }
+
+    /// <summary>
+    /// Run <paramref name="body"/> inside a deferred-redecode batch on
+    /// the currently-loaded save. The batch suspends per-call
+    /// <c>decode_blocks</c> for every mutation entry point, then runs
+    /// <b>one</b> encode + parse + decode pass on commit — collapsing
+    /// dozens of seconds of bulk-mutation re-decode into ~0.1 s on a
+    /// 1.07-baseline save.
+    ///
+    /// <para>
+    /// Exception in <paramref name="body"/> calls
+    /// <see cref="AbortDeferredRedecode"/> and rethrows; the handle's
+    /// in-memory state is restored to its pre-begin snapshot. Normal
+    /// completion calls <see cref="EndDeferredRedecode"/>, which
+    /// commits the accumulated tree and bumps
+    /// <c>mutation_version</c> exactly once. A <c>MUTATION_INVALID</c>
+    /// at commit time is wrapped as <see cref="CrimsonSaveException"/>;
+    /// the handle is auto-rolled-back by the Rust side.
+    /// </para>
+    ///
+    /// <para>
+    /// For partial-success workflows (e.g. the bulk SA challenge
+    /// sweep, which stops on first per-op failure but wants to KEEP
+    /// the already-applied work), callers should swallow per-op
+    /// exceptions inside <paramref name="body"/> and let it return
+    /// normally so the commit lands. Letting the exception escape
+    /// here would abort the whole batch.
+    /// </para>
+    /// </summary>
+    public void RunDeferred(Action body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        BeginDeferredRedecode();
+        try
+        {
+            body();
+        }
+        catch
+        {
+            try { AbortDeferredRedecode(); }
+            catch (CrimsonSaveException) { /* surface the original exception */ }
+            throw;
+        }
+        EndDeferredRedecode();
+    }
+
     public IReadOnlyList<InventoryItemRecord> ListInventoryItems(out ulong version)
     {
         var cached = RequireLoaded(nameof(ListInventoryItems));
@@ -1225,6 +1315,10 @@ internal static partial class NativeMethods
     public const int NOT_SCALAR_FIELD_KIND    = -18;
     public const int MUTATION_INVALID         = -19;
     public const int NOT_INLINE_BYTES         = -20;
+    // Deferred-redecode batch error codes (per
+    // vendor/crimson-rs/docs/save-deferred-redecode.md).
+    public const int BATCH_IN_PROGRESS        = -21;
+    public const int BATCH_NOT_OPEN           = -22;
     public const int PANIC                 = -99;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -1484,6 +1578,40 @@ internal static partial class NativeMethods
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_save_get_mutation_version")]
     public static partial int GetMutationVersion(CrimsonSaveHandle handle, out ulong outVersion);
+
+    // ── Deferred-redecode batch (suspend per-call decode_blocks) ────────────
+    //
+    // Transactional wrapper that lets bulk-mutation flows collapse N
+    // per-op encode + parse + decode_blocks cycles into ONE on the
+    // matching end_*. The motivating consumer is the "Complete All
+    // Held Sealed Abyss Artifact Challenges" sweep — 3 length-changing
+    // calls × 141 challenges ≈ 423 re-decodes (~10s) collapses to 1
+    // (~0.1s). See vendor/crimson-rs/docs/save-deferred-redecode.md.
+    //
+    // Contract:
+    //  - begin_*: no nesting. Returns BATCH_IN_PROGRESS if a batch is
+    //    already open on this handle.
+    //  - end_*: commits the accumulated tree, bumps mutation_version
+    //    exactly once. Returns MUTATION_INVALID on encode/re-parse
+    //    failure (handle is auto-rolled-back to pre-begin state).
+    //  - abort_*: discards every in-batch mutation, restores
+    //    pre-begin mutation_version.
+    //  - write_to_file is rejected with BATCH_IN_PROGRESS while a
+    //    batch is open — caller must end_* / abort_* first.
+    //  - Reads (get_block_json / list_inventory_items / etc.) work
+    //    normally during a batch (see the in-progress tree).
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_begin_deferred_redecode")]
+    public static partial int BeginDeferredRedecode(CrimsonSaveHandle handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_end_deferred_redecode")]
+    public static partial int EndDeferredRedecode(CrimsonSaveHandle handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_abort_deferred_redecode")]
+    public static partial int AbortDeferredRedecode(CrimsonSaveHandle handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_is_deferred_redecode_open")]
+    public static partial int IsDeferredRedecodeOpen(CrimsonSaveHandle handle, out int outOpen);
 
     // ── Inventory flat enumeration ──────────────────────────────────────────
     //
