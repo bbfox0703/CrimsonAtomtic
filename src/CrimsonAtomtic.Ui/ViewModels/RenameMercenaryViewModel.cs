@@ -228,8 +228,55 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
         var resolvedName = characterKey == 0
             ? string.Empty
             : localization.ResolveByFieldTypeName("CharacterKey", characterKey);
-        var row = new MercenaryRow(vm, index, mercNo, characterKey, equipCount, resolvedName);
+        // Pull the characterinfo internal name (string_key) so the
+        // category bucket can be derived from its prefix (Riding_Horse_*
+        // / Riding_Wagon_* / Riding_Balloon_* / Animal_* / NHM_* / NOM_*
+        // / NHW_*). Only ~3 mercenary CharKeys in 1.07 actually have an
+        // NPC portrait shipped; the rest get a generic class glyph
+        // sourced from this bucket. Null is fine — it just yields the
+        // Unknown bucket.
+        var internalName = characterKey == 0
+            ? null
+            : localization.LookupCharacterInternalName(characterKey);
+        var category = ClassifyByInternalName(internalName);
+        var row = new MercenaryRow(vm, index, mercNo, characterKey, equipCount,
+                                   resolvedName, category);
         return row;
+    }
+
+    /// <summary>
+    /// Bucket an internal name into a coarse class so the dialog can
+    /// show a meaningful glyph when no NPC portrait DDS exists for the
+    /// row. Prefix-based matching — fast, allocation-free, and
+    /// covers every internal-name pattern seen across slot102 / 103 /
+    /// 104 / 105 probes.
+    /// </summary>
+    private static MercenaryCategory ClassifyByInternalName(string? internalName)
+    {
+        if (string.IsNullOrEmpty(internalName))
+        {
+            return MercenaryCategory.Unknown;
+        }
+        // Order matters — Riding_Balloon_ must beat Riding_ generic.
+        if (internalName.StartsWith("Riding_Balloon_", StringComparison.OrdinalIgnoreCase))
+            return MercenaryCategory.Balloon;
+        if (internalName.StartsWith("Riding_Wagon_", StringComparison.OrdinalIgnoreCase))
+            return MercenaryCategory.Wagon;
+        if (internalName.StartsWith("Riding_Horse_", StringComparison.OrdinalIgnoreCase)
+            || internalName.StartsWith("Horse_", StringComparison.OrdinalIgnoreCase))
+            return MercenaryCategory.Mount;
+        if (internalName.StartsWith("Riding_", StringComparison.OrdinalIgnoreCase))
+            return MercenaryCategory.Mount;     // covers Riding_Camel_, Riding_Bear_, etc.
+        if (internalName.StartsWith("Animal_", StringComparison.OrdinalIgnoreCase))
+            return MercenaryCategory.Animal;
+        if (internalName.StartsWith("Pet_", StringComparison.OrdinalIgnoreCase))
+            return MercenaryCategory.Pet;
+        if (internalName.StartsWith("NHM_", StringComparison.OrdinalIgnoreCase)
+            || internalName.StartsWith("NOM_", StringComparison.OrdinalIgnoreCase)
+            || internalName.StartsWith("NHW_", StringComparison.OrdinalIgnoreCase)
+            || internalName.StartsWith("FieldNPC_", StringComparison.OrdinalIgnoreCase))
+            return MercenaryCategory.Npc;
+        return MercenaryCategory.Unknown;
     }
 
     /// <summary>
@@ -300,6 +347,30 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
 }
 
 /// <summary>
+/// Coarse class buckets a <c>MercenaryRow</c> can land in. Drives the
+/// fallback glyph shown when no NPC portrait DDS resolves for the row.
+/// Buckets reflect the in-game taxonomy surfaced by characterinfo
+/// internal-name prefixes — not the user-facing display name.
+/// </summary>
+public enum MercenaryCategory
+{
+    /// <summary>Default. No internal-name match — show a neutral glyph.</summary>
+    Unknown = 0,
+    /// <summary>Named or generic NPC mercenary (NHM_* / NOM_* / NHW_* / FieldNPC_*).</summary>
+    Npc,
+    /// <summary>Horse / camel / bear / wolf etc. ridable mount (Riding_Horse_*, Riding_Bear_*, …).</summary>
+    Mount,
+    /// <summary>Cart / cloudcart / wagon (Riding_Wagon_*).</summary>
+    Wagon,
+    /// <summary>Hot-air balloon (Riding_Balloon_*).</summary>
+    Balloon,
+    /// <summary>Wild animal — stag, ibex, lion, etc. (Animal_*).</summary>
+    Animal,
+    /// <summary>Domestic pet (Pet_*).</summary>
+    Pet,
+}
+
+/// <summary>
 /// One mercenary row in the rename dialog. Tracks the identifying info
 /// plus the user's pending new name.
 /// </summary>
@@ -313,7 +384,8 @@ public sealed partial class MercenaryRow : ObservableObject
         ulong mercNo,
         uint characterKey,
         int equipCount,
-        string resolvedCharacterName)
+        string resolvedCharacterName,
+        MercenaryCategory category)
     {
         _parent = parent;
         Index = index;
@@ -321,6 +393,7 @@ public sealed partial class MercenaryRow : ObservableObject
         CharacterKey = characterKey;
         EquipCount = equipCount;
         ResolvedCharacterName = resolvedCharacterName;
+        Category = category;
     }
 
     public int Index { get; }
@@ -342,14 +415,50 @@ public sealed partial class MercenaryRow : ObservableObject
     public string TypeTag => EquipCount == 0 ? "Animal" : "Mercenary";
 
     /// <summary>
+    /// Class bucket derived from the row's characterinfo internal
+    /// name. Drives <see cref="CategoryGlyph"/> when no portrait
+    /// loads — the fallback shape every row gets to render *something*
+    /// even when Pearl Abyss doesn't ship a per-character portrait.
+    /// </summary>
+    public MercenaryCategory Category { get; }
+
+    /// <summary>
+    /// Unicode glyph shown in the Portrait cell when no actual
+    /// portrait DDS resolved. Mirrors <see cref="Category"/> — kept
+    /// here as a presentation-layer convenience so the cell template
+    /// doesn't need a value converter.
+    /// </summary>
+    public string CategoryGlyph => Category switch
+    {
+        MercenaryCategory.Npc     => "👤",
+        MercenaryCategory.Mount   => "🐎",
+        MercenaryCategory.Wagon   => "🛒",
+        MercenaryCategory.Balloon => "🎈",
+        MercenaryCategory.Animal  => "🦌",
+        MercenaryCategory.Pet     => "🐾",
+        _                         => "❔",
+    };
+
+    /// <summary>
+    /// True iff <see cref="Portrait"/> is populated. The cell template
+    /// uses this to swap between the Image (real DDS-derived portrait)
+    /// and the TextBlock fallback (<see cref="CategoryGlyph"/>).
+    /// Recomputed on every <c>Portrait</c> change via the source-gen
+    /// <c>NotifyPropertyChangedFor</c> trigger below.
+    /// </summary>
+    public bool HasPortrait => Portrait is not null;
+
+    /// <summary>
     /// NPC portrait for this row's <see cref="CharacterKey"/>, lazily
     /// populated by <see cref="StartPortraitLoad"/> on the thread
     /// pool. Starts null; remains null when the bridge has no match
-    /// above <see cref="PortraitProvider.MinAcceptableScore"/>. The
+    /// above <see cref="PortraitProvider.MinAcceptableScore"/> or when
+    /// Pearl Abyss simply ships no portrait DDS for the key. The
     /// DataGrid binding re-evaluates automatically via the
     /// ObservableProperty notification.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPortrait))]
     private Bitmap? _portrait;
 
     /// <summary>
