@@ -1,0 +1,93 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        xmlns:svc="using:CrimsonAtomtic.Ui.Services"
+        mc:Ignorable="d"
+        d:DesignWidth="900"
+        d:DesignHeight="540"
+        x:Class="CrimsonAtomtic.Ui.Views.DyeEditorWindow"
+        x:DataType="vm:DyeEditorViewModel"
+        Title="{StaticResource DyeEditorWindowTitle}"
+        Icon="/Assets/MainIcon.ico"
+        Width="900" Height="540"
+        MinWidth="640" MinHeight="320"
+        FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
+
+  <DockPanel LastChildFill="True" Margin="12">
+    <!-- Header explains v1 scope. -->
+    <TextBlock DockPanel.Dock="Top"
+               Text="{StaticResource DyeEditorHeader}"
+               TextWrapping="Wrap"
+               Opacity="0.7"
+               Margin="0,0,0,8" />
+
+    <!-- Filter box. -->
+    <TextBox DockPanel.Dock="Top"
+             Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+             PlaceholderText="{StaticResource DyeEditorSearchPlaceholder}"
+             Margin="0,0,0,6" />
+
+    <!-- Status + close. -->
+    <Grid DockPanel.Dock="Bottom"
+          ColumnDefinitions="*,Auto"
+          ColumnSpacing="12"
+          Margin="0,8,0,0">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding ResultsCountText}"
+                 Opacity="0.7"
+                 VerticalAlignment="Center"
+                 TextTrimming="CharacterEllipsis" />
+      <Button Grid.Column="1"
+              Content="{StaticResource DyeEditorClose}"
+              Click="OnCloseClick"
+              MinWidth="80" />
+    </Grid>
+
+    <DataGrid ItemsSource="{Binding Items}"
+              IsReadOnly="True"
+              CanUserResizeColumns="True"
+              CanUserSortColumns="True"
+              GridLinesVisibility="Horizontal"
+              HeadersVisibility="Column"
+              AutoGenerateColumns="False">
+      <DataGrid.Columns>
+        <DataGridTemplateColumn Header="{StaticResource DyeEditorColIcon}" Width="56">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:DyeEditorItemRow">
+              <Image Source="{Binding ItemKey, Converter={x:Static svc:ItemKeyToIconConverter.Instance}}"
+                     Width="40" Height="40"
+                     Stretch="Uniform"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTextColumn Header="{StaticResource DyeEditorColBag}"
+                            Binding="{Binding BagLabel}"
+                            Width="180" />
+        <DataGridTextColumn Header="{StaticResource DyeEditorColItem}"
+                            Binding="{Binding ItemNameEnglish}"
+                            Width="*" />
+        <DataGridTextColumn Header="{StaticResource DyeEditorColItemKey}"
+                            Binding="{Binding ItemKey}"
+                            Width="90" />
+        <DataGridTextColumn Header="{StaticResource DyeEditorColSlotCount}"
+                            Binding="{Binding DyeSlotCount}"
+                            Width="80" />
+        <DataGridTemplateColumn Header="{StaticResource DyeEditorColAction}" Width="90">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:DyeEditorItemRow">
+              <Button Content="{StaticResource DyeEditorEdit}"
+                      ToolTip.Tip="{StaticResource DyeEditorEditTip}"
+                      Padding="6,2"
+                      MinHeight="0"
+                      Click="OnEditButtonClick" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+      </DataGrid.Columns>
+    </DataGrid>
+  </DockPanel>
+</Window>

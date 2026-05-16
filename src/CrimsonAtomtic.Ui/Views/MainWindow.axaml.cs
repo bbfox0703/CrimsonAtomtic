@@ -488,6 +488,83 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Tools → Edit Item Dyes… handler. Opens the master dye-editor
+    /// dialog which lists every item with a non-empty
+    /// <c>_itemDyeDataList</c>. Per-row Edit button opens a child
+    /// slot-editor dialog. Both dialogs flip the main VM's dirty flag
+    /// on close if any Apply succeeded.
+    /// </summary>
+    private void OnEditItemDyesClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm
+            || vm.LoadedPath is not { } loadedPath)
+        {
+            return;
+        }
+        DyeEditorViewModel masterVm;
+        try
+        {
+            masterVm = new DyeEditorViewModel(vm.GetSaveLoader(), vm.Localization, loadedPath);
+        }
+        catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex)
+        {
+            _ = ConfirmDialog.ShowAlertAsync(this,
+                "Could not scan dyed items",
+                $"{ex.Message} (code {ex.ErrorCode})");
+            return;
+        }
+        if (masterVm.TotalDyedItems == 0)
+        {
+            var title = (Application.Current?.FindResource("DyeEditorNotAvailableTitle") as string)
+                        ?? "No dyed items";
+            var body = (Application.Current?.FindResource("DyeEditorNotAvailableBody") as string)
+                       ?? "Scan returned 0 rows.";
+            _ = ConfirmDialog.ShowAlertAsync(this, title, body);
+            return;
+        }
+
+        // Per-row Edit → open the child slot editor.
+        masterVm.EditRequested += row =>
+        {
+            DyeSlotEditorViewModel childVm;
+            try
+            {
+                childVm = new DyeSlotEditorViewModel(
+                    vm.GetSaveLoader(), vm.Localization, loadedPath, row);
+            }
+            catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex)
+            {
+                _ = ConfirmDialog.ShowAlertAsync(this,
+                    "Could not open slot editor",
+                    $"{ex.Message} (code {ex.ErrorCode})");
+                return;
+            }
+            var child = new DyeSlotEditorWindow { DataContext = childVm };
+            child.Closed += (_, _) =>
+            {
+                if (childVm.IsDirty)
+                {
+                    masterVm.NotifyChildApplied();
+                    // Re-scan so the master row count + per-row state
+                    // refresh against the new save body.
+                    masterVm.Refresh();
+                }
+            };
+            child.Show(this);
+        };
+
+        var master = new DyeEditorWindow { DataContext = masterVm };
+        master.Closed += (_, _) =>
+        {
+            if (masterVm.IsDirty)
+            {
+                vm.MarkDirtyFromExternalEdit();
+            }
+        };
+        master.Show(this);
+    }
+
+    /// <summary>
     /// Tools → Edit Abyss Gates… handler. Walks the loaded save
     /// asynchronously to build the per-gate list, then opens the
     /// dialog. Closes the dialog and flips the main VM's dirty flag

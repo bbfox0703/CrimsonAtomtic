@@ -91,6 +91,9 @@
         <MenuItem Header="{StaticResource MenuRenameMercenary}"
                   Click="OnRenameMercenaryClick"
                   IsEnabled="{Binding HasSave}" />
+        <MenuItem Header="{StaticResource MenuEditItemDyes}"
+                  Click="OnEditItemDyesClick"
+                  IsEnabled="{Binding HasSave}" />
         <MenuItem Header="{StaticResource MenuEditItemSockets}"
                   Click="OnEditItemSocketsClick"
                   IsEnabled="{Binding HasSave}" />

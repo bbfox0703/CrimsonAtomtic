@@ -1,0 +1,135 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        mc:Ignorable="d"
+        d:DesignWidth="900"
+        d:DesignHeight="540"
+        x:Class="CrimsonAtomtic.Ui.Views.DyeSlotEditorWindow"
+        x:DataType="vm:DyeSlotEditorViewModel"
+        Title="{StaticResource DyeSlotEditorWindowTitle}"
+        Icon="/Assets/MainIcon.ico"
+        Width="940" Height="560"
+        MinWidth="760" MinHeight="380"
+        FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
+
+  <DockPanel LastChildFill="True" Margin="12">
+    <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,0,0,8">
+      <TextBlock Text="{Binding HeaderText}" FontWeight="Bold" />
+      <TextBlock Text="{Binding SubHeaderText}" Opacity="0.7" />
+    </StackPanel>
+
+    <Grid DockPanel.Dock="Bottom"
+          ColumnDefinitions="*,Auto"
+          ColumnSpacing="12"
+          Margin="0,8,0,0">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding StatusMessage}"
+                 Opacity="0.7"
+                 VerticalAlignment="Center"
+                 TextTrimming="CharacterEllipsis" />
+      <Button Grid.Column="1"
+              Content="{StaticResource DyeSlotEditorClose}"
+              Click="OnCloseClick"
+              MinWidth="80" />
+    </Grid>
+
+    <!-- Per-slot rows. Each row carries 7 editors (R/G/B/A + grime +
+         material + color group) + an Apply button + LastError text.
+         DataGrid keeps things compact for items with 3-4 slots. -->
+    <DataGrid ItemsSource="{Binding Slots}"
+              IsReadOnly="False"
+              CanUserResizeColumns="True"
+              CanUserSortColumns="False"
+              GridLinesVisibility="Horizontal"
+              HeadersVisibility="Column"
+              AutoGenerateColumns="False">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="{StaticResource DyeSlotColSlot}"
+                            Binding="{Binding SlotLabel}"
+                            Width="110"
+                            IsReadOnly="True" />
+        <DataGridTemplateColumn Header="R" Width="64">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:DyeSlotRow">
+              <NumericUpDown Value="{Binding R}" Minimum="0" Maximum="255"
+                             ShowButtonSpinner="False" Increment="1"
+                             HorizontalContentAlignment="Right" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTemplateColumn Header="G" Width="64">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:DyeSlotRow">
+              <NumericUpDown Value="{Binding G}" Minimum="0" Maximum="255"
+                             ShowButtonSpinner="False" Increment="1"
+                             HorizontalContentAlignment="Right" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTemplateColumn Header="B" Width="64">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:DyeSlotRow">
+              <NumericUpDown Value="{Binding B}" Minimum="0" Maximum="255"
+                             ShowButtonSpinner="False" Increment="1"
+                             HorizontalContentAlignment="Right" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTemplateColumn Header="A" Width="64">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:DyeSlotRow">
+              <NumericUpDown Value="{Binding A}" Minimum="0" Maximum="255"
+                             ShowButtonSpinner="False" Increment="1"
+                             HorizontalContentAlignment="Right" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTemplateColumn Header="{StaticResource DyeSlotColGrime}" Width="80">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:DyeSlotRow">
+              <NumericUpDown Value="{Binding Grime}" Minimum="-128" Maximum="127"
+                             ShowButtonSpinner="False" Increment="1"
+                             HorizontalContentAlignment="Right" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTemplateColumn Header="{StaticResource DyeSlotColMaterial}" Width="200">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:DyeSlotRow">
+              <ComboBox ItemsSource="{Binding MaterialOptions}"
+                        SelectedItem="{Binding SelectedMaterial}"
+                        DisplayMemberBinding="{Binding Display}"
+                        HorizontalAlignment="Stretch" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTemplateColumn Header="{StaticResource DyeSlotColColorGroup}" Width="200">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:DyeSlotRow">
+              <ComboBox ItemsSource="{Binding ColorGroupOptions}"
+                        SelectedItem="{Binding SelectedColorGroup}"
+                        DisplayMemberBinding="{Binding Display}"
+                        HorizontalAlignment="Stretch" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTemplateColumn Header="{StaticResource DyeSlotColAction}" Width="90">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:DyeSlotRow">
+              <Button Content="{StaticResource DyeSlotApply}"
+                      Command="{Binding ApplyCommand}"
+                      Padding="6,2"
+                      MinHeight="0" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTextColumn Header="{StaticResource DyeSlotColStatus}"
+                            Binding="{Binding LastError}"
+                            Width="*"
+                            IsReadOnly="True" />
+      </DataGrid.Columns>
+    </DataGrid>
+  </DockPanel>
+</Window>

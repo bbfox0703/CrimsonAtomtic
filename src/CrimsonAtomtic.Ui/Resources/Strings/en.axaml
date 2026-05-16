@@ -53,6 +53,34 @@
   <sys:String x:Key="MenuFillAllStacks">Fill _All Stacks Across Every Inventory…</sys:String>
   <sys:String x:Key="MenuUnlockAllAbyssGates">_Unlock All Abyss Gates (Map Discovery)…</sys:String>
   <sys:String x:Key="MenuEditAbyssGates">_Edit Abyss Gates (Lock/Unlock per gate)…</sys:String>
+  <sys:String x:Key="MenuEditItemDyes">Edit Item _Dyes…</sys:String>
+
+  <!-- Dye editor master dialog -->
+  <sys:String x:Key="DyeEditorWindowTitle">Edit item dyes</sys:String>
+  <sys:String x:Key="DyeEditorHeader">Per-item dye editing. Lists every item whose _itemDyeDataList is present + non-empty. Click Edit to mutate R/G/B/A + grime + material + color group on individual slots. v1 scope: edit-existing-dye only — adding dye to an undyed item is deferred until the upstream set_object_list_present ABI lands.</sys:String>
+  <sys:String x:Key="DyeEditorSearchPlaceholder">Filter by item name, bag, or ItemKey…</sys:String>
+  <sys:String x:Key="DyeEditorColIcon">Icon</sys:String>
+  <sys:String x:Key="DyeEditorColBag">Bag</sys:String>
+  <sys:String x:Key="DyeEditorColItem">Item</sys:String>
+  <sys:String x:Key="DyeEditorColItemKey">ItemKey</sys:String>
+  <sys:String x:Key="DyeEditorColSlotCount">Slots</sys:String>
+  <sys:String x:Key="DyeEditorColAction">Action</sys:String>
+  <sys:String x:Key="DyeEditorEdit">Edit…</sys:String>
+  <sys:String x:Key="DyeEditorEditTip">Open the per-slot editor for this item's dye list. The dialog stays open after applying so you can edit several slots in sequence.</sys:String>
+  <sys:String x:Key="DyeEditorClose">Close</sys:String>
+  <sys:String x:Key="DyeEditorNotAvailableTitle">No dyed items in this save</sys:String>
+  <sys:String x:Key="DyeEditorNotAvailableBody">No item carried _itemDyeDataList with at least one slot. Either the player hasn't dyed anything yet, or this save schema has _itemDyeDataList under a different field name (re-run vendor/crimson-rs/_probe_item_dye_data to verify).</sys:String>
+
+  <!-- Dye slot editor child dialog -->
+  <sys:String x:Key="DyeSlotEditorWindowTitle">Edit dye slots</sys:String>
+  <sys:String x:Key="DyeSlotColSlot">Slot</sys:String>
+  <sys:String x:Key="DyeSlotColGrime">Grime</sys:String>
+  <sys:String x:Key="DyeSlotColMaterial">Material</sys:String>
+  <sys:String x:Key="DyeSlotColColorGroup">Color group</sys:String>
+  <sys:String x:Key="DyeSlotColAction">Action</sys:String>
+  <sys:String x:Key="DyeSlotColStatus">Status</sys:String>
+  <sys:String x:Key="DyeSlotApply">Apply</sys:String>
+  <sys:String x:Key="DyeSlotEditorClose">Close</sys:String>
   <sys:String x:Key="AbyssGatesWindowTitle">Edit Abyss Gates</sys:String>
   <sys:String x:Key="AbyssGatesHeader">Per-gate Lock/Unlock toggle. Writes _initStateNameHash on each FieldGimmickSaveData block (Default 0x866c7489 ↔ Activated 0xe300acfe). Idle (scenery) and Unknown rows are read-only to avoid destabilising non-gate gimmicks. v1 walks top-level FieldGimmickSaveData blocks only — nested ones inside container ObjectList fields are not surfaced. Saves to the file on next File → Save.</sys:String>
   <sys:String x:Key="AbyssGatesColOwnerLevel">Owner level</sys:String>
