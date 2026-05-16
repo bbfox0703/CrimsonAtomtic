@@ -592,14 +592,16 @@ public sealed partial class MainWindow : Window
     private void OnEditItemDyesClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel vm
-            || vm.LoadedPath is not { } loadedPath)
+            || vm.LoadedPath is not { } loadedPath
+            || vm.Summary is not { Blocks: { } blocks })
         {
             return;
         }
         DyeEditorViewModel masterVm;
         try
         {
-            masterVm = new DyeEditorViewModel(vm.GetSaveLoader(), vm.Localization, loadedPath);
+            masterVm = new DyeEditorViewModel(
+                vm.GetSaveLoader(), vm.Localization, loadedPath, blocks);
         }
         catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex)
         {

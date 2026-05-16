@@ -110,7 +110,7 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
         BlockDetails details;
         try
         {
-            details = _loader.LoadBlockDetails(_savePath, (int)_itemRow.Record.BlockIndex);
+            details = _loader.LoadBlockDetails(_savePath, _itemRow.BlockIndex);
         }
         catch (CrimsonSaveException ex)
         {
@@ -118,24 +118,24 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
             return;
         }
 
-        // Drill: InventorySaveData → _inventorylist[N] → _itemList[M].
-        var invListField = FindField(details.Fields, "_inventorylist");
-        if (invListField?.Elements is not { Count: > 0 } containers
-            || _itemRow.Record.InventoryElementIndex >= (uint)containers.Count)
+        // Generic two-step descent driven by the row's stored
+        // first/second-step indices. Works uniformly for inventory
+        // items (_inventorylist → _itemList) and equipped gear
+        // (_list → _item locator).
+        if (!TryDescend(details, _itemRow.FirstStepFieldIndex,
+                        _itemRow.FirstStepElementIndex, out var afterStep1))
         {
             StatusMessage = "Item not found (schema drift?).";
             return;
         }
-        var container = containers[(int)_itemRow.Record.InventoryElementIndex];
-        var itemListField = FindField(container.Fields, "_itemList");
-        if (itemListField?.Elements is not { Count: > 0 } items
-            || _itemRow.Record.ItemElementIndex >= (uint)items.Count)
+        if (!TryDescend(afterStep1, _itemRow.SecondStepFieldIndex,
+                        _itemRow.SecondStepElementIndex, out var item))
         {
             StatusMessage = "Item not found (schema drift?).";
             return;
         }
-        var item = items[(int)_itemRow.Record.ItemElementIndex];
-        var dyeListField = FindField(item.Fields, DyeEditorViewModel.DyeListFieldName);
+        var dyeListField = item.Fields.FirstOrDefault(f =>
+            string.Equals(f.Name, DyeEditorViewModel.DyeListFieldName, StringComparison.Ordinal));
         if (dyeListField?.Elements is not { Count: > 0 } dyeSlots)
         {
             StatusMessage = "This item has no dye slots.";
@@ -196,6 +196,43 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Descend one step into <paramref name="parent"/>: through field
+    /// <paramref name="fieldIdx"/>, then through its
+    /// <paramref name="elementIdx"/>-th list element (ObjectList) or
+    /// through its inline child (object_locator — <paramref name="elementIdx"/>
+    /// ignored). Returns the resolved nested <see cref="BlockDetails"/>
+    /// on success; <c>false</c> when the field is absent / out of
+    /// range / unsupported shape.
+    /// </summary>
+    private static bool TryDescend(
+        BlockDetails parent, uint fieldIdx, uint elementIdx,
+        out BlockDetails nested)
+    {
+        nested = null!;
+        if (fieldIdx >= parent.Fields.Count)
+        {
+            return false;
+        }
+        var f = parent.Fields[(int)fieldIdx];
+        if (!f.Present)
+        {
+            return false;
+        }
+        if (f.Elements is { Count: > 0 } elements)
+        {
+            if (elementIdx >= elements.Count) return false;
+            nested = elements[(int)elementIdx];
+            return true;
+        }
+        if (f.Child is { } child)
+        {
+            nested = child;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Aggregate journal log per Apply (one entry per slot, listing
     /// which scalars flipped — better than per-scalar spam).
     /// </summary>
@@ -219,24 +256,25 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
                                  out string errorMessage)
     {
         errorMessage = string.Empty;
-        var path = new[]
-        {
-            new PathStep(_itemRow.InventoryListFieldIndex, _itemRow.Record.InventoryElementIndex),
-            new PathStep(_itemRow.ItemListFieldIndex, _itemRow.Record.ItemElementIndex),
-            new PathStep(_itemRow.DyeListFieldIndex, (uint)slotIndex),
-        };
+        // Path = item-path + (dyeList, slotIdx). Item-path is the
+        // first/second-step pair the row carries (inventory descent or
+        // equipment descent, transparent to this writer).
+        var itemPath = _itemRow.BuildPathToItem();
+        var path = new PathStep[itemPath.Length + 1];
+        Array.Copy(itemPath, path, itemPath.Length);
+        path[^1] = new PathStep(_itemRow.DyeListFieldIndex, (uint)slotIndex);
         try
         {
             if (!wasPresent)
             {
                 _loader.SetScalarFieldPresent(
-                    (int)_itemRow.Record.BlockIndex, path, scalarFieldIndex,
+                    _itemRow.BlockIndex, path, scalarFieldIndex,
                     makePresent: true, initialBytes: bytes);
             }
             else
             {
                 _loader.SetScalarField(
-                    (int)_itemRow.Record.BlockIndex, path, scalarFieldIndex, bytes);
+                    _itemRow.BlockIndex, path, scalarFieldIndex, bytes);
             }
         }
         catch (CrimsonSaveException ex)
