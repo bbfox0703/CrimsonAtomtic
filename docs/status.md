@@ -795,7 +795,7 @@ do them all at once.
 | 9 | ~~**Browse Characters / NPCs dialog**~~ | ~~EASY~~ | ✅ **Shipped 2026-05-15 part 6.** Tools → Browse Characters / NPCs… mirrors "Browse Items" but is driven by `characterinfo.pabgb` + the portrait pipeline. `CharacterPickerViewModel` enumerates every `(CharacterKey, internal_name)` pair via `crimson_characterinfo_get_entry` (two-call), joins each with PALOC-resolved display name (English + optional secondary), and shows an NPC portrait when one matches above `MinAcceptableScore`. Read-only — no Add-to-bag analog. Useful for FieldNPC investigation work (deferred item #5's other half). |
 
 **Lower-priority deferred items** (the older list — none blocking; pick by appetite):
-- Items #1, #5b, #7–#14 from the original list below. (Items #2, #3, #4, #5a, #6 already shipped or addressed — see strikethrough rows there.)
+- Items #1, #5b, #7, #9–#14 from the original list below. (Items #2, #3, #4, #5a, #6, #8 already shipped or addressed — see strikethrough rows there.)
 - Plus crimson-rs "optional follow-ons" surfaced by the wave-2 refresh: Knowledge group breadcrumb (resolve KnowledgeKey to "Knowledge › 〈group〉 › 〈entry〉"), Quest chapter rollup ("Quest › 〈chapter heading〉 › 〈quest title〉"), broader CharacterKey PALOC namespaces beyond `lo32=0x30` (needs a save sample touching more named NPCs), portrait matcher mesh / customisation tokens (CrimsonForge-style — current matcher scores name tokens only).
 
 ## Sealed Abyss Artifact investigation (HISTORICAL — superseded by 2026-05-15)
@@ -1314,10 +1314,18 @@ Open from earlier work, none blocking the icon pipeline:
    editing existing slots). Value-prop dropped now that Item
    Picker + slot replace + Fill stacks cover most edit needs.
 
-8. **Cross-bag item search beyond one nested level.**
-   `BuildNestedHaystack` walks one level deep. List-of-lists
-   shapes (haven't seen one yet in 1.06) wouldn't be reached.
-   Generalise to bounded recursion when needed.
+8. ~~**Cross-bag item search beyond one nested level.**~~
+   ✅ **Superseded** by `Tools → Find Items` (2026-05-15 part 7) which
+   uses `crimson_save_list_inventory_items` to flat-list every item
+   slot across every container in one FFI call — strictly better than
+   walking nested haystacks on the C# side. `BuildNestedHaystack`
+   stays as the in-block element-picker's filter helper (it's the
+   right tool for "filter the elements you're currently looking at"),
+   but the cross-bag "where is item X?" use case the original entry
+   targeted is fully covered by the new Find Items dialog. If a
+   future 1.x patch introduces a list-of-lists shape that breaks
+   the element-picker filter specifically, revisit — but no current
+   gap.
 
 9. **Avalonia.Diagnostics 12.x** — add back behind a `Debug`
    condition once published.
