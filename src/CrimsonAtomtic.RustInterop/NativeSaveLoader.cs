@@ -112,6 +112,57 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         return ReadBlockDetails(handle, (uint)blockIndex);
     }
 
+    public ulong GetMutationVersion()
+    {
+        var cached = RequireLoaded(nameof(GetMutationVersion));
+        var rc = NativeMethods.GetMutationVersion(cached, out var v);
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_save_get_mutation_version failed: {ErrorName(rc)}");
+        }
+        return v;
+    }
+
+    public IReadOnlyList<InventoryItemRecord> ListInventoryItems(out ulong version)
+    {
+        var cached = RequireLoaded(nameof(ListInventoryItems));
+        // Two-call shape: first probes count + version, second fills
+        // the typed buffer. The Rust side returns OK (not
+        // BUFFER_TOO_SMALL) when the save has zero items — handle that
+        // case without a second call.
+        unsafe
+        {
+            nuint count = 0;
+            ulong v = 0;
+            int rc = NativeMethods.ListInventoryItems(
+                cached, null, 0, out count, out v);
+            if (rc == NativeMethods.OK && count == 0)
+            {
+                version = v;
+                return Array.Empty<InventoryItemRecord>();
+            }
+            if (rc != NativeMethods.BUFFER_TOO_SMALL)
+            {
+                throw new CrimsonSaveException(rc,
+                    $"crimson_save_list_inventory_items size query failed: {ErrorName(rc)}");
+            }
+            var buf = new InventoryItemRecord[(int)count];
+            fixed (InventoryItemRecord* p = buf)
+            {
+                rc = NativeMethods.ListInventoryItems(
+                    cached, p, count, out _, out v);
+            }
+            if (rc != NativeMethods.OK)
+            {
+                throw new CrimsonSaveException(rc,
+                    $"crimson_save_list_inventory_items fill failed: {ErrorName(rc)}");
+            }
+            version = v;
+            return buf;
+        }
+    }
+
     public void SetScalarField(int blockIndex, int fieldIndex, ReadOnlySpan<byte> bytes) =>
         SetScalarField(blockIndex, ReadOnlySpan<PathStep>.Empty, fieldIndex, bytes);
 
@@ -1427,6 +1478,32 @@ internal static partial class NativeMethods
         uint idx,
         byte* keyBuf, nuint keyBufLen, out nuint keyRequired,
         byte* valueBuf, nuint valueBufLen, out nuint valueRequired);
+
+    // ── Mutation-version counter ────────────────────────────────────────────
+    //
+    // Monotonic u64 bumped by exactly 1 on every successful mutation
+    // through the C ABI surface. Pure reads (LoadBlockDetails, snapshot
+    // listings, etc.) DO NOT bump it. Pair with snapshot-style reads
+    // for cheap O(1) staleness detection.
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_get_mutation_version")]
+    public static partial int GetMutationVersion(CrimsonSaveHandle handle, out ulong outVersion);
+
+    // ── Inventory flat enumeration ──────────────────────────────────────────
+    //
+    // Single-FFI walk of every `_inventoryList[N]._itemList[M]` slot
+    // across every InventorySaveData block. 48-byte repr(C) records,
+    // blittable to C# InventoryItemRecord. The third out-param is the
+    // mutation-version snapshot — callers pair it with the records so
+    // a later GetMutationVersion call detects staleness.
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_list_inventory_items")]
+    public static unsafe partial int ListInventoryItems(
+        CrimsonSaveHandle handle,
+        InventoryItemRecord* outRecords,
+        nuint capacityRecords,
+        out nuint outCountRecords,
+        out ulong outVersion);
 
     // ── PAZ extraction ──────────────────────────────────────────────────────
 

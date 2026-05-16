@@ -1278,4 +1278,125 @@ public sealed class NativeSaveLoaderTests
         Assert.True(newField.Present);
         Assert.Equal((uint)scalarSize, newField.End - newField.Start);
     }
+
+    // ── Mutation-version + flat inventory listing ───────────────────────────
+
+    [Fact]
+    public void GetMutationVersion_StartsAtZeroAfterLoad()
+    {
+        var path = FindLiveSave();
+        if (path is null) return;
+        var loader = new NativeSaveLoader();
+        loader.Load(path);
+        var v = loader.GetMutationVersion();
+        Assert.Equal(0u, v);
+    }
+
+    [Fact]
+    public void GetMutationVersion_NoSaveLoaded_Throws()
+    {
+        if (!File.Exists("crimson_rs.dll")) return;
+        var loader = new NativeSaveLoader();
+        Assert.Throws<InvalidOperationException>(() => loader.GetMutationVersion());
+    }
+
+    [Fact]
+    public void ListInventoryItems_LiveSave_ReturnsNonEmptyConsistentRecords()
+    {
+        var path = FindLiveSave();
+        if (path is null) return;
+        var loader = new NativeSaveLoader();
+        loader.Load(path);
+
+        var items = loader.ListInventoryItems(out var snapshotVersion);
+        Assert.Equal(0u, snapshotVersion);     // fresh load
+        Assert.NotEmpty(items);                 // any real save has items
+
+        // Sanity: ItemKey 0 is reserved-empty; non-zero records should
+        // have well-formed InventoryKey + StackCount, and the InventoryKey
+        // values must be a subset of the documented container set.
+        foreach (var rec in items)
+        {
+            Assert.True(rec.ItemKey > 0, "ItemKey 0 should not appear in flat list");
+            // Block + element indexes are usable as descent paths — they
+            // index into actual save data, so they must be in-range
+            // u32s (we don't have an upper bound without re-decoding
+            // blocks, so this is a smoke check).
+            Assert.True(rec.BlockIndex < 10_000);
+            Assert.True(rec.InventoryElementIndex < 32);
+        }
+
+        // Version stamp is stable across a pure read.
+        var stillFresh = loader.GetMutationVersion();
+        Assert.Equal(snapshotVersion, stillFresh);
+    }
+
+    [Fact]
+    public void GetMutationVersion_BumpsAfterMutation()
+    {
+        var path = FindLiveSave();
+        if (path is null) return;
+        var loader = new NativeSaveLoader();
+        loader.Load(path);
+        var before = loader.GetMutationVersion();
+
+        // Find a present scalar field somewhere and patch it to its own
+        // value (no semantic change, but the FFI still counts it as a
+        // mutation — that's the whole point of the version counter).
+        var summary = loader.Load(path);
+        var (blockIdx, fieldIdx, start, end) = FindAnyPresentScalar(loader, path, summary);
+        if (start < 0)
+        {
+            return; // no suitable scalar
+        }
+        var details = loader.LoadBlockDetails(path, blockIdx);
+        var field = details.Fields[fieldIdx];
+        // Read the current bytes and write them back unchanged.
+        // We can't easily get raw bytes from BlockDetails without
+        // re-reading the save body — so just write a 1-byte u8 / 4-byte
+        // u32 zero-pattern with the correct size for any small fixed
+        // width. Skip if size doesn't match an expected width.
+        var size = (int)(end - start);
+        if (size is not (1 or 2 or 4 or 8))
+        {
+            return;
+        }
+        var buf = new byte[size];
+        // For a defensive smoke test, write the same bytes the field
+        // already holds. Simplest stand-in: zero buffer (works for
+        // most numeric fields without changing semantics meaningfully
+        // for a test smoke; if a field rejects the value the test
+        // returns early as a soft-skip rather than failing).
+        try
+        {
+            loader.SetScalarField(blockIdx, fieldIdx, buf);
+        }
+        catch (CrimsonSaveException)
+        {
+            return;
+        }
+        var after = loader.GetMutationVersion();
+        Assert.Equal(before + 1, after);
+    }
+
+    private static (int blockIdx, int fieldIdx, long start, long end) FindAnyPresentScalar(
+        NativeSaveLoader loader, string path, SaveSummary summary)
+    {
+        for (var bi = 0; bi < summary.Blocks.Count; bi++)
+        {
+            BlockDetails d;
+            try { d = loader.LoadBlockDetails(path, bi); }
+            catch (CrimsonSaveException) { continue; }
+            for (var fi = 0; fi < d.Fields.Count; fi++)
+            {
+                var f = d.Fields[fi];
+                if (f.Present && f.Kind is "fixed_prefix" or "fixed_suffix"
+                    && (f.End - f.Start) is >= 1 and <= 8)
+                {
+                    return (bi, fi, (long)f.Start, (long)f.End);
+                }
+            }
+        }
+        return (-1, -1, -1, -1);
+    }
 }

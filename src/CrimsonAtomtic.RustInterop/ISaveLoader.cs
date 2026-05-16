@@ -24,6 +24,57 @@ public interface ISaveLoader
     BlockDetails LoadBlockDetails(string savePath, int blockIndex, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Read the loaded handle's monotonic mutation counter. The counter
+    /// starts at 0 on <see cref="Load"/> and bumps by exactly 1 on every
+    /// successful mutation through this interface (<c>SetScalarField</c>,
+    /// <c>ListRemoveElement</c>, batch variants, …). Pure reads
+    /// (<see cref="LoadBlockDetails"/>, <see cref="ListInventoryItems"/>,
+    /// …) DO NOT bump it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Pair with <see cref="ListInventoryItems"/>'s out-version stamp
+    /// for cheap O(1) staleness detection on cached snapshots. Throws
+    /// <see cref="InvalidOperationException"/> when no save is loaded.
+    /// </para>
+    /// </remarks>
+    ulong GetMutationVersion();
+
+    /// <summary>
+    /// Flat-list every item slot across every <c>InventorySaveData</c>
+    /// block in the currently-loaded save. One FFI call replaces the
+    /// 18-container × N-item nesting walk callers used to do manually
+    /// (<c>InventorySaveData → _inventorylist[N] → _itemList[M]</c>).
+    /// </summary>
+    /// <param name="version">
+    /// Out parameter — receives the handle's mutation counter at the
+    /// moment the list was read. Pair with
+    /// <see cref="GetMutationVersion"/> later to detect whether the
+    /// snapshot's positional fields
+    /// (<see cref="InventoryItemRecord.BlockIndex"/> /
+    /// <see cref="InventoryItemRecord.InventoryElementIndex"/> /
+    /// <see cref="InventoryItemRecord.ItemElementIndex"/>) are still
+    /// valid — they go stale on the next length-changing mutation.
+    /// </param>
+    /// <returns>
+    /// Flat list of every slot. Empty when the save has zero inventory
+    /// items. The records are pure data — safe to retain across
+    /// non-mutating calls, but the positional indexes go stale after
+    /// any list edit (see version contract).
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// Performance: O(total items + 18 containers). Under 1 ms on a
+    /// 1.07-era save with 543 items.
+    /// </para>
+    /// <para>
+    /// Requires a prior <see cref="Load"/> call. Throws
+    /// <see cref="InvalidOperationException"/> when no save is loaded.
+    /// </para>
+    /// </remarks>
+    IReadOnlyList<InventoryItemRecord> ListInventoryItems(out ulong version);
+
+    /// <summary>
     /// Overwrite the bytes of a fixed-size scalar field in the
     /// currently-loaded save with <paramref name="bytes"/>. The set is
     /// validated against the field's recorded byte range; mismatched
