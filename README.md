@@ -1,5 +1,7 @@
 # CrimsonAtomtic
 
+<img src="./img/Logo.jpg" alt="CrimsonAtomic"/>  
+
 [![Platform](https://img.shields.io/badge/Platform-Windows%20x64-0078D4)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
