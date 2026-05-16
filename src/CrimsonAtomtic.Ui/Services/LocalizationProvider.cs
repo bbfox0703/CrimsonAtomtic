@@ -766,6 +766,54 @@ public sealed class LocalizationProvider : IDisposable
         _knowledgeInfo?.GetEntry(index);
 
     /// <summary>
+    /// Number of entries in the loaded <c>gimmickinfo.pabgb</c>.
+    /// <c>0</c> when the bridge isn't loaded.
+    /// </summary>
+    public int GimmickCount => _gimmickInfo?.EntryCount ?? 0;
+
+    /// <summary>
+    /// Get the <c>(GimmickInfoKey, InternalName)</c> pair at insertion
+    /// index <paramref name="index"/>. Returns <c>null</c> when the
+    /// bridge isn't loaded or <paramref name="index"/> is out of range.
+    /// </summary>
+    public (uint GimmickInfoKey, string InternalName)? GetGimmick(int index) =>
+        _gimmickInfo?.GetEntry(index);
+
+    /// <summary>
+    /// Enumerate every loaded gimmick entry whose internal name
+    /// contains <b>any</b> of <paramref name="substrings"/>
+    /// (case-insensitive). Returns an empty sequence when the bridge
+    /// isn't loaded. Substring match (not prefix) — gimmick internal
+    /// names are descriptive (e.g. <c>gimmick_abyssone_bridge_gate_01</c>)
+    /// so substring catches more than prefix would.
+    /// </summary>
+    public IEnumerable<(uint GimmickInfoKey, string InternalName)>
+        EnumerateGimmicksByNameContains(params string[] substrings)
+    {
+        if (_gimmickInfo is null || substrings is null || substrings.Length == 0)
+        {
+            yield break;
+        }
+        var count = _gimmickInfo.EntryCount;
+        for (var i = 0; i < count; i++)
+        {
+            var entry = _gimmickInfo.GetEntry(i);
+            if (entry is not { } e || string.IsNullOrEmpty(e.Name))
+            {
+                continue;
+            }
+            foreach (var s in substrings)
+            {
+                if (e.Name.Contains(s, StringComparison.OrdinalIgnoreCase))
+                {
+                    yield return e;
+                    break;
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Enumerate every loaded knowledge entry whose internal name
     /// matches at least one of <paramref name="namePrefixes"/>
     /// (case-insensitive ordinal). Returns an empty sequence when

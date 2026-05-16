@@ -85,6 +85,9 @@
                   Command="{Binding FillAllStacksAcrossInventoriesCommand}" />
         <MenuItem Header="{StaticResource MenuUnlockAllAbyssGates}"
                   Command="{Binding UnlockAllAbyssGatesCommand}" />
+        <MenuItem Header="{StaticResource MenuEditAbyssGates}"
+                  Click="OnEditAbyssGatesClick"
+                  IsEnabled="{Binding HasSave}" />
         <MenuItem Header="{StaticResource MenuRenameMercenary}"
                   Click="OnRenameMercenaryClick"
                   IsEnabled="{Binding HasSave}" />

@@ -488,6 +488,56 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Tools → Edit Abyss Gates… handler. Walks the loaded save
+    /// asynchronously to build the per-gate list, then opens the
+    /// dialog. Closes the dialog and flips the main VM's dirty flag
+    /// when the user has applied at least one toggle. Read-only when
+    /// no save is loaded (menu item gated on HasSave).
+    /// </summary>
+    private async void OnEditAbyssGatesClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm
+            || vm.LoadedPath is not { } loadedPath
+            || vm.Summary is not { Blocks: { } blocks })
+        {
+            return;
+        }
+        AbyssGatesViewModel dialogVm;
+        try
+        {
+            dialogVm = await AbyssGatesViewModel.CreateAsync(
+                vm.GetSaveLoader(), vm.Localization, loadedPath, blocks);
+        }
+        catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex)
+        {
+            await ConfirmDialog.ShowAlertAsync(this,
+                "Could not load abyss gates",
+                $"Failed to scan save: {ex.Message} (code {ex.ErrorCode})");
+            return;
+        }
+
+        if (dialogVm.Rows.Count == 0)
+        {
+            var title = (Application.Current?.FindResource("AbyssGatesNotAvailableTitle") as string)
+                        ?? "No abyss gates";
+            var body = (Application.Current?.FindResource("AbyssGatesNotAvailableBody") as string)
+                       ?? dialogVm.StatusMessage ?? "Scan returned 0 rows.";
+            await ConfirmDialog.ShowAlertAsync(this, title, body);
+            return;
+        }
+
+        var child = new AbyssGatesWindow { DataContext = dialogVm };
+        child.Closed += (_, _) =>
+        {
+            if (dialogVm.IsDirty)
+            {
+                vm.MarkDirtyFromExternalEdit();
+            }
+        };
+        child.Show(this);
+    }
+
+    /// <summary>
     /// Tools → Find Items… handler. Opens the cross-bag item-search
     /// dialog powered by <see cref="ISaveLoader.ListInventoryItems"/>.
     /// Read-only; the menu item is gated on <c>HasSave</c> so this
