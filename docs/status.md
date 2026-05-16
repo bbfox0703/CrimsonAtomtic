@@ -3,7 +3,84 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-16 part 13 (Abyss Gates bugfix sweep — per-gate dialog walks nested gimmicks; bulk inject rewritten for object_list).
+> Last updated: 2026-05-16 part 17 (deferred-redecode batch on the bulk SA challenge sweep — 200× wall-clock win, measured on the live save).
+>
+> ## ✅ This session — what shipped (2026-05-16 part 17)
+>
+> Consumed `vendor/crimson-rs`'s new **deferred-redecode batch** ABI
+> (commit `a161064`; full contract at
+> [`vendor/crimson-rs/docs/save-deferred-redecode.md`](../vendor/crimson-rs/docs/save-deferred-redecode.md)).
+> The bulk "Complete All Held Sealed Abyss Artifact Challenges"
+> sweep now wraps its 141-challenge apply loop in
+> `begin_/end_deferred_redecode`, collapsing 423 per-call body
+> re-decodes (3 length-changing FFI calls × 141 challenges) into
+> ONE encode + parse + decode pass at commit.
+>
+> | Area | Scope |
+> |---|---|
+> | **C# batch API** | 4 new `[LibraryImport]` entries on `NativeMethods` (`BeginDeferredRedecode` / `EndDeferredRedecode` / `AbortDeferredRedecode` / `IsDeferredRedecodeOpen`) + 2 new error constants (`BATCH_IN_PROGRESS = -21`, `BATCH_NOT_OPEN = -22`). `NativeSaveLoader` exposes 5 wrappers; `ISaveLoader` mirrors them with full docstrings including the partial-success contract. The recommended call site is `loader.RunDeferred(Action body)` — auto-aborts on exception (rolls handle back to pre-begin state), surfaces commit-time `MUTATION_INVALID` as `CrimsonSaveException`. |
+> | **Bulk SA sweep wiring** | `BulkCompleteHeldSealedArtifactChallengesAsync`'s apply loop now runs inside `loader.RunDeferred`. Per-op failures are captured into local `loopError` / `loopErrorKey` and the `foreach` falls through normally — that path preserves the pre-batch "partial-success keeps already-applied work" UX (letting the exception escape `RunDeferred` would Abort and lose work, which is wrong for this flow). A commit-time `MUTATION_INVALID` is caught at the outer level and surfaced as `applied=0`. |
+> | **7 new tests** in `NativeSaveLoaderTests` | `DeferredRedecode_AbortRestoresPreBeginState`, `DeferredRedecode_EndBumpsVersionExactlyOnce`, `DeferredRedecode_NestedBeginReturnsBatchInProgress`, `DeferredRedecode_EndOrAbortWithNoBatch_ReturnsBatchNotOpen`, `DeferredRedecode_WriteToFileRejectedMidBatch`, `RunDeferred_AutoCommitsOnNormalReturn`, `RunDeferred_AutoAbortsOnException`. All pin the ABI contract against the live save. |
+>
+> **Measured speedup**, 100 clone+remove cycles (= 200 length-changing ops) against the slot102 save's largest object_list, Debug build:
+>
+> | Mode | Time | Per-op |
+> |---|---:|---:|
+> | Normal (per-op decode_blocks) | **197,025 ms** | 1970 ms |
+> | Deferred batch (1 decode at end) | **994 ms** | 10 ms |
+> | **Speedup** | — | **198×** |
+>
+> For the actual 141-challenge SA sweep the loop now runs in well under a second instead of the previous ~10 s. Release-mode numbers will improve both sides, but the ratio holds.
+>
+> Tests: **190/190 pass** (was 183; +7 deferred-redecode contract tests). Debug build clean.
+>
+> Future opportunity: the same wrapper could wrap any multi-mutation Tools-menu flow (Sockets-Apply-Set bulk, Dye slot editor's multi-Apply, Unlock-All-Abyss-Gates). Each would land a similar order-of-magnitude win.
+>
+> ## ✅ This session — what shipped (2026-05-16 part 16)
+>
+> StoreKey bridge consumed + a new Vendor Buyback dialog built on
+> top of it. Powered by `vendor/crimson-rs` commit `3af28de` (storeinfo
+> bridge) which lights up 292 store templates in 1.07.
+>
+> | Area | Scope |
+> |---|---|
+> | **StoreKey resolver bridge — `storeinfo.pabgb` / `.pabgh`** | 6 new `[LibraryImport]` entries on `NativeMethods` (two-file load + free + entry_count + lookup_string_key + get_entry). New `NativeStoreInfoCatalog` (mirrors `NativeSkillInfoCatalog`'s two-file pattern) + `CrimsonStoreInfoHandle` SafeHandle. `LocalizationProvider`: `_storeInfo` field + `StoreInfo` accessor + `TryBootstrapStoreInfo` helper called from `TryBootstrapFromGameRoot`. `"StoreKey"` added to `TableDrivenKeyTypes` + dispatch branch in `ResolveKeyTableOne` — lights up `StoreDataSaveData._storeKey` in the resolved-name column. Internal name only — no PALOC chain (the secondary-language column echoes the primary; same convention as QuestGauge / Skill). |
+> | **Tools → Vendor Buyback dialog (v1: view + remove)** | New dialog surfaces every item the player has sold to vendors that still sits in a per-store buyback queue. Walks the singleton `StoreSaveData._storeDataList` → per-store `StoreDataSaveData._storeSoldItemDataList`, emits one row per sold `ItemSaveData`. Resolved columns: Store (via the new bridge) + StoreKey + Item (English / secondary via iteminfo + PALOC) + ItemKey + Stack + Endurance + SoldAt ticks. Two-pass filter (same shape as Sockets v2): store-name match expands to every row in that store; item-name / item-key narrows per-row. Per-row **Remove** action calls `ListRemoveElement`; after success, every sibling row in the same store whose `BuybackElementIdx` sat above the removed one is shifted down by 1 (list-element-shift invariant). |
+>
+> End-to-end verified against slot102 (17 rows across 5 stores — `Store_Camp_Accessory` 4-item set + `Store_Camp_Grocery` 4-item set + 3 other stores) and slot105 (10 rows across 4 stores).
+>
+> **Out of scope for v1**: "Move back to inventory" (clone `ItemSaveData` into a target bag's `_itemList` + remove from buyback) — needs target-bag picking + per-bag empty-slot detection. Planned follow-up. Edit stack / endurance / sockets — the generic block editor handles those; the dedicated dialog stays focused on the per-row buyback decision.
+>
+> Tests: **183/183 pass** (no new tests — wiring of an existing-pattern bridge + a view-only dialog with one mutation surface that already has coverage via `ListRemoveElement` tests). Debug build clean. Rebuilt `crimson_rs.dll` to expose the new storeinfo exports.
+>
+> ## ✅ This session — what shipped (2026-05-16 part 15)
+>
+> Two improvements to the editor's resolver + bulk-op infrastructure
+> that don't need crimson-rs changes:
+>
+> | Area | Scope |
+> |---|---|
+> | **Tier 1 key-resolver wiring — `DyeColorGroupInfoKey` + `StringInfoKey`** | The dye-color-group bridge (`_dyeColorGroupInfo`) is already populated for the Dye editor's dropdown but wasn't routed for `ItemDyeSaveData._dyeColorGroupInfoKey`. Added `"DyeColorGroupInfoKey"` to `TableDrivenKeyTypes` + a switch branch in `ResolveKeyTableOne` that delegates to `LookupName`. Same for `"StringInfoKey"` scalar fields: pre-computed Jenkins hashes the existing stringinfo bridge reverses in one hop — covers `UseItemReserveSlotElementSaveData._specialNameKey`, `FactionNodeSubInnerEnableElementSaveData._levelNameKey`, etc. Dynamic-array StringInfoKey fields like `MissionStateData._usedTagList` stay on the raw-array display path (collections, not single names). |
+> | **Bulk SA sweep — live progress + scalar batching** | Before this turn the bulk "Complete All Held Sealed Abyss Artifact Challenges" sweep took ~8–10 s on a 141-artifact set with a frozen-looking status footer. Added (a) live progress via `IProgress<(Done, Total, CurrentKey)>` — `Progress<T>` captures the UI `SynchronizationContext` at construction, so `Report(...)` from inside `Task.Run` posts back to the UI thread automatically; status footer now animates "Applying Pattern B v1: N / 141 — challenge 0xXXXXXXXX" as each apply lands; (b) batched the trailing scalar setters in `ApplyPatternBv1Writes` via `SetScalarFieldsBatch` — up to 4 scalar mutations per challenge now ship in one FFI roundtrip instead of up to 4. Modest wall-clock impact (re-decode cost dominates), but cleaner code + cuts validation overhead. **The big speedup landed in part 17 via the deferred-redecode batch.** |
+>
+> Tier-1 gap inventory diagnosis surfaced 45 distinct typed-ID TypeNames in slot105's save; 13 are already resolved, 27 fall into 4 tiers by tractability (per the inline analysis): **Tier 1** = pure C# wiring (DyeColorGroup + StringInfoKey above + already-loaded bridges); **Tier 2** = high-value `crimson-rs` bridges (Faction* set / StoreKey / MercenaryKey / FieldInfoKey — most landed upstream in the same vendor refresh); **Tier 3** = niche bridges (GameAdvice / RoyalSupply / etc.); **Tier 4** = per-save instance IDs (not gamedata-lookupable).
+>
+> Tests: **183/183 pass** (no new tests — pure wiring + UI plumbing). Debug build clean.
+>
+> ## ✅ This session — what shipped (2026-05-16 part 14)
+>
+> Four UI bug fixes / UX improvements landed back-to-back on the
+> Sockets editor, Dye editor, and Rename Mercenary dialog. All
+> driven by user feedback against the live 1.07 save.
+>
+> | Area | Scope |
+> |---|---|
+> | **Rename Mercenary — generic class glyph fallback when no NPC portrait** | Diagnosis: 95+ rows in the user's MercenaryClanSaveData showed blank Portrait cells. Probe revealed `0012/0.pamt` ships only 3 named-NPC portraits in 1.07 (`demian` / `kliff` / `oongka`); every other "mercenary" CharKey is actually a mount / wagon / animal with template names like `Riding_Horse_Tiuta_Unique_2050_kliff`, `Riding_Balloon_Summoner_3`, `Animal_Stefano_Wild_31364`. Pearl Abyss doesn't ship per-character portraits for them. Fix: bucket each row by characterinfo internal-name prefix into a `MercenaryCategory` (Npc / Mount / Wagon / Balloon / Animal / Pet / Unknown). Render a centered Unicode glyph (👤 / 🐎 / 🛒 / 🎈 / 🦌 / 🐾 / ❔) in the cell when no real portrait loads. New `LocalizationProvider.LookupCharacterInternalName(uint)` helper delegates to `_characterInfo.LookupStringKey`. Cell template becomes a `<Panel>` with both Image (when `HasPortrait`) and TextBlock (glyph). |
+> | **Sockets editor — visible Item column + live filter (en + secondary)** | Two bugs in one commit. (a) The shipped AXAML had `Width="2*"` on both Item and Current-gem columns competing against ~970 px of fixed-width siblings in a 980 px window — the proportional columns ended up with ~5 px each, so the Item column never showed. Fixed widths (Item=260, Current-gem=220, both `MinWidth=120`) + bumped default window width to 1320×600. (b) Added a Filter TextBox above the Apply-Set toolbar, bound to `SocketEditorViewModel.SearchText`. `SocketRow` now stores `ItemNameEnglish` + `ItemNameSecondary` separately (matching Find Items / Sockets v2 pattern); filter does case-insensitive substring against bag label / item name (en + secondary) / item key / current gem name / current gem key. |
+> | **Sockets + Dye editors — include equipped gear (`EquipmentSaveData`)** | Both editors walked only `InventorySaveData` blocks; equipped items under `EquipmentSaveData._list[i]._item` (object_locator → inline `ItemSaveData` child) never showed up. In slot105 that meant **18 equipped items × 5 sockets = 90 missing socket rows**, plus any dyed equipped armour silently absent. **No `crimson_rs` change needed** — equipped items use the same `ItemSaveData` schema; the only difference is the descent path: `[(_list, slotIdx), (_item, 0), …]` instead of `[(_inventorylist, bagIdx), (_itemList, itemIdx), …]`. Both are 2-step descents the existing path-addressed ABI already handles (object-list + locator). Sockets: new `CollectFromEquipment` walk runs alongside `CollectFromInventory`; the four existing field-index getters on `SocketRow` get reinterpreted as "first descent step + second descent step" pairs so all the path-construction code stays unchanged. Dye: bigger refactor — the master VM used `ListInventoryItems` FFI (inventory-only) and the slot VM hardcoded an `_inventorylist → _itemList` drill; both rewritten to direct block walking, `DyeEditorItemRow` drops the `InventoryItemRecord` field and carries the same first/second-step indices, `DyeSlotEditorViewModel.LoadSlots` uses a generic `TryDescend` helper. End-to-end verified: SocketEditor now surfaces 2,840 rows (2,750 inventory + 90 equipped). |
+> | **Sockets editor — two-pass filter so item-name match shows empty slots** | Diagnosis: the user's "電" filter showed only 1 row for Kuku Rishi's Boots (slot 2 holding Greater Shockward). The other 4 slots existed but were filtered out — the "Item" column / item-name filter and the "Current gem" column / gem-name filter were OR'd together per-row, so empty slots and non-electric gems on the same item got hidden. Fix: split `SocketRow.MatchesFilter` into `MatchesItemFilter` (bag / item name / item key) and `MatchesSocketFilter` (gem name / gem key). `ApplyFilter` does a two-pass walk: pass 1 collects every item identity `(BlockIndex, BagIndex, ItemIndex)` whose parent fields match; pass 2 emits every row whose item is in the matched set OR whose own gem matches. Verified: "Kuku Rishi" → all 5 slots (3 filled + 2 with Fill...), "Equipped" → all 90 equipped slots, narrow gem-name filter unchanged. |
+>
+> Tests: **183/183 pass** throughout (no new tests — UI fixes are pure presentation-layer plumbing over existing primitives, all of which have their own coverage). Debug build clean. No `vendor/crimson-rs` change in any of the four.
 >
 > ## ✅ This session — what shipped (2026-05-16 part 13)
 >

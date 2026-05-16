@@ -71,8 +71,14 @@ set of Tools-menu bulk operations. Highlights:
 - **Abyss Gates** — bulk **Unlock All Abyss Gates (Map Discovery)** for
   the knowledge layer plus a per-gate Lock/Unlock dialog for the gate-state
   layer.
+- **Vendor Buyback** — list every item the player has sold to vendors
+  (StoreKey resolved live via `storeinfo.pabgb`), per-row Remove to
+  free a buyback slot; two-pass filter (store-name match expands to
+  every sold item in that store; item-name narrows per-row).
 - **Mercenary rename** — with character portrait column driven by the
-  PAZ NPC portrait pipeline.
+  PAZ NPC portrait pipeline, plus generic class glyphs (🐎 / 🛒 / 🎈 /
+  🦌 / 👤) for mounts / wagons / animals / NPCs that don't ship a
+  per-character portrait.
 - **Browse Items / Browse Characters / NPCs** — reference dialogs over the
   full `iteminfo` and `characterinfo` tables.
 - **Find Items** — cross-bag search with per-row Go button that jumps the
