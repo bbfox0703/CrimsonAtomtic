@@ -52,9 +52,32 @@ public sealed partial class SocketEditorViewModel : ObservableObject
 {
     /// <summary>Class name of every top-level inventory block.</summary>
     private const string InventorySaveDataClass = "InventorySaveData";
+    /// <summary>
+    /// Class name of the top-level block carrying the player's
+    /// equipped-gear slots. One per save. Each
+    /// <c>_list[i]._item</c> is a full <see cref="ItemSaveData"/>
+    /// child (object_locator) with the same socket/dye schema as
+    /// inventory items — so we walk it here in parallel with
+    /// <see cref="InventorySaveDataClass"/> rather than asking
+    /// crimson-rs for a unified flat enumerator.
+    /// </summary>
+    private const string EquipmentSaveDataClass = "EquipmentSaveData";
 
     private const string InventoryListFieldName = "_inventorylist";
     private const string ItemListFieldName = "_itemList";
+    /// <summary>
+    /// Object-list field on <see cref="EquipmentSaveDataClass"/>
+    /// holding 18 <c>EquipSlotElementSaveData</c> rows in the 1.07
+    /// schema, each carrying an <c>_item</c> locator child.
+    /// </summary>
+    private const string EquipListFieldName = "_list";
+    /// <summary>
+    /// Object-locator field on each <c>EquipSlotElementSaveData</c>
+    /// that wraps the equipped <c>ItemSaveData</c> child. Descent
+    /// step uses <c>element_idx=0</c> per the path-ABI contract
+    /// (ignored for locator descent).
+    /// </summary>
+    private const string EquipItemLocatorFieldName = "_item";
     private const string SocketListFieldName = "_socketSaveDataList";
     private const string ItemKeyFieldName = "_itemKey";
 
@@ -253,10 +276,6 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         var vm = new SocketEditorViewModel(loader, localization, journal, savePath);
         foreach (var b in blocks)
         {
-            if (!string.Equals(b.ClassName, InventorySaveDataClass, StringComparison.Ordinal))
-            {
-                continue;
-            }
             BlockDetails top;
             try
             {
@@ -266,7 +285,14 @@ public sealed partial class SocketEditorViewModel : ObservableObject
             {
                 continue;
             }
-            vm.CollectFromInventory(top, b.Index);
+            if (string.Equals(b.ClassName, InventorySaveDataClass, StringComparison.Ordinal))
+            {
+                vm.CollectFromInventory(top, b.Index);
+            }
+            else if (string.Equals(b.ClassName, EquipmentSaveDataClass, StringComparison.Ordinal))
+            {
+                vm.CollectFromEquipment(top, b.Index);
+            }
         }
         if (vm.Sockets.Count == 0)
         {
@@ -449,12 +475,58 @@ public sealed partial class SocketEditorViewModel : ObservableObject
                     {
                         CollectFromItem(
                             blockIndex,
-                            inventoryListFieldIdx: f,
-                            bagIndex: bagIdx,
-                            itemListFieldIdx: g,
-                            itemIndex: itemIdx,
-                            item: items[itemIdx]);
+                            firstStepFieldIdx: f,
+                            firstStepElementIdx: bagIdx,
+                            secondStepFieldIdx: g,
+                            secondStepElementIdx: itemIdx,
+                            item: items[itemIdx],
+                            bagLabel: FormatBagLabel(_localization, bagIdx));
                     }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Collect socket rows from an <c>EquipmentSaveData</c> block.
+    /// Layout: <c>EquipmentSaveData._list[i]._item</c> is an
+    /// object_locator pointing at a full <c>ItemSaveData</c> child
+    /// with the same socket schema as inventory items. Path to the
+    /// item: <c>[(_list, slotIdx), (_item, 0)]</c> — same 2-step
+    /// shape as the inventory path, so the reinterpreted indices
+    /// (firstStep* = list+slot, secondStep* = locator+0) feed the
+    /// existing path-construction code unchanged.
+    /// </summary>
+    private void CollectFromEquipment(BlockDetails top, int blockIndex)
+    {
+        for (var f = 0; f < top.Fields.Count; f++)
+        {
+            var listField = top.Fields[f];
+            if (!string.Equals(listField.Name, EquipListFieldName, StringComparison.Ordinal)
+                || listField.Elements is not { Count: > 0 } slots)
+            {
+                continue;
+            }
+            for (var slotIdx = 0; slotIdx < slots.Count; slotIdx++)
+            {
+                var slot = slots[slotIdx];
+                for (var g = 0; g < slot.Fields.Count; g++)
+                {
+                    var itemLocator = slot.Fields[g];
+                    if (!string.Equals(itemLocator.Name, EquipItemLocatorFieldName, StringComparison.Ordinal)
+                        || !itemLocator.Present
+                        || itemLocator.Child is not { } itemChild)
+                    {
+                        continue;
+                    }
+                    CollectFromItem(
+                        blockIndex,
+                        firstStepFieldIdx: f,
+                        firstStepElementIdx: slotIdx,
+                        secondStepFieldIdx: g,
+                        secondStepElementIdx: 0,    // locator descent ignores element_idx
+                        item: itemChild,
+                        bagLabel: "Equipped");
                 }
             }
         }
@@ -462,11 +534,12 @@ public sealed partial class SocketEditorViewModel : ObservableObject
 
     private void CollectFromItem(
         int blockIndex,
-        int inventoryListFieldIdx,
-        int bagIndex,
-        int itemListFieldIdx,
-        int itemIndex,
-        BlockDetails item)
+        int firstStepFieldIdx,
+        int firstStepElementIdx,
+        int secondStepFieldIdx,
+        int secondStepElementIdx,
+        BlockDetails item,
+        string bagLabel)
     {
         uint itemKey = 0;
         DecodedFieldRow? socketListField = null;
@@ -524,10 +597,10 @@ public sealed partial class SocketEditorViewModel : ObservableObject
             var row = new SocketRow(
                 vm: this,
                 blockIndex: blockIndex,
-                inventoryListFieldIdx: inventoryListFieldIdx,
-                bagIndex: bagIndex,
-                itemListFieldIdx: itemListFieldIdx,
-                itemIndex: itemIndex,
+                inventoryListFieldIdx: firstStepFieldIdx,
+                bagIndex: firstStepElementIdx,
+                itemListFieldIdx: secondStepFieldIdx,
+                itemIndex: secondStepElementIdx,
                 socketListFieldIdx: socketListField.FieldIndex,
                 socketIndex: s,
                 gemKeyFieldIdx: gemKeyFieldIdx,
@@ -535,7 +608,7 @@ public sealed partial class SocketEditorViewModel : ObservableObject
                 validSocketCountFieldIdx: validSocketCountFieldIdx,
                 maxSocketCount: sockets.Count,
                 currentValidSocketCount: currentValidSocketCount,
-                bagLabel: FormatBagLabel(_localization, bagIndex),
+                bagLabel: bagLabel,
                 itemKey: itemKey,
                 itemName: itemName,
                 itemNameEnglish: itemNameEn,
@@ -657,7 +730,7 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         }
         catch (CrimsonSaveException ex)
         {
-            StatusMessage = $"Apply failed (bag {row.BagIndex}, item {row.ItemIndex}, "
+            StatusMessage = $"Apply failed ({row.BagLabel}, item {row.ItemIndex}, "
                 + $"socket {row.SocketIndex}): {ex.Message}";
             row.LastError = ex.Message;
             return;
@@ -711,7 +784,7 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         }
         catch (CrimsonSaveException ex)
         {
-            StatusMessage = $"Clear failed (bag {row.BagIndex}, item {row.ItemIndex}, "
+            StatusMessage = $"Clear failed ({row.BagLabel}, item {row.ItemIndex}, "
                 + $"socket {row.SocketIndex}): {ex.Message}";
             row.LastError = ex.Message;
             return;
@@ -963,9 +1036,43 @@ public sealed partial class SocketRow : ObservableObject
     }
 
     public int BlockIndex { get; }
+
+    /// <summary>
+    /// First descent step's <b>field index</b> on the top-level block.
+    /// Reinterpreted by source:
+    /// <list type="bullet">
+    ///   <item>Inventory: index of the <c>_inventorylist</c> field
+    ///     on <c>InventorySaveData</c>.</item>
+    ///   <item>Equipped: index of the <c>_list</c> field on
+    ///     <c>EquipmentSaveData</c>.</item>
+    /// </list>
+    /// The path-addressed ABI treats both as ObjectList descents.
+    /// </summary>
     public int InventoryListFieldIdx { get; }
+
+    /// <summary>
+    /// First descent step's <b>element index</b>.
+    /// Inventory: bag index inside <c>_inventorylist</c>.
+    /// Equipped: slot index inside
+    /// <c>EquipmentSaveData._list</c> (0..17 in 1.07).
+    /// </summary>
     public int BagIndex { get; }
+
+    /// <summary>
+    /// Second descent step's <b>field index</b>.
+    /// Inventory: index of the <c>_itemList</c> field on the bag.
+    /// Equipped: index of the <c>_item</c> object-locator field on
+    /// <c>EquipSlotElementSaveData</c>.
+    /// </summary>
     public int ItemListFieldIdx { get; }
+
+    /// <summary>
+    /// Second descent step's <b>element index</b>.
+    /// Inventory: item index inside the bag's <c>_itemList</c>.
+    /// Equipped: always <c>0</c> — the path-ABI ignores
+    /// <c>element_idx</c> for locator descents but the slot still
+    /// has to be filled in.
+    /// </summary>
     public int ItemIndex { get; }
     public int SocketListFieldIdx { get; }
     public int SocketIndex { get; }
