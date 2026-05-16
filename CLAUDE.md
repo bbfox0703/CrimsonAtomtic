@@ -22,8 +22,9 @@ one-line pointer here.
 
 ## Project
 
-Crimson Desert save editor + game-data toolchain. Target game version: **1.06**.
-Cross-platform goal: Windows (must), Linux, macOS.
+Crimson Desert save editor + game-data toolchain. Tracks the live game install
+(currently **1.07**) and stays compatible with 1.05 / 1.06 saves via schema
+auto-detection. Cross-platform goal: Windows (must), Linux, macOS.
 
 - High-level architecture: [docs/architecture.md](docs/architecture.md)
 - Data hygiene policy: [docs/data-policy.md](docs/data-policy.md)

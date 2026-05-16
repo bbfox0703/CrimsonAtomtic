@@ -2,7 +2,7 @@
 
 ## Current install
 
-`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 1.06**
+`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 1.07**
 
 Top-level layout:
 
@@ -19,7 +19,7 @@ Crimson Desert/
 
 - **Engine**: proprietary Pearl Abyss engine, DirectX 12.
 - **Total size on disk**: ~126 GB.
-- **Version stamp**: `meta/0.paver` is 10 bytes, binary-encoded. The bytes seen on the 1.06 install begin `01 00 06 00 ...` — likely a little-endian `(major=1, minor=6, ...)` quad. TODO: confirm exact layout via `crimson-rs`.
+- **Version stamp**: `meta/0.paver` is 10 bytes, binary-encoded. The first 4 bytes hold a little-endian `(major, minor)` u16 pair — `01 00 06 00 ...` on 1.06, `01 00 07 00 ...` on 1.07. TODO: confirm the trailing 6 bytes' layout via `crimson-rs`.
 
 ## Historical versions
 
@@ -27,8 +27,9 @@ Used for **cross-version diffing** when the game patches and a parser breaks.
 
 | Path                              | Version  | Storage |
 | --------------------------------- | -------- | ------- |
-| `F:\Crimson Desert\1.04.01\`      | 1.04.01  | SSD     |
-| `F:\Crimson Desert\1.05.01\`      | 1.05.01  | SSD     |
+| `F:\Crimson Desert\1.06.01\`      | 1.06.01  | SSD     |
+| `X:\Crimson Desert\1.05.01\`      | 1.05.01  | HDD     |
+| `X:\Crimson Desert\1.04.01\`      | 1.04.01  | HDD     |
 | `X:\Crimson Desert\1.03.01\`      | 1.03.01  | HDD     |
 
 Each subfolder contains the same layout as the current install (pack groups + bin64 + CDMods + meta + mods).
@@ -55,7 +56,7 @@ Per-user, not per-version:
 ## Version detection (planned approach)
 
 1. Read `meta/0.paver` if present in the chosen install root — authoritative when format is decoded.
-2. Fall back to comparing iteminfo item count and pamt directory hashes against known fingerprints (1.03/1.04/1.05/1.06 each have distinct sets).
+2. Fall back to comparing iteminfo item count and pamt directory hashes against known fingerprints (1.03/1.04/1.05/1.06/1.07 each have distinct sets).
 3. Save files do not embed a game version directly. We infer compatibility from the TOC layout and field hashes, similar to how `crimson-rs` auto-detects skill format flags.
 
 ## Diffing playbook
@@ -67,4 +68,4 @@ When a new patch lands and a parser fails:
 3. Run `tools/diff/diff_pamt.py` to find which pack groups changed (most patches only touch a few).
 4. If a binary format's bytes shifted, narrow the field range with `crimson-rs`'s `BinaryReadTracked` trait, then patch the parser. Add a fixture + regression test.
 
-The 1.05 → 1.06 jump turned out to be **zero schema changes** (only +17 items), so the parser stayed the same. We expect most patches to be data-only; structural changes are the exception, and our pipeline is built to make those exceptions detectable.
+The 1.05 → 1.06 jump turned out to be **zero schema changes** (only +17 items), so the parser stayed the same. The 1.06 → 1.07 jump similarly stayed data-only on the save-body side (the editor continues to load 1.06 + 1.07 saves through one schema path). We expect most patches to be data-only; structural changes are the exception (e.g. the slot104 / 1.05-era 23-field `ItemSaveData` vs 1.06+'s 25-field shape — see [status.md](status.md)), and our pipeline is built to make those exceptions detectable.

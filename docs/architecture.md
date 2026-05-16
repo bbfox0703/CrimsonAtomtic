@@ -94,21 +94,35 @@
 
 `src/` now contains the 5 projects shown above:
 
-- **CrimsonAtomtic.Core** — `IPlatformPaths`, `ISingleInstanceGuard` (interfaces only).
-- **CrimsonAtomtic.SaveModel** — `SaveSummary`, `BlockSummary` records, plus
-  a `[JsonSerializable]` source-generated context for AOT-safe serialization.
-- **CrimsonAtomtic.RustInterop** — `ISaveLoader` + `NativeSaveLoader`,
-  a `[LibraryImport]`/`SafeHandle` wrapper around the `crimson_save_*`
-  C ABI in `vendor/crimson-rs`. AOT-safe (source-generated marshalling,
-  no reflection).
+- **CrimsonAtomtic.Core** — platform abstractions (`IPlatformPaths`,
+  `ISingleInstanceGuard`, settings persistence, save backup retention).
+  No direct P/Invoke or registry access lives here.
+- **CrimsonAtomtic.SaveModel** — domain records, `[JsonSerializable]`
+  source-generated context for AOT-safe serialization, and the in-memory
+  edit model.
+- **CrimsonAtomtic.RustInterop** — `[LibraryImport]` / `SafeHandle`
+  wrappers around the C ABI in `vendor/crimson-rs`. Surface today:
+  `ISaveLoader` + `NativeSaveLoader` (save load / scalar+path mutations /
+  mutation-version cache / inventory enumeration / write-to-file),
+  `IItemInfoCatalog`, `NativeSkillInfoCatalog`, `NativeCharacterInfoCatalog`,
+  `NativeKnowledgeInfoCatalog`, `NativeGimmickInfoCatalog`, the three dye
+  catalogs, plus `NativePalocCatalog` and `NativePazExtractor`. Source-
+  generated marshalling, no reflection.
 - **CrimsonAtomtic.Ui** — Avalonia 12 / .NET 10 app with `PublishAot=true`,
   `BuiltInComInteropSupport=false`, `AvaloniaUseCompiledBindingsByDefault=true`.
-  Mutex-based single-instance guard on Windows, minimal MainWindow with
-  File menu + an empty-state / loaded-state split, DataGrid of block summaries.
-- **CrimsonAtomtic.Tests** — xUnit 3 covering `NativeSaveLoader` against
-  a live save (skips gracefully when none is present).
+  Mutex-based single-instance guard on Windows. Left-rail navigator over
+  the loaded save, per-block field editor with typed validation +
+  present/absent toggle + close-on-dirty `ChangeJournal` confirm. Tools
+  menu covers Find Items, Browse Items / Characters, Sockets editor,
+  Dye editor, Mercenary rename, Abyss Gates (bulk + per-gate), Sealed
+  Abyss Artifact challenges (per-row + bulk), and the icon / portrait
+  caches under `%LOCALAPPDATA%\CrimsonAtomtic\`.
+- **CrimsonAtomtic.Tests** — xUnit 3 covering the RustInterop wrappers,
+  the catalog bridges, and the save loader against a live save (skips
+  gracefully when none is present). Current count: **181/181 pass**.
 
-Builds clean, all tests pass.
+For the running ledger of what shipped per session see
+[status.md](status.md).
 
 ## Open questions / future work
 
