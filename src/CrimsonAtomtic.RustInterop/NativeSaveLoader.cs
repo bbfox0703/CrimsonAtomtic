@@ -34,14 +34,32 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
     private string? _cachedPath;
     private CrimsonSaveHandle? _cachedHandle;
 
-    // BlockDetails cache keyed by blockIndex. Populated on demand from the
-    // fast path; cleared whenever the body could have changed (every
-    // mutation, plus Load handle swap and Dispose). For a save like
-    // QuestSaveData with 4341 mission elements, one fetch costs ~1-2 s
-    // (Rust JSON serialize + C# deserialize); subsequent re-clicks are
-    // O(1) until the next mutation invalidates the entry. WriteToFile is
-    // intentionally NOT a cache buster — it doesn't touch the body.
-    private readonly Dictionary<int, BlockDetails> _detailsCache = new();
+    // BlockDetails cache keyed by blockIndex. Each entry pairs the
+    // decoded BlockDetails with the handle's mutation_version at the
+    // moment the snapshot was taken. Reads validate by re-reading the
+    // current mutation_version: equal → cache hit, mismatched →
+    // refetch + replace.
+    //
+    // Version-based invalidation replaces the older "every mutation
+    // entry point clears the cache" pattern that needed manual
+    // bookkeeping on each new C ABI mutation surface (per
+    // `vendor/crimson-rs/docs/save-mutation-version.md`: "Hardcoding
+    // 'invalidate the cache on every save mutation we know about' is
+    // fragile — easy to miss an FFI path. Version check is the
+    // ground-truth.").
+    //
+    // For a save like QuestSaveData with 4341 mission elements, one
+    // fetch costs ~1-2 s (Rust JSON serialize + C# deserialize);
+    // subsequent re-clicks are O(1) — one u64 read for the version
+    // check — until the next mutation bumps the version. WriteToFile
+    // is intentionally NOT a cache buster — it doesn't touch the body
+    // (and doesn't bump the version on the Rust side either).
+    //
+    // Load(path) and Dispose still clear the cache outright because
+    // the mutation_version of a fresh handle starts back at 0 — a
+    // stale entry whose stored version happens to equal 0 would
+    // otherwise falsely cache-hit against the new handle.
+    private readonly Dictionary<int, (ulong Version, BlockDetails Details)> _detailsCache = new();
 
     public SaveSummary Load(string savePath, CancellationToken cancellationToken = default)
     {
@@ -88,17 +106,25 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         // the per-block details cache. SafeHandle.AddRef'd implicitly when
         // crossing the LibraryImport boundary, so a Dispose race can't yank
         // the native handle out from under the FFI call.
+        //
+        // Cache validation: each entry pairs (mutation_version,
+        // BlockDetails). On hit, query the current version via FFI
+        // (one u64 read) and compare. Match → return cached. Mismatch
+        // → re-fetch + replace. This catches every mutation path
+        // automatically without per-entry-point manual invalidation.
         lock (_cacheLock)
         {
             if (PathsMatch(_cachedPath, savePath)
                 && _cachedHandle is { IsInvalid: false } cached)
             {
-                if (_detailsCache.TryGetValue(blockIndex, out var hit))
+                var currentVersion = ReadMutationVersionOrThrow(cached);
+                if (_detailsCache.TryGetValue(blockIndex, out var hit)
+                    && hit.Version == currentVersion)
                 {
-                    return hit;
+                    return hit.Details;
                 }
                 var details = ReadBlockDetails(cached, (uint)blockIndex);
-                _detailsCache[blockIndex] = details;
+                _detailsCache[blockIndex] = (currentVersion, details);
                 return details;
             }
         }
@@ -171,23 +197,10 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
 
-        // Invalidate the per-block details cache up-front: Rust re-decodes
-        // every block after a successful mutation, so any cached BlockDetails
-        // would otherwise show stale field values. Clearing pre-FFI is fine
-        // because the Rust side is all-or-nothing on errors (the body is
-        // left untouched, so the cache could in theory survive; clearing
-        // anyway costs only one re-fetch on the rare error path).
-        CrimsonSaveHandle? cached;
-        lock (_cacheLock)
-        {
-            cached = _cachedHandle;
-            _detailsCache.Clear();
-        }
-        if (cached is null || cached.IsInvalid)
-        {
-            throw new InvalidOperationException(
-                "No save is currently loaded. Call Load(savePath) before SetScalarField.");
-        }
+        // No manual cache invalidation needed — the Rust side bumps
+        // mutation_version on the success path, and LoadBlockDetails
+        // validates cache entries against it on every read.
+        var cached = RequireLoaded(nameof(SetScalarField));
 
         unsafe
         {
@@ -222,17 +235,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
             return;
         }
 
-        CrimsonSaveHandle? cached;
-        lock (_cacheLock)
-        {
-            cached = _cachedHandle;
-            _detailsCache.Clear();
-        }
-        if (cached is null || cached.IsInvalid)
-        {
-            throw new InvalidOperationException(
-                "No save is currently loaded. Call Load(savePath) before SetScalarFieldsBatch.");
-        }
+        var cached = RequireLoaded(nameof(SetScalarFieldsBatch));
 
         // Per-op input checks (block/field non-negative). These mirror
         // the ArgumentOutOfRangeException pattern the single-op setter
@@ -345,19 +348,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
             return;
         }
 
-        CrimsonSaveHandle? cached;
-        lock (_cacheLock)
-        {
-            cached = _cachedHandle;
-            // Length-changing batch — body re-emit invalidates every
-            // cached BlockDetails entry.
-            _detailsCache.Clear();
-        }
-        if (cached is null || cached.IsInvalid)
-        {
-            throw new InvalidOperationException(
-                "No save is currently loaded. Call Load(savePath) before SetScalarFieldsPresentBatch.");
-        }
+        var cached = RequireLoaded(nameof(SetScalarFieldsPresentBatch));
 
         for (var i = 0; i < count; i++)
         {
@@ -456,17 +447,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
             return;
         }
 
-        CrimsonSaveHandle? cached;
-        lock (_cacheLock)
-        {
-            cached = _cachedHandle;
-            _detailsCache.Clear();
-        }
-        if (cached is null || cached.IsInvalid)
-        {
-            throw new InvalidOperationException(
-                "No save is currently loaded. Call Load(savePath) before ListRemoveElementsBatch.");
-        }
+        var cached = RequireLoaded(nameof(ListRemoveElementsBatch));
 
         for (var i = 0; i < count; i++)
         {
@@ -554,7 +535,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
 
-        var cached = RequireLoaded(nameof(DynamicArraySetU32Elements), invalidateDetailsCache: true);
+        var cached = RequireLoaded(nameof(DynamicArraySetU32Elements));
         unsafe
         {
             fixed (PathStep* pPath = path)
@@ -588,7 +569,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
 
-        var cached = RequireLoaded(nameof(SetInlineBytesField), invalidateDetailsCache: true);
+        var cached = RequireLoaded(nameof(SetInlineBytesField));
         unsafe
         {
             fixed (PathStep* pPath = path)
@@ -698,7 +679,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(elementIndex);
 
-        var cached = RequireLoaded(nameof(ListRemoveElement), invalidateDetailsCache: true);
+        var cached = RequireLoaded(nameof(ListRemoveElement));
         unsafe
         {
             fixed (PathStep* pPath = path)
@@ -732,7 +713,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(sourceIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(destinationIndex);
 
-        var cached = RequireLoaded(nameof(ListCloneElement), invalidateDetailsCache: true);
+        var cached = RequireLoaded(nameof(ListCloneElement));
         unsafe
         {
             fixed (PathStep* pPath = path)
@@ -765,7 +746,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
 
-        var cached = RequireLoaded(nameof(SetScalarFieldPresent), invalidateDetailsCache: true);
+        var cached = RequireLoaded(nameof(SetScalarFieldPresent));
         unsafe
         {
             fixed (PathStep* pPath = path)
@@ -842,7 +823,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(insertAt);
 
-        var cached = RequireLoaded(nameof(ListInsertElement), invalidateDetailsCache: true);
+        var cached = RequireLoaded(nameof(ListInsertElement));
         unsafe
         {
             fixed (PathStep* pPath = path)
@@ -869,25 +850,22 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
     }
 
     /// <summary>
-    /// Validate a save is loaded and return its cached handle, optionally
-    /// dropping the per-block details cache atomically with the handle
-    /// read. <paramref name="invalidateDetailsCache"/> should be
-    /// <c>true</c> for any caller about to perform a body mutation — the
-    /// Rust side re-decodes every block on success, so cached
-    /// <see cref="BlockDetails"/> would otherwise serve stale values. Use
-    /// <c>false</c> for read-only callers (<see cref="MakeEmptyElementBytes"/>
-    /// queries the schema template, never the body).
+    /// Validate a save is loaded and return its cached handle.
     /// </summary>
-    private CrimsonSaveHandle RequireLoaded(string caller, bool invalidateDetailsCache = false)
+    /// <remarks>
+    /// Mutation entry points used to pass a <c>invalidateDetailsCache</c>
+    /// flag to drop the per-block details cache atomically with the
+    /// handle read. That flag is gone — the cache now validates entries
+    /// against the handle's <c>mutation_version</c> on every read, so
+    /// stale data can't survive a mutation regardless of which entry
+    /// point committed it.
+    /// </remarks>
+    private CrimsonSaveHandle RequireLoaded(string caller)
     {
         CrimsonSaveHandle? cached;
         lock (_cacheLock)
         {
             cached = _cachedHandle;
-            if (invalidateDetailsCache)
-            {
-                _detailsCache.Clear();
-            }
         }
         if (cached is null || cached.IsInvalid)
         {
@@ -895,6 +873,24 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                 $"No save is currently loaded. Call Load(savePath) before {caller}.");
         }
         return cached;
+    }
+
+    /// <summary>
+    /// Read the live mutation_version on the cached handle, throwing
+    /// if the FFI call rejects. Called by <see cref="LoadBlockDetails"/>
+    /// to validate cache entries; lifted out so the cache-check path
+    /// stays under the lock without re-entering the public method
+    /// (and its own RequireLoaded).
+    /// </summary>
+    private static ulong ReadMutationVersionOrThrow(CrimsonSaveHandle handle)
+    {
+        var rc = NativeMethods.GetMutationVersion(handle, out var v);
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_save_get_mutation_version failed: {ErrorName(rc)}");
+        }
+        return v;
     }
 
     public void Dispose()

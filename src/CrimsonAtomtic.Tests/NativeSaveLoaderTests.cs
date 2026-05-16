@@ -1399,4 +1399,37 @@ public sealed class NativeSaveLoaderTests
         }
         return (-1, -1, -1, -1);
     }
+
+    [Fact]
+    public void BlockDetailsCache_VersionBumps_InvalidatesAutomatically()
+    {
+        // Regression for the mutation_version-based cache: a mutation
+        // through ANY entry point (here SetScalarField) must invalidate
+        // the next LoadBlockDetails read for the affected block, even
+        // though the mutation path no longer manually clears the cache.
+        var path = FindLiveSave();
+        if (path is null) return;
+        var loader = new NativeSaveLoader();
+        var summary = loader.Load(path);
+
+        var (blockIdx, fieldIdx, _, end) = FindAnyPresentScalar(loader, path, summary);
+        if (blockIdx < 0) return;
+
+        // Prime the cache with a read.
+        var before = loader.LoadBlockDetails(path, blockIdx);
+        var beforeField = before.Fields[fieldIdx];
+        var size = (int)(end - (long)beforeField.Start);
+        if (size is not (1 or 2 or 4 or 8)) return;
+
+        // Mutate the same scalar (write all-zeros).
+        var buf = new byte[size];
+        try { loader.SetScalarField(blockIdx, fieldIdx, buf); }
+        catch (CrimsonSaveException) { return; }
+
+        // Read again. With the version-based cache, the second read
+        // MUST refetch (version mismatch) rather than serve the
+        // pre-mutation snapshot.
+        var after = loader.LoadBlockDetails(path, blockIdx);
+        Assert.NotSame(before, after);
+    }
 }
