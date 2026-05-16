@@ -54,6 +54,23 @@ public sealed partial class FindItemsViewModel : ObservableObject
         Refresh();
     }
 
+    /// <summary>
+    /// Raised when the user clicks a row's "Go" button to navigate
+    /// the main window to that exact item slot. The hosting
+    /// MainWindow subscribes when it opens this dialog and routes
+    /// through <c>MainWindowViewModel.NavigateToInventoryItemAsync</c>.
+    /// The dialog itself stays open after the jump (the user often
+    /// wants to inspect several items in sequence).
+    /// </summary>
+    public event Action<FindItemsRow>? GotoRequested;
+
+    /// <summary>
+    /// Invoked by the code-behind click handler when the user clicks
+    /// the "Go" button. Public so the AXAML.cs in this assembly can
+    /// call it without reaching into private state.
+    /// </summary>
+    public void RequestGoto(FindItemsRow row) => GotoRequested?.Invoke(row);
+
     public string? SecondaryLanguage { get; }
     public bool HasSecondary => !string.IsNullOrEmpty(SecondaryLanguage);
 
@@ -185,9 +202,11 @@ public sealed partial class FindItemsViewModel : ObservableObject
 /// <see cref="InventoryItemRecord"/> fields with PALOC-resolved labels
 /// (container name, English + optional secondary item name) so the
 /// grid can show useful columns without each row re-resolving names on
-/// every render pass.
+/// every render pass. <see cref="Record"/> is retained so the "Go"
+/// button can navigate to the exact descent path.
 /// </summary>
 public sealed record FindItemsRow(
+    InventoryItemRecord Record,
     uint ItemKey,
     string ItemKeyText,
     uint InventoryKey,
@@ -230,6 +249,7 @@ public sealed record FindItemsRow(
             inventoryLabel = $"InventoryKey {rec.InventoryKey}";
         }
         return new FindItemsRow(
+            Record: rec,
             ItemKey: rec.ItemKey,
             ItemKeyText: rec.ItemKey.ToString(CultureInfo.InvariantCulture),
             InventoryKey: rec.InventoryKey,

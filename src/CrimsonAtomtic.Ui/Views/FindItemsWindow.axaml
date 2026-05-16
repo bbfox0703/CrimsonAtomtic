@@ -95,12 +95,19 @@
         <DataGridTextColumn Header="{StaticResource FindItemsColItemNo}"
                             Binding="{Binding ItemNo}"
                             Width="120" />
-        <!-- Copy buttons. K = ItemKey, N = English item name. -->
-        <DataGridTemplateColumn Header="{StaticResource FindItemsColCopy}" Width="80">
+        <!-- Action buttons: Go = navigate main window to this exact
+             slot's drill path. K = copy ItemKey. N = copy English
+             item name. -->
+        <DataGridTemplateColumn Header="{StaticResource FindItemsColAction}" Width="120">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:FindItemsRow">
               <StackPanel Orientation="Horizontal" Spacing="2"
                           VerticalAlignment="Center">
+                <Button Content="{StaticResource FindItemsGotoButton}"
+                        ToolTip.Tip="{StaticResource FindItemsGotoTip}"
+                        Padding="6,2"
+                        MinHeight="0"
+                        Click="OnGotoButtonClick" />
                 <Button Content="K"
                         ToolTip.Tip="{StaticResource FindItemsCopyKeyTip}"
                         Padding="6,2"

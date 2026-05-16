@@ -3,6 +3,7 @@ using Avalonia.Controls;
 // lives on ClipboardExtensions, not directly on IClipboard.
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using CrimsonAtomtic.Ui.ViewModels;
 
 namespace CrimsonAtomtic.Ui.Views;
 
@@ -33,6 +34,24 @@ public sealed partial class FindItemsWindow : Window
         if (topLevel?.Clipboard is { } clipboard)
         {
             await clipboard.SetTextAsync(text);
+        }
+    }
+
+    /// <summary>
+    /// "Go" button: ask the picker VM to fire its GotoRequested
+    /// event. The MainWindow code-behind subscribes when it opens
+    /// this dialog and routes through
+    /// <c>MainWindowViewModel.NavigateToInventoryItemAsync</c>. The
+    /// dialog stays open so the user can jump to several items in
+    /// sequence.
+    /// </summary>
+    private void OnGotoButtonClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control source) return;
+        if (source.DataContext is not FindItemsRow row) return;
+        if (DataContext is FindItemsViewModel vm)
+        {
+            vm.RequestGoto(row);
         }
     }
 }

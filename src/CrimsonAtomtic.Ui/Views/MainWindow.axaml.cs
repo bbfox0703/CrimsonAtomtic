@@ -510,11 +510,28 @@ public sealed partial class MainWindow : Window
             // race (save unloaded between menu open and click) — no-op.
             return;
         }
+        // Wire the "Go" button to navigate the main window. We bring
+        // ourselves to the foreground after the jump so the user sees
+        // the new selection without having to alt-tab past the
+        // still-open Find Items dialog.
+        pickerVm.GotoRequested += row =>
+        {
+            _ = NavigateToFindItemsRowAsync(vm, row);
+        };
         var child = new FindItemsWindow
         {
             DataContext = pickerVm,
         };
         child.Show(this);
+    }
+
+    private async Task NavigateToFindItemsRowAsync(MainWindowViewModel vm, FindItemsRow row)
+    {
+        await vm.NavigateToInventoryItemAsync(row.Record);
+        // Surface the main window above the picker so the user sees
+        // the freshly-rebuilt nav stack. The picker stays open behind
+        // — by design, so the user can pick another row.
+        Activate();
     }
 
     /// <summary>

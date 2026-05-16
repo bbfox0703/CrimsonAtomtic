@@ -54,6 +54,139 @@ public sealed partial class MainWindowViewModel(
     }
 
     /// <summary>
+    /// Drives the Find Items dialog's per-row "Go" button: navigates
+    /// the main window into the exact item slot identified by
+    /// <paramref name="rec"/>, rebuilding the nav stack down through
+    /// <c>InventorySaveData → _inventorylist[N] → _itemList[M] → item</c>
+    /// so the user lands on the item-detail view with a clean Back
+    /// trail (item → _itemList picker → container → _inventorylist
+    /// picker → InventorySaveData → no-back).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Race control: the default <see cref="OnSelectedBlockChanged"/>
+    /// fire-and-forget worker would push its own root frame and could
+    /// land after our deeper push, wiping the target. The
+    /// <see cref="_suppressBlockSelectionLoad"/> flag tells that
+    /// handler to skip the work this one time; we then load the top
+    /// block ourselves (awaited) and build the full stack
+    /// synchronously.
+    /// </para>
+    /// <para>
+    /// Best-effort silent on failure (block not found, schema drift
+    /// breaks the field-name match, FFI throws): the navigator
+    /// reports through <see cref="DetailsError"/> and bails — the
+    /// dialog stays open so the user can pick another row.
+    /// </para>
+    /// </remarks>
+    public async Task NavigateToInventoryItemAsync(InventoryItemRecord rec)
+    {
+        if (_loadedPath is null)
+        {
+            return;
+        }
+        // Locate the BlockSummary so we can highlight the row in the
+        // BlocksDataGrid. Skip if the index drifted out from under us
+        // (mutation between snapshot and click).
+        BlockSummary? blockSummary = null;
+        foreach (var b in _allBlocks)
+        {
+            if (b.Index == (int)rec.BlockIndex)
+            {
+                blockSummary = b;
+                break;
+            }
+        }
+        if (blockSummary is null)
+        {
+            DetailsError = $"Block #{rec.BlockIndex} not found in current save.";
+            return;
+        }
+
+        BlockDetails topDetails;
+        try
+        {
+            topDetails = await Task.Run(() =>
+                loader.LoadBlockDetails(_loadedPath, (int)rec.BlockIndex)).ConfigureAwait(true);
+        }
+        catch (CrimsonSaveException ex)
+        {
+            DetailsError = $"{ex.Message} (code {ex.ErrorCode})";
+            return;
+        }
+
+        // Highlight the row without re-firing the default loader (we
+        // already have the details and are about to push a deeper
+        // stack than the default handler would).
+        _suppressBlockSelectionLoad = true;
+        try { SelectedBlock = blockSummary; }
+        finally { _suppressBlockSelectionLoad = false; }
+
+        // Build the stack from scratch: BlockFrame(top) → ElementsFrame(_inventorylist)
+        // → BlockFrame(container) → ElementsFrame(_itemList) → BlockFrame(item).
+        ClearNavigation();
+        PushFrame(new BlockFrame(topDetails.ClassName, topDetails, Array.Empty<PathStep>()));
+
+        var invListField = FindFieldByName(topDetails, "_inventorylist");
+        if (invListField?.Elements is not { Count: > 0 } containers
+            || rec.InventoryElementIndex >= (uint)containers.Count)
+        {
+            return; // Top frame only — user can drill manually from here.
+        }
+        PushFrame(new ElementsFrame(
+            $"{invListField.Name}[{containers.Count}]",
+            containers,
+            Array.Empty<PathStep>(),
+            (uint)invListField.FieldIndex));
+
+        var container = containers[(int)rec.InventoryElementIndex];
+        var path1 = new[] { new PathStep((uint)invListField.FieldIndex, rec.InventoryElementIndex) };
+        PushFrame(new BlockFrame(
+            $"{container.ClassName}[{rec.InventoryElementIndex}]", container, path1));
+
+        var itemListField = FindFieldByName(container, "_itemList");
+        if (itemListField?.Elements is not { Count: > 0 } items
+            || rec.ItemElementIndex >= (uint)items.Count)
+        {
+            return; // Container frame is the deepest — leave the user there.
+        }
+        PushFrame(new ElementsFrame(
+            $"{itemListField.Name}[{items.Count}]",
+            items,
+            path1,
+            (uint)itemListField.FieldIndex));
+
+        var item = items[(int)rec.ItemElementIndex];
+        var path2 = new[]
+        {
+            new PathStep((uint)invListField.FieldIndex, rec.InventoryElementIndex),
+            new PathStep((uint)itemListField.FieldIndex, rec.ItemElementIndex),
+        };
+        PushFrame(new BlockFrame(
+            $"{item.ClassName}[{rec.ItemElementIndex}]", item, path2));
+    }
+
+    private static DecodedFieldRow? FindFieldByName(BlockDetails block, string name)
+    {
+        foreach (var f in block.Fields)
+        {
+            if (string.Equals(f.Name, name, StringComparison.Ordinal))
+            {
+                return f;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// When set true, the next <see cref="OnSelectedBlockChanged"/>
+    /// invocation skips its fire-and-forget loader. Used by
+    /// <see cref="NavigateToInventoryItemAsync"/> to drive the nav
+    /// stack itself without racing against the default handler.
+    /// </summary>
+    private bool _suppressBlockSelectionLoad;
+
+    /// <summary>
     /// Status string for the icon-cache slot of the footer.
     /// Shape:
     /// - "Icons: not set" → no path configured.
@@ -888,6 +1021,16 @@ public sealed partial class MainWindowViewModel(
 
     partial void OnSelectedBlockChanged(BlockSummary? value)
     {
+        if (_suppressBlockSelectionLoad)
+        {
+            // External navigator (e.g. Find Items goto) is driving
+            // the load + stack push itself; skip the default
+            // fire-and-forget worker so we don't race against it and
+            // overwrite its deeper stack with a shallow root frame.
+            // The navigator handles ClearNavigation + PushFrame
+            // itself.
+            return;
+        }
         ClearNavigation();
         if (value is null || _loadedPath is null)
         {
