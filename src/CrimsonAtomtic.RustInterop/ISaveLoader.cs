@@ -41,6 +41,73 @@ public interface ISaveLoader
     ulong GetMutationVersion();
 
     /// <summary>
+    /// Open a deferred-redecode batch on the currently-loaded save.
+    /// Within an open batch, every length-changing mutation entry
+    /// point (<c>ListCloneElement</c>, <c>ListRemoveElement</c>,
+    /// <c>SetScalarFieldPresent</c>, <c>DynamicArraySetU32Elements</c>,
+    /// batch variants, …) skips the per-call encode + parse +
+    /// <c>decode_blocks</c> tail and mutates the in-memory tree
+    /// directly. Scalar entry points update typed
+    /// <c>ScalarValue</c>s in place. The matching
+    /// <see cref="EndDeferredRedecode"/> commits everything with
+    /// one decode pass.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Batches do not nest. Pairs <b>must</b> match — open + commit
+    /// or open + abort. <see cref="WriteToFile"/> is rejected while a
+    /// batch is open (BATCH_IN_PROGRESS); end / abort first.
+    /// </para>
+    /// <para>
+    /// Most callers should prefer <see cref="RunDeferred"/> over the
+    /// raw triple — it auto-aborts on exception.
+    /// </para>
+    /// </remarks>
+    void BeginDeferredRedecode();
+
+    /// <summary>
+    /// Commit the deferred batch — runs one
+    /// <c>encode + parse + decode_blocks</c> pass over the accumulated
+    /// tree and bumps the mutation version exactly once. Throws
+    /// <see cref="CrimsonSaveException"/> with code
+    /// <c>MUTATION_INVALID</c> when the accumulated tree fails to
+    /// encode or re-parse (handle is auto-rolled-back to the
+    /// pre-begin snapshot).
+    /// </summary>
+    void EndDeferredRedecode();
+
+    /// <summary>
+    /// Discard every in-batch mutation; restore the handle to its
+    /// pre-begin state. Mutation version reverts to its pre-begin
+    /// value.
+    /// </summary>
+    void AbortDeferredRedecode();
+
+    /// <summary>
+    /// True iff a <see cref="BeginDeferredRedecode"/> batch is open
+    /// on the currently-loaded save.
+    /// </summary>
+    bool IsDeferredRedecodeOpen();
+
+    /// <summary>
+    /// Convenience wrapper around begin / end / abort:
+    /// <list type="bullet">
+    ///   <item>Calls <see cref="BeginDeferredRedecode"/>.</item>
+    ///   <item>Invokes <paramref name="body"/>.</item>
+    ///   <item>On exception, calls <see cref="AbortDeferredRedecode"/>
+    ///     and rethrows.</item>
+    ///   <item>On normal completion, calls
+    ///     <see cref="EndDeferredRedecode"/> — which itself may throw
+    ///     <c>MUTATION_INVALID</c>.</item>
+    /// </list>
+    /// For partial-success workflows that want to KEEP already-applied
+    /// work when a per-op failure mid-batch fires, swallow per-op
+    /// exceptions inside <paramref name="body"/> so it returns
+    /// normally — that path lets the commit land.
+    /// </summary>
+    void RunDeferred(Action body);
+
+    /// <summary>
     /// Flat-list every item slot across every <c>InventorySaveData</c>
     /// block in the currently-loaded save. One FFI call replaces the
     /// 18-container × N-item nesting walk callers used to do manually

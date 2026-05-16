@@ -1911,35 +1911,72 @@ public sealed partial class MainWindowViewModel(
         var (applied, firstError, firstErrorKey) = await Task.Run<(int, CrimsonSaveException?, uint)>(() =>
         {
             var done = 0;
-            foreach (var c in preview.Candidates)
+            CrimsonSaveException? loopError = null;
+            uint loopErrorKey = 0;
+            // Wrap the apply loop in a deferred-redecode batch (see
+            // vendor/crimson-rs/docs/save-deferred-redecode.md). Each
+            // per-challenge write today triggers ~3 length-changing
+            // body re-decodes (~25ms each on a 5MB body); without the
+            // batch, 141 challenges × 3 = ~423 re-decodes ≈ 10s. With
+            // the batch, every write mutates the in-memory tree only,
+            // and the trailing EndDeferredRedecode runs ONE encode +
+            // parse + decode pass for the whole sweep — ~100ms total.
+            //
+            // Partial-success semantics preserved: per-op failure is
+            // captured into loopError/loopErrorKey and we BREAK out
+            // of the loop, letting the deferred batch commit the
+            // already-applied work (matching the pre-batch behaviour
+            // where partial progress was kept and the user could
+            // still Save or reload-to-revert). Letting the exception
+            // escape RunDeferred would Abort and roll the partial
+            // work back, which is the wrong UX for this flow.
+            try
             {
-                // Announce BEFORE applying so the user sees the
-                // current challenge key while the FFI is in flight
-                // (each apply is ~70ms — visible on-screen).
-                reporter.Report((done, totalCandidates, c.CatalogKey));
-                var lookup = TryReadFarKeyFieldIdx(c);
-                if (lookup.FarKeyFieldIdx < 0)
+                loader.RunDeferred(() =>
                 {
-                    return (done,
-                        lookup.Error ?? new CrimsonSaveException(0,
-                            $"Challenge {c.CatalogKey}: FAR tracker lacks _key field."),
-                        c.CatalogKey);
-                }
-                var appendIdx = perBlockCount[c.MissionTopBlockIdx];
-                var err = ApplyPatternBv1Writes(c, newCt, appendIdx, lookup.FarKeyFieldIdx);
-                if (err is not null)
-                {
-                    return (done, err, c.CatalogKey);
-                }
-                if (!c.FollowUpAlreadyExists)
-                {
-                    perBlockCount[c.MissionTopBlockIdx] = appendIdx + 1;
-                }
-                newCt++;
-                done++;
+                    foreach (var c in preview.Candidates)
+                    {
+                        // Announce BEFORE applying so the user sees the
+                        // current challenge key while the FFI is in
+                        // flight. With the deferred batch the loop runs
+                        // ~100x faster than before; the IProgress<T>
+                        // posts to the UI thread coalesce naturally.
+                        reporter.Report((done, totalCandidates, c.CatalogKey));
+                        var lookup = TryReadFarKeyFieldIdx(c);
+                        if (lookup.FarKeyFieldIdx < 0)
+                        {
+                            loopError = lookup.Error ?? new CrimsonSaveException(0,
+                                $"Challenge {c.CatalogKey}: FAR tracker lacks _key field.");
+                            loopErrorKey = c.CatalogKey;
+                            return;
+                        }
+                        var appendIdx = perBlockCount[c.MissionTopBlockIdx];
+                        var err = ApplyPatternBv1Writes(c, newCt, appendIdx, lookup.FarKeyFieldIdx);
+                        if (err is not null)
+                        {
+                            loopError = err;
+                            loopErrorKey = c.CatalogKey;
+                            return;
+                        }
+                        if (!c.FollowUpAlreadyExists)
+                        {
+                            perBlockCount[c.MissionTopBlockIdx] = appendIdx + 1;
+                        }
+                        newCt++;
+                        done++;
+                    }
+                });
+            }
+            catch (CrimsonSaveException commitEx)
+            {
+                // End_*'s own commit failed (MUTATION_INVALID): the
+                // Rust side already rolled `blocks` back to the
+                // pre-begin snapshot, so nothing landed. Surface as
+                // applied=0 with the commit error.
+                return (0, commitEx, 0u);
             }
             reporter.Report((done, totalCandidates, 0u));
-            return (done, null, 0u);
+            return (done, loopError, loopErrorKey);
         });
 
         RefreshSelectedBlockSilently();
