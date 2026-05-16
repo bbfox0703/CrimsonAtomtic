@@ -189,18 +189,52 @@ public sealed partial class SocketEditorViewModel : ObservableObject
 
     /// <summary>
     /// Recompute <see cref="Sockets"/> from <see cref="_allSockets"/>
-    /// using <see cref="SearchText"/>. Called whenever the filter
-    /// input changes. Kept synchronous — the snapshot is in-memory and
-    /// even very generous saves cap at a few hundred rows.
+    /// using <see cref="SearchText"/>. Two-pass:
+    /// <list type="number">
+    ///   <item>Pass 1 finds every <i>item</i> (identified by
+    ///     <c>(BlockIndex, BagIndex, ItemIndex)</c>) whose identity
+    ///     fields match (bag / item name / item key). Every slot
+    ///     of those items is included — so empty Fill-able slots
+    ///     surface alongside the filled ones when the user is
+    ///     searching for an item by name.</item>
+    ///   <item>Pass 2 also includes any individual slot whose gem
+    ///     name / gem key matches, even if its parent item didn't
+    ///     match — so searching for a specific gem still works
+    ///     across items.</item>
+    /// </list>
+    /// Called whenever <see cref="SearchText"/> changes. Synchronous
+    /// — the snapshot is in-memory and even very generous saves cap
+    /// at a few thousand rows.
     /// </summary>
     private void ApplyFilter()
     {
         Sockets.Clear();
         var needle = SearchText;
-        var unfiltered = string.IsNullOrWhiteSpace(needle);
+        if (string.IsNullOrWhiteSpace(needle))
+        {
+            foreach (var row in _allSockets)
+            {
+                Sockets.Add(row);
+            }
+            OnPropertyChanged(nameof(FilterCountText));
+            return;
+        }
+
+        // Pass 1: collect item identities whose parent matches.
+        var matchedItems = new HashSet<(int Block, int Bag, int Item)>();
         foreach (var row in _allSockets)
         {
-            if (unfiltered || row.MatchesFilter(needle!))
+            if (row.MatchesItemFilter(needle))
+            {
+                matchedItems.Add((row.BlockIndex, row.BagIndex, row.ItemIndex));
+            }
+        }
+
+        // Pass 2: emit every row whose item matched OR whose gem matches.
+        foreach (var row in _allSockets)
+        {
+            if (matchedItems.Contains((row.BlockIndex, row.BagIndex, row.ItemIndex))
+                || row.MatchesSocketFilter(needle))
             {
                 Sockets.Add(row);
             }
@@ -1013,20 +1047,35 @@ public sealed partial class SocketRow : ObservableObject
     public string ItemKeyText { get; }
 
     /// <summary>
-    /// True iff the filter <paramref name="needle"/> (already
-    /// non-empty / non-whitespace per <see cref="SocketEditorViewModel.ApplyFilter"/>)
-    /// matches any of the row's substantive identifying fields:
-    /// bag label, English item name, secondary item name, item key,
-    /// current gem name, and current gem key. Case-insensitive
-    /// ordinal — same convention as the Find Items filter.
+    /// True iff <paramref name="needle"/> matches one of the row's
+    /// <b>parent item identity</b> fields: bag label, English item
+    /// name, secondary item name, item key. Drives the first pass
+    /// of the filter — every row of an item whose identity matches
+    /// is included (so empty Fill-able slots stay visible when the
+    /// user is searching for a specific item, not a specific gem).
+    /// Case-insensitive ordinal.
     /// </summary>
-    public bool MatchesFilter(string needle)
+    public bool MatchesItemFilter(string needle)
     {
         if (BagLabel.Contains(needle, StringComparison.OrdinalIgnoreCase)) return true;
         if (ItemNameEnglish.Contains(needle, StringComparison.OrdinalIgnoreCase)) return true;
         if (ItemNameSecondary is not null
             && ItemNameSecondary.Contains(needle, StringComparison.OrdinalIgnoreCase)) return true;
         if (ItemKeyText.Contains(needle, StringComparison.Ordinal)) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// True iff <paramref name="needle"/> matches the row's
+    /// <b>per-slot</b> fields: current gem name, current gem key.
+    /// Drives the second pass — slots whose gem matches the filter
+    /// (but whose parent item doesn't) are still surfaced. Empty
+    /// slots can never match here (no gem to compare against), so
+    /// to see them the user has to match the parent item via
+    /// <see cref="MatchesItemFilter"/>. Case-insensitive ordinal.
+    /// </summary>
+    public bool MatchesSocketFilter(string needle)
+    {
         if (!string.IsNullOrEmpty(CurrentGemName)
             && CurrentGemName.Contains(needle, StringComparison.OrdinalIgnoreCase)) return true;
         if (CurrentGemKey != 0

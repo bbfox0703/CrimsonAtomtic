@@ -42,7 +42,7 @@
   <sys:String x:Key="SocketEditorApplySetEditCustom">Edit custom sets…</sys:String>
   <sys:String x:Key="SocketEditorApplySetEditCustomTip">Define / rename the three user-custom gem sets. Saved to settings.json.</sys:String>
   <sys:String x:Key="SocketEditorFilterLabel">Filter:</sys:String>
-  <sys:String x:Key="SocketEditorFilterWatermark">Type to filter — item name (English / secondary), bag, item key, gem name, or gem key…</sys:String>
+  <sys:String x:Key="SocketEditorFilterWatermark">Type to filter — item name / bag / item key shows all 5 slots; gem name / gem key narrows to matching slots only…</sys:String>
 
   <!-- Custom gem sets editor (launched from Sockets editor toolbar) -->
   <sys:String x:Key="CustomGemSetsWindowTitle">Edit custom gem sets</sys:String>
