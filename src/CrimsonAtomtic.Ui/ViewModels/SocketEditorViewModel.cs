@@ -113,7 +113,77 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     [ObservableProperty]
     private string? _statusMessage;
 
+    /// <summary>
+    /// Currently-visible socket rows. Filtered subset of
+    /// <see cref="_allSockets"/> when <see cref="SearchText"/> is
+    /// non-empty; otherwise the whole set. DataGrid binds to this.
+    /// </summary>
     public ObservableCollection<SocketRow> Sockets { get; } = new();
+
+    /// <summary>
+    /// Full unfiltered snapshot — built once during
+    /// <see cref="TryCreate"/>. <see cref="ApplyFilter"/> walks this
+    /// list and republishes the matches into <see cref="Sockets"/>.
+    /// Kept as <see cref="List{T}"/> (not observable) so filter passes
+    /// don't fire CollectionChanged on the snapshot side.
+    /// </summary>
+    private readonly List<SocketRow> _allSockets = new();
+
+    /// <summary>
+    /// Live filter input — bound to a TextBox above the DataGrid. A
+    /// substring match (case-insensitive) against
+    /// <see cref="SocketRow.BagLabel"/>,
+    /// <see cref="SocketRow.ItemNameEnglish"/>,
+    /// <see cref="SocketRow.ItemNameSecondary"/>,
+    /// <see cref="SocketRow.ItemKeyText"/>,
+    /// <see cref="SocketRow.DisplayGemName"/> and
+    /// <see cref="SocketRow.DisplayGemKeyText"/> filters the visible
+    /// rows down. Empty / whitespace = show everything.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FilterCountText))]
+    private string? _searchText;
+
+    partial void OnSearchTextChanged(string? value) => ApplyFilter();
+
+    /// <summary>Status-bar text reflecting filter state.</summary>
+    public string FilterCountText
+    {
+        get
+        {
+            var total = _allSockets.Count;
+            if (total == 0)
+            {
+                return string.Empty;
+            }
+            if (string.IsNullOrWhiteSpace(SearchText))
+            {
+                return $"{total} slot(s).";
+            }
+            return $"{Sockets.Count} of {total} slot(s) match.";
+        }
+    }
+
+    /// <summary>
+    /// Recompute <see cref="Sockets"/> from <see cref="_allSockets"/>
+    /// using <see cref="SearchText"/>. Called whenever the filter
+    /// input changes. Kept synchronous — the snapshot is in-memory and
+    /// even very generous saves cap at a few hundred rows.
+    /// </summary>
+    private void ApplyFilter()
+    {
+        Sockets.Clear();
+        var needle = SearchText;
+        var unfiltered = string.IsNullOrWhiteSpace(needle);
+        foreach (var row in _allSockets)
+        {
+            if (unfiltered || row.MatchesFilter(needle!))
+            {
+                Sockets.Add(row);
+            }
+        }
+        OnPropertyChanged(nameof(FilterCountText));
+    }
 
     /// <summary>
     /// Distinct items present in the editor — drives the Apply-Set
@@ -208,6 +278,11 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         vm.StatusMessage =
             $"{vm.Sockets.Count} slot(s) across {CountDistinctItems(vm.Sockets)} item(s) "
             + $"({filledCount} filled).";
+        // Publish the initial filter-count text now that _allSockets
+        // is populated. ApplyFilter normally raises this when
+        // SearchText changes, but we never went through that path
+        // during construction.
+        vm.OnPropertyChanged(nameof(FilterCountText));
         return vm;
     }
 
@@ -425,7 +500,8 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         {
             return;
         }
-        var itemName = FormatItemDisplay(_localization, itemKey);
+        var (itemNameEn, itemNameSecondary) = ResolveItemNames(_localization, itemKey);
+        var itemName = FormatCombinedName(itemNameEn, itemNameSecondary);
         // Capture the per-element field indices once from the first
         // socket — the per-class schema is fixed across siblings.
         var (gemKeyFieldIdx, enduranceFieldIdx) = ResolveSocketFieldIndices(sockets[0]);
@@ -462,9 +538,12 @@ public sealed partial class SocketEditorViewModel : ObservableObject
                 bagLabel: FormatBagLabel(_localization, bagIndex),
                 itemKey: itemKey,
                 itemName: itemName,
+                itemNameEnglish: itemNameEn,
+                itemNameSecondary: itemNameSecondary,
                 isFilled: isFilled,
                 currentGemKey: isFilled ? gemKey : 0u,
                 currentGemName: gemName);
+            _allSockets.Add(row);
             Sockets.Add(row);
         }
     }
@@ -709,8 +788,40 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         {
             return formatted;
         }
-        return localization.ItemInfoStringKey(itemKey) ?? itemKey.ToString();
+        return localization.ItemInfoStringKey(itemKey) ?? itemKey.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
+
+    /// <summary>
+    /// Resolve an item key into its English + secondary-language name
+    /// pair. English falls back to the iteminfo string_key (then raw
+    /// decimal) so the cell never goes blank; secondary stays
+    /// <c>null</c> when no secondary language is configured or the
+    /// PALOC misses. Both fields feed the filter — substring matches
+    /// against either count as a hit.
+    /// </summary>
+    private static (string English, string? Secondary)
+        ResolveItemNames(LocalizationProvider localization, uint itemKey)
+    {
+        var en = localization.LookupItemName(itemKey, LocalizationProvider.DefaultLanguage)
+                 ?? localization.ItemInfoStringKey(itemKey)
+                 ?? itemKey.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var secondaryLang = localization.SecondaryLanguage;
+        string? secondary = null;
+        if (!string.IsNullOrEmpty(secondaryLang))
+        {
+            secondary = localization.LookupItemName(itemKey, secondaryLang);
+        }
+        return (en, secondary);
+    }
+
+    /// <summary>
+    /// Build the single combined display string the Item column shows.
+    /// Mirrors <see cref="LocalizationProvider.ResolveItemNameFormatted"/>'s
+    /// shape (<c>"English / 中文"</c>) but driven off the pre-resolved
+    /// pair so the filter and the display share one source of truth.
+    /// </summary>
+    private static string FormatCombinedName(string english, string? secondary) =>
+        string.IsNullOrEmpty(secondary) ? english : $"{english} / {secondary}";
 
     /// <summary>
     /// Format a bag's position-in-inventorylist as a UI label. Uses the
@@ -775,6 +886,8 @@ public sealed partial class SocketRow : ObservableObject
         string bagLabel,
         uint itemKey,
         string itemName,
+        string itemNameEnglish,
+        string? itemNameSecondary,
         bool isFilled,
         uint currentGemKey,
         string currentGemName)
@@ -795,9 +908,58 @@ public sealed partial class SocketRow : ObservableObject
         BagLabel = bagLabel;
         ItemKey = itemKey;
         ItemName = itemName;
+        ItemNameEnglish = itemNameEnglish;
+        ItemNameSecondary = itemNameSecondary;
+        ItemKeyText = itemKey.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _isFilled = isFilled;
         _currentGemKey = currentGemKey;
         _currentGemName = currentGemName;
+    }
+
+    /// <summary>
+    /// English item name (PALOC default-language lookup; falls back to
+    /// the iteminfo string_key, then to the raw decimal key). Always
+    /// non-empty. Substring-matched by the filter.
+    /// </summary>
+    public string ItemNameEnglish { get; }
+
+    /// <summary>
+    /// Item name in the user's secondary language (e.g. <c>"黃金 / Gold"</c>'s
+    /// <c>"黃金"</c> half), <c>null</c> when no secondary language is
+    /// configured or the PALOC misses. Substring-matched by the filter
+    /// in addition to <see cref="ItemNameEnglish"/>, so users can type
+    /// either name and find a hit.
+    /// </summary>
+    public string? ItemNameSecondary { get; }
+
+    /// <summary>
+    /// Pre-formatted <see cref="ItemKey"/> as a decimal string —
+    /// stored so the filter can do a substring match against
+    /// "12345" without re-stringifying per filter pass.
+    /// </summary>
+    public string ItemKeyText { get; }
+
+    /// <summary>
+    /// True iff the filter <paramref name="needle"/> (already
+    /// non-empty / non-whitespace per <see cref="SocketEditorViewModel.ApplyFilter"/>)
+    /// matches any of the row's substantive identifying fields:
+    /// bag label, English item name, secondary item name, item key,
+    /// current gem name, and current gem key. Case-insensitive
+    /// ordinal — same convention as the Find Items filter.
+    /// </summary>
+    public bool MatchesFilter(string needle)
+    {
+        if (BagLabel.Contains(needle, StringComparison.OrdinalIgnoreCase)) return true;
+        if (ItemNameEnglish.Contains(needle, StringComparison.OrdinalIgnoreCase)) return true;
+        if (ItemNameSecondary is not null
+            && ItemNameSecondary.Contains(needle, StringComparison.OrdinalIgnoreCase)) return true;
+        if (ItemKeyText.Contains(needle, StringComparison.Ordinal)) return true;
+        if (!string.IsNullOrEmpty(CurrentGemName)
+            && CurrentGemName.Contains(needle, StringComparison.OrdinalIgnoreCase)) return true;
+        if (CurrentGemKey != 0
+            && CurrentGemKey.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                .Contains(needle, StringComparison.Ordinal)) return true;
+        return false;
     }
 
     public int BlockIndex { get; }

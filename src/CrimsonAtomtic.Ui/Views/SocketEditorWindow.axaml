@@ -4,8 +4,8 @@
         x:Class="CrimsonAtomtic.Ui.Views.SocketEditorWindow"
         x:DataType="vm:SocketEditorViewModel"
         Title="{StaticResource MenuEditItemSockets}"
-        Width="980" Height="560"
-        MinWidth="720" MinHeight="380"
+        Width="1320" Height="600"
+        MinWidth="900" MinHeight="380"
         FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
 
   <DockPanel LastChildFill="True" Margin="12">
@@ -14,6 +14,29 @@
                TextWrapping="Wrap"
                Opacity="0.7"
                Margin="0,0,0,8" />
+
+    <!-- Filter input: substring match against bag / item name (en +
+         secondary) / item key / current gem name / gem key. Case-
+         insensitive. Bound to SearchText; ApplyFilter runs on every
+         change via the partial OnSearchTextChanged. -->
+    <Grid DockPanel.Dock="Top"
+          ColumnDefinitions="Auto,*,Auto"
+          ColumnSpacing="8"
+          Margin="0,0,0,8">
+      <TextBlock Grid.Column="0"
+                 Text="{StaticResource SocketEditorFilterLabel}"
+                 VerticalAlignment="Center"
+                 Opacity="0.8" />
+      <TextBox Grid.Column="1"
+               Text="{Binding SearchText, Mode=TwoWay}"
+               PlaceholderText="{StaticResource SocketEditorFilterWatermark}"
+               HorizontalAlignment="Stretch" />
+      <TextBlock Grid.Column="2"
+                 Text="{Binding FilterCountText}"
+                 VerticalAlignment="Center"
+                 Opacity="0.6"
+                 MinWidth="160" />
+    </Grid>
 
     <!-- Apply-Set toolbar: pick an item, pick a set, click Apply.
          Set overwrites slots 0..N-1 (N = set's gem count); slots
@@ -77,9 +100,15 @@
         <DataGridTextColumn Header="{StaticResource SocketEditorColBag}"
                             Binding="{Binding BagLabel}"
                             Width="140" />
+        <!-- Item-name column. Shows English / secondary together
+             (e.g. "Wooden Sword / 木劍") via the pre-formatted
+             ItemName property; the filter matches each language
+             independently via SocketRow.ItemNameEnglish +
+             ItemNameSecondary. -->
         <DataGridTextColumn Header="{StaticResource SocketEditorColItem}"
                             Binding="{Binding ItemName}"
-                            Width="2*" />
+                            Width="260"
+                            MinWidth="120" />
         <DataGridTextColumn Header="{StaticResource SocketEditorColItemKey}"
                             Binding="{Binding ItemKey}"
                             Width="90" />
@@ -91,7 +120,8 @@
                             Width="170" />
         <DataGridTextColumn Header="{StaticResource SocketEditorColCurrentGem}"
                             Binding="{Binding DisplayGemName}"
-                            Width="2*" />
+                            Width="220"
+                            MinWidth="120" />
         <DataGridTextColumn Header="{StaticResource SocketEditorColCurrentGemKey}"
                             Binding="{Binding DisplayGemKeyText}"
                             Width="90" />
