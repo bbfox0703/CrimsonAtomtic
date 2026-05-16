@@ -751,6 +751,57 @@ public sealed class LocalizationProvider : IDisposable
         _characterInfo?.GetEntry(index);
 
     /// <summary>
+    /// Number of entries in the loaded <c>knowledgeinfo.pabgb</c>.
+    /// <c>0</c> when the bridge isn't loaded.
+    /// </summary>
+    public int KnowledgeCount => _knowledgeInfo?.EntryCount ?? 0;
+
+    /// <summary>
+    /// Get the <c>(KnowledgeKey, InternalName)</c> pair at insertion
+    /// index <paramref name="index"/>. Returns <c>null</c> when the
+    /// bridge isn't loaded or <paramref name="index"/> is out of range.
+    /// Drives the Abyss-Gate bulk-unlock scan.
+    /// </summary>
+    public (uint KnowledgeKey, string InternalName)? GetKnowledge(int index) =>
+        _knowledgeInfo?.GetEntry(index);
+
+    /// <summary>
+    /// Enumerate every loaded knowledge entry whose internal name
+    /// matches at least one of <paramref name="namePrefixes"/>
+    /// (case-insensitive ordinal). Returns an empty sequence when
+    /// the bridge isn't loaded. Used by the Abyss-Gate bulk-unlock
+    /// flow to harvest every <c>AbyssGate_*</c> /
+    /// <c>Knowledge_AbyssRuins_HyperSpace_*</c> /
+    /// <c>Knowledge_LevelGimmickIcon_AbyssGate*</c> key from
+    /// <c>knowledgeinfo.pabgb</c> without vendoring a JSON pack.
+    /// </summary>
+    public IEnumerable<(uint KnowledgeKey, string InternalName)>
+        EnumerateKnowledgeByNamePrefix(params string[] namePrefixes)
+    {
+        if (_knowledgeInfo is null || namePrefixes is null || namePrefixes.Length == 0)
+        {
+            yield break;
+        }
+        var count = _knowledgeInfo.EntryCount;
+        for (var i = 0; i < count; i++)
+        {
+            var entry = _knowledgeInfo.GetEntry(i);
+            if (entry is not { } e || string.IsNullOrEmpty(e.Name))
+            {
+                continue;
+            }
+            foreach (var prefix in namePrefixes)
+            {
+                if (e.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    yield return e;
+                    break;
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Look up the localized display name for a <c>CharacterKey</c>
     /// against the language whose PALOC is loaded under
     /// <paramref name="langCode"/>. Returns <c>null</c> when:

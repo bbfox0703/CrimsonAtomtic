@@ -51,6 +51,7 @@
   <sys:String x:Key="RenameMercenaryNotAvailableTitle">No mercenaries to rename</sys:String>
   <sys:String x:Key="RenameMercenaryNotAvailableBody">The loaded save doesn't have a MercenaryClanSaveData block, or its _mercenaryDataList is empty / unreadable. Mercenaries appear here once you've recruited at least one in-game.</sys:String>
   <sys:String x:Key="MenuFillAllStacks">Fill _All Stacks Across Every Inventory…</sys:String>
+  <sys:String x:Key="MenuUnlockAllAbyssGates">_Unlock All Abyss Gates (Map Discovery)…</sys:String>
   <sys:String x:Key="MenuFontSize">_Font Size</sys:String>
   <sys:String x:Key="SummaryToggleTip">Show / hide the Save Summary panel — claim more room for the main grids.</sys:String>
   <sys:String x:Key="MenuLanguage">_Secondary Language</sys:String>

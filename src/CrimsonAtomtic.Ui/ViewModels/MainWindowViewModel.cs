@@ -3102,6 +3102,225 @@ public sealed partial class MainWindowViewModel(
     }
 
     /// <summary>
+    /// Name prefixes the Abyss-Gate bulk-unlock flow harvests from
+    /// <c>knowledgeinfo.pabgb</c>. Covers:
+    /// <list type="bullet">
+    ///   <item><c>AbyssGate_*</c> — per-gate discovery flags.</item>
+    ///   <item><c>Knowledge_AbyssRuins_HyperSpace_*</c> — hyperspace ruin
+    ///     discovery flags.</item>
+    ///   <item><c>Knowledge_LevelGimmickIcon_AbyssGate</c> /
+    ///     <c>Knowledge_LevelGimmickIcon_HyperSpace</c> — map-icon header
+    ///     entries that the reference editor's 398-key pack treats as
+    ///     mandatory prelude rows. Without them the map icons stay
+    ///     hidden even after the per-gate keys are present.</item>
+    /// </list>
+    /// </summary>
+    private static readonly string[] AbyssGateKnowledgePrefixes =
+    [
+        "AbyssGate_",
+        "Knowledge_AbyssRuins_HyperSpace",
+        "Knowledge_LevelGimmickIcon_AbyssGate",
+        "Knowledge_LevelGimmickIcon_HyperSpace",
+    ];
+
+    /// <summary>
+    /// Class name of the top-level block carrying the player's
+    /// knowledge / discovery list. One per save.
+    /// </summary>
+    private const string KnowledgeSaveDataClass = "KnowledgeSaveData";
+
+    /// <summary>Name of the dynamic_array&lt;u32&gt; field on that block.</summary>
+    private const string KnowledgeListFieldName = "_list";
+
+    /// <summary>
+    /// Tools menu: bulk-inject every abyss-gate knowledge key into
+    /// <c>KnowledgeSaveData._list</c> via the dedicated
+    /// <c>dynamic_array&lt;u32&gt;</c> setter. Touches only the
+    /// **discovery flag** layer (gates show up on the map) — the
+    /// gate-state layer (whether the bridge is actually crossable in
+    /// world) lives on <c>FieldGimmickSaveData._initStateNameHash</c>
+    /// and is handled by the per-gate Edit Abyss Gates dialog.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Mirrors the reference PyQt5 editor's "No Map Reveal Abyss Gate
+    /// Unlock Only" pack flow (398 hand-curated keys) — but the
+    /// keyset is harvested live from <c>knowledgeinfo.pabgb</c> via
+    /// <see cref="LocalizationProvider.EnumerateKnowledgeByNamePrefix"/>
+    /// so no JSON pack is vendored. The harvested set is then unioned
+    /// with the user's current <c>_list</c> contents (deduped) before
+    /// writing back; already-discovered gates are left alone.
+    /// </para>
+    /// <para>
+    /// Implementation cost: one read FFI (<c>DynamicArrayGetU32Elements</c>),
+    /// up to a few thousand <see cref="LocalizationProvider.GetKnowledge"/>
+    /// calls for the catalog scan, and one write FFI
+    /// (<c>DynamicArraySetU32Elements</c>). End-to-end well under one
+    /// second on a 1.07-era save.
+    /// </para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(HasSave))]
+    private async Task UnlockAllAbyssGatesAsync()
+    {
+        BulkOpStatus = null;
+        if (_loadedPath is null
+            || Summary is not { Blocks: { } blocks }
+            || ConfirmRequested is not { } ask)
+        {
+            return;
+        }
+        if (localization.KnowledgeCount == 0)
+        {
+            BulkOpStatus = "Nothing to do — knowledgeinfo.pabgb not loaded (no game install configured).";
+            return;
+        }
+
+        // Locate the KnowledgeSaveData top-level block + its _list field.
+        var blockSummary = FindFirstBlockByClassName(blocks, KnowledgeSaveDataClass);
+        if (blockSummary is null)
+        {
+            BulkOpStatus = $"Nothing to do — no {KnowledgeSaveDataClass} block in this save.";
+            return;
+        }
+        BlockDetails details;
+        try
+        {
+            details = loader.LoadBlockDetails(_loadedPath, blockSummary.Index);
+        }
+        catch (CrimsonSaveException ex)
+        {
+            BulkOpStatus = $"Could not read {KnowledgeSaveDataClass}: {ex.Message}";
+            return;
+        }
+        var listField = FindFieldByName(details, KnowledgeListFieldName);
+        if (listField is null)
+        {
+            BulkOpStatus = $"Schema drift: {KnowledgeSaveDataClass} has no {KnowledgeListFieldName} field. "
+                + "Bridge needs a new schema baseline.";
+            return;
+        }
+
+        // Pre-flight: scan the catalog for matching prefixes + read the
+        // current list contents. Both on a background thread because the
+        // catalog scan walks ~2k entries.
+        var preview = await Task.Run(() =>
+        {
+            var harvested = localization
+                .EnumerateKnowledgeByNamePrefix(AbyssGateKnowledgePrefixes)
+                .Select(e => e.KnowledgeKey)
+                .ToHashSet();
+            uint[] existing;
+            try
+            {
+                existing = loader.DynamicArrayGetU32Elements(
+                    blockSummary.Index, ReadOnlySpan<PathStep>.Empty, listField.FieldIndex);
+            }
+            catch (CrimsonSaveException)
+            {
+                existing = Array.Empty<uint>();
+            }
+            var existingSet = new HashSet<uint>(existing);
+            var alreadyHave = 0;
+            var toAdd = new List<uint>(harvested.Count);
+            foreach (var k in harvested)
+            {
+                if (existingSet.Contains(k)) alreadyHave++;
+                else toAdd.Add(k);
+            }
+            return (Harvested: harvested.Count, AlreadyHave: alreadyHave,
+                    ToAdd: toAdd, Existing: existing);
+        });
+
+        if (preview.Harvested == 0)
+        {
+            BulkOpStatus = "Nothing to do — no abyss-gate knowledge entries found in knowledgeinfo.pabgb.";
+            return;
+        }
+        if (preview.ToAdd.Count == 0)
+        {
+            BulkOpStatus =
+                $"Nothing to do — all {preview.Harvested} abyss-gate knowledge entries already discovered.";
+            return;
+        }
+
+        var msg =
+            $"Inject {preview.ToAdd.Count} abyss-gate knowledge key(s) into "
+            + $"{KnowledgeSaveDataClass}._list?\n\n"
+            + $"Harvested {preview.Harvested} matching keys from knowledgeinfo.pabgb "
+            + $"({AbyssGateKnowledgePrefixes.Length} name prefixes).\n"
+            + $"{preview.AlreadyHave} already present in your save — left alone.\n"
+            + $"{preview.ToAdd.Count} will be appended.\n\n"
+            + "This is the **discovery flag** layer only — abyss gates "
+            + "show up on the map after this. To actually unlock gates "
+            + "for crossing, use Tools → Edit Abyss Gates… for per-gate "
+            + "state changes.\n\n"
+            + "Reversible by reloading the save without writing.";
+        var ok = await ask("Unlock all abyss gates (map discovery)?", msg);
+        if (!ok)
+        {
+            BulkOpStatus = "Cancelled.";
+            return;
+        }
+
+        // Build the union, preserving the user's existing order so the
+        // diff against an unedited save stays minimal.
+        var merged = new List<uint>(preview.Existing.Length + preview.ToAdd.Count);
+        merged.AddRange(preview.Existing);
+        merged.AddRange(preview.ToAdd);
+
+        BulkOpStatus = $"Injecting {preview.ToAdd.Count} knowledge key(s)…";
+        var error = await Task.Run<CrimsonSaveException?>(() =>
+        {
+            try
+            {
+                loader.DynamicArraySetU32Elements(
+                    blockSummary.Index, ReadOnlySpan<PathStep>.Empty,
+                    listField.FieldIndex, merged.ToArray());
+                return null;
+            }
+            catch (CrimsonSaveException ex)
+            {
+                return ex;
+            }
+        });
+
+        RefreshSelectedBlockSilently();
+
+        if (error is null)
+        {
+            IsDirty = true;
+            OnPropertyChanged(nameof(WindowTitle));
+            BulkOpStatus = $"Done: added {preview.ToAdd.Count} abyss-gate knowledge key(s) "
+                + $"({merged.Count} total in {KnowledgeSaveDataClass}._list).";
+        }
+        else
+        {
+            BulkOpStatus = $"Failed: {error.Message} (code {error.ErrorCode}). "
+                + "Reload the save without writing to revert.";
+        }
+    }
+
+    /// <summary>
+    /// Linear scan for the first block whose <c>ClassName</c> matches
+    /// <paramref name="className"/>. Used by bulk-op flows that
+    /// target a known singleton block (KnowledgeSaveData,
+    /// ContentsMiscSaveData, etc.). Returns <c>null</c> when no
+    /// matching block exists in the save.
+    /// </summary>
+    private static BlockSummary? FindFirstBlockByClassName(
+        IReadOnlyList<BlockSummary> blocks, string className)
+    {
+        foreach (var b in blocks)
+        {
+            if (string.Equals(b.ClassName, className, StringComparison.Ordinal))
+            {
+                return b;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Re-fetch the currently-selected top-level block and refresh the
     /// nav stack so any open view picks up post-mutation values.
     /// No-op when nothing is selected; swallows FFI errors so a stale
