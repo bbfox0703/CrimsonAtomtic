@@ -3,7 +3,22 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-15 part 6 (Rename Mercenary now resolves character names; Drop All SA Artifacts menu removed; crimson-rs bridge wave 2 surveyed into roadmap).
+> Last updated: 2026-05-15 part 7 (vendor/crimson-rs wave 3 consumed: mutation_version + list_inventory_items + cache refactor + Find Items dialog).
+>
+> ## ✅ This session — what shipped (2026-05-15 part 7)
+>
+> Consumed the latest `vendor/crimson-rs` refresh's two new C ABI
+> exports (`crimson_save_get_mutation_version` +
+> `crimson_save_list_inventory_items`) end-to-end across three
+> focused commits.
+>
+> | Area | Scope |
+> |---|---|
+> | **`mutation_version` + `list_inventory_items` bindings** | New `InventoryItemRecord` blittable struct (48-byte `repr(C)` mirror of the Rust shape). `ISaveLoader` gains `ulong GetMutationVersion()` + `IReadOnlyList<InventoryItemRecord> ListInventoryItems(out ulong version)`. The version-pairing pattern is documented per `vendor/crimson-rs/docs/save-mutation-version.md`. |
+> | **`_detailsCache` refactored to use `mutation_version`** | Per-block details cache changes from `Dictionary<int, BlockDetails>` to `Dictionary<int, (ulong Version, BlockDetails Details)>`. `LoadBlockDetails` now validates cached entries against the live mutation version on every read — refetches on mismatch. `RequireLoaded` loses its `invalidateDetailsCache` flag; 4 inline `_detailsCache.Clear()` patterns in mutation entry points collapse to a single `var cached = RequireLoaded(nameof(...));` line each. Net diff −82 lines despite added behavior. Defense-in-depth: adding a future mutation entry point no longer requires remembering to flag the cache flush — the version check is ground truth. |
+> | **Tools → Find Items… cross-bag dialog** | New menu item (gated on `HasSave`) opens `FindItemsWindow` bound to `FindItemsViewModel`. Drives off the new flat-list FFI: every `_inventoryList[N]._itemList[M]` slot in one snapshot, joined with PALOC-resolved item name + InventoryKey container label. Columns: Icon / Bag / Slot / ItemKey / Name (eng) / (Name secondary) / Stack / Flags (L/N) / ItemNo / Copy (K/N). Search filters by ItemKey / item name / bag label / ItemNo. Footer shows snapshot version + Refresh button (re-lists in one click after the user edits elsewhere). |
+>
+> Tests: **177/177 pass** (was 172; +5 covering `GetMutationVersion` starts-at-0 / no-save-throws / bumps-on-mutation, `ListInventoryItems` returns consistent non-empty records, and `BlockDetailsCache_VersionBumps_InvalidatesAutomatically` regression for the cache refactor). Debug build clean. Rebuilt `crimson_rs.dll` to expose the new exports (vendor source unchanged — `cargo build --features c_abi --release` only).
 >
 > ## ✅ This session — what shipped (2026-05-15 part 6)
 >

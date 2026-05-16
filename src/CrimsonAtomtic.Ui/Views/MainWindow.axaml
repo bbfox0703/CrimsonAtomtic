@@ -68,6 +68,9 @@
                   Click="OnBrowseCharactersClick" />
         <MenuItem Header="{StaticResource MenuBrowseLocalization}"
                   Click="OnBrowseLocalizationClick" />
+        <MenuItem Header="{StaticResource MenuFindItems}"
+                  Click="OnFindItemsClick"
+                  IsEnabled="{Binding HasSave}" />
         <Separator />
         <MenuItem Header="{StaticResource MenuExtractIcons}"
                   Click="OnExtractIconsClick" />

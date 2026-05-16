@@ -488,6 +488,36 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Tools → Find Items… handler. Opens the cross-bag item-search
+    /// dialog powered by <see cref="ISaveLoader.ListInventoryItems"/>.
+    /// Read-only; the menu item is gated on <c>HasSave</c> so this
+    /// only fires with a loaded save.
+    /// </summary>
+    private void OnFindItemsClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+        FindItemsViewModel pickerVm;
+        try
+        {
+            pickerVm = new FindItemsViewModel(vm.GetSaveLoader(), vm.Localization);
+        }
+        catch (InvalidOperationException)
+        {
+            // HasSave gate is the primary defense, but in case of a
+            // race (save unloaded between menu open and click) — no-op.
+            return;
+        }
+        var child = new FindItemsWindow
+        {
+            DataContext = pickerVm,
+        };
+        child.Show(this);
+    }
+
+    /// <summary>
     /// Tools → Browse Characters / NPCs… handler. Opens the character
     /// picker dialog (mirror of Browse Items, but driven by
     /// <c>characterinfo.pabgb</c> + the portrait pipeline). Read-only;

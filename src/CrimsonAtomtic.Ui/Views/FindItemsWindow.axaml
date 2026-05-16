@@ -1,0 +1,135 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        xmlns:svc="using:CrimsonAtomtic.Ui.Services"
+        mc:Ignorable="d"
+        d:DesignWidth="1200"
+        d:DesignHeight="600"
+        x:Class="CrimsonAtomtic.Ui.Views.FindItemsWindow"
+        x:DataType="vm:FindItemsViewModel"
+        Title="{StaticResource FindItemsWindowTitle}"
+        Icon="/Assets/MainIcon.ico"
+        Width="1200" Height="640"
+        MinWidth="700" MinHeight="380">
+
+  <Grid RowDefinitions="Auto,Auto,*,Auto"
+        Margin="12">
+
+    <!-- Filter box -->
+    <TextBox Grid.Row="0"
+             Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+             PlaceholderText="{StaticResource FindItemsSearchPlaceholder}" />
+
+    <!-- Result count + sort hint -->
+    <TextBlock Grid.Row="1"
+               Text="{Binding ResultsCountText}"
+               Opacity="0.6"
+               Margin="2,6,0,8" />
+
+    <!-- Results grid. Default sort is (Bag, Slot) matching the
+         in-game UI layout; user can re-sort by clicking column
+         headers. -->
+    <DataGrid Grid.Row="2"
+              ItemsSource="{Binding Results}"
+              IsReadOnly="True"
+              CanUserResizeColumns="True"
+              CanUserSortColumns="True"
+              GridLinesVisibility="Horizontal"
+              HeadersVisibility="Column"
+              AutoGenerateColumns="False">
+      <DataGrid.Columns>
+        <!-- Icon — uses the same ItemKeyToIconConverter singleton the
+             rest of the editor exposes, so cells fill in immediately
+             when the icon cache is populated. -->
+        <DataGridTemplateColumn Header="{StaticResource FindItemsColIcon}" Width="56">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:FindItemsRow">
+              <Image Source="{Binding ItemKey, Converter={x:Static svc:ItemKeyToIconConverter.Instance}}"
+                     Width="40" Height="40"
+                     Stretch="Uniform"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTextColumn Header="{StaticResource FindItemsColBag}"
+                            Binding="{Binding InventoryLabel}"
+                            Width="180" />
+        <DataGridTextColumn Header="{StaticResource FindItemsColSlot}"
+                            Binding="{Binding SlotNo}"
+                            Width="70" />
+        <DataGridTextColumn Header="{StaticResource FindItemsColItemKey}"
+                            Binding="{Binding ItemKey}"
+                            Width="100" />
+        <DataGridTextColumn Header="{StaticResource FindItemsColItemName}"
+                            Binding="{Binding ItemNameEnglish}"
+                            Width="*" />
+        <!-- Secondary name only shows when the user has a secondary
+             language loaded. Header echoes the lang code. -->
+        <DataGridTextColumn Header="{Binding $parent[Window].((vm:FindItemsViewModel)DataContext).SecondaryNameHeader}"
+                            Binding="{Binding ItemNameSecondary}"
+                            Width="*"
+                            IsVisible="{Binding $parent[Window].((vm:FindItemsViewModel)DataContext).HasSecondary}" />
+        <DataGridTextColumn Header="{StaticResource FindItemsColStack}"
+                            Binding="{Binding StackCount}"
+                            Width="90" />
+        <!-- Locked / NewMark flags as a compact text column ("🔒 / N"
+             style without emoji to stay terminal-friendly). -->
+        <DataGridTemplateColumn Header="{StaticResource FindItemsColFlags}" Width="80">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:FindItemsRow">
+              <StackPanel Orientation="Horizontal" Spacing="6"
+                          VerticalAlignment="Center">
+                <TextBlock Text="L" Opacity="0.85"
+                           IsVisible="{Binding IsLocked}"
+                           ToolTip.Tip="{StaticResource FindItemsFlagLockedTip}" />
+                <TextBlock Text="N" Opacity="0.85"
+                           IsVisible="{Binding IsNewMark}"
+                           ToolTip.Tip="{StaticResource FindItemsFlagNewMarkTip}" />
+              </StackPanel>
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTextColumn Header="{StaticResource FindItemsColItemNo}"
+                            Binding="{Binding ItemNo}"
+                            Width="120" />
+        <!-- Copy buttons. K = ItemKey, N = English item name. -->
+        <DataGridTemplateColumn Header="{StaticResource FindItemsColCopy}" Width="80">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:FindItemsRow">
+              <StackPanel Orientation="Horizontal" Spacing="2"
+                          VerticalAlignment="Center">
+                <Button Content="K"
+                        ToolTip.Tip="{StaticResource FindItemsCopyKeyTip}"
+                        Padding="6,2"
+                        MinHeight="0"
+                        Tag="{Binding ItemKeyText}"
+                        Click="OnCopyButtonClick" />
+                <Button Content="N"
+                        ToolTip.Tip="{StaticResource FindItemsCopyNameTip}"
+                        Padding="6,2"
+                        MinHeight="0"
+                        Tag="{Binding ItemNameEnglish}"
+                        Click="OnCopyButtonClick" />
+              </StackPanel>
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+      </DataGrid.Columns>
+    </DataGrid>
+
+    <!-- Footer: snapshot freshness + Refresh button -->
+    <Grid Grid.Row="3" ColumnDefinitions="*,Auto"
+          ColumnSpacing="12" Margin="0,8,0,0">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding SnapshotInfoText}"
+                 Opacity="0.6"
+                 VerticalAlignment="Center" />
+      <Button Grid.Column="1"
+              Content="{StaticResource FindItemsRefresh}"
+              Command="{Binding RefreshCommand}" />
+    </Grid>
+  </Grid>
+</Window>

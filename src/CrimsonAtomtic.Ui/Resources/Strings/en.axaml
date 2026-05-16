@@ -69,6 +69,25 @@
   <sys:String x:Key="ItemPickerCopyNameTip">Copy the English name to the clipboard</sys:String>
   <sys:String x:Key="ItemPickerCopyNameSecondaryTip">Copy the secondary-language name to the clipboard</sys:String>
 
+  <!-- Find-items dialog -->
+  <sys:String x:Key="MenuFindItems">_Find Items…</sys:String>
+  <sys:String x:Key="FindItemsWindowTitle">Find items (cross-bag)</sys:String>
+  <sys:String x:Key="FindItemsSearchPlaceholder">Filter by ItemKey, item name, bag name, or ItemNo…</sys:String>
+  <sys:String x:Key="FindItemsColIcon">Icon</sys:String>
+  <sys:String x:Key="FindItemsColBag">Bag</sys:String>
+  <sys:String x:Key="FindItemsColSlot">Slot</sys:String>
+  <sys:String x:Key="FindItemsColItemKey">ItemKey</sys:String>
+  <sys:String x:Key="FindItemsColItemName">Name (eng)</sys:String>
+  <sys:String x:Key="FindItemsColStack">Stack</sys:String>
+  <sys:String x:Key="FindItemsColFlags">Flags</sys:String>
+  <sys:String x:Key="FindItemsColItemNo">ItemNo</sys:String>
+  <sys:String x:Key="FindItemsColCopy">Copy</sys:String>
+  <sys:String x:Key="FindItemsCopyKeyTip">Copy the numeric ItemKey to the clipboard</sys:String>
+  <sys:String x:Key="FindItemsCopyNameTip">Copy the English item name to the clipboard</sys:String>
+  <sys:String x:Key="FindItemsFlagLockedTip">_isLocked = true</sys:String>
+  <sys:String x:Key="FindItemsFlagNewMarkTip">_isNewMark = true (item has the in-game "new" badge)</sys:String>
+  <sys:String x:Key="FindItemsRefresh">Refresh</sys:String>
+
   <!-- Browse-characters dialog -->
   <sys:String x:Key="MenuBrowseCharacters">Browse _Characters / NPCs…</sys:String>
   <sys:String x:Key="CharacterPickerWindowTitle">Browse characters / NPCs</sys:String>
