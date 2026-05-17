@@ -15,6 +15,14 @@ public sealed class ScalarFieldEditingTests
     [InlineData("1.5 <f32>",       "1.5",      "f32")]
     [InlineData("-7 <i8>",         "-7",       "i8")]
     [InlineData("100 bytes <bytes>", "100 bytes", "bytes")]
+    // Composite-scalar tags landed in vendor/crimson-rs commit 94c7a96
+    // (typed F32x3 / F32x4 / U32x4 ScalarValue variants). The raw value
+    // is bracketed and comma-separated; the LastIndexOf-space split
+    // still puts the trailing "<tag>" cleanly on the tag side.
+    [InlineData("[1.5, 2, -3.25] <f32x3>",          "[1.5, 2, -3.25]",          "f32x3")]
+    [InlineData("[0.5, 0, 1, 0] <f32x4>",           "[0.5, 0, 1, 0]",           "f32x4")]
+    [InlineData("[0x12345678, 0xdeadbeef, 0x00000001, 0xffffffff] <u32x4>",
+                "[0x12345678, 0xdeadbeef, 0x00000001, 0xffffffff]", "u32x4")]
     public void TryParse_FormattedValue_SplitsRawAndTag(string formatted, string expectedRaw, string expectedTag)
     {
         Assert.True(ScalarFieldEditing.TryParse(formatted, out var raw, out var tag));
@@ -120,6 +128,36 @@ public sealed class ScalarFieldEditingTests
     {
         var row = MakeRow(kind: "fixed_prefix", value: "100 bytes <bytes>");
         Assert.False(ScalarFieldEditing.IsTextEditable(row));
+    }
+
+    [Theory]
+    [InlineData("[1.5, 2, -3.25] <f32x3>")]
+    [InlineData("[0.5, 0, 1, 0] <f32x4>")]
+    [InlineData("[0x12345678, 0xdeadbeef, 0x00000001, 0xffffffff] <u32x4>")]
+    public void IsTextEditable_CompositeScalarReturnsFalse(string value)
+    {
+        // The typed F32x3 / F32x4 / U32x4 ScalarValue variants land
+        // with their own tags (vendor/crimson-rs commit 94c7a96), so the
+        // display now shows numeric values instead of "12 bytes". The
+        // edit surface still rejects them — a single text box can't
+        // drive a multi-component value. Add the tags to
+        // SupportedTypeTags + extend TryEncode when a vector-aware
+        // editor surface ships.
+        var row = MakeRow(kind: "fixed_prefix", value: value);
+        Assert.False(ScalarFieldEditing.IsTextEditable(row));
+    }
+
+    [Theory]
+    [InlineData("f32x3")]
+    [InlineData("f32x4")]
+    [InlineData("u32x4")]
+    public void TryEncode_CompositeScalarTagReturnsFalse(string tag)
+    {
+        // Composite tags are deliberately not in SupportedTypeTags;
+        // TryEncode reports the generic "not editable" error message.
+        Assert.False(ScalarFieldEditing.TryEncode(tag, "anything", out var bytes, out var err));
+        Assert.Empty(bytes);
+        Assert.Contains(tag, err);
     }
 
     [Fact]
