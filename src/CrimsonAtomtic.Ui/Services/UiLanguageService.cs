@@ -113,21 +113,35 @@ public sealed class UiLanguageService
     private void SnapshotDictionaries()
     {
         var merged = _app.Resources.MergedDictionaries;
-        foreach (var item in merged)
+        Log($"SnapshotDictionaries: merged.Count={merged.Count}");
+
+        for (int i = 0; i < merged.Count; i++)
         {
-            if (item is not Avalonia.Markup.Xaml.Styling.ResourceInclude ri
-                || ri.Source is not { } src)
+            var item = merged[i];
+            var typeName = item?.GetType().FullName ?? "<null>";
+            Log($"  [{i}] type={typeName}");
+
+            // Try the documented Avalonia 11.x type first.
+            if (item is Avalonia.Markup.Xaml.Styling.ResourceInclude ri && ri.Source is { } src)
             {
+                Log($"      ResourceInclude.Source.OriginalString='{src.OriginalString}'");
+                foreach (var code in SupportedCodes)
+                {
+                    if (MatchesUri(src, $"/{code}.axaml", $"/Resources/Strings/{code}.axaml"))
+                    {
+                        _dictByCode[code] = ri;
+                        Log($"      matched code='{code}'");
+                        break;
+                    }
+                }
                 continue;
             }
-            foreach (var code in SupportedCodes)
-            {
-                if (MatchesUri(src, $"/{code}.axaml", $"/Resources/Strings/{code}.axaml"))
-                {
-                    _dictByCode[code] = ri;
-                    break;
-                }
-            }
+
+            // Item type isn't Avalonia.Markup.Xaml.Styling.ResourceInclude
+            // — log the full type name so we can see what compiled XAML
+            // actually emits in this Avalonia build and target it
+            // explicitly.
+            Log($"      <unrecognised type — add a branch above to claim it>");
         }
     }
 
