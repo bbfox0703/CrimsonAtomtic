@@ -5,6 +5,69 @@
 >
 > Last updated: 2026-05-17 part 11 (UI language switch finally fixed — two real root causes: XAML compiler inlines ResourceInclude as ResourceDictionary (no Source URI exposed), and InvariantGlobalization makes CultureInfo.Name always empty).
 >
+> ## 🎯 Next-session quick pickup
+>
+> Working tree clean, `dev` + `main` aligned at `5ce00e2`. AOT bundle
+> staged at `dist\win-x64\CrimsonAtomtic.exe` (2026-05-17 22:05).
+> Test suite **281/281**. No urgent blockers — all open items below
+> are pick-by-appetite.
+>
+> ### Open follow-ons (consolidated across parts 1–11)
+>
+> Sized small → large, freshest-context first:
+>
+> - **Surface "no dictionary found" in the UI** (part 11) — when
+>   `UiLanguageService.LastApplyOutcome == DictionaryNotFound` the menu
+>   pick is silently swallowed. A status-bar message or alert would
+>   catch any future regression that breaks the marker-key probe (e.g.
+>   someone removes `__UiLangCode__` from a new language file).
+> - **CharacterKey picker tooltip variant** (from part 1's per-row
+>   button work — *NB: this is the original-original status doc item,
+>   not the Mark-Challenge tooltip; that's already shipped*). Likely
+>   already-resolved-by-collateral; verify before starting.
+> - **OCT forum post URL placeholder** (from part 1) —
+>   `docs/oct/features-highlights.md` no longer has a Get-it section,
+>   so this is moot unless the post needs the URL re-added separately.
+> - **Visual verification of the part-4 palette picker** —
+>   user-confirmed working in part 6's note; this is closed but listed
+>   here for completeness. Skip.
+> - **AOT publish smoke test** (from part 8) — automate the
+>   "publish → launch → click → assert repaint" chain. Worth doing
+>   only if a third AOT-only regression surfaces.
+> - **Headless Avalonia integration test for language switching**
+>   (parts 9 + 11) — same shape as above but for the i18n chain.
+> - **Safe re-attempt of "+ Add Dye"** with a per-prefab valid-slot
+>   picker (rolled back in part 5; recipe documented inline at the
+>   part-5 entry). Needs the `partprefabdyeslotinfo.LookupSlotCount`
+>   gamedata bridge (already loaded) + a small slot-picker UX step.
+> - **World-map UX layer** (parts 6 + 7) — both backing ABIs
+>   (`list_field_positions` + `paz_list_dir`) bound. Next step is a
+>   scope decision: read-only DataGrid (no basemap image required) vs.
+>   full visual basemap dialog (needs a game-extracted DDS — asset
+>   license / repo-shipping question to settle first).
+> - **Pattern B v2 for multi-objective SA challenges** (from part 1)
+>   — RE-heavy; needs slot106 → slot107 → post-claim diff to determine
+>   the engine-natural completion shape for negative-keyed sub-step
+>   challenges. Diagnostic scripts in `tools/inspect/sa-investigations/`.
+>
+> ### Vendor state
+>
+> `vendor/crimson-rs` at `090a73d` (see part 7 — `crimson_paz_list_dir`
+> binding). Run `vendor\update_vendors.ps1` at session start to refresh;
+> the upstream history was force-pushed once during this session, so
+> use `-Force` if vendor diverges.
+>
+> ### Quick verification checklist
+>
+> Before committing new code:
+>
+> 1. `dotnet build src/CrimsonAtomtic.Tests/CrimsonAtomtic.Tests.csproj` — must be 0 errors, 0 warnings
+> 2. `dotnet test src/CrimsonAtomtic.Tests/CrimsonAtomtic.Tests.csproj --no-build` — should be 281/281
+> 3. For UI changes: launch via `dotnet run` (or F5 in VS) and exercise the changed surface
+> 4. For shippable changes: `.\build.cmd publish` → smoke-test `dist\win-x64\CrimsonAtomtic.exe`
+>
+> ---
+>
 > ## ✅ This session — what shipped (2026-05-17 part 11)
 >
 > The UI language switch bug from parts 8/9/10 — finally resolved via
