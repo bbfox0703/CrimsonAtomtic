@@ -15,9 +15,9 @@ namespace CrimsonAtomtic.Ui.Views;
 ///
 /// <para>
 /// Returns <c>true</c> via <c>Close(true)</c> when the user clicks
-/// "我同意 / I Accept"; <c>false</c> via <c>Close(false)</c> on
-/// "離開 / Quit". The app shuts down when the user declines —
-/// <see cref="App"/> wires that in <c>OnFrameworkInitializationCompleted</c>.
+/// "I Accept"; <c>false</c> via <c>Close(false)</c> on "Quit". The
+/// app shuts down when the user declines — <see cref="App"/> wires
+/// that in <c>OnFrameworkInitializationCompleted</c>.
 /// </para>
 /// </summary>
 public sealed partial class DisclaimerDialog : Window

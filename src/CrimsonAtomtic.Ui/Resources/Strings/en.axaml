@@ -212,7 +212,7 @@
   <!-- Character refs browser (Tools menu) + per-field CharacterKey picker share
        the warning banner + Pick button strings below. -->
   <sys:String x:Key="MenuBrowseCharacterRefs">Browse Character _References…</sys:String>
-  <sys:String x:Key="CharacterRefsBrowserWarning">⚠ 資料串接不一定正確 — 同一個 CharacterKey 在不同 block / 不同欄位脈絡下可能代表不同實體。本列表僅依 schema 標示為「CharacterKey」的欄位列舉；以原始編輯介面交叉驗證。&#x0a;⚠ Reference linkage is best-effort. The same CharacterKey can mean different things across different blocks/fields. This list enumerates every save field whose schema TypeName is "CharacterKey" — cross-verify in the raw editor.</sys:String>
+  <sys:String x:Key="CharacterRefsBrowserWarning">⚠ Reference linkage is best-effort. The same CharacterKey can mean different things across different blocks/fields. This list enumerates every save field whose schema TypeName is "CharacterKey" — cross-verify in the raw editor.</sys:String>
   <sys:String x:Key="CharacterRefsBrowserJump">Jump…</sys:String>
   <sys:String x:Key="CharacterRefsBrowserJumpTip">Close this dialog and navigate the main editor's block tree to the top-level block containing this CharacterKey reference. From there drill manually to the specific field.</sys:String>
   <sys:String x:Key="CharacterRefsBrowserFilterLabel">Filter:</sys:String>
@@ -226,7 +226,7 @@
 
   <!-- Picker shared with CharacterPickerWindow (Pick mode + warning banner)
        + edit panel button strings for the CharacterKey scalar field picker. -->
-  <sys:String x:Key="CharacterPickerWarning">⚠ 資料串接不一定正確 — characterinfo.pabgb 中的 key 在不同欄位脈絡下不一定對應同一實體。請以遊戲畫面或主編輯器交叉驗證。&#x0a;⚠ Linkage is best-effort. Cross-verify before relying on the resolved name.</sys:String>
+  <sys:String x:Key="CharacterPickerWarning">⚠ Linkage is best-effort. A characterinfo.pabgb key may not refer to the same entity across different fields. Cross-verify in-game or against the main editor before relying on the resolved name.</sys:String>
   <sys:String x:Key="CharacterPickerPick">Pick</sys:String>
   <sys:String x:Key="CharacterPickerColPick">Pick</sys:String>
   <sys:String x:Key="EditPanelPickCharacter">Pick character…</sys:String>
@@ -243,10 +243,10 @@
   <sys:String x:Key="LocalizationCopyValue2Tip">Copy the secondary-language value to the clipboard</sys:String>
 
   <!-- First-launch legal disclaimer -->
-  <sys:String x:Key="DisclaimerTitle">CrimsonAtomtic — Disclaimer / 免責聲明</sys:String>
-  <sys:String x:Key="DisclaimerAccept">我同意 / I Accept</sys:String>
-  <sys:String x:Key="DisclaimerDecline">離開 / Quit</sys:String>
-  <sys:String x:Key="DisclaimerBody">本編輯器不保證能正常運作，也沒有針對所有 save 結構做詳細檢查。如使用後造成資料錯誤、存檔損壞或任何遊戲帳號相關問題，作者不負任何責任。&#x0a;&#x0a;按下「我同意」即表示您已閱讀並同意上述條款，並接受使用本工具的全部風險。&#x0a;&#x0a;This editor is provided as-is with no warranty of correct operation and no exhaustive validation of save structures. The author accepts no responsibility for any data corruption, save damage, or account-related issues that may result from its use.&#x0a;&#x0a;Clicking "I Accept" confirms you have read and agreed to the above and accept all risks of using this tool.</sys:String>
+  <sys:String x:Key="DisclaimerTitle">CrimsonAtomtic — Disclaimer</sys:String>
+  <sys:String x:Key="DisclaimerAccept">I Accept</sys:String>
+  <sys:String x:Key="DisclaimerDecline">Quit</sys:String>
+  <sys:String x:Key="DisclaimerBody">This editor is provided as-is with no warranty of correct operation and no exhaustive validation of save structures. The author accepts no responsibility for any data corruption, save damage, or account-related issues that may result from its use.&#x0a;&#x0a;Clicking "I Accept" confirms you have read and agreed to the above and accept all risks of using this tool.</sys:String>
 
   <!-- Empty workspace -->
   <sys:String x:Key="EmptyTitle">No save loaded</sys:String>
