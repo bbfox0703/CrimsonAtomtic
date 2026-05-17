@@ -255,7 +255,7 @@
   <sys:String x:Key="DisclaimerTitle">CrimsonAtomtic — Disclaimer</sys:String>
   <sys:String x:Key="DisclaimerAccept">I Accept</sys:String>
   <sys:String x:Key="DisclaimerDecline">Quit</sys:String>
-  <sys:String x:Key="DisclaimerBody">This editor is provided as-is with no warranty of correct operation and no exhaustive validation of save structures. The author accepts no responsibility for any data corruption, save damage, account-related issues, or features that don't work as expected — and is under no obligation to fix them.&#x0a;&#x0a;Clicking "I Accept" confirms you have read and agreed to the above and accept all risks of using this tool.</sys:String>
+  <sys:String x:Key="DisclaimerBody">This editor is provided as-is with no warranty of correct operation and no exhaustive validation of save structures. The author accepts no responsibility for any data corruption, save damage, account-related issues, or features that don't work as expected — and is under no obligation to fix them. There is no guarantee that this tool will be updated to track future game versions.&#x0a;&#x0a;Clicking "I Accept" confirms you have read and agreed to the above and accept all risks of using this tool.</sys:String>
 
   <!-- Empty workspace -->
   <sys:String x:Key="EmptyTitle">No save loaded</sys:String>

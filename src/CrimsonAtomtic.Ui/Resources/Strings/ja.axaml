@@ -266,7 +266,7 @@
   <sys:String x:Key="DisclaimerTitle">CrimsonAtomtic — 免責事項</sys:String>
   <sys:String x:Key="DisclaimerAccept">同意する</sys:String>
   <sys:String x:Key="DisclaimerDecline">終了</sys:String>
-  <sys:String x:Key="DisclaimerBody">本エディタは現状のまま (as-is) 提供されており、正しく動作することの保証も、全ての save 構造に対する網羅的な検証も行われていません。本ツールの使用により生じたデータ破損、セーブの損傷、アカウント関連の問題、またはツール内の機能が期待通りに動作しないことについて、作者は一切責任を負わず、修正の義務も負いません。&#x0a;&#x0a;「同意する」を押すと、上記内容を読み同意したものとみなされ、本ツール使用に伴うすべてのリスクを受け入れたことになります。</sys:String>
+  <sys:String x:Key="DisclaimerBody">本エディタは現状のまま (as-is) 提供されており、正しく動作することの保証も、全ての save 構造に対する網羅的な検証も行われていません。本ツールの使用により生じたデータ破損、セーブの損傷、アカウント関連の問題、またはツール内の機能が期待通りに動作しないことについて、作者は一切責任を負わず、修正の義務も負いません。今後のゲームバージョン更新に本ツールが追従する保証もありません。&#x0a;&#x0a;「同意する」を押すと、上記内容を読み同意したものとみなされ、本ツール使用に伴うすべてのリスクを受け入れたことになります。</sys:String>
 
   <!-- Empty workspace -->
   <sys:String x:Key="EmptyTitle">セーブが読み込まれていません</sys:String>

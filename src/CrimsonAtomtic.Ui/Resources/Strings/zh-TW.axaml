@@ -266,7 +266,7 @@
   <sys:String x:Key="DisclaimerTitle">CrimsonAtomtic — 免責聲明</sys:String>
   <sys:String x:Key="DisclaimerAccept">我同意</sys:String>
   <sys:String x:Key="DisclaimerDecline">離開</sys:String>
-  <sys:String x:Key="DisclaimerBody">本編輯器以「現狀」方式提供，不保證能正常運作，也沒有針對所有存檔結構做詳細驗證。對於使用本工具可能造成的資料錯誤、存檔毀損或任何遊戲帳號相關問題，或是工具中的功能無法如期使用、作者不負任何責任、也不會負責修復。&#x0a;&#x0a;按下「我同意」即表示您已閱讀並同意上述條款，並接受使用本工具的全部風險。</sys:String>
+  <sys:String x:Key="DisclaimerBody">本編輯器以「現狀」方式提供，不保證能正常運作，也沒有針對所有存檔結構做詳細驗證。對於使用本工具可能造成的資料錯誤、存檔毀損或任何遊戲帳號相關問題，或是工具中的功能無法如期使用、作者不負任何責任、也不會負責修復。後續遊戲版本如有更新，亦不保證本工具會跟著更新。&#x0a;&#x0a;按下「我同意」即表示您已閱讀並同意上述條款，並接受使用本工具的全部風險。</sys:String>
 
   <!-- Empty workspace -->
   <sys:String x:Key="EmptyTitle">尚未載入存檔</sys:String>
