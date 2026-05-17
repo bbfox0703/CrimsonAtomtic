@@ -67,8 +67,13 @@
         <DataGridTextColumn Header="{StaticResource DyeEditorColBag}"
                             Binding="{Binding BagLabel}"
                             Width="180" />
+        <!-- Item column shows the combined "English / Secondary" string
+             (e.g. "Hernandian Honor Guard Armor / 赫南迪安榮譽近衛盔甲")
+             via DyeEditorItemRow.ItemName; matches the Sockets editor's
+             format. The filter still substring-matches each language
+             separately via ItemNameEnglish + ItemNameSecondary. -->
         <DataGridTextColumn Header="{StaticResource DyeEditorColItem}"
-                            Binding="{Binding ItemNameEnglish}"
+                            Binding="{Binding ItemName}"
                             Width="*" />
         <DataGridTextColumn Header="{StaticResource DyeEditorColItemKey}"
                             Binding="{Binding ItemKey}"

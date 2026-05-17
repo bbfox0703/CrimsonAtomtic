@@ -3922,57 +3922,88 @@ public sealed partial class MainWindowViewModel(
 
         await Task.Run(() =>
         {
-            for (var i = 0; i < keysToAdd.Count; i++)
+            // Wrap the per-key inject loop in a deferred-redecode batch
+            // (see vendor/crimson-rs/docs/save-deferred-redecode.md).
+            // Each key costs 1 ListCloneElement (length-changing) + up
+            // to 3 SetScalarField (in-place); without the batch every
+            // ListCloneElement triggers a full body re-decode (~25ms on
+            // a 5MB body). For a ~30-key inject (typical abyss-gate
+            // count) that's ~30 re-decodes ≈ 750ms; with the batch
+            // every clone stays in the in-memory tree and the trailing
+            // commit runs ONE encode + parse + decode pass.
+            //
+            // Partial-success preserved: per-op exceptions are caught
+            // inside the inner try/catch + `return` out of the lambda.
+            // RunDeferred sees normal completion → commits whatever
+            // already landed. A commit-time MUTATION_INVALID surfaces
+            // through the outer try/catch as applied=0.
+            try
             {
-                var newIdx = baselineCount + i;
-                var key = keysToAdd[i];
-                try
+                loader.RunDeferred(() =>
                 {
-                    // Clone element 0 as a fresh template at the tail.
-                    loader.ListCloneElement(
-                        blockIdx,
-                        ReadOnlySpan<PathStep>.Empty,
-                        listFieldIdx,
-                        sourceIndex: 0,
-                        destinationIndex: newIdx);
-
-                    var newPath = new[] { new PathStep((uint)listFieldIdx, (uint)newIdx) };
-
-                    // Patch _key → the abyss-gate knowledge key.
-                    loader.SetScalarField(
-                        blockIdx, newPath, keyFieldIdx, BitConverter.GetBytes(key));
-
-                    // Patch _learnedFieldTime → 0 (bulk-inject sentinel —
-                    // distinguishes editor-injected discoveries from
-                    // organically learned ones). Optional; only if the
-                    // field is part of the schema.
-                    if (learnedTimeFieldIdx >= 0)
+                    for (var i = 0; i < keysToAdd.Count; i++)
                     {
-                        loader.SetScalarField(
-                            blockIdx, newPath, learnedTimeFieldIdx,
-                            BitConverter.GetBytes((ulong)0));
+                        var newIdx = baselineCount + i;
+                        var key = keysToAdd[i];
+                        try
+                        {
+                            // Clone element 0 as a fresh template at the tail.
+                            loader.ListCloneElement(
+                                blockIdx,
+                                ReadOnlySpan<PathStep>.Empty,
+                                listFieldIdx,
+                                sourceIndex: 0,
+                                destinationIndex: newIdx);
+
+                            var newPath = new[] { new PathStep((uint)listFieldIdx, (uint)newIdx) };
+
+                            // Patch _key → the abyss-gate knowledge key.
+                            loader.SetScalarField(
+                                blockIdx, newPath, keyFieldIdx, BitConverter.GetBytes(key));
+
+                            // Patch _learnedFieldTime → 0 (bulk-inject sentinel —
+                            // distinguishes editor-injected discoveries from
+                            // organically learned ones). Optional; only if the
+                            // field is part of the schema.
+                            if (learnedTimeFieldIdx >= 0)
+                            {
+                                loader.SetScalarField(
+                                    blockIdx, newPath, learnedTimeFieldIdx,
+                                    BitConverter.GetBytes((ulong)0));
+                            }
+                            // Patch _isNewMark → false so the bulk-injected
+                            // entries don't all flash as new in the player's
+                            // UI on the next load.
+                            if (isNewMarkFieldIdx >= 0)
+                            {
+                                loader.SetScalarField(
+                                    blockIdx, newPath, isNewMarkFieldIdx, new byte[] { 0 });
+                            }
+                            applied++;
+                        }
+                        catch (CrimsonSaveException ex)
+                        {
+                            failed++;
+                            firstError ??= ex;
+                            firstFailedKey ??= key;
+                            // Abort the sweep on first failure — the list shape
+                            // may now be inconsistent, and continuing risks
+                            // compounding the error. Reload without saving to
+                            // revert. Returning out of the lambda lets the
+                            // deferred batch commit the partial progress.
+                            return;
+                        }
                     }
-                    // Patch _isNewMark → false so the bulk-injected
-                    // entries don't all flash as new in the player's
-                    // UI on the next load.
-                    if (isNewMarkFieldIdx >= 0)
-                    {
-                        loader.SetScalarField(
-                            blockIdx, newPath, isNewMarkFieldIdx, new byte[] { 0 });
-                    }
-                    applied++;
-                }
-                catch (CrimsonSaveException ex)
-                {
-                    failed++;
-                    firstError ??= ex;
-                    firstFailedKey ??= key;
-                    // Abort the sweep on first failure — the list shape
-                    // may now be inconsistent, and continuing risks
-                    // compounding the error. Reload without saving to
-                    // revert.
-                    return;
-                }
+                });
+            }
+            catch (CrimsonSaveException commitEx)
+            {
+                // End_*'s commit failed (MUTATION_INVALID): the Rust
+                // side already rolled `blocks` back to pre-begin, so
+                // nothing landed. Reset applied so the post-loop
+                // reporting matches reality.
+                applied = 0;
+                firstError ??= commitEx;
             }
         });
 

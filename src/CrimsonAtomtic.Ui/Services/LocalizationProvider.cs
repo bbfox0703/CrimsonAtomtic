@@ -61,6 +61,36 @@ public sealed class LocalizationProvider : IDisposable
     // Vendor Buyback dialog.
     private const string StoreInfoPabgbFileName  = "storeinfo.pabgb";
     private const string StoreInfoPabghFileName  = "storeinfo.pabgh";
+    // 13 niche name-only bridges, all in group 0008 next to iteminfo.
+    // Order matches the new-session brief table. Five filenames drop the
+    // "info" suffix (royalsupply, globalgameevent, globalgameeventgroup,
+    // reserveslot) — copy literally.
+    private const string HouseInfoPabgbFileName              = "houseinfo.pabgb";
+    private const string HouseInfoPabghFileName              = "houseinfo.pabgh";
+    private const string RoyalSupplyPabgbFileName            = "royalsupply.pabgb";
+    private const string RoyalSupplyPabghFileName            = "royalsupply.pabgh";
+    private const string CraftToolInfoPabgbFileName          = "crafttoolinfo.pabgb";
+    private const string CraftToolInfoPabghFileName          = "crafttoolinfo.pabgh";
+    private const string CraftToolGroupInfoPabgbFileName     = "crafttoolgroupinfo.pabgb";
+    private const string CraftToolGroupInfoPabghFileName     = "crafttoolgroupinfo.pabgh";
+    private const string TriggerRegionInfoPabgbFileName      = "triggerregioninfo.pabgb";
+    private const string TriggerRegionInfoPabghFileName      = "triggerregioninfo.pabgh";
+    private const string GamePlayVariableInfoPabgbFileName   = "gameplayvariableinfo.pabgb";
+    private const string GamePlayVariableInfoPabghFileName   = "gameplayvariableinfo.pabgh";
+    private const string GlobalGameEventPabgbFileName        = "globalgameevent.pabgb";
+    private const string GlobalGameEventPabghFileName        = "globalgameevent.pabgh";
+    private const string GlobalGameEventGroupPabgbFileName   = "globalgameeventgroup.pabgb";
+    private const string GlobalGameEventGroupPabghFileName   = "globalgameeventgroup.pabgh";
+    private const string GameAdviceInfoPabgbFileName         = "gameadviceinfo.pabgb";
+    private const string GameAdviceInfoPabghFileName         = "gameadviceinfo.pabgh";
+    private const string GameAdviceGroupInfoPabgbFileName    = "gameadvicegroupinfo.pabgb";
+    private const string GameAdviceGroupInfoPabghFileName    = "gameadvicegroupinfo.pabgh";
+    private const string ReserveSlotPabgbFileName            = "reserveslot.pabgb";
+    private const string ReserveSlotPabghFileName            = "reserveslot.pabgh";
+    private const string RegionInfoPabgbFileName             = "regioninfo.pabgb";
+    private const string RegionInfoPabghFileName             = "regioninfo.pabgh";
+    private const string ItemGroupInfoPabgbFileName          = "itemgroupinfo.pabgb";
+    private const string ItemGroupInfoPabghFileName          = "itemgroupinfo.pabgh";
 
     /// <summary>
     /// Known PALOC language codes the game ships. Sourced authoritatively
@@ -236,6 +266,24 @@ public sealed class LocalizationProvider : IDisposable
         // their original raw-array display path; only scalar fields
         // route through here.)
         "StringInfoKey",
+        // 13 niche name-only bridges (impl_name_only_bridge!) — each
+        // resolves the save-side key to the row's internal template name
+        // ("DefaultHouse_Lv1", "Region_Pywel", "ItemGroup_Category_Equipment", …).
+        // No PALOC chain on any of these; secondary-language column
+        // intentionally mirrors English (matches QuestGauge / Skill convention).
+        "HouseKey",                  // 4 rows
+        "RoyalSupplyKey",            // 4 rows
+        "CraftToolKey",              // 17 rows
+        "CraftToolGroupKey",         // 10 rows
+        "TriggerRegionKey",          // 12 rows
+        "GamePlayVariableKey",       // 47 rows
+        "GlobalGameEventInfoKey",    // 103 rows
+        "GlobalGameEventGroupKey",   // 7 rows
+        "GameAdviceInfoKey",         // 461 rows; PALOC chain deferred
+        "GameAdviceGroupKey",        // 8 rows
+        "ReserveSlotKey",            // 27 rows; PALOC chain deferred
+        "RegionKey",                 // 1,004 rows
+        "ItemGroupKey",              // 1,500 rows
     };
 
     /// <summary>
@@ -286,6 +334,20 @@ public sealed class LocalizationProvider : IDisposable
     private NativePartPrefabDyeTexturePalleteCatalog? _dyeTexturePalleteInfo;
     private NativePartPrefabDyeSlotInfoCatalog? _dyeSlotInfo;
     private NativeStoreInfoCatalog? _storeInfo;
+    // 13 niche name-only bridges, group 0008 (impl_name_only_bridge!).
+    private NativeHouseInfoCatalog? _houseInfo;
+    private NativeRoyalSupplyInfoCatalog? _royalSupplyInfo;
+    private NativeCraftToolInfoCatalog? _craftToolInfo;
+    private NativeCraftToolGroupInfoCatalog? _craftToolGroupInfo;
+    private NativeTriggerRegionInfoCatalog? _triggerRegionInfo;
+    private NativeGamePlayVariableInfoCatalog? _gamePlayVariableInfo;
+    private NativeGlobalGameEventInfoCatalog? _globalGameEventInfo;
+    private NativeGlobalGameEventGroupInfoCatalog? _globalGameEventGroupInfo;
+    private NativeGameAdviceInfoCatalog? _gameAdviceInfo;
+    private NativeGameAdviceGroupInfoCatalog? _gameAdviceGroupInfo;
+    private NativeReserveSlotInfoCatalog? _reserveSlotInfo;
+    private NativeRegionInfoCatalog? _regionInfo;
+    private NativeItemGroupInfoCatalog? _itemGroupInfo;
     private string? _gameRoot;
     private string? _secondaryLanguage;
 
@@ -461,6 +523,7 @@ public sealed class LocalizationProvider : IDisposable
         TryBootstrapSkillInfo(gameRoot);
         TryBootstrapDyeGamedata(gameRoot);
         TryBootstrapStoreInfo(gameRoot);
+        TryBootstrapNicheBridges(gameRoot);
 
         // ── Discover available PALOC languages by probing the well-known
         // group range. PAMT parses are fast (a few ms each); the probe
@@ -648,6 +711,73 @@ public sealed class LocalizationProvider : IDisposable
             var pabgh = _paz.ExtractFile(pamt, ItemInfoDirectory, StoreInfoPabghFileName);
             _storeInfo?.Dispose();
             _storeInfo = NativeStoreInfoCatalog.LoadFromBytes(pabgb, pabgh);
+        }
+        catch (CrimsonSaveException) { }
+        catch (IOException) { }
+    }
+
+    /// <summary>
+    /// Load all 13 name-only niche bridges in one pass. Each one is the
+    /// same two-file shape (<c>.pabgb</c> body + <c>.pabgh</c> index, both
+    /// in group <c>0008</c>'s <c>gamedata/binary__/client/bin/</c>) and
+    /// each is independent — failure of one only blanks the corresponding
+    /// resolved-name column. We open the group-0008 PAMT once and route
+    /// every extraction through <see cref="TryLoadNicheBridge{T}"/>.
+    /// </summary>
+    private void TryBootstrapNicheBridges(string gameRoot)
+    {
+        var pamt = Path.Combine(gameRoot, "0008", "0.pamt");
+        if (!File.Exists(pamt))
+        {
+            return;
+        }
+        TryLoadNicheBridge(pamt, HouseInfoPabgbFileName, HouseInfoPabghFileName,
+            NativeHouseInfoCatalog.LoadFromBytes, ref _houseInfo);
+        TryLoadNicheBridge(pamt, RoyalSupplyPabgbFileName, RoyalSupplyPabghFileName,
+            NativeRoyalSupplyInfoCatalog.LoadFromBytes, ref _royalSupplyInfo);
+        TryLoadNicheBridge(pamt, CraftToolInfoPabgbFileName, CraftToolInfoPabghFileName,
+            NativeCraftToolInfoCatalog.LoadFromBytes, ref _craftToolInfo);
+        TryLoadNicheBridge(pamt, CraftToolGroupInfoPabgbFileName, CraftToolGroupInfoPabghFileName,
+            NativeCraftToolGroupInfoCatalog.LoadFromBytes, ref _craftToolGroupInfo);
+        TryLoadNicheBridge(pamt, TriggerRegionInfoPabgbFileName, TriggerRegionInfoPabghFileName,
+            NativeTriggerRegionInfoCatalog.LoadFromBytes, ref _triggerRegionInfo);
+        TryLoadNicheBridge(pamt, GamePlayVariableInfoPabgbFileName, GamePlayVariableInfoPabghFileName,
+            NativeGamePlayVariableInfoCatalog.LoadFromBytes, ref _gamePlayVariableInfo);
+        TryLoadNicheBridge(pamt, GlobalGameEventPabgbFileName, GlobalGameEventPabghFileName,
+            NativeGlobalGameEventInfoCatalog.LoadFromBytes, ref _globalGameEventInfo);
+        TryLoadNicheBridge(pamt, GlobalGameEventGroupPabgbFileName, GlobalGameEventGroupPabghFileName,
+            NativeGlobalGameEventGroupInfoCatalog.LoadFromBytes, ref _globalGameEventGroupInfo);
+        TryLoadNicheBridge(pamt, GameAdviceInfoPabgbFileName, GameAdviceInfoPabghFileName,
+            NativeGameAdviceInfoCatalog.LoadFromBytes, ref _gameAdviceInfo);
+        TryLoadNicheBridge(pamt, GameAdviceGroupInfoPabgbFileName, GameAdviceGroupInfoPabghFileName,
+            NativeGameAdviceGroupInfoCatalog.LoadFromBytes, ref _gameAdviceGroupInfo);
+        TryLoadNicheBridge(pamt, ReserveSlotPabgbFileName, ReserveSlotPabghFileName,
+            NativeReserveSlotInfoCatalog.LoadFromBytes, ref _reserveSlotInfo);
+        TryLoadNicheBridge(pamt, RegionInfoPabgbFileName, RegionInfoPabghFileName,
+            NativeRegionInfoCatalog.LoadFromBytes, ref _regionInfo);
+        TryLoadNicheBridge(pamt, ItemGroupInfoPabgbFileName, ItemGroupInfoPabghFileName,
+            NativeItemGroupInfoCatalog.LoadFromBytes, ref _itemGroupInfo);
+    }
+
+    /// <summary>
+    /// Generic two-file loader shared by every niche bridge — extracts
+    /// the <c>.pabgb</c> + <c>.pabgh</c> pair from the group-0008 PAMT
+    /// and hands them to the per-bridge factory. Modelled on
+    /// <see cref="TryLoadDyeBridge"/>; failures degrade silently
+    /// per-bridge (a missing file just blanks the corresponding column).
+    /// </summary>
+    private void TryLoadNicheBridge<T>(
+        string pamt, string pabgbName, string pabghName,
+        Func<ReadOnlySpan<byte>, ReadOnlySpan<byte>, T> loader,
+        ref T? slot)
+        where T : class, IDisposable
+    {
+        try
+        {
+            var pabgb = _paz.ExtractFile(pamt, ItemInfoDirectory, pabgbName);
+            var pabgh = _paz.ExtractFile(pamt, ItemInfoDirectory, pabghName);
+            slot?.Dispose();
+            slot = loader(pabgb, pabgh);
         }
         catch (CrimsonSaveException) { }
         catch (IOException) { }
@@ -1382,6 +1512,22 @@ public sealed class LocalizationProvider : IDisposable
             // already-loaded stringinfo bridge. Internal name only —
             // stringinfo doesn't ship localized titles.
             "StringInfoKey" => _stringInfo?.LookupByHash(key),
+            // 13 niche bridges — internal name only (no PALOC chain).
+            // Same convention as Store / QuestGauge / Skill: secondary
+            // language intentionally echoes the English column.
+            "HouseKey"                => _houseInfo?.LookupStringKey(key),
+            "RoyalSupplyKey"          => _royalSupplyInfo?.LookupStringKey(key),
+            "CraftToolKey"            => _craftToolInfo?.LookupStringKey(key),
+            "CraftToolGroupKey"       => _craftToolGroupInfo?.LookupStringKey(key),
+            "TriggerRegionKey"        => _triggerRegionInfo?.LookupStringKey(key),
+            "GamePlayVariableKey"     => _gamePlayVariableInfo?.LookupStringKey(key),
+            "GlobalGameEventInfoKey"  => _globalGameEventInfo?.LookupStringKey(key),
+            "GlobalGameEventGroupKey" => _globalGameEventGroupInfo?.LookupStringKey(key),
+            "GameAdviceInfoKey"       => _gameAdviceInfo?.LookupStringKey(key),
+            "GameAdviceGroupKey"      => _gameAdviceGroupInfo?.LookupStringKey(key),
+            "ReserveSlotKey"          => _reserveSlotInfo?.LookupStringKey(key),
+            "RegionKey"               => _regionInfo?.LookupStringKey(key),
+            "ItemGroupKey"            => _itemGroupInfo?.LookupStringKey(key),
             _               => null,
         };
     }
@@ -1476,6 +1622,20 @@ public sealed class LocalizationProvider : IDisposable
         _dyeSlotInfo = null;
         _storeInfo?.Dispose();
         _storeInfo = null;
+        // 13 niche bridges.
+        _houseInfo?.Dispose(); _houseInfo = null;
+        _royalSupplyInfo?.Dispose(); _royalSupplyInfo = null;
+        _craftToolInfo?.Dispose(); _craftToolInfo = null;
+        _craftToolGroupInfo?.Dispose(); _craftToolGroupInfo = null;
+        _triggerRegionInfo?.Dispose(); _triggerRegionInfo = null;
+        _gamePlayVariableInfo?.Dispose(); _gamePlayVariableInfo = null;
+        _globalGameEventInfo?.Dispose(); _globalGameEventInfo = null;
+        _globalGameEventGroupInfo?.Dispose(); _globalGameEventGroupInfo = null;
+        _gameAdviceInfo?.Dispose(); _gameAdviceInfo = null;
+        _gameAdviceGroupInfo?.Dispose(); _gameAdviceGroupInfo = null;
+        _reserveSlotInfo?.Dispose(); _reserveSlotInfo = null;
+        _regionInfo?.Dispose(); _regionInfo = null;
+        _itemGroupInfo?.Dispose(); _itemGroupInfo = null;
         foreach (var cat in _catalogs.Values)
         {
             cat.Dispose();

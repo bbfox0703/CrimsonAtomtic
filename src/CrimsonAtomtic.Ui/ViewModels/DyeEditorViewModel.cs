@@ -324,6 +324,14 @@ public sealed partial class DyeEditorViewModel : ObservableObject
         string? nameSecondary = secondaryLang is null
             ? null
             : localization.LookupItemName(itemKey, secondaryLang);
+        // Pre-format the combined "English / Secondary" display string so
+        // the AXAML Item column can bind to a single property — matches
+        // the Sockets editor's ItemName / ItemNameEnglish / ItemNameSecondary
+        // pattern (the per-language fields stay for filter-matching;
+        // ItemName drives the rendered cell).
+        var nameDisplay = string.IsNullOrEmpty(nameSecondary)
+            ? nameEn
+            : $"{nameEn} / {nameSecondary}";
         sink.Add(new DyeEditorItemRow(
             blockIndex: blockIndex,
             firstStepFieldIndex: firstStepFieldIdx,
@@ -335,7 +343,8 @@ public sealed partial class DyeEditorViewModel : ObservableObject
             bagLabel: bagLabel,
             itemKey: itemKey,
             itemNameEnglish: nameEn,
-            itemNameSecondary: nameSecondary));
+            itemNameSecondary: nameSecondary,
+            itemNameDisplay: nameDisplay));
     }
 
     /// <summary>
@@ -425,7 +434,8 @@ public sealed partial class DyeEditorItemRow : ObservableObject
         string bagLabel,
         uint itemKey,
         string itemNameEnglish,
-        string? itemNameSecondary)
+        string? itemNameSecondary,
+        string itemNameDisplay)
     {
         BlockIndex = blockIndex;
         FirstStepFieldIndex = firstStepFieldIndex;
@@ -438,6 +448,7 @@ public sealed partial class DyeEditorItemRow : ObservableObject
         ItemKey = itemKey;
         ItemNameEnglish = itemNameEnglish;
         ItemNameSecondary = itemNameSecondary;
+        ItemName = itemNameDisplay;
         ItemKeyText = itemKey.ToString(CultureInfo.InvariantCulture);
     }
 
@@ -477,6 +488,15 @@ public sealed partial class DyeEditorItemRow : ObservableObject
     public uint ItemKey { get; }
     public string ItemNameEnglish { get; }
     public string? ItemNameSecondary { get; }
+    /// <summary>
+    /// Pre-formatted "English / Secondary" display string the AXAML's
+    /// Item column binds to. Falls back to English-only when no
+    /// secondary language is configured or the secondary lookup misses.
+    /// Filter substring matching still routes through the per-language
+    /// <see cref="ItemNameEnglish"/> + <see cref="ItemNameSecondary"/>
+    /// (see <see cref="DyeEditorViewModel.ApplyFilter"/>).
+    /// </summary>
+    public string ItemName { get; }
     public string ItemKeyText { get; }
 
     /// <summary>
