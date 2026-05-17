@@ -3,7 +3,42 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-17 part 8 (AOT bug fix: UI language switch silently no-op'd because the avares:// URI matcher relied on AbsolutePath which is empty in trimmed AOT publishes).
+> Last updated: 2026-05-17 part 9 (real root-cause fix for UI language switch in AOT: Avalonia's MergedDictionaries reorder doesn't auto-raise ResourcesChanged; explicit NotifyHostedResourcesChanged required).
+>
+> ## ✅ This session — what shipped (2026-05-17 part 9)
+>
+> Real root-cause fix for the UI language switch bug. Part 8's URI matching
+> hardening helped robustness but didn't fix the symptom — the user
+> rebuilt the AOT bundle with part 8 in place and the language switch
+> still didn't repaint. Deeper investigation against Avalonia 11.3.12's
+> source surfaced the actual issue.
+>
+> | Area | Scope |
+> |---|---|
+> | **Manual ResourcesChanged notification after reorder** | Avalonia 11.3.12's `ResourceDictionary.MergedDictionaries` is an `AvaloniaList` whose `ForEachItem` callbacks only manage `AddOwner` / `RemoveOwner` on item add / remove — they do **NOT** raise `ResourcesChanged` on the parent dictionary for an in-place `RemoveAt + Add` of the SAME item instance. So the visual tree's `DynamicResource` listeners never get notified, and the UI keeps rendering the pre-swap language. (The bug exists in Debug too — it just happens not to matter at startup because `Apply` runs before any window is constructed, so `DynamicResource` resolves correctly on first paint.) The fix: after the reorder, explicitly call `IResourceHost.NotifyHostedResourcesChanged(new ResourcesChangedEventArgs())` on **both** the `Application` (covers bindings whose nearest IResourceHost ancestor is the app) AND each open top-level `Window` (covers bindings that attached to the TopLevel's resource host). Belt-and-suspenders — Avalonia 11.3.12 doesn't ship a "refresh everything" helper, and walking both sets ensures every DynamicResource binding gets re-evaluated regardless of which host it subscribed to. Wrapped in defensive try/catch so a notification glitch can't roll back the swap itself. |
+>
+> Cross-references:
+> - [Avalonia 11.3.12 ResourceDictionary.cs](https://github.com/AvaloniaUI/Avalonia/blob/release/11.3.12/src/Avalonia.Base/Controls/ResourceDictionary.cs) — `MergedDictionaries` setup, item callbacks (lines around `ForEachItem`).
+> - [IResourceHost.cs](https://github.com/AvaloniaUI/Avalonia/blob/release/11.3.12/src/Avalonia.Base/Controls/IResourceHost.cs) — `NotifyHostedResourcesChanged` is public.
+> - [Application.cs](https://github.com/AvaloniaUI/Avalonia/blob/release/11.3.12/src/Avalonia.Controls/Application.cs) — implements `IResourceHost2`; its `NotifyHostedResourcesChanged` invokes local handlers (which the bindings subscribe to via the ancestor walk).
+>
+> Tests: **281/281 pass** (no new tests — the notification path is hard to unit-test without standing up an Avalonia app; verified manually via AOT rebuild + menu pick). Debug build clean. Part-8 URI matching hardening + `LastApplyOutcome` diagnostic kept in place — defense-in-depth, useful if a different URI matching regression surfaces later.
+>
+> ### Open follow-ons noted during this session
+>
+> - **Headless Avalonia integration test for language switching**: the unit tests cover matcher logic but not the actual ResourcesChanged propagation. A `Avalonia.Headless` test harness could verify the swap end-to-end. Worth adding if a third regression surfaces.
+> - **Audit other "swap by reorder" patterns** in the codebase, if any exist. None currently surfaced but worth a grep next time.
+>
+> ### Open follow-ons carried over (no change)
+>
+> - AOT publish smoke test (from part 8).
+> - Surface LastApplyOutcome in the UI (from part 8).
+> - World-map UX layer (deferred).
+> - Safe re-attempt of "+ Add Dye" with per-prefab slot picker (from part 5).
+> - Pattern B v2 for multi-objective SA challenges (from part 1).
+> - OCT forum post URL placeholder (from part 1).
+>
+> ---
 >
 > ## ✅ This session — what shipped (2026-05-17 part 8)
 >

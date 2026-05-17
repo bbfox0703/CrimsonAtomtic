@@ -219,13 +219,73 @@ public sealed class UiLanguageService
             return;
         }
 
-        // Move-to-end. RemoveAt + Add fires the collection-changed
-        // notifications Avalonia listens on for DynamicResource refresh.
+        // Move-to-end. Note: in Avalonia 11.3.12 the AvaloniaList
+        // ForEachItem callbacks attached by ResourceDictionary's
+        // MergedDictionaries setup only manage AddOwner / RemoveOwner
+        // — they do NOT raise ResourcesChanged on the parent dictionary
+        // for a RemoveAt+Add of the SAME item instance. So the visual
+        // tree's DynamicResource listeners never get notified that
+        // their resolved values may have changed, and the UI keeps
+        // rendering the pre-swap language. We fix this by explicitly
+        // raising the event after the reorder via the public
+        // IResourceHost.NotifyHostedResourcesChanged surface.
+        //
+        // Verified upstream:
+        // https://github.com/AvaloniaUI/Avalonia/blob/release/11.3.12/src/Avalonia.Base/Controls/ResourceDictionary.cs
+        // (MergedDictionaries setup, item callbacks)
+        // https://github.com/AvaloniaUI/Avalonia/blob/release/11.3.12/src/Avalonia.Base/Controls/IResourceHost.cs
+        // (NotifyHostedResourcesChanged is public)
         merged.RemoveAt(targetIdx);
         merged.Add(target);
 
+        // Notify every visual tree that resources changed. The
+        // Application itself is an IResourceHost2 (the lookup root for
+        // App.Resources-scoped DynamicResource bindings), so firing on
+        // it covers most of the tree; we also walk open windows
+        // defensively since some bindings attach to the TopLevel's
+        // resource host rather than the Application.
+        RaiseResourcesChanged();
+
         Current = languageCode;
         LastApplyOutcome = ApplyOutcome.Swapped;
+    }
+
+    /// <summary>
+    /// Explicitly fire <see cref="IResourceHost.NotifyHostedResourcesChanged"/>
+    /// on the Application + every open top-level window. Use after
+    /// reordering <c>MergedDictionaries</c> — Avalonia 11.3.12 does not
+    /// auto-raise <c>ResourcesChanged</c> for in-place reorders, so
+    /// without this kick the visual tree's DynamicResource bindings
+    /// never re-evaluate.
+    /// </summary>
+    private void RaiseResourcesChanged()
+    {
+        // 11.3.12 hasn't exposed the static Empty surface yet — use a
+        // direct ctor (the type is a marker, no payload semantics).
+        var args = new ResourcesChangedEventArgs();
+
+        // Application-level — picks up bindings whose nearest IResourceHost
+        // ancestor is the Application itself.
+        if (_app is IResourceHost appHost)
+        {
+            try { appHost.NotifyHostedResourcesChanged(args); }
+            catch { /* defensive — never let a notification glitch kill the swap */ }
+        }
+
+        // Per-window — TopLevel listeners propagate ResourcesChanged
+        // down their visual tree, refreshing every DynamicResource
+        // binding regardless of which IResourceHost it subscribed to.
+        if (_app.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            foreach (var window in desktop.Windows)
+            {
+                if (window is IResourceHost winHost)
+                {
+                    try { winHost.NotifyHostedResourcesChanged(args); }
+                    catch { /* same defensive guard */ }
+                }
+            }
+        }
     }
 
     /// <summary>
