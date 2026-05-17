@@ -9,33 +9,14 @@ using CrimsonAtomtic.Ui.Services;
 namespace CrimsonAtomtic.Ui.ViewModels;
 
 /// <summary>
-/// VM for the master "Edit Item Dyes" dialog. Walks every
-/// <c>InventorySaveData</c> AND <c>EquipmentSaveData</c> top-level
-/// block, finds items whose <c>_itemDyeDataList</c> field is present
-/// + non-empty, and lists them with one row per dyed item. The
-/// per-row Edit button raises <see cref="EditRequested"/>; the
-/// hosting MainWindow code-behind opens the per-item slot editor
+/// VM for the master "Edit Item Dyes" dialog. Lists every item with
+/// a non-empty <c>_itemDyeDataList</c> across all five container
+/// kinds (active equip / reserve / inventory / mercenary equip /
+/// mercenary inventory) via
+/// <see cref="ISaveLoader.ListAllItems"/>. The per-row Edit button
+/// raises <see cref="EditRequested"/>; the hosting MainWindow
+/// code-behind opens the per-item slot editor
 /// (<see cref="DyeSlotEditorViewModel"/>) in response.
-///
-/// <para>
-/// <b>v1 scope</b>: edit-existing-dye only. The per-slot editor
-/// mutates RGBA / grime / palette key / color-group key on existing
-/// dye-list elements. "Add dye to undyed item" is deferred until the
-/// upstream <c>set_object_list_present</c> ABI lands (per
-/// <c>vendor/crimson-rs/docs/dye-editor-scope.md</c>).
-/// </para>
-///
-/// <para>
-/// <b>2026-05-16 part 14</b>: switched from
-/// <see cref="ISaveLoader.ListInventoryItems"/> (inventory-only) to
-/// direct block walking so equipped gear under
-/// <c>EquipmentSaveData._list[i]._item</c> shows up too. Equipped
-/// items use the same <c>ItemSaveData</c> schema as inventory items
-/// — the only difference is the descent path. <see cref="DyeEditorItemRow"/>
-/// stores the two descent steps as "first-step / second-step" pairs
-/// that the path-addressed scalar setter consumes uniformly across
-/// both sources.
-/// </para>
 ///
 /// <para>
 /// One snapshot read at open + on Refresh. Edits made via the per-
@@ -56,38 +37,24 @@ public sealed partial class DyeEditorViewModel : ObservableObject
     /// </summary>
     public const string DyeListFieldName = "_itemDyeDataList";
 
-    /// <summary>Top-level block class names this editor walks.</summary>
-    private const string InventorySaveDataClass = "InventorySaveData";
-    private const string EquipmentSaveDataClass = "EquipmentSaveData";
-
-    /// <summary>Field names along the descent path.</summary>
-    private const string InventoryListFieldName = "_inventorylist";
-    private const string ItemListFieldName = "_itemList";
-    private const string EquipListFieldName = "_list";
-    private const string EquipItemLocatorFieldName = "_item";
     private const string ItemKeyFieldName = "_itemKey";
-    private const string InventoryKeyFieldName = "_inventoryKey";
 
     private readonly ISaveLoader _loader;
     private readonly LocalizationProvider _localization;
     private readonly string _savePath;
-    private readonly IReadOnlyList<BlockSummary> _blocks;
     private List<DyeEditorItemRow> _allRows = new();
 
     public DyeEditorViewModel(
         ISaveLoader loader,
         LocalizationProvider localization,
-        string savePath,
-        IReadOnlyList<BlockSummary> blocks)
+        string savePath)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(localization);
         ArgumentException.ThrowIfNullOrEmpty(savePath);
-        ArgumentNullException.ThrowIfNull(blocks);
         _loader = loader;
         _localization = localization;
         _savePath = savePath;
-        _blocks = blocks;
         SecondaryLanguage = localization.SecondaryLanguage;
         // The scan walks every inventory + equipment block and can run
         // ~1-2 seconds on a large save. Deliberately don't kick it off
@@ -160,6 +127,16 @@ public sealed partial class DyeEditorViewModel : ObservableObject
     public void RequestEdit(DyeEditorItemRow row) => EditRequested?.Invoke(row);
 
     /// <summary>
+    /// Raised when the user clicks a row's "+ Add" button on an
+    /// un-dyed but dye-eligible item. The hosting MainWindow handles
+    /// the confirm dialog + <see cref="ISaveLoader.SetObjectListPresent"/>
+    /// call + refresh.
+    /// </summary>
+    public event Action<DyeEditorItemRow>? AddDyeRequested;
+
+    public void RequestAddDye(DyeEditorItemRow row) => AddDyeRequested?.Invoke(row);
+
+    /// <summary>
     /// Called by the host after a child editor applied at least one
     /// edit, so the master VM can mark itself dirty. (The child VM
     /// owns the actual writes.)
@@ -181,7 +158,7 @@ public sealed partial class DyeEditorViewModel : ObservableObject
         try
         {
             var rows = await Task.Run(() =>
-                ScanForDyedItems(_loader, _localization, _savePath, _blocks));
+                ScanForDyedItems(_loader, _localization, _savePath));
             _allRows = rows;
             ApplyFilter();
         }
@@ -192,155 +169,128 @@ public sealed partial class DyeEditorViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Scan every relevant top-level block for items with non-empty
-    /// dye lists. Two block-type branches share one CollectFromItem
-    /// helper — same uniform "first-step + second-step" descent
-    /// semantics the Sockets editor uses.
+    /// Scan the save for dye-relevant items via the single-FFI
+    /// <see cref="ISaveLoader.ListAllItems"/> enumerator. Surfaces:
+    /// <list type="bullet">
+    ///   <item><b>Dyed items</b> (<see cref="ItemRecordFlags.HasDyeData"/>
+    ///     set, all container kinds) — row carries Edit action.</item>
+    ///   <item><b>Un-dyed equipped items</b>
+    ///     (<see cref="ContainerKind.ActiveEquip"/> /
+    ///     <see cref="ContainerKind.ActiveUseReserve"/> /
+    ///     <see cref="ContainerKind.MercenaryEquip"/>) whose
+    ///     <c>_itemDyeDataList</c> field exists in schema but is
+    ///     absent — row carries "+ Add" action that materializes a
+    ///     default empty dye via
+    ///     <see cref="ISaveLoader.SetObjectListPresent"/>.</item>
+    /// </list>
+    /// Inventory bags' un-dyed items are intentionally skipped —
+    /// players dye worn gear, not stockpiled materials, and including
+    /// the full inventory would flood the list with hundreds of
+    /// non-dyeable consumables.
     /// </summary>
     /// <remarks>
-    /// 2026-05-17: filter by ClassName BEFORE calling
-    /// <see cref="ISaveLoader.LoadBlockDetails"/>. The pre-fix walk
-    /// did the FFI load for every block in the save (~1000+ blocks
-    /// → ~1000 FFI roundtrips), then dropped the result on the
-    /// branch check. Filtering first cuts the load to ≤20 blocks
-    /// (InventorySaveData × N + 1 EquipmentSaveData) — typically
-    /// 10-20× speedup before the Task.Run wrapper even helps.
+    /// IS_PLAYER_OWNED widening (mounts whose <c>_ownedCharacterKey</c>
+    /// is absent — slot103 Tiuta_kliff + Stefano) goes through
+    /// <see cref="LocalizationProvider.IsPlayerEditableItem"/>; NPC
+    /// followers get filtered out by the strict flag.
     /// </remarks>
     private static List<DyeEditorItemRow> ScanForDyedItems(
         ISaveLoader loader,
         LocalizationProvider localization,
-        string savePath,
-        IReadOnlyList<BlockSummary> blocks)
+        string savePath)
     {
         var results = new List<DyeEditorItemRow>();
-        foreach (var b in blocks)
+        var detailsCache = new Dictionary<uint, BlockDetails>();
+        foreach (var rec in loader.ListAllItems(out _))
         {
-            bool isInventory = string.Equals(
-                b.ClassName, InventorySaveDataClass, StringComparison.Ordinal);
-            bool isEquipment = string.Equals(
-                b.ClassName, EquipmentSaveDataClass, StringComparison.Ordinal);
-            if (!isInventory && !isEquipment)
+            if (!localization.IsPlayerEditableItem(rec)) continue;
+            var includeUndyed = !rec.HasDyeData && IsEquippedKind(rec.Container);
+            if (!rec.HasDyeData && !includeUndyed) continue;
+            if (!detailsCache.TryGetValue(rec.BlockIndex, out var top))
             {
-                continue;
+                try
+                {
+                    top = loader.LoadBlockDetails(savePath, (int)rec.BlockIndex);
+                }
+                catch (CrimsonSaveException)
+                {
+                    continue;
+                }
+                detailsCache[rec.BlockIndex] = top;
             }
-            BlockDetails details;
-            try
-            {
-                details = loader.LoadBlockDetails(savePath, b.Index);
-            }
-            catch (CrimsonSaveException)
-            {
-                continue;
-            }
-            if (isInventory)
-            {
-                CollectFromInventory(results, localization, b.Index, details);
-            }
-            else
-            {
-                CollectFromEquipment(results, localization, b.Index, details);
-            }
-            if (results.Count >= MaxResults)
-            {
-                break;
-            }
+            var item = DescendToItem(top, rec);
+            if (item is null) continue;
+            TryAddRow(
+                results, localization, (int)rec.BlockIndex,
+                firstStepFieldIdx: rec.PathStep0Field,
+                firstStepElementIdx: rec.PathStep0Element,
+                secondStepFieldIdx: rec.PathStep1Field,
+                secondStepElementIdx: rec.PathStep1Element,
+                bagLabel: localization.FormatItemSourceLabel(rec),
+                item: item);
+            if (results.Count >= MaxResults) break;
         }
-        // Sort by source label then by item name — predictable ordering.
+        // Sort: dyed rows first (most actionable), then un-dyed; within
+        // each group by source label then item name.
         results.Sort((a, b) =>
         {
-            var c = string.CompareOrdinal(a.BagLabel, b.BagLabel);
-            return c != 0 ? c : string.CompareOrdinal(a.ItemNameEnglish, b.ItemNameEnglish);
+            var byKind = a.CanAddDye.CompareTo(b.CanAddDye); // false (dyed) before true (add)
+            if (byKind != 0) return byKind;
+            var byBag = string.CompareOrdinal(a.BagLabel, b.BagLabel);
+            return byBag != 0 ? byBag : string.CompareOrdinal(a.ItemNameEnglish, b.ItemNameEnglish);
         });
         return results;
     }
 
-    private static void CollectFromInventory(
-        List<DyeEditorItemRow> sink,
-        LocalizationProvider localization,
-        int blockIndex,
-        BlockDetails top)
+    private static bool IsEquippedKind(ContainerKind kind) => kind switch
     {
-        for (var f = 0; f < top.Fields.Count; f++)
+        ContainerKind.ActiveEquip => true,
+        ContainerKind.ActiveUseReserve => true,
+        ContainerKind.MercenaryEquip => true,
+        _ => false,
+    };
+
+    /// <summary>
+    /// Descend a 2-step path from <paramref name="top"/> to the inner
+    /// <c>ItemSaveData</c> the record points at. Step 0 is always
+    /// <c>ObjectList</c> (bag list / mercenary list / equip list);
+    /// step 1 is <c>ObjectList</c> (item list) for inventory /
+    /// mercenary kinds and <c>ObjectLocator</c> (locator → child) for
+    /// active equip / reserve kinds. Returns null if either step
+    /// can't navigate (shouldn't happen if the record came from
+    /// <see cref="ISaveLoader.ListAllItems"/>, but defensive against
+    /// snapshot staleness).
+    /// </summary>
+    private static BlockDetails? DescendToItem(BlockDetails top, ItemRecord rec)
+    {
+        if (rec.PathLen != 2) return null;
+        var step0Field = top.Fields.FirstOrDefault(
+            f => f.FieldIndex == rec.PathStep0Field);
+        if (step0Field?.Elements is not { } step0Elements
+            || rec.PathStep0Element >= step0Elements.Count)
         {
-            var invList = top.Fields[f];
-            if (!string.Equals(invList.Name, InventoryListFieldName, StringComparison.Ordinal)
-                || invList.Elements is not { Count: > 0 } bags)
-            {
-                continue;
-            }
-            for (var bagIdx = 0; bagIdx < bags.Count; bagIdx++)
-            {
-                var bag = bags[bagIdx];
-                // Resolve a friendly bag label from the bag's _inventoryKey
-                // scalar so the row shows e.g. "Pocket" / "Equipment" /
-                // "Bag N". Mirrors the Sockets editor's FormatBagLabel.
-                var bagLabel = ResolveBagLabel(localization, bag, bagIdx);
-                for (var g = 0; g < bag.Fields.Count; g++)
-                {
-                    var itemListField = bag.Fields[g];
-                    if (!string.Equals(itemListField.Name, ItemListFieldName, StringComparison.Ordinal)
-                        || itemListField.Elements is not { Count: > 0 } items)
-                    {
-                        continue;
-                    }
-                    for (var itemIdx = 0; itemIdx < items.Count; itemIdx++)
-                    {
-                        if (sink.Count >= MaxResults) return;
-                        TryAddIfDyed(
-                            sink, localization, blockIndex,
-                            firstStepFieldIdx: (uint)f,
-                            firstStepElementIdx: (uint)bagIdx,
-                            secondStepFieldIdx: (uint)g,
-                            secondStepElementIdx: (uint)itemIdx,
-                            bagLabel: bagLabel,
-                            item: items[itemIdx]);
-                    }
-                }
-            }
+            return null;
         }
+        var step1Host = step0Elements[(int)rec.PathStep0Element];
+        var step1Field = step1Host.Fields.FirstOrDefault(
+            f => f.FieldIndex == rec.PathStep1Field);
+        if (step1Field is null) return null;
+        // Active equip / reserve use a locator descent (element_idx ignored);
+        // inventory / mercenary use an object-list descent.
+        if (step1Field.Child is { } locatorChild
+            && step1Field.Elements is not { Count: > 0 })
+        {
+            return locatorChild;
+        }
+        if (step1Field.Elements is { } step1Elements
+            && rec.PathStep1Element < step1Elements.Count)
+        {
+            return step1Elements[(int)rec.PathStep1Element];
+        }
+        return null;
     }
 
-    private static void CollectFromEquipment(
-        List<DyeEditorItemRow> sink,
-        LocalizationProvider localization,
-        int blockIndex,
-        BlockDetails top)
-    {
-        for (var f = 0; f < top.Fields.Count; f++)
-        {
-            var listField = top.Fields[f];
-            if (!string.Equals(listField.Name, EquipListFieldName, StringComparison.Ordinal)
-                || listField.Elements is not { Count: > 0 } slots)
-            {
-                continue;
-            }
-            for (var slotIdx = 0; slotIdx < slots.Count; slotIdx++)
-            {
-                var slot = slots[slotIdx];
-                for (var g = 0; g < slot.Fields.Count; g++)
-                {
-                    var itemLocator = slot.Fields[g];
-                    if (!string.Equals(itemLocator.Name, EquipItemLocatorFieldName, StringComparison.Ordinal)
-                        || !itemLocator.Present
-                        || itemLocator.Child is not { } itemChild)
-                    {
-                        continue;
-                    }
-                    if (sink.Count >= MaxResults) return;
-                    TryAddIfDyed(
-                        sink, localization, blockIndex,
-                        firstStepFieldIdx: (uint)f,
-                        firstStepElementIdx: (uint)slotIdx,
-                        secondStepFieldIdx: (uint)g,
-                        secondStepElementIdx: 0u,    // locator descent ignores element_idx
-                        bagLabel: "Equipped",
-                        item: itemChild);
-                }
-            }
-        }
-    }
-
-    private static void TryAddIfDyed(
+    private static void TryAddRow(
         List<DyeEditorItemRow> sink,
         LocalizationProvider localization,
         int blockIndex,
@@ -367,12 +317,15 @@ public sealed partial class DyeEditorViewModel : ObservableObject
                 dyeListField = f;
             }
         }
-        if (dyeListField is null
-            || !dyeListField.Present
-            || dyeListField.Elements is not { Count: > 0 } dyeSlots)
+        if (dyeListField is null)
         {
+            // Item's schema lacks the dye field entirely (some non-equipment
+            // ItemSaveData variants) — can't add dye even via the toggle ABI.
             return;
         }
+        var isDyed = dyeListField.Present
+            && dyeListField.Elements is { Count: > 0 };
+        var dyeSlots = isDyed ? dyeListField.Elements! : null;
         var nameEn = localization.LookupItemName(itemKey, LocalizationProvider.DefaultLanguage)
                      ?? localization.ItemInfoStringKey(itemKey)
                      ?? itemKey.ToString(CultureInfo.InvariantCulture);
@@ -395,39 +348,13 @@ public sealed partial class DyeEditorViewModel : ObservableObject
             secondStepFieldIndex: secondStepFieldIdx,
             secondStepElementIndex: secondStepElementIdx,
             dyeListFieldIndex: (uint)dyeListField.FieldIndex,
-            dyeSlotCount: dyeSlots.Count,
+            dyeSlotCount: dyeSlots?.Count ?? 0,
             bagLabel: bagLabel,
             itemKey: itemKey,
             itemNameEnglish: nameEn,
             itemNameSecondary: nameSecondary,
-            itemNameDisplay: nameDisplay));
-    }
-
-    /// <summary>
-    /// Find the bag's <c>_inventoryKey</c> scalar (when present) and
-    /// route it through PALOC's InventoryKey table for a friendly
-    /// label ("Pocket", "Equipment", etc.). Falls back to "Bag N"
-    /// when the key isn't in the table.
-    /// </summary>
-    private static string ResolveBagLabel(
-        LocalizationProvider localization, BlockDetails bag, int bagIdx)
-    {
-        foreach (var f in bag.Fields)
-        {
-            if (string.Equals(f.Name, InventoryKeyFieldName, StringComparison.Ordinal)
-                && f.Present
-                && TryParseScalarUInt(f.Value, out var ik)
-                && ik <= uint.MaxValue)
-            {
-                var label = localization.ResolveByFieldTypeName("InventoryKey", (uint)ik);
-                if (!string.IsNullOrEmpty(label))
-                {
-                    return label;
-                }
-                return $"InventoryKey {(uint)ik}";
-            }
-        }
-        return $"Bag {bagIdx}";
+            itemNameDisplay: nameDisplay,
+            canAddDye: !isDyed));
     }
 
     private static bool TryParseScalarUInt(string formatted, out ulong value)
@@ -491,7 +418,8 @@ public sealed partial class DyeEditorItemRow : ObservableObject
         uint itemKey,
         string itemNameEnglish,
         string? itemNameSecondary,
-        string itemNameDisplay)
+        string itemNameDisplay,
+        bool canAddDye)
     {
         BlockIndex = blockIndex;
         FirstStepFieldIndex = firstStepFieldIndex;
@@ -506,6 +434,7 @@ public sealed partial class DyeEditorItemRow : ObservableObject
         ItemNameSecondary = itemNameSecondary;
         ItemName = itemNameDisplay;
         ItemKeyText = itemKey.ToString(CultureInfo.InvariantCulture);
+        CanAddDye = canAddDye;
     }
 
     /// <summary>Top-level block index (InventorySaveData or EquipmentSaveData).</summary>
@@ -554,6 +483,19 @@ public sealed partial class DyeEditorItemRow : ObservableObject
     /// </summary>
     public string ItemName { get; }
     public string ItemKeyText { get; }
+
+    /// <summary>
+    /// True when this row represents an un-dyed but dye-eligible item.
+    /// Drives the AXAML to render an "Add" button instead of the
+    /// "Edit" button. The Add action calls
+    /// <see cref="ISaveLoader.SetObjectListPresent"/> to materialize
+    /// a default empty dye element; the master VM then re-scans so
+    /// the row flips to <c>CanAddDye=false</c> + slot count 1.
+    /// </summary>
+    public bool CanAddDye { get; }
+
+    /// <summary>True when this row carries an editable dye list (Edit button).</summary>
+    public bool CanEditDye => !CanAddDye && DyeSlotCount > 0;
 
     /// <summary>
     /// Build the descent path that addresses this item's

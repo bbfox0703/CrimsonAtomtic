@@ -8,11 +8,11 @@ using CrimsonAtomtic.Ui.Services;
 namespace CrimsonAtomtic.Ui.ViewModels;
 
 /// <summary>
-/// View-model for the Tools → Edit Item Sockets dialog. Walks every
-/// <see cref="InventorySaveDataClass"/> block in the loaded save,
-/// drills down through bags → items → socket lists, and surfaces one
-/// row per socket slot (both <b>empty</b> and <b>filled</b>) for items
-/// whose <c>_socketSaveDataList</c> is non-empty.
+/// View-model for the Tools → Edit Item Sockets dialog. Surfaces
+/// every socket-capable item across all five container kinds (active
+/// equip / reserve / inventory / mercenary equip / mercenary
+/// inventory) via <see cref="ISaveLoader.ListAllItems"/>, one row
+/// per socket slot (both <b>empty</b> and <b>filled</b>).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -50,34 +50,6 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 /// </remarks>
 public sealed partial class SocketEditorViewModel : ObservableObject
 {
-    /// <summary>Class name of every top-level inventory block.</summary>
-    private const string InventorySaveDataClass = "InventorySaveData";
-    /// <summary>
-    /// Class name of the top-level block carrying the player's
-    /// equipped-gear slots. One per save. Each
-    /// <c>_list[i]._item</c> is a full <see cref="ItemSaveData"/>
-    /// child (object_locator) with the same socket/dye schema as
-    /// inventory items — so we walk it here in parallel with
-    /// <see cref="InventorySaveDataClass"/> rather than asking
-    /// crimson-rs for a unified flat enumerator.
-    /// </summary>
-    private const string EquipmentSaveDataClass = "EquipmentSaveData";
-
-    private const string InventoryListFieldName = "_inventorylist";
-    private const string ItemListFieldName = "_itemList";
-    /// <summary>
-    /// Object-list field on <see cref="EquipmentSaveDataClass"/>
-    /// holding 18 <c>EquipSlotElementSaveData</c> rows in the 1.07
-    /// schema, each carrying an <c>_item</c> locator child.
-    /// </summary>
-    private const string EquipListFieldName = "_list";
-    /// <summary>
-    /// Object-locator field on each <c>EquipSlotElementSaveData</c>
-    /// that wraps the equipped <c>ItemSaveData</c> child. Descent
-    /// step uses <c>element_idx=0</c> per the path-ABI contract
-    /// (ignored for locator descent).
-    /// </summary>
-    private const string EquipItemLocatorFieldName = "_item";
     private const string SocketListFieldName = "_socketSaveDataList";
     private const string ItemKeyFieldName = "_itemKey";
 
@@ -298,36 +270,15 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         LocalizationProvider localization,
         ChangeJournal journal,
         string savePath,
-        IReadOnlyList<BlockSummary> blocks,
         IReadOnlyList<CustomGemSet>? customSets = null)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(localization);
         ArgumentNullException.ThrowIfNull(journal);
         ArgumentException.ThrowIfNullOrEmpty(savePath);
-        ArgumentNullException.ThrowIfNull(blocks);
 
         var vm = new SocketEditorViewModel(loader, localization, journal, savePath);
-        foreach (var b in blocks)
-        {
-            BlockDetails top;
-            try
-            {
-                top = loader.LoadBlockDetails(savePath, b.Index);
-            }
-            catch (CrimsonSaveException)
-            {
-                continue;
-            }
-            if (string.Equals(b.ClassName, InventorySaveDataClass, StringComparison.Ordinal))
-            {
-                vm.CollectFromInventory(top, b.Index);
-            }
-            else if (string.Equals(b.ClassName, EquipmentSaveDataClass, StringComparison.Ordinal))
-            {
-                vm.CollectFromEquipment(top, b.Index);
-            }
-        }
+        vm.CollectViaAllItems();
         if (vm.Sockets.Count == 0)
         {
             return null;
@@ -512,86 +463,83 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         return seen.Count;
     }
 
-    private void CollectFromInventory(BlockDetails top, int blockIndex)
+    /// <summary>
+    /// Collect socket rows via the single-FFI
+    /// <see cref="ISaveLoader.ListAllItems"/> enumerator — covers all
+    /// five container kinds (active equip / reserve / inventory /
+    /// mercenary equip / mercenary inventory) in one walk. Filters by
+    /// <see cref="ItemRecordFlags.HasSocketData"/> (skip items with no
+    /// socket list) and
+    /// <see cref="LocalizationProvider.IsPlayerEditableItem"/> (drop
+    /// NPC followers' gear; widen for player-controlled mounts whose
+    /// <c>_ownedCharacterKey</c> is absent).
+    /// </summary>
+    private void CollectViaAllItems()
     {
-        for (var f = 0; f < top.Fields.Count; f++)
+        var detailsCache = new Dictionary<uint, BlockDetails>();
+        foreach (var rec in _loader.ListAllItems(out _))
         {
-            var invList = top.Fields[f];
-            if (!string.Equals(invList.Name, InventoryListFieldName, StringComparison.Ordinal)
-                || invList.Elements is not { Count: > 0 } bags)
+            if (!rec.HasSocketData) continue;
+            if (!_localization.IsPlayerEditableItem(rec)) continue;
+            if (!detailsCache.TryGetValue(rec.BlockIndex, out var top))
             {
-                continue;
-            }
-            for (var bagIdx = 0; bagIdx < bags.Count; bagIdx++)
-            {
-                var bag = bags[bagIdx];
-                for (var g = 0; g < bag.Fields.Count; g++)
+                try
                 {
-                    var itemListField = bag.Fields[g];
-                    if (!string.Equals(itemListField.Name, ItemListFieldName, StringComparison.Ordinal)
-                        || itemListField.Elements is not { Count: > 0 } items)
-                    {
-                        continue;
-                    }
-                    for (var itemIdx = 0; itemIdx < items.Count; itemIdx++)
-                    {
-                        CollectFromItem(
-                            blockIndex,
-                            firstStepFieldIdx: f,
-                            firstStepElementIdx: bagIdx,
-                            secondStepFieldIdx: g,
-                            secondStepElementIdx: itemIdx,
-                            item: items[itemIdx],
-                            bagLabel: FormatBagLabel(_localization, bagIdx));
-                    }
+                    top = _loader.LoadBlockDetails(_savePath, (int)rec.BlockIndex);
                 }
+                catch (CrimsonSaveException)
+                {
+                    continue;
+                }
+                detailsCache[rec.BlockIndex] = top;
             }
+            var item = DescendToItem(top, rec);
+            if (item is null) continue;
+            CollectFromItem(
+                blockIndex: (int)rec.BlockIndex,
+                firstStepFieldIdx: (int)rec.PathStep0Field,
+                firstStepElementIdx: (int)rec.PathStep0Element,
+                secondStepFieldIdx: (int)rec.PathStep1Field,
+                secondStepElementIdx: (int)rec.PathStep1Element,
+                item: item,
+                bagLabel: _localization.FormatItemSourceLabel(rec));
         }
     }
 
     /// <summary>
-    /// Collect socket rows from an <c>EquipmentSaveData</c> block.
-    /// Layout: <c>EquipmentSaveData._list[i]._item</c> is an
-    /// object_locator pointing at a full <c>ItemSaveData</c> child
-    /// with the same socket schema as inventory items. Path to the
-    /// item: <c>[(_list, slotIdx), (_item, 0)]</c> — same 2-step
-    /// shape as the inventory path, so the reinterpreted indices
-    /// (firstStep* = list+slot, secondStep* = locator+0) feed the
-    /// existing path-construction code unchanged.
+    /// Descend an <see cref="ItemRecord"/>'s 2-step path from the
+    /// top-level block down to the inner <c>ItemSaveData</c>. Step 0
+    /// is always <c>ObjectList</c>; step 1 is <c>ObjectList</c> for
+    /// inventory / mercenary kinds and <c>ObjectLocator</c> for
+    /// active equip / reserve. Returns null on snapshot staleness
+    /// (defensive — shouldn't happen on a fresh
+    /// <see cref="ISaveLoader.ListAllItems"/> read).
     /// </summary>
-    private void CollectFromEquipment(BlockDetails top, int blockIndex)
+    private static BlockDetails? DescendToItem(BlockDetails top, ItemRecord rec)
     {
-        for (var f = 0; f < top.Fields.Count; f++)
+        if (rec.PathLen != 2) return null;
+        var step0Field = top.Fields.FirstOrDefault(
+            f => f.FieldIndex == rec.PathStep0Field);
+        if (step0Field?.Elements is not { } step0Elements
+            || rec.PathStep0Element >= step0Elements.Count)
         {
-            var listField = top.Fields[f];
-            if (!string.Equals(listField.Name, EquipListFieldName, StringComparison.Ordinal)
-                || listField.Elements is not { Count: > 0 } slots)
-            {
-                continue;
-            }
-            for (var slotIdx = 0; slotIdx < slots.Count; slotIdx++)
-            {
-                var slot = slots[slotIdx];
-                for (var g = 0; g < slot.Fields.Count; g++)
-                {
-                    var itemLocator = slot.Fields[g];
-                    if (!string.Equals(itemLocator.Name, EquipItemLocatorFieldName, StringComparison.Ordinal)
-                        || !itemLocator.Present
-                        || itemLocator.Child is not { } itemChild)
-                    {
-                        continue;
-                    }
-                    CollectFromItem(
-                        blockIndex,
-                        firstStepFieldIdx: f,
-                        firstStepElementIdx: slotIdx,
-                        secondStepFieldIdx: g,
-                        secondStepElementIdx: 0,    // locator descent ignores element_idx
-                        item: itemChild,
-                        bagLabel: "Equipped");
-                }
-            }
+            return null;
         }
+        var step1Host = step0Elements[(int)rec.PathStep0Element];
+        var step1Field = step1Host.Fields.FirstOrDefault(
+            f => f.FieldIndex == rec.PathStep1Field);
+        if (step1Field is null) return null;
+        if (step1Field.Child is { } locatorChild
+            && step1Field.Elements is not { Count: > 0 })
+        {
+            return locatorChild;
+        }
+        if (step1Field.Elements is { } step1Elements
+            && rec.PathStep1Element < step1Elements.Count)
+        {
+            return step1Elements[(int)rec.PathStep1Element];
+        }
+        return null;
     }
 
     private void CollectFromItem(
@@ -957,18 +905,6 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     /// </summary>
     private static string FormatCombinedName(string english, string? secondary) =>
         string.IsNullOrEmpty(secondary) ? english : $"{english} / {secondary}";
-
-    /// <summary>
-    /// Format a bag's position-in-inventorylist as a UI label. Uses the
-    /// <see cref="LocalizationProvider.ResolveByFieldTypeName"/> "InventoryKey"
-    /// table for friendly names where available; falls back to
-    /// <c>"Bag N"</c> otherwise.
-    /// </summary>
-    private static string FormatBagLabel(LocalizationProvider localization, int bagIndex)
-    {
-        var label = localization.ResolveByFieldTypeName("InventoryKey", (uint)bagIndex);
-        return string.IsNullOrEmpty(label) ? $"Bag {bagIndex}" : label;
-    }
 
     /// <summary>
     /// Pre-formatted scalar value (<c>"123 &lt;u32&gt;"</c>) →

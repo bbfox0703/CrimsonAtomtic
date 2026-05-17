@@ -128,7 +128,7 @@
 
   <!-- Dye editor master dialog -->
   <sys:String x:Key="DyeEditorWindowTitle">編輯物品染色</sys:String>
-  <sys:String x:Key="DyeEditorHeader">逐物品編輯染色。列出所有 _itemDyeDataList 存在且非空的物品。點 Edit 可修改各孔位的 R/G/B/A + 髒污 + 材質 + 色彩群組。v1 範圍：僅編輯既有染色 — 為未染色物品新增染色需等上游 set_object_list_present ABI 完成。</sys:String>
+  <sys:String x:Key="DyeEditorHeader">逐物品編輯染色。列出 _itemDyeDataList 存在的物品 (Edit)，以及已裝備但尚未染色但支援染色的物品 (+ Add)。Edit 可修改各孔位的 R/G/B/A + 髒污 + 材質 + 色彩群組；+ Add 會新增一個預設空白染色元素，之後再用 Edit 上色。</sys:String>
   <sys:String x:Key="DyeEditorSearchPlaceholder">依物品名稱、背包或 ItemKey 篩選…</sys:String>
   <sys:String x:Key="DyeEditorColIcon">圖示</sys:String>
   <sys:String x:Key="DyeEditorColBag">背包</sys:String>
@@ -138,6 +138,13 @@
   <sys:String x:Key="DyeEditorColAction">動作</sys:String>
   <sys:String x:Key="DyeEditorEdit">編輯…</sys:String>
   <sys:String x:Key="DyeEditorEditTip">為此物品的染色清單開啟逐孔編輯器。對話框在套用後不會關閉，方便連續編輯多個槽位。</sys:String>
+  <sys:String x:Key="DyeEditorAdd">+ 新增</sys:String>
+  <sys:String x:Key="DyeEditorAddTip">為此物品新增一個預設空白染色元素。完成後點 Edit 上色。</sys:String>
+  <sys:String x:Key="DyeEditorAddConfirmTitle">為此物品新增染色？</sys:String>
+  <sys:String x:Key="DyeEditorAddConfirmBody">將在此物品的 _itemDyeDataList 加入一個預設空白染色元素。之後可點 Edit 設定顏色 / 材質 / 色彩群組。</sys:String>
+  <sys:String x:Key="DyeEditorAddNoTemplateTitle">此存檔無染色模板</sys:String>
+  <sys:String x:Key="DyeEditorAddNoTemplateBody">此 toggle ABI 需要存檔中至少有一個已染色的物品作為元素 schema 的範本。請先在遊戲中染色任一件衣服 / 防具，存檔後重新載入再試。</sys:String>
+  <sys:String x:Key="DyeEditorAddFailedTitle">無法新增染色</sys:String>
   <sys:String x:Key="DyeEditorClose">關閉</sys:String>
   <sys:String x:Key="DyeEditorNotAvailableTitle">此存檔沒有已染色物品</sys:String>
   <sys:String x:Key="DyeEditorNotAvailableBody">沒有任何物品攜帶至少一格的 _itemDyeDataList。可能是玩家還沒染色過任何東西，或是此存檔 schema 把 _itemDyeDataList 放在不同的欄位名底下 (請重跑 vendor/crimson-rs/_probe_item_dye_data 確認)。</sys:String>
