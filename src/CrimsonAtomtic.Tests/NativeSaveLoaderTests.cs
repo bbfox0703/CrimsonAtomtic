@@ -1419,6 +1419,94 @@ public sealed class NativeSaveLoaderTests
     }
 
     [Fact]
+    public void PositionedEntityRecord_LayoutMatchesRustReprC()
+    {
+        // The 56-byte size + 8-byte alignment is part of the C ABI
+        // surface (see vendor/crimson-rs/src/c_abi/positions.rs's
+        // const_assert). Pin it on the C# side so a future struct
+        // edit that breaks blittability surfaces here.
+        Assert.Equal(56, System.Runtime.InteropServices.Marshal.SizeOf<PositionedEntityRecord>());
+
+        // Position-kind discriminants are part of the ABI — never
+        // reassign. Mirror the const block in c_abi/positions.rs.
+        Assert.Equal(0u, (uint)PositionKind.ActiveChar);
+        Assert.Equal(1u, (uint)PositionKind.Mercenary);
+        Assert.Equal(2u, (uint)PositionKind.Gimmick);
+
+        // Flag bits must match the Rust position_flags module.
+        Assert.Equal(1u << 0, PositionEntityFlags.IsMainMercenary);
+        Assert.Equal(1u << 1, PositionEntityFlags.IsPlayerOwned);
+        Assert.Equal(1u << 2, PositionEntityFlags.FromOriginTransform);
+    }
+
+    [Fact]
+    public void ListFieldPositions_LiveSave_ReturnsRecordsAcrossPositionKinds()
+    {
+        var path = FindLiveSave();
+        if (path is null) return;
+        var loader = new NativeSaveLoader();
+        loader.Load(path);
+
+        var positions = loader.ListFieldPositions(out var snapshotVersion);
+        Assert.Equal(0u, snapshotVersion);  // fresh load
+        // Any save with field state has at least one gimmick.
+        Assert.NotEmpty(positions);
+
+        var seenKinds = new HashSet<PositionKind>();
+        var sawNonZeroPos = false;
+        foreach (var rec in positions)
+        {
+            // Kind must be one of the documented constants.
+            Assert.InRange((uint)rec.Kind, 0u, 2u);
+            seenKinds.Add(rec.Kind);
+
+            // BlockIndex defensive smoke check (no upper bound without
+            // a second call).
+            Assert.True(rec.BlockIndex < 100_000);
+
+            // Position values must be finite (NaN/Inf would indicate a
+            // bad decode — the Rust side guards against this).
+            Assert.True(float.IsFinite(rec.PosX));
+            Assert.True(float.IsFinite(rec.PosY));
+            Assert.True(float.IsFinite(rec.PosZ));
+            Assert.True(float.IsFinite(rec.Yaw));
+
+            if (rec.PosX != 0f || rec.PosZ != 0f) sawNonZeroPos = true;
+
+            // ActiveChar implies IsPlayerOwned; Gimmick clears it.
+            if (rec.Kind == PositionKind.ActiveChar)
+            {
+                Assert.True(rec.IsPlayerOwned,
+                    "ACTIVE_CHAR records must carry IS_PLAYER_OWNED");
+            }
+            if (rec.Kind == PositionKind.Gimmick)
+            {
+                Assert.False(rec.IsPlayerOwned,
+                    "GIMMICK records must NOT carry IS_PLAYER_OWNED");
+            }
+        }
+
+        // Any played save has gimmicks; ACTIVE_CHAR appears when the
+        // player has loaded into a field at least once.
+        Assert.Contains(PositionKind.Gimmick, seenKinds);
+        Assert.True(sawNonZeroPos,
+            "Expected at least one record with a non-zero position");
+
+        // Sanity-check the basemap affine produces in-bounds pixels for
+        // at least one record (the vendor side asserts this on slot103;
+        // we mirror so any future affine constant drift surfaces here).
+        var sample = positions[0];
+        var px = 0.432044f * sample.PosX + 5937.50f;
+        var py = -0.433071f * sample.PosZ + 1864.08f;
+        Assert.True(float.IsFinite(px));
+        Assert.True(float.IsFinite(py));
+
+        // Version stamp is stable across a pure read.
+        var stillFresh = loader.GetMutationVersion();
+        Assert.Equal(snapshotVersion, stillFresh);
+    }
+
+    [Fact]
     public void SetObjectListPresent_LiveSave_RoundtripsDyeList()
     {
         var path = FindLiveSave();

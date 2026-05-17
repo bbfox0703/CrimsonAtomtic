@@ -3,7 +3,42 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-17 part 5 (rolled back "+ Add Dye" UX — slot-number specification is unsafe without per-prefab valid-slot lookup; SetObjectListPresent ABI binding kept).
+> Last updated: 2026-05-17 part 6 (positioned-entity enumerator binding — crimson-rs cd02b28 lights up world-map plotting; UX deferred).
+>
+> ## ✅ This session — what shipped (2026-05-17 part 6)
+>
+> One commit consuming the new `crimson_save_list_field_positions` C
+> ABI from vendor `cd02b28`. Vendor refreshed `fe566a4` → `cd02b28`
+> (1 upstream commit). Foundational binding only — no UX surface
+> shipped this iteration.
+>
+> | Area | Scope |
+> |---|---|
+> | **Positioned-entity enumerator binding** | New `crimson_save_list_field_positions` upstream ABI yields a single-FFI walk of every save-side positioned entity (active playable char + present-`_spawnPosition` mercenaries + present-`_transform` field gimmicks). Slot103 baseline: **3,317 records** = 1 ActiveChar + 76 Mercenary + 3,240 Gimmick. New 56-byte `repr(C)` `PositionedEntityRecord` struct (layout-pin test) + `PositionKind` enum (ActiveChar / Mercenary / Gimmick) + `PositionEntityFlags` constants (`IsMainMercenary` / `IsPlayerOwned` / `FromOriginTransform`). `ISaveLoader.ListFieldPositions(out version)` exposes the two-call buffer-dance wrapper. Records carry `PosX/Y/Z` in the global coordinate frame (no conversion needed) + `Yaw` + `FieldInfoKey` for region filtering + owner identity (`CharacterKey` / `GimmickInfoKey` / `GimmickSaveDataKey` / `MercenaryNo`). Live-save integration test asserts kind enum coverage, finite floats, ACTIVE_CHAR-implies-IS_PLAYER_OWNED + GIMMICK-clears-IS_PLAYER_OWNED invariants, non-zero positions exist, and the documented basemap affine (`0.432044·X + 5937.50` / `-0.433071·Z + 1864.08`) produces finite pixels on a sample record. |
+>
+> Tests: **269 → 271** (+2: layout pin + live cross-kind smoke). Debug build clean.
+>
+> ### Open follow-ons noted during this session
+>
+> - **World-map UX layer** (deferred): build a Tools → World Map dialog
+>   that takes the binding to its consumer. Two intermediate cuts:
+>   (a) read-only DataGrid showing `(Kind, OwnerName, PosX, PosZ,
+>   FieldInfoKey)` rows with filter UI — useful for inspection, no
+>   basemap image needed; (b) full visual basemap with plotted markers
+>   + region filter + tooltips — needs a basemap image asset (game-
+>   extracted DDS, not in repo; vendor scripts can extract it but
+>   asset-license / repo-shipping is a separate question). Pinned
+>   basemap affine constants live in `PositionedEntityRecord` docstring
+>   for either path.
+>
+> ### Open follow-ons carried over (no change)
+>
+> - Visual verification of palette picker (from part 4).
+> - Safe re-attempt of "+ Add Dye" with per-prefab slot picker (from part 5).
+> - Pattern B v2 for multi-objective SA challenges (from part 1).
+> - OCT forum post URL placeholder (from part 1).
+>
+> ---
 >
 > ## ✅ This session — what shipped (2026-05-17 part 5)
 >

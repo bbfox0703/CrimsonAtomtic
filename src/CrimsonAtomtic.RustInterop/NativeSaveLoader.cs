@@ -315,6 +315,42 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         }
     }
 
+    public IReadOnlyList<PositionedEntityRecord> ListFieldPositions(out ulong version)
+    {
+        var cached = RequireLoaded(nameof(ListFieldPositions));
+        // Same two-call buffer-dance shape as ListAllItems.
+        unsafe
+        {
+            nuint count = 0;
+            ulong v = 0;
+            int rc = NativeMethods.ListFieldPositions(
+                cached, null, 0, out count, out v);
+            if (rc == NativeMethods.OK && count == 0)
+            {
+                version = v;
+                return Array.Empty<PositionedEntityRecord>();
+            }
+            if (rc != NativeMethods.BUFFER_TOO_SMALL)
+            {
+                throw new CrimsonSaveException(rc,
+                    $"crimson_save_list_field_positions size query failed: {ErrorName(rc)}");
+            }
+            var buf = new PositionedEntityRecord[(int)count];
+            fixed (PositionedEntityRecord* p = buf)
+            {
+                rc = NativeMethods.ListFieldPositions(
+                    cached, p, count, out _, out v);
+            }
+            if (rc != NativeMethods.OK)
+            {
+                throw new CrimsonSaveException(rc,
+                    $"crimson_save_list_field_positions fill failed: {ErrorName(rc)}");
+            }
+            version = v;
+            return buf;
+        }
+    }
+
     /// <summary>
     /// Flat-list every <c>CharacterKey</c>-typed scalar (and every
     /// element of <c>DynamicArray&lt;CharacterKey&gt;</c>) across every
@@ -1804,6 +1840,24 @@ internal static partial class NativeMethods
     public static unsafe partial int ListAllItems(
         CrimsonSaveHandle handle,
         ItemRecord* outRecords,
+        nuint capacityRecords,
+        out nuint outCountRecords,
+        out ulong outVersion);
+
+    // ── Positioned-entity enumeration (world-map plotting) ──────────────────
+    //
+    // Yields every save-side positioned entity (active char + present-
+    // _spawnPosition mercenaries + present-_transform field gimmicks).
+    // 56-byte repr(C) records, blittable to PositionedEntityRecord.
+    // pos_x/y/z are already in the global frame — apply the documented
+    // basemap affine for pixel coords (see vendor/crimson-rs/docs/
+    // worldmap-plotting.md). Same two-call buffer-dance + version-stamp
+    // shape as ListAllItems.
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_list_field_positions")]
+    public static unsafe partial int ListFieldPositions(
+        CrimsonSaveHandle handle,
+        PositionedEntityRecord* outRecords,
         nuint capacityRecords,
         out nuint outCountRecords,
         out ulong outVersion);

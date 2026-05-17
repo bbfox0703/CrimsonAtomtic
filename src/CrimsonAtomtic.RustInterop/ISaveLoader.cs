@@ -192,6 +192,43 @@ public interface ISaveLoader
     IReadOnlyList<ItemRecord> ListAllItems(out ulong version);
 
     /// <summary>
+    /// Flat-list every positioned entity in the currently-loaded save
+    /// (active playable character + present-<c>_spawnPosition</c>
+    /// mercenaries + present-<c>_transform</c> field gimmicks). One
+    /// FFI call replaces the would-be per-class block walk; positions
+    /// arrive pre-decoded as global-frame float3s ready for affine
+    /// projection to basemap pixels.
+    /// </summary>
+    /// <param name="version">
+    /// Out parameter — receives the handle's mutation counter at the
+    /// moment the list was read. Pair with
+    /// <see cref="GetMutationVersion"/> later to detect snapshot
+    /// staleness.
+    /// </param>
+    /// <returns>
+    /// Flat list of every positioned entity. Empty for never-played
+    /// saves with no field state. Slot103 baseline: 3,317 records
+    /// (1 ActiveChar + 76 Mercenary + 3,240 Gimmick).
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// World coordinates are already in the global frame — same as the
+    /// in-game teleport-marker values. Apply the documented basemap
+    /// affine (see <c>vendor/crimson-rs/docs/worldmap-plotting.md</c>)
+    /// to project to pixels:
+    /// <code>
+    /// px =  0.432044f * record.PosX + 5937.50f;
+    /// py = -0.433071f * record.PosZ + 1864.08f;
+    /// </code>
+    /// </para>
+    /// <para>
+    /// Requires a prior <see cref="Load"/> call. Throws
+    /// <see cref="InvalidOperationException"/> when no save is loaded.
+    /// </para>
+    /// </remarks>
+    IReadOnlyList<PositionedEntityRecord> ListFieldPositions(out ulong version);
+
+    /// <summary>
     /// Flat-list every <c>CharacterKey</c>-typed reference across every
     /// top-level block + every ObjectList / Locator descendant in the
     /// currently-loaded save. One FFI call replaces the recursive
