@@ -9,7 +9,7 @@
         d:DesignHeight="540"
         x:Class="CrimsonAtomtic.Ui.Views.DyeEditorWindow"
         x:DataType="vm:DyeEditorViewModel"
-        Title="{StaticResource DyeEditorWindowTitle}"
+        Title="{DynamicResource DyeEditorWindowTitle}"
         Icon="/Assets/MainIcon.ico"
         Width="900" Height="540"
         MinWidth="640" MinHeight="320"
@@ -18,7 +18,7 @@
   <DockPanel LastChildFill="True" Margin="12">
     <!-- Header explains v1 scope. -->
     <TextBlock DockPanel.Dock="Top"
-               Text="{StaticResource DyeEditorHeader}"
+               Text="{DynamicResource DyeEditorHeader}"
                TextWrapping="Wrap"
                Opacity="0.7"
                Margin="0,0,0,8" />
@@ -26,7 +26,7 @@
     <!-- Filter box. -->
     <TextBox DockPanel.Dock="Top"
              Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-             PlaceholderText="{StaticResource DyeEditorSearchPlaceholder}"
+             PlaceholderText="{DynamicResource DyeEditorSearchPlaceholder}"
              Margin="0,0,0,6" />
 
     <!-- Status + close. -->
@@ -40,7 +40,7 @@
                  VerticalAlignment="Center"
                  TextTrimming="CharacterEllipsis" />
       <Button Grid.Column="1"
-              Content="{StaticResource DyeEditorClose}"
+              Content="{DynamicResource DyeEditorClose}"
               Click="OnCloseClick"
               MinWidth="80" />
     </Grid>
@@ -53,7 +53,7 @@
               HeadersVisibility="Column"
               AutoGenerateColumns="False">
       <DataGrid.Columns>
-        <DataGridTemplateColumn Header="{StaticResource DyeEditorColIcon}" Width="56">
+        <DataGridTemplateColumn Header="{DynamicResource DyeEditorColIcon}" Width="56">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:DyeEditorItemRow">
               <Image Source="{Binding ItemKey, Converter={x:Static svc:ItemKeyToIconConverter.Instance}}"
@@ -64,7 +64,7 @@
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
-        <DataGridTextColumn Header="{StaticResource DyeEditorColBag}"
+        <DataGridTextColumn Header="{DynamicResource DyeEditorColBag}"
                             Binding="{Binding BagLabel}"
                             Width="180" />
         <!-- Item column shows the combined "English / Secondary" string
@@ -72,20 +72,20 @@
              via DyeEditorItemRow.ItemName; matches the Sockets editor's
              format. The filter still substring-matches each language
              separately via ItemNameEnglish + ItemNameSecondary. -->
-        <DataGridTextColumn Header="{StaticResource DyeEditorColItem}"
+        <DataGridTextColumn Header="{DynamicResource DyeEditorColItem}"
                             Binding="{Binding ItemName}"
                             Width="*" />
-        <DataGridTextColumn Header="{StaticResource DyeEditorColItemKey}"
+        <DataGridTextColumn Header="{DynamicResource DyeEditorColItemKey}"
                             Binding="{Binding ItemKey}"
                             Width="90" />
-        <DataGridTextColumn Header="{StaticResource DyeEditorColSlotCount}"
+        <DataGridTextColumn Header="{DynamicResource DyeEditorColSlotCount}"
                             Binding="{Binding DyeSlotCount}"
                             Width="80" />
-        <DataGridTemplateColumn Header="{StaticResource DyeEditorColAction}" Width="90">
+        <DataGridTemplateColumn Header="{DynamicResource DyeEditorColAction}" Width="90">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:DyeEditorItemRow">
-              <Button Content="{StaticResource DyeEditorEdit}"
-                      ToolTip.Tip="{StaticResource DyeEditorEditTip}"
+              <Button Content="{DynamicResource DyeEditorEdit}"
+                      ToolTip.Tip="{DynamicResource DyeEditorEditTip}"
                       Padding="6,2"
                       MinHeight="0"
                       Click="OnEditButtonClick" />

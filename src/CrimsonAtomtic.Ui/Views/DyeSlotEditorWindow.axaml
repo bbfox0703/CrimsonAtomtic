@@ -8,7 +8,7 @@
         d:DesignHeight="540"
         x:Class="CrimsonAtomtic.Ui.Views.DyeSlotEditorWindow"
         x:DataType="vm:DyeSlotEditorViewModel"
-        Title="{StaticResource DyeSlotEditorWindowTitle}"
+        Title="{DynamicResource DyeSlotEditorWindowTitle}"
         Icon="/Assets/MainIcon.ico"
         Width="940" Height="560"
         MinWidth="760" MinHeight="380"
@@ -30,7 +30,7 @@
                  VerticalAlignment="Center"
                  TextTrimming="CharacterEllipsis" />
       <Button Grid.Column="1"
-              Content="{StaticResource DyeSlotEditorClose}"
+              Content="{DynamicResource DyeSlotEditorClose}"
               Click="OnCloseClick"
               MinWidth="80" />
     </Grid>
@@ -46,7 +46,7 @@
               HeadersVisibility="Column"
               AutoGenerateColumns="False">
       <DataGrid.Columns>
-        <DataGridTextColumn Header="{StaticResource DyeSlotColSlot}"
+        <DataGridTextColumn Header="{DynamicResource DyeSlotColSlot}"
                             Binding="{Binding SlotLabel}"
                             Width="110"
                             IsReadOnly="True" />
@@ -86,7 +86,7 @@
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
-        <DataGridTemplateColumn Header="{StaticResource DyeSlotColGrime}" Width="80">
+        <DataGridTemplateColumn Header="{DynamicResource DyeSlotColGrime}" Width="80">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:DyeSlotRow">
               <NumericUpDown Value="{Binding Grime}" Minimum="-128" Maximum="127"
@@ -95,7 +95,7 @@
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
-        <DataGridTemplateColumn Header="{StaticResource DyeSlotColMaterial}" Width="200">
+        <DataGridTemplateColumn Header="{DynamicResource DyeSlotColMaterial}" Width="200">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:DyeSlotRow">
               <ComboBox ItemsSource="{Binding MaterialOptions}"
@@ -105,7 +105,7 @@
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
-        <DataGridTemplateColumn Header="{StaticResource DyeSlotColColorGroup}" Width="200">
+        <DataGridTemplateColumn Header="{DynamicResource DyeSlotColColorGroup}" Width="200">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:DyeSlotRow">
               <ComboBox ItemsSource="{Binding ColorGroupOptions}"
@@ -115,17 +115,17 @@
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
-        <DataGridTemplateColumn Header="{StaticResource DyeSlotColAction}" Width="90">
+        <DataGridTemplateColumn Header="{DynamicResource DyeSlotColAction}" Width="90">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:DyeSlotRow">
-              <Button Content="{StaticResource DyeSlotApply}"
+              <Button Content="{DynamicResource DyeSlotApply}"
                       Command="{Binding ApplyCommand}"
                       Padding="6,2"
                       MinHeight="0" />
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
-        <DataGridTextColumn Header="{StaticResource DyeSlotColStatus}"
+        <DataGridTextColumn Header="{DynamicResource DyeSlotColStatus}"
                             Binding="{Binding LastError}"
                             Width="*"
                             IsReadOnly="True" />

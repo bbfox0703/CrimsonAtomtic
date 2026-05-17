@@ -25,11 +25,11 @@
                 Spacing="8"
                 Margin="0,16,0,0">
       <Button Name="NoButton"
-              Content="{StaticResource ConfirmDialogNo}"
+              Content="{DynamicResource ConfirmDialogNo}"
               Click="OnNoClick"
               MinWidth="80" />
       <Button Name="YesButton"
-              Content="{StaticResource ConfirmDialogYes}"
+              Content="{DynamicResource ConfirmDialogYes}"
               Click="OnYesClick"
               MinWidth="80"
               IsDefault="True" />

@@ -8,7 +8,7 @@
         d:DesignHeight="600"
         x:Class="CrimsonAtomtic.Ui.Views.LocalizationSearchWindow"
         x:DataType="vm:LocalizationSearchViewModel"
-        Title="{StaticResource LocalizationWindowTitle}"
+        Title="{DynamicResource LocalizationWindowTitle}"
         Icon="/Assets/MainIcon.ico"
         Width="980" Height="560"
         MinWidth="540" MinHeight="320">
@@ -18,7 +18,7 @@
 
     <TextBox Grid.Row="0"
              Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-             PlaceholderText="{StaticResource LocalizationSearchPlaceholder}" />
+             PlaceholderText="{DynamicResource LocalizationSearchPlaceholder}" />
 
     <TextBlock Grid.Row="1"
                Text="{Binding ResultsCountText}"
@@ -33,10 +33,10 @@
               HeadersVisibility="Column"
               AutoGenerateColumns="False">
       <DataGrid.Columns>
-        <DataGridTextColumn Header="{StaticResource LocalizationColKey}"
+        <DataGridTextColumn Header="{DynamicResource LocalizationColKey}"
                             Binding="{Binding Key}"
                             Width="220" />
-        <DataGridTextColumn Header="{StaticResource LocalizationColValue}"
+        <DataGridTextColumn Header="{DynamicResource LocalizationColValue}"
                             Binding="{Binding Value}"
                             Width="*" />
         <!-- Secondary-language column: only visible when the user
@@ -51,7 +51,7 @@
              clipboard without selecting + Ctrl+C. Buttons stash the
              text to copy in Tag; the click handler reads it and pushes
              to TopLevel.Clipboard. V₂ is hidden when no secondary. -->
-        <DataGridTemplateColumn Header="{StaticResource LocalizationColCopy}"
+        <DataGridTemplateColumn Header="{DynamicResource LocalizationColCopy}"
                                 Width="140">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:LocalizationRow">
@@ -60,19 +60,19 @@
                           VerticalAlignment="Center"
                           HorizontalAlignment="Left">
                 <Button Content="K"
-                        ToolTip.Tip="{StaticResource LocalizationCopyKeyTip}"
+                        ToolTip.Tip="{DynamicResource LocalizationCopyKeyTip}"
                         Padding="6,2"
                         MinHeight="0"
                         Tag="{Binding Key}"
                         Click="OnCopyButtonClick" />
                 <Button Content="V"
-                        ToolTip.Tip="{StaticResource LocalizationCopyValueTip}"
+                        ToolTip.Tip="{DynamicResource LocalizationCopyValueTip}"
                         Padding="6,2"
                         MinHeight="0"
                         Tag="{Binding Value}"
                         Click="OnCopyButtonClick" />
                 <Button Content="V₂"
-                        ToolTip.Tip="{StaticResource LocalizationCopyValue2Tip}"
+                        ToolTip.Tip="{DynamicResource LocalizationCopyValue2Tip}"
                         Padding="6,2"
                         MinHeight="0"
                         Tag="{Binding Value2}"

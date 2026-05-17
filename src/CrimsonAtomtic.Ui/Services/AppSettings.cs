@@ -88,6 +88,20 @@ public sealed record AppSettings
     [JsonPropertyName("disclaimer_accepted_version")]
     public int? DisclaimerAcceptedVersion { get; init; }
 
+    /// <summary>
+    /// User-picked UI language code. <c>null</c> / missing means
+    /// "auto-detect from <see cref="System.Globalization.CultureInfo.CurrentUICulture"/>"
+    /// (the default — picks zh-TW for Traditional Chinese OS, ja for
+    /// Japanese OS, en otherwise). Set explicitly via Tools → UI Language
+    /// to override the detection. Supported values mirror the resource
+    /// dictionaries shipped under <c>Resources/Strings/</c>: <c>"en"</c>,
+    /// <c>"ja"</c>, <c>"zh-TW"</c>. Unknown values fall back to auto-detect
+    /// on the next launch (so a hand-edited settings file can't lock the
+    /// app into an unloadable language).
+    /// </summary>
+    [JsonPropertyName("ui_language")]
+    public string? UiLanguage { get; init; }
+
     /// <summary>Default font size when the settings field is unset.</summary>
     public const double DefaultFontSize = 14.0;
 

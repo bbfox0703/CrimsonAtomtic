@@ -9,7 +9,7 @@
         d:DesignHeight="600"
         x:Class="CrimsonAtomtic.Ui.Views.ItemPickerWindow"
         x:DataType="vm:ItemPickerViewModel"
-        Title="{StaticResource ItemPickerWindowTitle}"
+        Title="{DynamicResource ItemPickerWindowTitle}"
         Icon="/Assets/MainIcon.ico"
         Width="1080" Height="600"
         MinWidth="600" MinHeight="320">
@@ -19,7 +19,7 @@
 
     <TextBox Grid.Row="0"
              Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-             PlaceholderText="{StaticResource ItemPickerSearchPlaceholder}" />
+             PlaceholderText="{DynamicResource ItemPickerSearchPlaceholder}" />
 
     <TextBlock Grid.Row="1"
                Text="{Binding ResultsCountText}"
@@ -43,7 +43,7 @@
              when no icon directory is configured / file missing —
              Image.Source = null hides the bitmap and the StackPanel
              leaves a placeholder gap. -->
-        <DataGridTemplateColumn Header="{StaticResource ItemPickerColIcon}" Width="56">
+        <DataGridTemplateColumn Header="{DynamicResource ItemPickerColIcon}" Width="56">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:ItemPickerRow">
               <Image Source="{Binding ItemKey, Converter={x:Static svc:ItemKeyToIconConverter.Instance}}"
@@ -54,13 +54,13 @@
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
-        <DataGridTextColumn Header="{StaticResource ItemPickerColKey}"
+        <DataGridTextColumn Header="{DynamicResource ItemPickerColKey}"
                             Binding="{Binding ItemKey}"
                             Width="100" />
-        <DataGridTextColumn Header="{StaticResource ItemPickerColStringKey}"
+        <DataGridTextColumn Header="{DynamicResource ItemPickerColStringKey}"
                             Binding="{Binding StringKey}"
                             Width="280" />
-        <DataGridTextColumn Header="{StaticResource ItemPickerColNameEnglish}"
+        <DataGridTextColumn Header="{DynamicResource ItemPickerColNameEnglish}"
                             Binding="{Binding NameEnglish}"
                             Width="*" />
         <!-- Secondary name column: only visible when the user has
@@ -74,7 +74,7 @@
              stores), S = string_key (iteminfo's internal id), N =
              English name, N₂ = secondary name. V₂ is hidden when no
              secondary language is loaded. -->
-        <DataGridTemplateColumn Header="{StaticResource ItemPickerColCopy}"
+        <DataGridTemplateColumn Header="{DynamicResource ItemPickerColCopy}"
                                 Width="160">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:ItemPickerRow">
@@ -83,25 +83,25 @@
                           VerticalAlignment="Center"
                           HorizontalAlignment="Left">
                 <Button Content="K"
-                        ToolTip.Tip="{StaticResource ItemPickerCopyKeyTip}"
+                        ToolTip.Tip="{DynamicResource ItemPickerCopyKeyTip}"
                         Padding="6,2"
                         MinHeight="0"
                         Tag="{Binding ItemKeyText}"
                         Click="OnCopyButtonClick" />
                 <Button Content="S"
-                        ToolTip.Tip="{StaticResource ItemPickerCopyStringKeyTip}"
+                        ToolTip.Tip="{DynamicResource ItemPickerCopyStringKeyTip}"
                         Padding="6,2"
                         MinHeight="0"
                         Tag="{Binding StringKey}"
                         Click="OnCopyButtonClick" />
                 <Button Content="N"
-                        ToolTip.Tip="{StaticResource ItemPickerCopyNameTip}"
+                        ToolTip.Tip="{DynamicResource ItemPickerCopyNameTip}"
                         Padding="6,2"
                         MinHeight="0"
                         Tag="{Binding NameEnglish}"
                         Click="OnCopyButtonClick" />
                 <Button Content="N₂"
-                        ToolTip.Tip="{StaticResource ItemPickerCopyNameSecondaryTip}"
+                        ToolTip.Tip="{DynamicResource ItemPickerCopyNameSecondaryTip}"
                         Padding="6,2"
                         MinHeight="0"
                         Tag="{Binding NameSecondary}"
@@ -116,7 +116,7 @@
                      MainWindowViewModel.AddItemToCurrentListAsync. -->
                 <Button Content="{Binding $parent[Window].((vm:ItemPickerViewModel)DataContext).ActionButtonLabel, FallbackValue='+ Bag'}"
                         ToolTip.Tip="{Binding $parent[Window].((vm:ItemPickerViewModel)DataContext).ActionButtonTooltip,
-                                              FallbackValue={StaticResource ItemPickerAddToBagTip}}"
+                                              FallbackValue={DynamicResource ItemPickerAddToBagTip}}"
                         Padding="6,2"
                         MinHeight="0"
                         Tag="{Binding ItemKey}"

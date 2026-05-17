@@ -9,7 +9,7 @@
         d:DesignHeight="600"
         x:Class="CrimsonAtomtic.Ui.Views.FindItemsWindow"
         x:DataType="vm:FindItemsViewModel"
-        Title="{StaticResource FindItemsWindowTitle}"
+        Title="{DynamicResource FindItemsWindowTitle}"
         Icon="/Assets/MainIcon.ico"
         Width="1200" Height="640"
         MinWidth="700" MinHeight="380">
@@ -20,7 +20,7 @@
     <!-- Filter box -->
     <TextBox Grid.Row="0"
              Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-             PlaceholderText="{StaticResource FindItemsSearchPlaceholder}" />
+             PlaceholderText="{DynamicResource FindItemsSearchPlaceholder}" />
 
     <!-- Result count + sort hint -->
     <TextBlock Grid.Row="1"
@@ -43,7 +43,7 @@
         <!-- Icon — uses the same ItemKeyToIconConverter singleton the
              rest of the editor exposes, so cells fill in immediately
              when the icon cache is populated. -->
-        <DataGridTemplateColumn Header="{StaticResource FindItemsColIcon}" Width="56">
+        <DataGridTemplateColumn Header="{DynamicResource FindItemsColIcon}" Width="56">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:FindItemsRow">
               <Image Source="{Binding ItemKey, Converter={x:Static svc:ItemKeyToIconConverter.Instance}}"
@@ -54,16 +54,16 @@
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
-        <DataGridTextColumn Header="{StaticResource FindItemsColBag}"
+        <DataGridTextColumn Header="{DynamicResource FindItemsColBag}"
                             Binding="{Binding InventoryLabel}"
                             Width="180" />
-        <DataGridTextColumn Header="{StaticResource FindItemsColSlot}"
+        <DataGridTextColumn Header="{DynamicResource FindItemsColSlot}"
                             Binding="{Binding SlotNo}"
                             Width="70" />
-        <DataGridTextColumn Header="{StaticResource FindItemsColItemKey}"
+        <DataGridTextColumn Header="{DynamicResource FindItemsColItemKey}"
                             Binding="{Binding ItemKey}"
                             Width="100" />
-        <DataGridTextColumn Header="{StaticResource FindItemsColItemName}"
+        <DataGridTextColumn Header="{DynamicResource FindItemsColItemName}"
                             Binding="{Binding ItemNameEnglish}"
                             Width="*" />
         <!-- Secondary name only shows when the user has a secondary
@@ -72,50 +72,50 @@
                             Binding="{Binding ItemNameSecondary}"
                             Width="*"
                             IsVisible="{Binding $parent[Window].((vm:FindItemsViewModel)DataContext).HasSecondary}" />
-        <DataGridTextColumn Header="{StaticResource FindItemsColStack}"
+        <DataGridTextColumn Header="{DynamicResource FindItemsColStack}"
                             Binding="{Binding StackCount}"
                             Width="90" />
         <!-- Locked / NewMark flags as a compact text column ("🔒 / N"
              style without emoji to stay terminal-friendly). -->
-        <DataGridTemplateColumn Header="{StaticResource FindItemsColFlags}" Width="80">
+        <DataGridTemplateColumn Header="{DynamicResource FindItemsColFlags}" Width="80">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:FindItemsRow">
               <StackPanel Orientation="Horizontal" Spacing="6"
                           VerticalAlignment="Center">
                 <TextBlock Text="L" Opacity="0.85"
                            IsVisible="{Binding IsLocked}"
-                           ToolTip.Tip="{StaticResource FindItemsFlagLockedTip}" />
+                           ToolTip.Tip="{DynamicResource FindItemsFlagLockedTip}" />
                 <TextBlock Text="N" Opacity="0.85"
                            IsVisible="{Binding IsNewMark}"
-                           ToolTip.Tip="{StaticResource FindItemsFlagNewMarkTip}" />
+                           ToolTip.Tip="{DynamicResource FindItemsFlagNewMarkTip}" />
               </StackPanel>
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
-        <DataGridTextColumn Header="{StaticResource FindItemsColItemNo}"
+        <DataGridTextColumn Header="{DynamicResource FindItemsColItemNo}"
                             Binding="{Binding ItemNo}"
                             Width="120" />
         <!-- Action buttons: Go = navigate main window to this exact
              slot's drill path. K = copy ItemKey. N = copy English
              item name. -->
-        <DataGridTemplateColumn Header="{StaticResource FindItemsColAction}" Width="120">
+        <DataGridTemplateColumn Header="{DynamicResource FindItemsColAction}" Width="120">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:FindItemsRow">
               <StackPanel Orientation="Horizontal" Spacing="2"
                           VerticalAlignment="Center">
-                <Button Content="{StaticResource FindItemsGotoButton}"
-                        ToolTip.Tip="{StaticResource FindItemsGotoTip}"
+                <Button Content="{DynamicResource FindItemsGotoButton}"
+                        ToolTip.Tip="{DynamicResource FindItemsGotoTip}"
                         Padding="6,2"
                         MinHeight="0"
                         Click="OnGotoButtonClick" />
                 <Button Content="K"
-                        ToolTip.Tip="{StaticResource FindItemsCopyKeyTip}"
+                        ToolTip.Tip="{DynamicResource FindItemsCopyKeyTip}"
                         Padding="6,2"
                         MinHeight="0"
                         Tag="{Binding ItemKeyText}"
                         Click="OnCopyButtonClick" />
                 <Button Content="N"
-                        ToolTip.Tip="{StaticResource FindItemsCopyNameTip}"
+                        ToolTip.Tip="{DynamicResource FindItemsCopyNameTip}"
                         Padding="6,2"
                         MinHeight="0"
                         Tag="{Binding ItemNameEnglish}"
@@ -135,7 +135,7 @@
                  Opacity="0.6"
                  VerticalAlignment="Center" />
       <Button Grid.Column="1"
-              Content="{StaticResource FindItemsRefresh}"
+              Content="{DynamicResource FindItemsRefresh}"
               Command="{Binding RefreshCommand}" />
     </Grid>
   </Grid>

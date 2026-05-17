@@ -3,14 +3,14 @@
         xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
         x:Class="CrimsonAtomtic.Ui.Views.SocketEditorWindow"
         x:DataType="vm:SocketEditorViewModel"
-        Title="{StaticResource MenuEditItemSockets}"
+        Title="{DynamicResource MenuEditItemSockets}"
         Width="1320" Height="600"
         MinWidth="900" MinHeight="380"
         FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
 
   <DockPanel LastChildFill="True" Margin="12">
     <TextBlock DockPanel.Dock="Top"
-               Text="{StaticResource SocketEditorHeader}"
+               Text="{DynamicResource SocketEditorHeader}"
                TextWrapping="Wrap"
                Opacity="0.7"
                Margin="0,0,0,8" />
@@ -24,12 +24,12 @@
           ColumnSpacing="8"
           Margin="0,0,0,8">
       <TextBlock Grid.Column="0"
-                 Text="{StaticResource SocketEditorFilterLabel}"
+                 Text="{DynamicResource SocketEditorFilterLabel}"
                  VerticalAlignment="Center"
                  Opacity="0.8" />
       <TextBox Grid.Column="1"
                Text="{Binding SearchText, Mode=TwoWay}"
-               PlaceholderText="{StaticResource SocketEditorFilterWatermark}"
+               PlaceholderText="{DynamicResource SocketEditorFilterWatermark}"
                HorizontalAlignment="Stretch" />
       <TextBlock Grid.Column="2"
                  Text="{Binding FilterCountText}"
@@ -46,7 +46,7 @@
           ColumnSpacing="8"
           Margin="0,0,0,10">
       <TextBlock Grid.Column="0"
-                 Text="{StaticResource SocketEditorApplySetItemLabel}"
+                 Text="{DynamicResource SocketEditorApplySetItemLabel}"
                  VerticalAlignment="Center"
                  Opacity="0.8" />
       <ComboBox Grid.Column="1"
@@ -55,7 +55,7 @@
                 DisplayMemberBinding="{Binding DisplayName}"
                 HorizontalAlignment="Stretch" />
       <TextBlock Grid.Column="2"
-                 Text="{StaticResource SocketEditorApplySetSetLabel}"
+                 Text="{DynamicResource SocketEditorApplySetSetLabel}"
                  VerticalAlignment="Center"
                  Opacity="0.8" />
       <ComboBox Grid.Column="3"
@@ -64,12 +64,12 @@
                 DisplayMemberBinding="{Binding DisplayName}"
                 HorizontalAlignment="Stretch" />
       <Button Grid.Column="4"
-              Content="{StaticResource SocketEditorApplySetApply}"
+              Content="{DynamicResource SocketEditorApplySetApply}"
               Command="{Binding ApplyGemSetCommand}"
               MinWidth="80" />
       <Button Grid.Column="5"
-              Content="{StaticResource SocketEditorApplySetEditCustom}"
-              ToolTip.Tip="{StaticResource SocketEditorApplySetEditCustomTip}"
+              Content="{DynamicResource SocketEditorApplySetEditCustom}"
+              ToolTip.Tip="{DynamicResource SocketEditorApplySetEditCustomTip}"
               Click="OnEditCustomGemSetsClick"
               MinWidth="120" />
     </Grid>
@@ -84,7 +84,7 @@
                  VerticalAlignment="Center"
                  TextTrimming="CharacterEllipsis" />
       <Button Grid.Column="1"
-              Content="{StaticResource SocketEditorClose}"
+              Content="{DynamicResource SocketEditorClose}"
               Click="OnCloseClick"
               MinWidth="80" />
     </Grid>
@@ -97,7 +97,7 @@
               IsReadOnly="True"
               HeadersVisibility="Column">
       <DataGrid.Columns>
-        <DataGridTextColumn Header="{StaticResource SocketEditorColBag}"
+        <DataGridTextColumn Header="{DynamicResource SocketEditorColBag}"
                             Binding="{Binding BagLabel}"
                             Width="140" />
         <!-- Item-name column. Shows English / secondary together
@@ -105,24 +105,24 @@
              ItemName property; the filter matches each language
              independently via SocketRow.ItemNameEnglish +
              ItemNameSecondary. -->
-        <DataGridTextColumn Header="{StaticResource SocketEditorColItem}"
+        <DataGridTextColumn Header="{DynamicResource SocketEditorColItem}"
                             Binding="{Binding ItemName}"
                             Width="260"
                             MinWidth="120" />
-        <DataGridTextColumn Header="{StaticResource SocketEditorColItemKey}"
+        <DataGridTextColumn Header="{DynamicResource SocketEditorColItemKey}"
                             Binding="{Binding ItemKey}"
                             Width="90" />
-        <DataGridTextColumn Header="{StaticResource SocketEditorColSocket}"
+        <DataGridTextColumn Header="{DynamicResource SocketEditorColSocket}"
                             Binding="{Binding SocketIndex}"
                             Width="60" />
-        <DataGridTextColumn Header="{StaticResource SocketEditorColState}"
+        <DataGridTextColumn Header="{DynamicResource SocketEditorColState}"
                             Binding="{Binding StateLabel}"
                             Width="170" />
-        <DataGridTextColumn Header="{StaticResource SocketEditorColCurrentGem}"
+        <DataGridTextColumn Header="{DynamicResource SocketEditorColCurrentGem}"
                             Binding="{Binding DisplayGemName}"
                             Width="220"
                             MinWidth="120" />
-        <DataGridTextColumn Header="{StaticResource SocketEditorColCurrentGemKey}"
+        <DataGridTextColumn Header="{DynamicResource SocketEditorColCurrentGemKey}"
                             Binding="{Binding DisplayGemKeyText}"
                             Width="90" />
         <!-- Action column hosts three buttons whose IsVisible / CanExecute
@@ -130,24 +130,24 @@
              (filled slots). The picker callback is the same for Fill
              and Change — the editor VM disambiguates by row.IsFilled
              when the picked gem comes back. -->
-        <DataGridTemplateColumn Header="{StaticResource SocketEditorColAction}"
+        <DataGridTemplateColumn Header="{DynamicResource SocketEditorColAction}"
                                 Width="220">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate DataType="vm:SocketRow">
               <StackPanel Orientation="Horizontal" Spacing="4"
                           VerticalAlignment="Center">
-                <Button Content="{StaticResource SocketEditorFillGem}"
-                        ToolTip.Tip="{StaticResource SocketEditorFillGemTip}"
+                <Button Content="{DynamicResource SocketEditorFillGem}"
+                        ToolTip.Tip="{DynamicResource SocketEditorFillGemTip}"
                         Command="{Binding FillGemCommand}"
                         IsVisible="{Binding !IsFilled}"
                         Padding="6,2" MinHeight="0" />
-                <Button Content="{StaticResource SocketEditorChangeGem}"
-                        ToolTip.Tip="{StaticResource SocketEditorChangeGemTip}"
+                <Button Content="{DynamicResource SocketEditorChangeGem}"
+                        ToolTip.Tip="{DynamicResource SocketEditorChangeGemTip}"
                         Command="{Binding ChangeGemCommand}"
                         IsVisible="{Binding IsFilled}"
                         Padding="6,2" MinHeight="0" />
-                <Button Content="{StaticResource SocketEditorClearGem}"
-                        ToolTip.Tip="{StaticResource SocketEditorClearGemTip}"
+                <Button Content="{DynamicResource SocketEditorClearGem}"
+                        ToolTip.Tip="{DynamicResource SocketEditorClearGemTip}"
                         Command="{Binding ClearGemCommand}"
                         IsVisible="{Binding IsFilled}"
                         Padding="6,2" MinHeight="0" />
@@ -155,7 +155,7 @@
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
-        <DataGridTextColumn Header="{StaticResource SocketEditorColApplied}"
+        <DataGridTextColumn Header="{DynamicResource SocketEditorColApplied}"
                             Binding="{Binding LastError}"
                             Width="200" />
       </DataGrid.Columns>

@@ -8,7 +8,7 @@
         d:DesignHeight="600"
         x:Class="CrimsonAtomtic.Ui.Views.CharacterPickerWindow"
         x:DataType="vm:CharacterPickerViewModel"
-        Title="{StaticResource CharacterPickerWindowTitle}"
+        Title="{DynamicResource CharacterPickerWindowTitle}"
         Icon="/Assets/MainIcon.ico"
         Width="1080" Height="600"
         MinWidth="600" MinHeight="320">
@@ -26,14 +26,14 @@
             BorderThickness="0,0,0,1"
             Padding="10,8"
             Margin="0,0,0,8">
-      <TextBlock Text="{StaticResource CharacterPickerWarning}"
+      <TextBlock Text="{DynamicResource CharacterPickerWarning}"
                  Foreground="#FFD088"
                  TextWrapping="Wrap" />
     </Border>
 
     <TextBox Grid.Row="1"
              Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-             PlaceholderText="{StaticResource CharacterPickerSearchPlaceholder}" />
+             PlaceholderText="{DynamicResource CharacterPickerSearchPlaceholder}" />
 
     <TextBlock Grid.Row="2"
                Text="{Binding ResultsCountText}"
@@ -54,7 +54,7 @@
              on the thread pool). Cells stay blank until the load
              completes or permanently when no portrait matched above
              PortraitProvider.MinAcceptableScore. -->
-        <DataGridTemplateColumn Header="{StaticResource CharacterPickerColPortrait}" Width="60">
+        <DataGridTemplateColumn Header="{DynamicResource CharacterPickerColPortrait}" Width="60">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:CharacterPickerRow">
               <Image Source="{Binding Portrait}"
@@ -65,13 +65,13 @@
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
-        <DataGridTextColumn Header="{StaticResource CharacterPickerColKey}"
+        <DataGridTextColumn Header="{DynamicResource CharacterPickerColKey}"
                             Binding="{Binding CharacterKey}"
                             Width="100" />
-        <DataGridTextColumn Header="{StaticResource CharacterPickerColInternal}"
+        <DataGridTextColumn Header="{DynamicResource CharacterPickerColInternal}"
                             Binding="{Binding InternalName}"
                             Width="280" />
-        <DataGridTextColumn Header="{StaticResource CharacterPickerColNameEnglish}"
+        <DataGridTextColumn Header="{DynamicResource CharacterPickerColNameEnglish}"
                             Binding="{Binding NameEnglish}"
                             Width="*" />
         <!-- Secondary name column: only visible when the user has
@@ -85,7 +85,7 @@
              schema stores), S = internal name, N = English display
              name, N₂ = secondary display name (hidden when no
              secondary). Mirrors Browse Items copy semantics. -->
-        <DataGridTemplateColumn Header="{StaticResource CharacterPickerColCopy}"
+        <DataGridTemplateColumn Header="{DynamicResource CharacterPickerColCopy}"
                                 Width="140">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:CharacterPickerRow">
@@ -94,25 +94,25 @@
                           VerticalAlignment="Center"
                           HorizontalAlignment="Left">
                 <Button Content="K"
-                        ToolTip.Tip="{StaticResource CharacterPickerCopyKeyTip}"
+                        ToolTip.Tip="{DynamicResource CharacterPickerCopyKeyTip}"
                         Padding="6,2"
                         MinHeight="0"
                         Tag="{Binding CharacterKeyText}"
                         Click="OnCopyButtonClick" />
                 <Button Content="S"
-                        ToolTip.Tip="{StaticResource CharacterPickerCopyInternalTip}"
+                        ToolTip.Tip="{DynamicResource CharacterPickerCopyInternalTip}"
                         Padding="6,2"
                         MinHeight="0"
                         Tag="{Binding InternalName}"
                         Click="OnCopyButtonClick" />
                 <Button Content="N"
-                        ToolTip.Tip="{StaticResource CharacterPickerCopyNameTip}"
+                        ToolTip.Tip="{DynamicResource CharacterPickerCopyNameTip}"
                         Padding="6,2"
                         MinHeight="0"
                         Tag="{Binding NameEnglish}"
                         Click="OnCopyButtonClick" />
                 <Button Content="N₂"
-                        ToolTip.Tip="{StaticResource CharacterPickerCopyNameSecondaryTip}"
+                        ToolTip.Tip="{DynamicResource CharacterPickerCopyNameSecondaryTip}"
                         Padding="6,2"
                         MinHeight="0"
                         Tag="{Binding NameSecondary}"
@@ -128,12 +128,12 @@
              Pick raises CharacterPickerViewModel.PickConfirmed and the
              hosting window closes with the chosen CharacterKey. The
              standalone Browse Characters dialog hides this column. -->
-        <DataGridTemplateColumn Header="{StaticResource CharacterPickerColPick}"
+        <DataGridTemplateColumn Header="{DynamicResource CharacterPickerColPick}"
                                 Width="80"
                                 IsVisible="{Binding $parent[Window].((vm:CharacterPickerViewModel)DataContext).IsPickMode}">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate DataType="vm:CharacterPickerRow">
-              <Button Content="{StaticResource CharacterPickerPick}"
+              <Button Content="{DynamicResource CharacterPickerPick}"
                       Command="{Binding PickCommand}"
                       Padding="6,2"
                       MinHeight="0" />

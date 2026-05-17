@@ -3,14 +3,14 @@
         xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
         x:Class="CrimsonAtomtic.Ui.Views.VendorBuybackWindow"
         x:DataType="vm:VendorBuybackViewModel"
-        Title="{StaticResource VendorBuybackWindowTitle}"
+        Title="{DynamicResource VendorBuybackWindowTitle}"
         Width="1280" Height="600"
         MinWidth="900" MinHeight="380"
         FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
 
   <DockPanel LastChildFill="True" Margin="12">
     <TextBlock DockPanel.Dock="Top"
-               Text="{StaticResource VendorBuybackHeader}"
+               Text="{DynamicResource VendorBuybackHeader}"
                TextWrapping="Wrap"
                Opacity="0.7"
                Margin="0,0,0,8" />
@@ -22,12 +22,12 @@
           ColumnSpacing="8"
           Margin="0,0,0,10">
       <TextBlock Grid.Column="0"
-                 Text="{StaticResource VendorBuybackFilterLabel}"
+                 Text="{DynamicResource VendorBuybackFilterLabel}"
                  VerticalAlignment="Center"
                  Opacity="0.8" />
       <TextBox Grid.Column="1"
                Text="{Binding SearchText, Mode=TwoWay}"
-               PlaceholderText="{StaticResource VendorBuybackFilterWatermark}"
+               PlaceholderText="{DynamicResource VendorBuybackFilterWatermark}"
                HorizontalAlignment="Stretch" />
       <TextBlock Grid.Column="2"
                  Text="{Binding FilterCountText}"
@@ -46,7 +46,7 @@
                  VerticalAlignment="Center"
                  TextTrimming="CharacterEllipsis" />
       <Button Grid.Column="1"
-              Content="{StaticResource VendorBuybackClose}"
+              Content="{DynamicResource VendorBuybackClose}"
               Click="OnCloseClick"
               MinWidth="80" />
     </Grid>
@@ -59,29 +59,29 @@
               IsReadOnly="True"
               HeadersVisibility="Column">
       <DataGrid.Columns>
-        <DataGridTextColumn Header="{StaticResource VendorBuybackColStore}"
+        <DataGridTextColumn Header="{DynamicResource VendorBuybackColStore}"
                             Binding="{Binding StoreName}"
                             Width="240" MinWidth="120" />
-        <DataGridTextColumn Header="{StaticResource VendorBuybackColStoreKey}"
+        <DataGridTextColumn Header="{DynamicResource VendorBuybackColStoreKey}"
                             Binding="{Binding StoreKey}"
                             Width="90" />
-        <DataGridTextColumn Header="{StaticResource VendorBuybackColItem}"
+        <DataGridTextColumn Header="{DynamicResource VendorBuybackColItem}"
                             Binding="{Binding ItemName}"
                             Width="280" MinWidth="160" />
-        <DataGridTextColumn Header="{StaticResource VendorBuybackColItemKey}"
+        <DataGridTextColumn Header="{DynamicResource VendorBuybackColItemKey}"
                             Binding="{Binding ItemKey}"
                             Width="90" />
-        <DataGridTextColumn Header="{StaticResource VendorBuybackColStack}"
+        <DataGridTextColumn Header="{DynamicResource VendorBuybackColStack}"
                             Binding="{Binding StackCount}"
                             Width="70" />
-        <DataGridTextColumn Header="{StaticResource VendorBuybackColEndurance}"
+        <DataGridTextColumn Header="{DynamicResource VendorBuybackColEndurance}"
                             Binding="{Binding Endurance}"
                             Width="90" />
-        <DataGridTextColumn Header="{StaticResource VendorBuybackColSoldAt}"
+        <DataGridTextColumn Header="{DynamicResource VendorBuybackColSoldAt}"
                             Binding="{Binding SoldAtTicks}"
                             Width="160"
                             FontFamily="Consolas, Menlo, monospace" />
-        <DataGridTemplateColumn Header="{StaticResource VendorBuybackColAction}"
+        <DataGridTemplateColumn Header="{DynamicResource VendorBuybackColAction}"
                                 Width="200">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate DataType="vm:VendorBuybackRow">
@@ -92,19 +92,19 @@
                    the buyback entry. -->
               <StackPanel Orientation="Horizontal" Spacing="4"
                           VerticalAlignment="Center">
-                <Button Content="{StaticResource VendorBuybackJump}"
-                        ToolTip.Tip="{StaticResource VendorBuybackJumpTip}"
+                <Button Content="{DynamicResource VendorBuybackJump}"
+                        ToolTip.Tip="{DynamicResource VendorBuybackJumpTip}"
                         Command="{Binding JumpCommand}"
                         Padding="6,2" MinHeight="0" />
-                <Button Content="{StaticResource VendorBuybackRemove}"
-                        ToolTip.Tip="{StaticResource VendorBuybackRemoveTip}"
+                <Button Content="{DynamicResource VendorBuybackRemove}"
+                        ToolTip.Tip="{DynamicResource VendorBuybackRemoveTip}"
                         Command="{Binding RemoveCommand}"
                         Padding="6,2" MinHeight="0" />
               </StackPanel>
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
-        <DataGridTextColumn Header="{StaticResource VendorBuybackColStatus}"
+        <DataGridTextColumn Header="{DynamicResource VendorBuybackColStatus}"
                             Binding="{Binding LastError}"
                             Width="200" />
       </DataGrid.Columns>

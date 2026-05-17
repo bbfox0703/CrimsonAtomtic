@@ -6,7 +6,7 @@
         d:DesignWidth="560"
         d:DesignHeight="400"
         x:Class="CrimsonAtomtic.Ui.Views.DisclaimerDialog"
-        Title="{StaticResource DisclaimerTitle}"
+        Title="{DynamicResource DisclaimerTitle}"
         Icon="/Assets/MainIcon.ico"
         Width="560" Height="400"
         MinWidth="480" MinHeight="320"
@@ -22,7 +22,7 @@
     <ScrollViewer Grid.Row="0"
                   HorizontalScrollBarVisibility="Disabled"
                   VerticalScrollBarVisibility="Auto">
-      <TextBlock Text="{StaticResource DisclaimerBody}"
+      <TextBlock Text="{DynamicResource DisclaimerBody}"
                  TextWrapping="Wrap"
                  LineHeight="20" />
     </ScrollViewer>
@@ -32,10 +32,10 @@
                 HorizontalAlignment="Right"
                 Spacing="8"
                 Margin="0,16,0,0">
-      <Button Content="{StaticResource DisclaimerDecline}"
+      <Button Content="{DynamicResource DisclaimerDecline}"
               Click="OnDecline"
               MinWidth="120" />
-      <Button Content="{StaticResource DisclaimerAccept}"
+      <Button Content="{DynamicResource DisclaimerAccept}"
               Click="OnAccept"
               MinWidth="120"
               IsDefault="True" />

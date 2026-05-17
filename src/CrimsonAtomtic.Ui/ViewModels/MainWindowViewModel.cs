@@ -18,7 +18,8 @@ public sealed partial class MainWindowViewModel(
     ISaveLoader loader,
     IPlatformPaths paths,
     LocalizationProvider localization,
-    SaveBackupService backupService) : ObservableObject
+    SaveBackupService backupService,
+    UiLanguageService uiLanguage) : ObservableObject
 {
     /// <summary>
     /// Backup service exposed for the Restore dialog (read-only — it
@@ -544,6 +545,53 @@ public sealed partial class MainWindowViewModel(
         }
         OnPropertyChanged(nameof(SecondaryLanguage));
         OnPropertyChanged(nameof(LocalizationStatus));
+    }
+
+    /// <summary>
+    /// Currently-applied UI language code (e.g. <c>"en"</c>, <c>"ja"</c>,
+    /// <c>"zh-TW"</c>). Reflects what's actually on screen now —
+    /// post-startup auto-detect output OR the user's latest pick. Used by
+    /// the Tools → UI Language menu to highlight the active radio item.
+    /// </summary>
+    public string CurrentUiLanguage => uiLanguage.Current;
+
+    /// <summary>
+    /// <c>true</c> when the user has NOT set an explicit UI language
+    /// override (settings.ui_language is null). The Tools → UI Language
+    /// menu uses this to put a check mark next to "Auto" rather than
+    /// next to the auto-detected concrete code.
+    /// </summary>
+    public bool IsUiLanguageAuto =>
+        string.IsNullOrEmpty(AppSettingsStore.Load(paths.LocalAppDataDirectory).UiLanguage);
+
+    /// <summary>
+    /// Swap the running UI language. <paramref name="code"/> = <c>null</c>
+    /// clears any persisted override and falls back to OS auto-detect;
+    /// otherwise it must be one of <see cref="UiLanguageService.SupportedCodes"/>.
+    /// The change applies live — every AXAML binding that uses
+    /// <c>DynamicResource</c> re-resolves against the new dictionary on
+    /// the next layout pass.
+    /// </summary>
+    public void SetUiLanguage(string? code)
+    {
+        // Compute the effective code to apply. Null means "auto" — we
+        // persist null but still need to figure out what to actually
+        // render now, which is the same auto-detect path App.axaml.cs
+        // uses at startup.
+        var existing = AppSettingsStore.Load(paths.LocalAppDataDirectory);
+        var effective = UiLanguageService.ResolveActive(
+            code, System.Globalization.CultureInfo.CurrentUICulture);
+        uiLanguage.Apply(effective);
+
+        // Persist the user's PICK (which may be null = auto), not the
+        // resolved effective code — otherwise "Auto" would freeze to
+        // whatever the OS reported on the last machine the settings
+        // travelled to.
+        AppSettingsStore.TrySave(paths.LocalAppDataDirectory,
+            existing with { UiLanguage = code });
+
+        OnPropertyChanged(nameof(CurrentUiLanguage));
+        OnPropertyChanged(nameof(IsUiLanguageAuto));
     }
 
     /// <summary>

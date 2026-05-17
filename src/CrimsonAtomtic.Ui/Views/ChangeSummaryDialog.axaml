@@ -7,7 +7,7 @@
         d:DesignWidth="720"
         d:DesignHeight="420"
         x:Class="CrimsonAtomtic.Ui.Views.ChangeSummaryDialog"
-        Title="{StaticResource ChangeSummaryWindowTitle}"
+        Title="{DynamicResource ChangeSummaryWindowTitle}"
         Icon="/Assets/MainIcon.ico"
         Width="720" Height="440"
         MinWidth="540" MinHeight="280"
@@ -33,15 +33,15 @@
                 Spacing="8"
                 Margin="0,12,0,0">
       <Button x:Name="DiscardButton"
-              Content="{StaticResource ChangeSummaryDiscard}"
+              Content="{DynamicResource ChangeSummaryDiscard}"
               Click="OnDiscardClick"
               MinWidth="120" />
       <Button x:Name="CancelButton"
-              Content="{StaticResource ChangeSummaryCancel}"
+              Content="{DynamicResource ChangeSummaryCancel}"
               Click="OnCancelClick"
               MinWidth="80" />
       <Button x:Name="SaveButton"
-              Content="{StaticResource ChangeSummarySave}"
+              Content="{DynamicResource ChangeSummarySave}"
               Click="OnSaveClick"
               MinWidth="100"
               Classes="accent"
@@ -59,13 +59,13 @@
               HeadersVisibility="Column"
               IsReadOnly="True">
       <DataGrid.Columns>
-        <DataGridTextColumn Header="{StaticResource ChangeSummaryColTime}"
+        <DataGridTextColumn Header="{DynamicResource ChangeSummaryColTime}"
                             Binding="{Binding TimestampText, DataType=svc:ChangeEntry}"
                             Width="70" />
-        <DataGridTextColumn Header="{StaticResource ChangeSummaryColCategory}"
+        <DataGridTextColumn Header="{DynamicResource ChangeSummaryColCategory}"
                             Binding="{Binding Category, DataType=svc:ChangeEntry}"
                             Width="120" />
-        <DataGridTextColumn Header="{StaticResource ChangeSummaryColSummary}"
+        <DataGridTextColumn Header="{DynamicResource ChangeSummaryColSummary}"
                             Binding="{Binding Summary, DataType=svc:ChangeEntry}"
                             Width="*" />
       </DataGrid.Columns>

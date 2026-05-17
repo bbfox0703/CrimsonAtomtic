@@ -8,7 +8,7 @@
         d:DesignHeight="420"
         x:Class="CrimsonAtomtic.Ui.Views.RestoreFromBackupWindow"
         x:DataType="vm:RestoreFromBackupViewModel"
-        Title="{StaticResource RestoreFromBackupTitle}"
+        Title="{DynamicResource RestoreFromBackupTitle}"
         Icon="/Assets/MainIcon.ico"
         Width="780" Height="420"
         MinWidth="520" MinHeight="280">
@@ -22,7 +22,7 @@
                Margin="0,0,0,4" />
 
     <TextBlock Grid.Row="1"
-               Text="{StaticResource RestoreFromBackupColumnHint}"
+               Text="{DynamicResource RestoreFromBackupColumnHint}"
                Opacity="0.6"
                FontSize="11"
                Margin="0,0,0,8" />
@@ -36,17 +36,17 @@
               HeadersVisibility="Column"
               AutoGenerateColumns="False">
       <DataGrid.Columns>
-        <DataGridTextColumn Header="{StaticResource RestoreColSlot}"
+        <DataGridTextColumn Header="{DynamicResource RestoreColSlot}"
                             Binding="{Binding SlotLabel}"
                             Width="180" />
-        <DataGridTextColumn Header="{StaticResource RestoreColTimestamp}"
+        <DataGridTextColumn Header="{DynamicResource RestoreColTimestamp}"
                             Binding="{Binding TimestampLabel}"
                             SortMemberPath="TimestampSortKey"
                             Width="180" />
-        <DataGridTextColumn Header="{StaticResource RestoreColFiles}"
+        <DataGridTextColumn Header="{DynamicResource RestoreColFiles}"
                             Binding="{Binding FileSummary}"
                             Width="180" />
-        <DataGridTextColumn Header="{StaticResource RestoreColSize}"
+        <DataGridTextColumn Header="{DynamicResource RestoreColSize}"
                             Binding="{Binding TotalBytesLabel}"
                             Width="90" />
         <!-- Per-row Restore button. Click goes through the VM event
@@ -54,12 +54,12 @@
              The dialog itself doesn't perform the file copy; the main
              VM owns the I/O so it can also re-load the save into the
              UI afterwards. -->
-        <DataGridTemplateColumn Header="{StaticResource RestoreColAction}"
+        <DataGridTemplateColumn Header="{DynamicResource RestoreColAction}"
                                 Width="120">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:BackupRowViewModel">
-              <Button Content="{StaticResource RestoreButton}"
-                      ToolTip.Tip="{StaticResource RestoreButtonTip}"
+              <Button Content="{DynamicResource RestoreButton}"
+                      ToolTip.Tip="{DynamicResource RestoreButtonTip}"
                       Padding="8,2"
                       MinHeight="0"
                       Tag="{Binding Entry}"

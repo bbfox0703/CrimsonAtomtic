@@ -10,7 +10,7 @@
         d:DesignHeight="600"
         x:Class="CrimsonAtomtic.Ui.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="{Binding WindowTitle, FallbackValue={StaticResource WindowTitle}}"
+        Title="{Binding WindowTitle, FallbackValue={DynamicResource WindowTitle}}"
         Icon="/Assets/MainIcon.ico"
         Width="960" Height="640"
         MinWidth="600" MinHeight="400"
@@ -48,65 +48,87 @@
                Background="Transparent">
 
     <Menu DockPanel.Dock="Top">
-      <MenuItem Header="{StaticResource MenuFile}">
-        <MenuItem Header="{StaticResource MenuOpenSave}" Click="OnOpenSaveClick" />
-        <MenuItem Header="{StaticResource MenuSave}"
+      <MenuItem Header="{DynamicResource MenuFile}">
+        <MenuItem Header="{DynamicResource MenuOpenSave}" Click="OnOpenSaveClick" />
+        <MenuItem Header="{DynamicResource MenuSave}"
                   Command="{Binding SaveCommand}" />
-        <MenuItem Header="{StaticResource MenuSaveAs}"
+        <MenuItem Header="{DynamicResource MenuSaveAs}"
                   Click="OnSaveAsClick"
                   IsEnabled="{Binding HasSave}" />
         <Separator />
-        <MenuItem Header="{StaticResource MenuRestoreFromBackup}"
+        <MenuItem Header="{DynamicResource MenuRestoreFromBackup}"
                   Click="OnRestoreFromBackupClick" />
         <Separator />
-        <MenuItem Header="{StaticResource MenuExit}" Click="OnExitClick" />
+        <MenuItem Header="{DynamicResource MenuExit}" Click="OnExitClick" />
       </MenuItem>
-      <MenuItem Header="{StaticResource MenuTools}">
-        <MenuItem Header="{StaticResource MenuBrowseItems}"
+      <MenuItem Header="{DynamicResource MenuTools}">
+        <!-- UI Language submenu. Auto = pick from OS culture every
+             launch (no settings.ui_language stored); the explicit
+             entries persist a code that survives across machines.
+             Dynamically populated check marks live in the code-behind
+             (RefreshUiLanguageCheckmarks). -->
+        <MenuItem Header="{DynamicResource MenuUiLanguage}"
+                  Name="UiLanguageMenu">
+          <MenuItem Header="{DynamicResource MenuUiLanguageAuto}"
+                    Click="OnSetUiLanguageClick"
+                    Tag="" />
+          <Separator />
+          <MenuItem Header="{DynamicResource MenuUiLanguageEn}"
+                    Click="OnSetUiLanguageClick"
+                    Tag="en" />
+          <MenuItem Header="{DynamicResource MenuUiLanguageJa}"
+                    Click="OnSetUiLanguageClick"
+                    Tag="ja" />
+          <MenuItem Header="{DynamicResource MenuUiLanguageZhTw}"
+                    Click="OnSetUiLanguageClick"
+                    Tag="zh-TW" />
+        </MenuItem>
+        <Separator />
+        <MenuItem Header="{DynamicResource MenuBrowseItems}"
                   Click="OnBrowseItemsClick" />
-        <MenuItem Header="{StaticResource MenuBrowseCharacters}"
+        <MenuItem Header="{DynamicResource MenuBrowseCharacters}"
                   Click="OnBrowseCharactersClick" />
-        <MenuItem Header="{StaticResource MenuBrowseCharacterRefs}"
+        <MenuItem Header="{DynamicResource MenuBrowseCharacterRefs}"
                   Click="OnBrowseCharacterRefsClick"
                   IsEnabled="{Binding HasSave}" />
-        <MenuItem Header="{StaticResource MenuBrowseLocalization}"
+        <MenuItem Header="{DynamicResource MenuBrowseLocalization}"
                   Click="OnBrowseLocalizationClick" />
-        <MenuItem Header="{StaticResource MenuFindItems}"
+        <MenuItem Header="{DynamicResource MenuFindItems}"
                   Click="OnFindItemsClick"
                   IsEnabled="{Binding HasSave}" />
         <Separator />
-        <MenuItem Header="{StaticResource MenuExtractIcons}"
+        <MenuItem Header="{DynamicResource MenuExtractIcons}"
                   Click="OnExtractIconsClick" />
-        <MenuItem Header="{StaticResource MenuSetGameInstallFolder}"
+        <MenuItem Header="{DynamicResource MenuSetGameInstallFolder}"
                   Click="OnSetGameInstallFolderClick" />
         <Separator />
         <!-- Bulk-edit sweeps. Both gate on HasSave via the VM's
              RelayCommand CanExecute, so the menu items disable when
              no save is loaded. Each command shows its own confirm
              dialog before mutating anything. -->
-        <MenuItem Header="{StaticResource MenuFillAllStacks}"
+        <MenuItem Header="{DynamicResource MenuFillAllStacks}"
                   Command="{Binding FillAllStacksAcrossInventoriesCommand}" />
-        <MenuItem Header="{StaticResource MenuUnlockAllAbyssGates}"
+        <MenuItem Header="{DynamicResource MenuUnlockAllAbyssGates}"
                   Command="{Binding UnlockAllAbyssGatesCommand}" />
-        <MenuItem Header="{StaticResource MenuBulkCompleteHeldSAChallenges}"
+        <MenuItem Header="{DynamicResource MenuBulkCompleteHeldSAChallenges}"
                   Command="{Binding BulkCompleteHeldSealedArtifactChallengesCommand}" />
-        <MenuItem Header="{StaticResource MenuEditAbyssGates}"
+        <MenuItem Header="{DynamicResource MenuEditAbyssGates}"
                   Click="OnEditAbyssGatesClick"
                   IsEnabled="{Binding HasSave}" />
-        <MenuItem Header="{StaticResource MenuRenameMercenary}"
+        <MenuItem Header="{DynamicResource MenuRenameMercenary}"
                   Click="OnRenameMercenaryClick"
                   IsEnabled="{Binding HasSave}" />
-        <MenuItem Header="{StaticResource MenuEditItemDyes}"
+        <MenuItem Header="{DynamicResource MenuEditItemDyes}"
                   Click="OnEditItemDyesClick"
                   IsEnabled="{Binding HasSave}" />
-        <MenuItem Header="{StaticResource MenuVendorBuyback}"
+        <MenuItem Header="{DynamicResource MenuVendorBuyback}"
                   Click="OnVendorBuybackClick"
                   IsEnabled="{Binding HasSave}" />
         <Separator />
-        <MenuItem Header="{StaticResource MenuReviewChanges}"
+        <MenuItem Header="{DynamicResource MenuReviewChanges}"
                   Click="OnReviewChangesClick"
                   IsEnabled="{Binding HasSave}" />
-        <MenuItem Header="{StaticResource MenuEditItemSockets}"
+        <MenuItem Header="{DynamicResource MenuEditItemSockets}"
                   Click="OnEditItemSocketsClick"
                   IsEnabled="{Binding HasSave}" />
         <Separator />
@@ -114,7 +136,7 @@
              via the VM, which cascades to every child control. The
              tag carries the numeric value so the handler doesn't
              have to parse the header text. -->
-        <MenuItem Header="{StaticResource MenuFontSize}"
+        <MenuItem Header="{DynamicResource MenuFontSize}"
                   Name="FontSizeMenu">
           <MenuItem Header="10" Click="OnSetFontSizeClick" Tag="10" />
           <MenuItem Header="12" Click="OnSetFontSizeClick" Tag="12" />
@@ -124,9 +146,9 @@
           <MenuItem Header="18" Click="OnSetFontSizeClick" Tag="18" />
           <MenuItem Header="20" Click="OnSetFontSizeClick" Tag="20" />
         </MenuItem>
-        <MenuItem Header="{StaticResource MenuLanguage}"
+        <MenuItem Header="{DynamicResource MenuLanguage}"
                   Name="SecondaryLanguageMenu">
-          <MenuItem Header="{StaticResource MenuLanguageOff}"
+          <MenuItem Header="{DynamicResource MenuLanguageOff}"
                     Click="OnSetSecondaryLanguageClick"
                     Tag="" />
         </MenuItem>
@@ -170,10 +192,10 @@
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 Spacing="8">
-      <TextBlock Text="{StaticResource EmptyTitle}"
+      <TextBlock Text="{DynamicResource EmptyTitle}"
                  FontSize="24"
                  HorizontalAlignment="Center" />
-      <TextBlock Text="{StaticResource EmptyHint}"
+      <TextBlock Text="{DynamicResource EmptyHint}"
                  Opacity="0.6"
                  HorizontalAlignment="Center" />
     </StackPanel>
@@ -201,12 +223,12 @@
             <Button Grid.Column="0"
                     Content="{Binding SummaryToggleGlyph}"
                     Command="{Binding ToggleSummaryCollapsedCommand}"
-                    ToolTip.Tip="{StaticResource SummaryToggleTip}"
+                    ToolTip.Tip="{DynamicResource SummaryToggleTip}"
                     Padding="6,0"
                     MinHeight="24"
                     VerticalAlignment="Center" />
             <TextBlock Grid.Column="1"
-                       Text="{StaticResource SummaryHeader}"
+                       Text="{DynamicResource SummaryHeader}"
                        FontWeight="SemiBold"
                        VerticalAlignment="Center"
                        IsVisible="{Binding IsSummaryExpanded}" />
@@ -218,25 +240,25 @@
                 RowSpacing="4"
                 IsVisible="{Binding IsSummaryExpanded}">
 
-            <TextBlock Grid.Row="0" Grid.Column="0" Text="{StaticResource SummarySlot}" Opacity="0.6" />
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource SummarySlot}" Opacity="0.6" />
             <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Summary.SlotName}" />
 
-            <TextBlock Grid.Row="1" Grid.Column="0" Text="{StaticResource SummaryVersion}" Opacity="0.6" />
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource SummaryVersion}" Opacity="0.6" />
             <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Summary.Version}" />
 
-            <TextBlock Grid.Row="2" Grid.Column="0" Text="{StaticResource SummaryHmac}" Opacity="0.6" />
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource SummaryHmac}" Opacity="0.6" />
             <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding HmacStatusText}" />
 
-            <TextBlock Grid.Row="3" Grid.Column="0" Text="{StaticResource SummaryPayload}" Opacity="0.6" />
+            <TextBlock Grid.Row="3" Grid.Column="0" Text="{DynamicResource SummaryPayload}" Opacity="0.6" />
             <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PayloadSizeText}" />
 
-            <TextBlock Grid.Row="4" Grid.Column="0" Text="{StaticResource SummaryBody}" Opacity="0.6" />
+            <TextBlock Grid.Row="4" Grid.Column="0" Text="{DynamicResource SummaryBody}" Opacity="0.6" />
             <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding UncompressedSizeText}" />
 
-            <TextBlock Grid.Row="5" Grid.Column="0" Text="{StaticResource SummaryTypes}" Opacity="0.6" />
+            <TextBlock Grid.Row="5" Grid.Column="0" Text="{DynamicResource SummaryTypes}" Opacity="0.6" />
             <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding SchemaTypeCountText}" />
 
-            <TextBlock Grid.Row="6" Grid.Column="0" Text="{StaticResource SummaryEntries}" Opacity="0.6" />
+            <TextBlock Grid.Row="6" Grid.Column="0" Text="{DynamicResource SummaryEntries}" Opacity="0.6" />
             <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding TocEntryCountText}" />
           </Grid>
         </StackPanel>
@@ -254,7 +276,7 @@
               ColumnDefinitions="*,Auto"
               Margin="0,0,0,4">
           <TextBlock Grid.Column="0"
-                     Text="{StaticResource BlocksHeader}"
+                     Text="{DynamicResource BlocksHeader}"
                      FontSize="16"
                      FontWeight="SemiBold" />
           <TextBlock Grid.Column="1"
@@ -269,7 +291,7 @@
              row 1106. -->
         <TextBox Grid.Row="1"
                  Text="{Binding BlocksFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                 PlaceholderText="{StaticResource BlocksFilterPlaceholder}"
+                 PlaceholderText="{DynamicResource BlocksFilterPlaceholder}"
                  Margin="0,0,0,4" />
 
         <!-- Column widths are deliberately fixed (no Width="*") so the
@@ -290,11 +312,11 @@
                   Background="Transparent"
                   RowBackground="Transparent">
           <DataGrid.Columns>
-            <DataGridTextColumn Header="{StaticResource BlocksColIndex}"   Binding="{Binding Index}"          Width="60" />
-            <DataGridTextColumn Header="{StaticResource BlocksColClass}"   Binding="{Binding ClassName}"      Width="480" />
-            <DataGridTextColumn Header="{StaticResource BlocksColOffset}"  Binding="{Binding DataOffset}"     Width="120" />
-            <DataGridTextColumn Header="{StaticResource BlocksColSize}"    Binding="{Binding DataSize}"       Width="120" />
-            <DataGridTextColumn Header="{StaticResource BlocksColFields}"  Binding="{Binding FieldsDecoded}"  Width="80" />
+            <DataGridTextColumn Header="{DynamicResource BlocksColIndex}"   Binding="{Binding Index}"          Width="60" />
+            <DataGridTextColumn Header="{DynamicResource BlocksColClass}"   Binding="{Binding ClassName}"      Width="480" />
+            <DataGridTextColumn Header="{DynamicResource BlocksColOffset}"  Binding="{Binding DataOffset}"     Width="120" />
+            <DataGridTextColumn Header="{DynamicResource BlocksColSize}"    Binding="{Binding DataSize}"       Width="120" />
+            <DataGridTextColumn Header="{DynamicResource BlocksColFields}"  Binding="{Binding FieldsDecoded}"  Width="80" />
           </DataGrid.Columns>
         </DataGrid>
 
@@ -312,7 +334,7 @@
                 ColumnDefinitions="*,Auto"
                 Margin="0,0,0,4">
             <TextBlock Grid.Column="0"
-                       Text="{StaticResource FieldsHeader}"
+                       Text="{DynamicResource FieldsHeader}"
                        FontSize="14"
                        FontWeight="SemiBold" />
             <StackPanel Grid.Column="1"
@@ -330,7 +352,7 @@
 
           <!-- Empty state: no block selected. -->
           <TextBlock Grid.Row="1"
-                     Text="{StaticResource FieldsHint}"
+                     Text="{DynamicResource FieldsHint}"
                      Opacity="0.6"
                      IsVisible="{Binding !HasSelectedBlock}"
                      Margin="0,0,0,4" />
@@ -370,11 +392,11 @@
                       Margin="0,0,0,4">
             <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,*"
                   ColumnSpacing="8">
-              <TextBlock Grid.Column="0" Text="{StaticResource FieldsMask}" Opacity="0.6" />
+              <TextBlock Grid.Column="0" Text="{DynamicResource FieldsMask}" Opacity="0.6" />
               <TextBlock Grid.Column="1" Text="{Binding MaskBytesText}" FontFamily="Cascadia Code,Consolas,monospace" />
-              <TextBlock Grid.Column="2" Text="{StaticResource FieldsTrailingPad}" Opacity="0.6" />
+              <TextBlock Grid.Column="2" Text="{DynamicResource FieldsTrailingPad}" Opacity="0.6" />
               <TextBlock Grid.Column="3" Text="{Binding TrailingPadText}" FontFamily="Cascadia Code,Consolas,monospace" />
-              <TextBlock Grid.Column="4" Text="{StaticResource FieldsUndecoded}" Opacity="0.6" />
+              <TextBlock Grid.Column="4" Text="{DynamicResource FieldsUndecoded}" Opacity="0.6" />
               <TextBlock Grid.Column="5" Text="{Binding UndecodedRangesText}" FontFamily="Cascadia Code,Consolas,monospace" />
             </Grid>
             <!-- Block-action bar: "Mark Challenge Complete" appears when the
@@ -383,8 +405,8 @@
                  on class + key + state checks; the bar's IsVisible binds to
                  the same flag, so it disappears as soon as the user navigates
                  elsewhere or the edit lands. -->
-            <Button Content="{StaticResource MarkChallengeCompleteButton}"
-                    ToolTip.Tip="{StaticResource MarkChallengeCompleteTip}"
+            <Button Content="{DynamicResource MarkChallengeCompleteButton}"
+                    ToolTip.Tip="{DynamicResource MarkChallengeCompleteTip}"
                     Command="{Binding MarkCurrentChallengeCompleteCommand}"
                     IsVisible="{Binding IsCurrentChallengeMarkable}"
                     HorizontalAlignment="Left"
@@ -395,7 +417,7 @@
           <!-- Filter box: shown only when fields are being displayed. -->
           <TextBox Grid.Row="3"
                    Text="{Binding FieldsFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                   PlaceholderText="{StaticResource FieldsFilterPlaceholder}"
+                   PlaceholderText="{DynamicResource FieldsFilterPlaceholder}"
                    IsVisible="{Binding IsShowingFields}"
                    Margin="0,0,0,4" />
 
@@ -405,7 +427,7 @@
                exclusive via IsVisible. -->
           <TextBox Grid.Row="3"
                    Text="{Binding ElementsFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                   PlaceholderText="{StaticResource ElementsFilterPlaceholder}"
+                   PlaceholderText="{DynamicResource ElementsFilterPlaceholder}"
                    IsVisible="{Binding IsShowingElements}"
                    Margin="0,0,0,4" />
 
@@ -424,17 +446,17 @@
                     Background="Transparent"
                     RowBackground="Transparent">
             <DataGrid.Columns>
-              <DataGridTextColumn Header="{StaticResource FieldsColIndex}"       Binding="{Binding FieldIndex}"   Width="50" />
-              <DataGridTextColumn Header="{StaticResource FieldsColName}"        Binding="{Binding Name}"         Width="320" />
-              <DataGridTextColumn Header="{StaticResource FieldsColType}"        Binding="{Binding TypeName}"     Width="200" />
-              <DataGridTextColumn Header="{StaticResource FieldsColKind}"        Binding="{Binding Kind}"         Width="130" />
-              <DataGridTextColumn Header="{StaticResource FieldsColPresent}"     Binding="{Binding Present}"      Width="80" />
-              <DataGridTextColumn Header="{StaticResource FieldsColValue}"       Binding="{Binding DisplayValue}" Width="400" />
-              <DataGridTextColumn Header="{StaticResource FieldsColResolvedName}" Binding="{Binding ResolvedName}" Width="280" />
-              <DataGridTemplateColumn Header="{StaticResource FieldsColDrill}" Width="80">
+              <DataGridTextColumn Header="{DynamicResource FieldsColIndex}"       Binding="{Binding FieldIndex}"   Width="50" />
+              <DataGridTextColumn Header="{DynamicResource FieldsColName}"        Binding="{Binding Name}"         Width="320" />
+              <DataGridTextColumn Header="{DynamicResource FieldsColType}"        Binding="{Binding TypeName}"     Width="200" />
+              <DataGridTextColumn Header="{DynamicResource FieldsColKind}"        Binding="{Binding Kind}"         Width="130" />
+              <DataGridTextColumn Header="{DynamicResource FieldsColPresent}"     Binding="{Binding Present}"      Width="80" />
+              <DataGridTextColumn Header="{DynamicResource FieldsColValue}"       Binding="{Binding DisplayValue}" Width="400" />
+              <DataGridTextColumn Header="{DynamicResource FieldsColResolvedName}" Binding="{Binding ResolvedName}" Width="280" />
+              <DataGridTemplateColumn Header="{DynamicResource FieldsColDrill}" Width="80">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:FieldRowViewModel">
-                    <Button Content="{StaticResource FieldsDrillButton}"
+                    <Button Content="{DynamicResource FieldsDrillButton}"
                             IsVisible="{Binding HasNested}"
                             HorizontalAlignment="Center"
                             Padding="8,2"
@@ -462,7 +484,7 @@
                   ColumnSpacing="8"
                   RowSpacing="4">
               <TextBlock Grid.Row="0" Grid.Column="0"
-                         Text="{StaticResource EditPanelHeader}"
+                         Text="{DynamicResource EditPanelHeader}"
                          FontWeight="SemiBold" />
               <TextBlock Grid.Row="0" Grid.Column="1"
                          Text="{Binding SelectedField.Name}"
@@ -494,8 +516,8 @@
                    to the textbox — the destructive action that loses
                    the typed value. -->
               <Button Grid.Row="1" Grid.Column="2"
-                      Content="{StaticResource EditPanelMakeAbsent}"
-                      ToolTip.Tip="{StaticResource EditPanelMakeAbsentTip}"
+                      Content="{DynamicResource EditPanelMakeAbsent}"
+                      ToolTip.Tip="{DynamicResource EditPanelMakeAbsentTip}"
                       Command="{Binding MakeFieldAbsentCommand}"
                       CommandParameter="{Binding SelectedField}"
                       IsVisible="{Binding SelectedField.Present, FallbackValue=False}" />
@@ -506,8 +528,8 @@
                    visible at all times and it just lights up when
                    relevant. -->
               <Button Grid.Row="1" Grid.Column="3"
-                      Content="{StaticResource EditPanelFillMaxStack}"
-                      ToolTip.Tip="{StaticResource EditPanelFillMaxStackTip}"
+                      Content="{DynamicResource EditPanelFillMaxStack}"
+                      ToolTip.Tip="{DynamicResource EditPanelFillMaxStackTip}"
                       Command="{Binding FillSelectedFieldToMaxStackCommand}" />
               <!-- Pick character… : visible only when the selected
                    scalar is a CharacterKey (TypeName check on the VM).
@@ -515,17 +537,17 @@
                    the chosen key is written back to SelectedField.RawText
                    so the user can review + click Apply. -->
               <Button Grid.Row="1" Grid.Column="4"
-                      Content="{StaticResource EditPanelPickCharacter}"
-                      ToolTip.Tip="{StaticResource EditPanelPickCharacterTip}"
+                      Content="{DynamicResource EditPanelPickCharacter}"
+                      ToolTip.Tip="{DynamicResource EditPanelPickCharacterTip}"
                       Click="OnPickCharacterClick"
                       IsVisible="{Binding IsSelectedFieldCharacterKey}" />
               <Button Grid.Row="1" Grid.Column="5"
-                      Content="{StaticResource EditPanelApply}"
+                      Content="{DynamicResource EditPanelApply}"
                       Command="{Binding CommitFieldEditCommand}"
                       CommandParameter="{Binding SelectedField}"
                       IsDefault="True" />
               <Button Grid.Row="1" Grid.Column="6"
-                      Content="{StaticResource EditPanelRevert}"
+                      Content="{DynamicResource EditPanelRevert}"
                       Command="{Binding RevertFieldEditCommand}"
                       CommandParameter="{Binding SelectedField}" />
 
@@ -559,14 +581,14 @@
                     Background="Transparent"
                     RowBackground="Transparent">
             <DataGrid.Columns>
-              <DataGridTextColumn Header="{StaticResource ElementsColIndex}"    Binding="{Binding ClassIndex}"   Width="60" />
+              <DataGridTextColumn Header="{DynamicResource ElementsColIndex}"    Binding="{Binding ClassIndex}"   Width="60" />
               <!-- Icon column — only meaningful for ItemKey-typed rows
                    (ItemSaveData inside an itemList). The VM zeroes
                    IconItemKey on rows whose key field is a different
                    kind, so the converter returns null and the cell
                    stays empty for character / faction / container
                    pickers. -->
-              <DataGridTemplateColumn Header="{StaticResource ElementsColIcon}" Width="56">
+              <DataGridTemplateColumn Header="{DynamicResource ElementsColIcon}" Width="56">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:ElementRowViewModel">
                     <Image Source="{Binding IconItemKey, Converter={x:Static svc:ItemKeyToIconConverter.Instance}}"
@@ -577,15 +599,15 @@
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
-              <DataGridTextColumn Header="{StaticResource ElementsColClass}"    Binding="{Binding ClassName}"    Width="280" />
-              <DataGridTextColumn Header="{StaticResource ElementsColItemKey}"  Binding="{Binding KeyText}"      Width="90" />
-              <DataGridTextColumn Header="{StaticResource ElementsColItemName}" Binding="{Binding ResolvedName}" Width="360" />
-              <DataGridTextColumn Header="{StaticResource ElementsColOffset}"   Binding="{Binding DataOffset}"   Width="120" />
-              <DataGridTextColumn Header="{StaticResource ElementsColSize}"     Binding="{Binding DataSize}"     Width="120" />
-              <DataGridTemplateColumn Header="{StaticResource ElementsColOpen}" Width="80">
+              <DataGridTextColumn Header="{DynamicResource ElementsColClass}"    Binding="{Binding ClassName}"    Width="280" />
+              <DataGridTextColumn Header="{DynamicResource ElementsColItemKey}"  Binding="{Binding KeyText}"      Width="90" />
+              <DataGridTextColumn Header="{DynamicResource ElementsColItemName}" Binding="{Binding ResolvedName}" Width="360" />
+              <DataGridTextColumn Header="{DynamicResource ElementsColOffset}"   Binding="{Binding DataOffset}"   Width="120" />
+              <DataGridTextColumn Header="{DynamicResource ElementsColSize}"     Binding="{Binding DataSize}"     Width="120" />
+              <DataGridTemplateColumn Header="{DynamicResource ElementsColOpen}" Width="80">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:ElementRowViewModel">
-                    <Button Content="{StaticResource ElementsOpenButton}"
+                    <Button Content="{DynamicResource ElementsOpenButton}"
                             HorizontalAlignment="Center"
                             Padding="8,2"
                             MinHeight="0"
@@ -608,11 +630,11 @@
                          item.
                    Both routes go through the same command which
                    prompts for confirmation before applying. -->
-              <DataGridTemplateColumn Header="{StaticResource ElementsColBulkFill}" Width="120">
+              <DataGridTemplateColumn Header="{DynamicResource ElementsColBulkFill}" Width="120">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:ElementRowViewModel">
                     <Button Content="{Binding FillButtonLabel}"
-                            ToolTip.Tip="{StaticResource ElementsBulkFillTip}"
+                            ToolTip.Tip="{DynamicResource ElementsBulkFillTip}"
                             IsVisible="{Binding IsBulkFillCandidate}"
                             Padding="8,2"
                             MinHeight="0"
@@ -628,11 +650,11 @@
                    place. Confirms via the same modal hook the Fill
                    command uses; cancelled removes leave the save
                    untouched. -->
-              <DataGridTemplateColumn Header="{StaticResource ElementsColRemove}" Width="90">
+              <DataGridTemplateColumn Header="{DynamicResource ElementsColRemove}" Width="90">
                 <DataGridTemplateColumn.CellTemplate>
                   <DataTemplate x:DataType="vm:ElementRowViewModel">
-                    <Button Content="{StaticResource ElementsRemoveButton}"
-                            ToolTip.Tip="{StaticResource ElementsRemoveTip}"
+                    <Button Content="{DynamicResource ElementsRemoveButton}"
+                            ToolTip.Tip="{DynamicResource ElementsRemoveTip}"
                             Padding="8,2"
                             MinHeight="0"
                             Command="{Binding $parent[DataGrid].((vm:MainWindowViewModel)DataContext).RemoveElementCommand}"

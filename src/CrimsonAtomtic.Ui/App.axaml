@@ -10,8 +10,17 @@
 
   <Application.Resources>
     <ResourceDictionary>
+      <!-- Every shipped UI language is pre-merged here so the
+           avares:// Source is resolved at XAML-compile time (AOT-safe;
+           constructing a ResourceInclude at runtime trips IL2026
+           because its (Uri) ctor is RequiresUnreferencedCode).
+           UiLanguageService.Apply reorders this collection at runtime
+           so the active language sits last — Avalonia's MergedDictionaries
+           lookup walks in reverse, so last-merged wins for duplicate keys. -->
       <ResourceDictionary.MergedDictionaries>
         <ResourceInclude Source="avares://CrimsonAtomtic/Resources/Strings/en.axaml" />
+        <ResourceInclude Source="avares://CrimsonAtomtic/Resources/Strings/ja.axaml" />
+        <ResourceInclude Source="avares://CrimsonAtomtic/Resources/Strings/zh-TW.axaml" />
       </ResourceDictionary.MergedDictionaries>
     </ResourceDictionary>
   </Application.Resources>

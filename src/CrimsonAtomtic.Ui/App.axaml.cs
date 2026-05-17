@@ -54,6 +54,18 @@ public sealed class App : Application
                 localization.SecondaryLanguage = settings.SecondaryLanguage;
             }
 
+            // UI language wiring. Resolve effective code from settings
+            // (explicit pick wins) + OS UI culture (auto-detect fallback)
+            // and swap the merged ResourceDictionary BEFORE the main
+            // window is constructed — that way every initial AXAML
+            // resource lookup hits the correct language. AXAML uses
+            // DynamicResource so subsequent runtime swaps via Tools →
+            // UI Language pick up live without restarting the app.
+            var uiLanguage = new UiLanguageService(this);
+            var effectiveLanguage = UiLanguageService.ResolveActive(
+                settings.UiLanguage, System.Globalization.CultureInfo.CurrentUICulture);
+            uiLanguage.Apply(effectiveLanguage);
+
             // Icon cache wiring. Fixed location under
             // %LOCALAPPDATA%\CrimsonAtomtic\IconCache\ — matches where
             // the save-backup tree lives, so all of the editor's
@@ -85,7 +97,7 @@ public sealed class App : Application
             var backupService = new CrimsonAtomtic.Ui.Services.SaveBackupService(paths);
             var mainWindow = new MainWindow
             {
-                DataContext = new MainWindowViewModel(loader, paths, localization, backupService),
+                DataContext = new MainWindowViewModel(loader, paths, localization, backupService, uiLanguage),
             };
 
             // First-launch legal disclaimer. Show AFTER the main window

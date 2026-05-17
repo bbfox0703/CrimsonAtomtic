@@ -8,7 +8,7 @@
         d:DesignHeight="600"
         x:Class="CrimsonAtomtic.Ui.Views.CharacterRefsBrowserWindow"
         x:DataType="vm:CharacterRefsBrowserViewModel"
-        Title="{StaticResource MenuBrowseCharacterRefs}"
+        Title="{DynamicResource MenuBrowseCharacterRefs}"
         Icon="/Assets/MainIcon.ico"
         Width="1100" Height="600"
         MinWidth="800" MinHeight="380"
@@ -27,7 +27,7 @@
             BorderThickness="0,0,0,1"
             Padding="10,8"
             Margin="0,0,0,8">
-      <TextBlock Text="{StaticResource CharacterRefsBrowserWarning}"
+      <TextBlock Text="{DynamicResource CharacterRefsBrowserWarning}"
                  Foreground="#FFD088"
                  TextWrapping="Wrap" />
     </Border>
@@ -39,7 +39,7 @@
           ColumnSpacing="8"
           Margin="0,0,0,10">
       <TextBlock Grid.Column="0"
-                 Text="{StaticResource CharacterRefsBrowserFilterLabel}"
+                 Text="{DynamicResource CharacterRefsBrowserFilterLabel}"
                  VerticalAlignment="Center"
                  Opacity="0.8" />
       <TextBox Grid.Column="1"
@@ -62,7 +62,7 @@
                  VerticalAlignment="Center"
                  TextTrimming="CharacterEllipsis" />
       <Button Grid.Column="1"
-              Content="{StaticResource CharacterRefsBrowserClose}"
+              Content="{DynamicResource CharacterRefsBrowserClose}"
               Click="OnCloseClick"
               MinWidth="80" />
     </Grid>
@@ -78,7 +78,7 @@
         <!-- Portrait column. Same lazy-load pattern as the Character
              Picker — bound straight to the row's Portrait property
              which is filled in on the UI thread by StartPortraitLoad. -->
-        <DataGridTemplateColumn Header="{StaticResource CharacterRefsBrowserCol_Portrait}" Width="56">
+        <DataGridTemplateColumn Header="{DynamicResource CharacterRefsBrowserCol_Portrait}" Width="56">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate DataType="vm:CharacterRefRow">
               <Image Source="{Binding Portrait}"
@@ -89,25 +89,25 @@
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
-        <DataGridTextColumn Header="{StaticResource CharacterRefsBrowserCol_Block}"
+        <DataGridTextColumn Header="{DynamicResource CharacterRefsBrowserCol_Block}"
                             Binding="{Binding BlockClassName}"
                             Width="220" />
-        <DataGridTextColumn Header="{StaticResource CharacterRefsBrowserCol_BlockNum}"
+        <DataGridTextColumn Header="{DynamicResource CharacterRefsBrowserCol_BlockNum}"
                             Binding="{Binding BlockIndex}"
                             Width="70" />
-        <DataGridTextColumn Header="{StaticResource CharacterRefsBrowserCol_Name}"
+        <DataGridTextColumn Header="{DynamicResource CharacterRefsBrowserCol_Name}"
                             Binding="{Binding Name}"
                             Width="*"
                             MinWidth="200" />
-        <DataGridTextColumn Header="{StaticResource CharacterRefsBrowserCol_Key}"
+        <DataGridTextColumn Header="{DynamicResource CharacterRefsBrowserCol_Key}"
                             Binding="{Binding CharacterKey}"
                             Width="110" />
-        <DataGridTemplateColumn Header="{StaticResource CharacterRefsBrowserCol_Action}"
+        <DataGridTemplateColumn Header="{DynamicResource CharacterRefsBrowserCol_Action}"
                                 Width="90">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate DataType="vm:CharacterRefRow">
-              <Button Content="{StaticResource CharacterRefsBrowserJump}"
-                      ToolTip.Tip="{StaticResource CharacterRefsBrowserJumpTip}"
+              <Button Content="{DynamicResource CharacterRefsBrowserJump}"
+                      ToolTip.Tip="{DynamicResource CharacterRefsBrowserJumpTip}"
                       Command="{Binding JumpCommand}"
                       Padding="6,2" MinHeight="0" />
             </DataTemplate>

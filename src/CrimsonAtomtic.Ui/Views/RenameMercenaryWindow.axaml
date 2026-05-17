@@ -3,7 +3,7 @@
         xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
         x:Class="CrimsonAtomtic.Ui.Views.RenameMercenaryWindow"
         x:DataType="vm:RenameMercenaryViewModel"
-        Title="{StaticResource MenuRenameMercenary}"
+        Title="{DynamicResource MenuRenameMercenary}"
         Width="1280" Height="600"
         MinWidth="960" MinHeight="360"
         FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
@@ -12,7 +12,7 @@
     <!-- Header explains the v1 limitation up front so users don't go
          hunting for a "show current name" column that doesn't exist. -->
     <TextBlock DockPanel.Dock="Top"
-               Text="{StaticResource RenameMercenaryHeader}"
+               Text="{DynamicResource RenameMercenaryHeader}"
                TextWrapping="Wrap"
                Opacity="0.7"
                Margin="0,0,0,8" />
@@ -28,7 +28,7 @@
                  VerticalAlignment="Center"
                  TextTrimming="CharacterEllipsis" />
       <Button Grid.Column="1"
-              Content="{StaticResource RenameMercenaryClose}"
+              Content="{DynamicResource RenameMercenaryClose}"
               Click="OnCloseClick"
               MinWidth="80" />
     </Grid>
@@ -44,15 +44,15 @@
               IsReadOnly="False"
               HeadersVisibility="Column">
       <DataGrid.Columns>
-        <DataGridTextColumn Header="{StaticResource RenameMercenaryColIdx}"
+        <DataGridTextColumn Header="{DynamicResource RenameMercenaryColIdx}"
                             Binding="{Binding Index}"
                             Width="60"
                             IsReadOnly="True" />
-        <DataGridTextColumn Header="{StaticResource RenameMercenaryColMercNo}"
+        <DataGridTextColumn Header="{DynamicResource RenameMercenaryColMercNo}"
                             Binding="{Binding MercNo}"
                             Width="80"
                             IsReadOnly="True" />
-        <DataGridTextColumn Header="{StaticResource RenameMercenaryColCharKey}"
+        <DataGridTextColumn Header="{DynamicResource RenameMercenaryColCharKey}"
                             Binding="{Binding CharacterKey}"
                             Width="90"
                             IsReadOnly="True" />
@@ -64,7 +64,7 @@
              mounts / wagons / animals with template names, and Pearl
              Abyss only ships per-character portraits for ~3 main
              NPCs, so the fallback is the common case. -->
-        <DataGridTemplateColumn Header="{StaticResource RenameMercenaryColPortrait}"
+        <DataGridTemplateColumn Header="{DynamicResource RenameMercenaryColPortrait}"
                                 Width="60">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate DataType="vm:MercenaryRow">
@@ -83,15 +83,15 @@
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
-        <DataGridTextColumn Header="{StaticResource RenameMercenaryColCharName}"
+        <DataGridTextColumn Header="{DynamicResource RenameMercenaryColCharName}"
                             Binding="{Binding ResolvedCharacterName}"
                             Width="200"
                             IsReadOnly="True" />
-        <DataGridTextColumn Header="{StaticResource RenameMercenaryColType}"
+        <DataGridTextColumn Header="{DynamicResource RenameMercenaryColType}"
                             Binding="{Binding TypeTag}"
                             Width="90"
                             IsReadOnly="True" />
-        <DataGridTextColumn Header="{StaticResource RenameMercenaryColEquip}"
+        <DataGridTextColumn Header="{DynamicResource RenameMercenaryColEquip}"
                             Binding="{Binding EquipCount}"
                             Width="70"
                             IsReadOnly="True" />
@@ -103,28 +103,28 @@
              could land before NewName updated, surfacing as a no-op.
              PropertyChanged commits on every character so the textbox
              is always in sync with the model. -->
-        <DataGridTemplateColumn Header="{StaticResource RenameMercenaryColNewName}"
+        <DataGridTemplateColumn Header="{DynamicResource RenameMercenaryColNewName}"
                                 Width="*"
                                 MinWidth="220">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate DataType="vm:MercenaryRow">
               <TextBox Text="{Binding NewName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                        VerticalAlignment="Center"
-                       PlaceholderText="{StaticResource RenameMercenaryNewNameWatermark}" />
+                       PlaceholderText="{DynamicResource RenameMercenaryNewNameWatermark}" />
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
-        <DataGridTemplateColumn Header="{StaticResource RenameMercenaryColApply}"
+        <DataGridTemplateColumn Header="{DynamicResource RenameMercenaryColApply}"
                                 Width="90">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate DataType="vm:MercenaryRow">
-              <Button Content="{StaticResource RenameMercenaryApply}"
+              <Button Content="{DynamicResource RenameMercenaryApply}"
                       Command="{Binding ApplyCommand}"
                       HorizontalAlignment="Stretch" />
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
-        <DataGridTextColumn Header="{StaticResource RenameMercenaryColApplied}"
+        <DataGridTextColumn Header="{DynamicResource RenameMercenaryColApplied}"
                             Binding="{Binding AppliedName}"
                             Width="160"
                             IsReadOnly="True" />

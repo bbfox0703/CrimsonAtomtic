@@ -8,7 +8,7 @@
         d:DesignHeight="600"
         x:Class="CrimsonAtomtic.Ui.Views.AbyssGatesWindow"
         x:DataType="vm:AbyssGatesViewModel"
-        Title="{StaticResource AbyssGatesWindowTitle}"
+        Title="{DynamicResource AbyssGatesWindowTitle}"
         Icon="/Assets/MainIcon.ico"
         Width="1080" Height="600"
         MinWidth="700" MinHeight="320"
@@ -18,7 +18,7 @@
     <!-- Header explains the v1 scope so users don't expect missing-
          gate rows to mean a bug. -->
     <TextBlock DockPanel.Dock="Top"
-               Text="{StaticResource AbyssGatesHeader}"
+               Text="{DynamicResource AbyssGatesHeader}"
                TextWrapping="Wrap"
                Opacity="0.7"
                Margin="0,0,0,8" />
@@ -34,7 +34,7 @@
                  VerticalAlignment="Center"
                  TextTrimming="CharacterEllipsis" />
       <Button Grid.Column="1"
-              Content="{StaticResource AbyssGatesClose}"
+              Content="{DynamicResource AbyssGatesClose}"
               Click="OnCloseClick"
               MinWidth="80" />
     </Grid>
@@ -49,36 +49,36 @@
               HeadersVisibility="Column"
               AutoGenerateColumns="False">
       <DataGrid.Columns>
-        <DataGridTextColumn Header="{StaticResource AbyssGatesColOwnerLevel}"
+        <DataGridTextColumn Header="{DynamicResource AbyssGatesColOwnerLevel}"
                             Binding="{Binding OwnerLevelName}"
                             Width="240" />
-        <DataGridTextColumn Header="{StaticResource AbyssGatesColGimmick}"
+        <DataGridTextColumn Header="{DynamicResource AbyssGatesColGimmick}"
                             Binding="{Binding GimmickName}"
                             Width="*" />
-        <DataGridTextColumn Header="{StaticResource AbyssGatesColSaveKey}"
+        <DataGridTextColumn Header="{DynamicResource AbyssGatesColSaveKey}"
                             Binding="{Binding FieldGimmickSaveDataKey}"
                             Width="110" />
-        <DataGridTextColumn Header="{StaticResource AbyssGatesColState}"
+        <DataGridTextColumn Header="{DynamicResource AbyssGatesColState}"
                             Binding="{Binding StateLabel}"
                             Width="180" />
-        <DataGridTextColumn Header="{StaticResource AbyssGatesColStateHash}"
+        <DataGridTextColumn Header="{DynamicResource AbyssGatesColStateHash}"
                             Binding="{Binding StateHashText}"
                             Width="120"
                             FontFamily="Consolas, Menlo, monospace" />
         <!-- Lock / Unlock buttons. CanExecute on the underlying
              commands gates which one is enabled for the row's
              current state. -->
-        <DataGridTemplateColumn Header="{StaticResource AbyssGatesColAction}" Width="170">
+        <DataGridTemplateColumn Header="{DynamicResource AbyssGatesColAction}" Width="170">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate DataType="vm:AbyssGateRow">
               <StackPanel Orientation="Horizontal" Spacing="4"
                           VerticalAlignment="Center">
-                <Button Content="{StaticResource AbyssGatesUnlock}"
-                        ToolTip.Tip="{StaticResource AbyssGatesUnlockTip}"
+                <Button Content="{DynamicResource AbyssGatesUnlock}"
+                        ToolTip.Tip="{DynamicResource AbyssGatesUnlockTip}"
                         Command="{Binding UnlockCommand}"
                         Padding="6,2" MinHeight="0" />
-                <Button Content="{StaticResource AbyssGatesLock}"
-                        ToolTip.Tip="{StaticResource AbyssGatesLockTip}"
+                <Button Content="{DynamicResource AbyssGatesLock}"
+                        ToolTip.Tip="{DynamicResource AbyssGatesLockTip}"
                         Command="{Binding LockCommand}"
                         Padding="6,2" MinHeight="0" />
               </StackPanel>

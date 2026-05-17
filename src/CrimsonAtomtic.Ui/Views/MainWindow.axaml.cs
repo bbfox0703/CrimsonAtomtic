@@ -333,6 +333,11 @@ public sealed partial class MainWindow : Window
         // menu item carries a Tag with its size value; the entry
         // whose Tag matches FontSize gets the ✓ icon.
         RefreshFontSizeCheckmarks(vm.FontSize);
+
+        // Refresh the UI Language submenu's check marks. Auto is
+        // marked when the user has no persisted override; otherwise
+        // the entry whose Tag matches the active code gets ✓.
+        RefreshUiLanguageCheckmarks(vm.IsUiLanguageAuto, vm.CurrentUiLanguage);
     }
 
     /// <summary>
@@ -526,6 +531,53 @@ public sealed partial class MainWindow : Window
         vm.SetSecondaryLanguage(string.IsNullOrEmpty(code) ? null : code);
         // Re-paint the check marks.
         OnDataContextChanged(this, System.EventArgs.Empty);
+    }
+
+    private void OnSetUiLanguageClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
+        if (sender is not MenuItem mi)
+        {
+            return;
+        }
+        // Tag carries the language code; empty string = Auto (clear
+        // override, fall back to OS detection).
+        var code = mi.Tag as string;
+        vm.SetUiLanguage(string.IsNullOrEmpty(code) ? null : code);
+        RefreshUiLanguageCheckmarks(vm.IsUiLanguageAuto, vm.CurrentUiLanguage);
+    }
+
+    /// <summary>
+    /// Walk the UI Language submenu and set ✓ next to the active
+    /// entry. When <paramref name="isAuto"/> is true the "Auto" entry
+    /// (empty-string Tag) gets the mark; otherwise the entry whose
+    /// Tag matches <paramref name="activeCode"/> (case-insensitive)
+    /// is marked. Called from <see cref="OnDataContextChanged"/> at
+    /// startup and from <see cref="OnSetUiLanguageClick"/> after each
+    /// menu pick.
+    /// </summary>
+    private void RefreshUiLanguageCheckmarks(bool isAuto, string activeCode)
+    {
+        foreach (var item in UiLanguageMenu.Items)
+        {
+            if (item is not MenuItem mi || mi.Tag is not string tagText)
+            {
+                continue;
+            }
+            bool isThisOne;
+            if (string.IsNullOrEmpty(tagText))
+            {
+                isThisOne = isAuto;
+            }
+            else
+            {
+                isThisOne = !isAuto && string.Equals(tagText, activeCode, System.StringComparison.OrdinalIgnoreCase);
+            }
+            mi.Icon = isThisOne ? new TextBlock { Text = "✓" } : null;
+        }
     }
 
     private void OnBrowseLocalizationClick(object? sender, RoutedEventArgs e)

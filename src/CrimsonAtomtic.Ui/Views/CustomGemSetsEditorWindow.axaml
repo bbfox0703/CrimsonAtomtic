@@ -8,7 +8,7 @@
         d:DesignHeight="320"
         x:Class="CrimsonAtomtic.Ui.Views.CustomGemSetsEditorWindow"
         x:DataType="vm:CustomGemSetsEditorViewModel"
-        Title="{StaticResource CustomGemSetsWindowTitle}"
+        Title="{DynamicResource CustomGemSetsWindowTitle}"
         Icon="/Assets/MainIcon.ico"
         Width="780" Height="360"
         MinWidth="640" MinHeight="280"
@@ -17,7 +17,7 @@
 
   <DockPanel LastChildFill="True" Margin="14">
     <TextBlock DockPanel.Dock="Top"
-               Text="{StaticResource CustomGemSetsHeader}"
+               Text="{DynamicResource CustomGemSetsHeader}"
                TextWrapping="Wrap"
                Opacity="0.7"
                Margin="0,0,0,10" />
@@ -32,10 +32,10 @@
                  VerticalAlignment="Center"
                  Margin="0,0,12,0"
                  TextTrimming="CharacterEllipsis" />
-      <Button Content="{StaticResource CustomGemSetsClose}"
+      <Button Content="{DynamicResource CustomGemSetsClose}"
               Click="OnCloseClick"
               MinWidth="80" />
-      <Button Content="{StaticResource CustomGemSetsSave}"
+      <Button Content="{DynamicResource CustomGemSetsSave}"
               Command="{Binding SaveCommand}"
               Classes="accent"
               MinWidth="80" />

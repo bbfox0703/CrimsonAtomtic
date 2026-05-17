@@ -2,6 +2,15 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=System.Runtime">
 
+  <!--
+    TODO: Traditional Chinese translations. Currently a verbatim copy
+    of en.axaml so the i18n plumbing works end-to-end before
+    translation begins. Translate each <sys:String> value (NOT the
+    x:Key attribute) into 繁體中文; preserve the access-key underscore
+    convention on menu entries. Keep en.axaml as the source of truth —
+    re-sync new keys here whenever en.axaml gains entries.
+  -->
+
   <!-- Window / chrome -->
   <sys:String x:Key="WindowTitle">CrimsonAtomtic</sys:String>
 
