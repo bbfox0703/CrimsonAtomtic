@@ -130,34 +130,80 @@ public sealed class ScalarFieldEditingTests
         Assert.False(ScalarFieldEditing.IsTextEditable(row));
     }
 
+    // Composite-scalar SETTER coverage (2026-05-17, vendor 23a9e0d).
+    // Replaces the prior "always rejected" stance — the bracketed
+    // display format the read side emits is now round-trippable.
+    // (IsTextEditable_CompositeScalarReturnsTrue below replaces the
+    // old IsTextEditable_CompositeScalarReturnsFalse.)
+
+    [Theory]
+    [InlineData("f32x3", "[1.5, 2.0, -3.25]", new byte[] {
+        0x00, 0x00, 0xC0, 0x3F,  // 1.5f
+        0x00, 0x00, 0x00, 0x40,  // 2.0f
+        0x00, 0x00, 0x50, 0xC0,  // -3.25f
+    })]
+    [InlineData("f32x3", "1.5, 2.0, -3.25", new byte[] {
+        0x00, 0x00, 0xC0, 0x3F,
+        0x00, 0x00, 0x00, 0x40,
+        0x00, 0x00, 0x50, 0xC0,
+    })]  // bare (no brackets) also accepted
+    [InlineData("f32x4", "[0.5, 0, 1, 0]", new byte[] {
+        0x00, 0x00, 0x00, 0x3F,  // 0.5f
+        0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x80, 0x3F,  // 1.0f
+        0x00, 0x00, 0x00, 0x00,
+    })]
+    public void TryEncode_CompositeFloatVec_RoundTripsLittleEndian(
+        string tag, string input, byte[] expected)
+    {
+        Assert.True(ScalarFieldEditing.TryEncode(tag, input, out var bytes, out var err));
+        Assert.Equal("", err);
+        Assert.Equal(expected, bytes);
+    }
+
+    [Theory]
+    [InlineData("u32x4", "[0x12345678, 0xdeadbeef, 1, 4294967295]", new byte[] {
+        0x78, 0x56, 0x34, 0x12,
+        0xEF, 0xBE, 0xAD, 0xDE,
+        0x01, 0x00, 0x00, 0x00,
+        0xFF, 0xFF, 0xFF, 0xFF,
+    })]
+    [InlineData("u32x4", "0,0,0,0", new byte[] {
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    })]
+    public void TryEncode_CompositeUintVec_AcceptsHexAndDecimal(
+        string tag, string input, byte[] expected)
+    {
+        Assert.True(ScalarFieldEditing.TryEncode(tag, input, out var bytes, out var err));
+        Assert.Equal("", err);
+        Assert.Equal(expected, bytes);
+    }
+
+    [Theory]
+    [InlineData("f32x3", "1.5, 2.0", "Expected 3")]               // too few
+    [InlineData("f32x3", "1, 2, 3, 4", "Expected 3")]              // too many
+    [InlineData("f32x4", "[]", "empty list")]
+    [InlineData("f32x3", "1, 2, abc", "not a valid f32")]
+    [InlineData("u32x4", "1, 2, 3, -1", "not a valid u32 decimal")] // negative -> reject
+    [InlineData("u32x4", "1, 2, 3, 0xZZ", "not a valid u32 hex literal")]
+    public void TryEncode_CompositeVec_RejectsMalformedInput(string tag, string input, string errFragment)
+    {
+        Assert.False(ScalarFieldEditing.TryEncode(tag, input, out var bytes, out var err));
+        Assert.Empty(bytes);
+        Assert.Contains(errFragment, err);
+    }
+
     [Theory]
     [InlineData("[1.5, 2, -3.25] <f32x3>")]
     [InlineData("[0.5, 0, 1, 0] <f32x4>")]
     [InlineData("[0x12345678, 0xdeadbeef, 0x00000001, 0xffffffff] <u32x4>")]
-    public void IsTextEditable_CompositeScalarReturnsFalse(string value)
+    public void IsTextEditable_CompositeScalarReturnsTrue(string value)
     {
-        // The typed F32x3 / F32x4 / U32x4 ScalarValue variants land
-        // with their own tags (vendor/crimson-rs commit 94c7a96), so the
-        // display now shows numeric values instead of "12 bytes". The
-        // edit surface still rejects them — a single text box can't
-        // drive a multi-component value. Add the tags to
-        // SupportedTypeTags + extend TryEncode when a vector-aware
-        // editor surface ships.
+        // Inverted from the 94c7a96 "always rejected" rule once the
+        // typed setters landed (23a9e0d). The single textbox now
+        // round-trips bracketed component lists.
         var row = MakeRow(kind: "fixed_prefix", value: value);
-        Assert.False(ScalarFieldEditing.IsTextEditable(row));
-    }
-
-    [Theory]
-    [InlineData("f32x3")]
-    [InlineData("f32x4")]
-    [InlineData("u32x4")]
-    public void TryEncode_CompositeScalarTagReturnsFalse(string tag)
-    {
-        // Composite tags are deliberately not in SupportedTypeTags;
-        // TryEncode reports the generic "not editable" error message.
-        Assert.False(ScalarFieldEditing.TryEncode(tag, "anything", out var bytes, out var err));
-        Assert.Empty(bytes);
-        Assert.Contains(tag, err);
+        Assert.True(ScalarFieldEditing.IsTextEditable(row));
     }
 
     [Fact]
@@ -215,15 +261,30 @@ public sealed class ScalarFieldEditingTests
     }
 
     [Theory]
-    [InlineData("float3", 12)]
-    [InlineData("float4", 16)]
-    [InlineData("Quaternion", 16)]
     [InlineData("MissionKey", 8)] // future-patch divergence; size-gated rejection
     [InlineData("",          4)]
+    [InlineData("float3",    8)]  // size mismatch — float3 must be 12 bytes
+    [InlineData("float4",   12)]  // size mismatch — float4 must be 16 bytes
+    [InlineData("Quaternion", 8)] // size mismatch
+    [InlineData("uint4",     8)]  // size mismatch
     public void TryInferTypeTagFromSchema_NonScalarOrUnknownReturnsFalse(string typeName, int metaSize)
     {
         Assert.False(ScalarFieldEditing.TryInferTypeTagFromSchema(typeName, metaSize, out var tag));
         Assert.Equal(string.Empty, tag);
+    }
+
+    [Theory]
+    [InlineData("float3",         12, "f32x3")]
+    [InlineData("float4",         16, "f32x4")]
+    [InlineData("Quaternion",     16, "f32x4")]  // quaternion shares the 16B float4 shape
+    [InlineData("quaternion",     16, "f32x4")]
+    [InlineData("uint4",          16, "u32x4")]
+    [InlineData("SceneObjectUuid", 16, "u32x4")] // 128-bit ID stored as uint4
+    public void TryInferTypeTagFromSchema_CompositeTypeNamesResolve(
+        string typeName, int metaSize, string expected)
+    {
+        Assert.True(ScalarFieldEditing.TryInferTypeTagFromSchema(typeName, metaSize, out var tag));
+        Assert.Equal(expected, tag);
     }
 
     private static DecodedFieldRow MakeRow(string kind, string value) => new(

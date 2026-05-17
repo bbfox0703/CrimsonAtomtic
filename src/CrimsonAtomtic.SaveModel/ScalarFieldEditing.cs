@@ -28,12 +28,24 @@ namespace CrimsonAtomtic.SaveModel;
 public static class ScalarFieldEditing
 {
     /// <summary>The set of type tags accepted by <see cref="TryEncode"/>.</summary>
+    /// <remarks>
+    /// Composite tags (<c>f32x3</c> / <c>f32x4</c> / <c>u32x4</c>) accept
+    /// the same bracketed format the read side emits: e.g.
+    /// <c>"[1.5, 2.0, 3.0]"</c> for f32x3, <c>"[0x12, 0xdeadbeef, 1, 0]"</c>
+    /// for u32x4. Single-textbox edits stay viable — the user round-trips
+    /// the displayed value with comma-separated components.
+    /// </remarks>
     public static readonly IReadOnlySet<string> SupportedTypeTags =
         new HashSet<string>(StringComparer.Ordinal)
         {
             "bool", "u8", "u16", "u32", "u64",
             "i8", "i16", "i32", "i64",
             "f32", "f64",
+            // Typed composite scalars (2026-05-17, vendor 23a9e0d):
+            // 12-byte float3, 16-byte float4 / quaternion, 16-byte uint4
+            // (SceneObjectUuid). All edited via the same bracketed
+            // comma-separated text format the read side emits.
+            "f32x3", "f32x4", "u32x4",
         };
 
     /// <summary>
@@ -71,9 +83,15 @@ public static class ScalarFieldEditing
     /// Handles primitive aliases (<c>uint64</c> ↔ <c>u64</c>, <c>float</c>
     /// ↔ <c>f32</c>, …) and the schema's <c>*Key</c> typedefs (all of
     /// which are 4-byte u32 in 1.06: ItemKey, MissionKey, QuestKey,
-    /// StageKey, KnowledgeKey, FactionKey, CharacterKey, …). Vector
-    /// types like <c>float3</c> / <c>float4</c> are intentionally
-    /// rejected — a single textbox can't drive a multi-component value.
+    /// StageKey, KnowledgeKey, FactionKey, CharacterKey, …).
+    /// <para>
+    /// <b>Composite scalar support (2026-05-17)</b>: <c>float3</c>,
+    /// <c>float4</c>, <c>quaternion</c>, and <c>uint4</c> resolve to
+    /// the composite tags (<c>f32x3</c> / <c>f32x4</c> / <c>u32x4</c>)
+    /// so absent → present promotion flows can drive them through a
+    /// single bracketed-textbox input — matches the display format
+    /// (<c>"[1.5, 2.0, 3.0]"</c>) the typed read side emits.
+    /// </para>
     /// </remarks>
     public static bool TryInferTypeTagFromSchema(string typeName, int metaSize, out string typeTag)
     {
@@ -95,6 +113,30 @@ public static class ScalarFieldEditing
             case "int64":  case "i64":               typeTag = "i64"; return true;
             case "float":  case "f32": case "single": typeTag = "f32"; return true;
             case "double": case "f64":               typeTag = "f64"; return true;
+        }
+        // Composite typed-scalar typedefs (size-gated). Pearl Abyss's
+        // schema names vary across patch versions; accept the common
+        // variants. The metaSize gate keeps a future patch that
+        // changes the size from being misclassified.
+        if (metaSize == 12 && typeName.Equals("float3", StringComparison.Ordinal))
+        {
+            typeTag = "f32x3";
+            return true;
+        }
+        if (metaSize == 16
+            && (typeName.Equals("float4", StringComparison.Ordinal)
+                || typeName.Equals("Quaternion", StringComparison.Ordinal)
+                || typeName.Equals("quaternion", StringComparison.Ordinal)))
+        {
+            typeTag = "f32x4";
+            return true;
+        }
+        if (metaSize == 16
+            && (typeName.Equals("uint4", StringComparison.Ordinal)
+                || typeName.Equals("SceneObjectUuid", StringComparison.Ordinal)))
+        {
+            typeTag = "u32x4";
+            return true;
         }
         // Schema typedef heuristic: every `*Key` typedef in 1.06 is a
         // 4-byte u32 (ItemKey, MissionKey, FactionKey, etc.). We gate
@@ -255,9 +297,121 @@ public static class ScalarFieldEditing
                 error = $"Value '{trimmed}' is not a valid f64.";
                 return false;
 
+            case "f32x3": return TryEncodeFloatVec(trimmed, expectedCount: 3, out bytes, out error);
+            case "f32x4": return TryEncodeFloatVec(trimmed, expectedCount: 4, out bytes, out error);
+            case "u32x4": return TryEncodeUintVec(trimmed, expectedCount: 4, out bytes, out error);
+
             default:
                 error = $"Type '{typeTag}' is not editable through the scalar surface.";
                 return false;
         }
+    }
+
+    /// <summary>
+    /// Parse a bracketed (or bare) comma-separated list of <paramref name="expectedCount"/>
+    /// f32 values into a little-endian byte buffer (<paramref name="expectedCount"/> × 4 bytes).
+    /// Accepts both <c>"[1.5, 2, -3.25]"</c> and <c>"1.5, 2, -3.25"</c> shapes;
+    /// whitespace within / between components is tolerated. Returns false
+    /// with a descriptive <paramref name="error"/> on malformed input.
+    /// </summary>
+    private static bool TryEncodeFloatVec(string raw, int expectedCount,
+                                          out byte[] bytes, out string error)
+    {
+        bytes = [];
+        if (!TrySplitComponents(raw, expectedCount, out var parts, out error))
+        {
+            return false;
+        }
+        var ci = CultureInfo.InvariantCulture;
+        var buf = new byte[expectedCount * 4];
+        for (var i = 0; i < expectedCount; i++)
+        {
+            if (!float.TryParse(parts[i], NumberStyles.Float, ci, out var f))
+            {
+                error = $"Component {i} ('{parts[i]}') is not a valid f32.";
+                return false;
+            }
+            BitConverter.GetBytes(f).CopyTo(buf, i * 4);
+        }
+        bytes = buf;
+        return true;
+    }
+
+    /// <summary>
+    /// Parse a bracketed (or bare) comma-separated list of <paramref name="expectedCount"/>
+    /// u32 values into a little-endian byte buffer. Accepts decimal,
+    /// <c>0x</c>-prefixed hex (case-insensitive), and the bracket-stripped
+    /// shape the read side emits. <c>SceneObjectUuid</c> values are rendered
+    /// as <c>"[0xdeadbeef, 0x12345678, ...]"</c> so hex acceptance matters.
+    /// </summary>
+    private static bool TryEncodeUintVec(string raw, int expectedCount,
+                                         out byte[] bytes, out string error)
+    {
+        bytes = [];
+        if (!TrySplitComponents(raw, expectedCount, out var parts, out error))
+        {
+            return false;
+        }
+        var ci = CultureInfo.InvariantCulture;
+        var buf = new byte[expectedCount * 4];
+        for (var i = 0; i < expectedCount; i++)
+        {
+            var part = parts[i];
+            uint v;
+            if (part.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+                || part.StartsWith("0X", StringComparison.Ordinal))
+            {
+                if (!uint.TryParse(part.AsSpan(2), NumberStyles.HexNumber, ci, out v))
+                {
+                    error = $"Component {i} ('{part}') is not a valid u32 hex literal.";
+                    return false;
+                }
+            }
+            else if (!uint.TryParse(part, NumberStyles.Integer, ci, out v))
+            {
+                error = $"Component {i} ('{part}') is not a valid u32 decimal.";
+                return false;
+            }
+            BitConverter.GetBytes(v).CopyTo(buf, i * 4);
+        }
+        bytes = buf;
+        return true;
+    }
+
+    /// <summary>
+    /// Tear apart a <c>"[a, b, c]"</c>-style component list and return
+    /// <paramref name="expectedCount"/> trimmed component strings. Bare
+    /// <c>"a, b, c"</c> (without brackets) is also accepted. Errors out
+    /// when component count drifts so the per-type encoder can give a
+    /// precise error message instead of dereferencing a wrong array.
+    /// </summary>
+    private static bool TrySplitComponents(string raw, int expectedCount,
+                                           out string[] parts, out string error)
+    {
+        parts = [];
+        error = string.Empty;
+        var trimmed = raw.Trim();
+        if (trimmed.Length >= 2 && trimmed[0] == '[' && trimmed[^1] == ']')
+        {
+            trimmed = trimmed[1..^1];
+        }
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            error = $"Expected {expectedCount} component(s), got an empty list.";
+            return false;
+        }
+        var split = trimmed.Split(',');
+        if (split.Length != expectedCount)
+        {
+            error = $"Expected {expectedCount} component(s), got {split.Length} "
+                    + $"(input: '{raw}').";
+            return false;
+        }
+        for (var i = 0; i < split.Length; i++)
+        {
+            split[i] = split[i].Trim();
+        }
+        parts = split;
+        return true;
     }
 }
