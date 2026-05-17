@@ -131,4 +131,49 @@ public sealed class UiLanguageServiceTests
     {
         Assert.Equal(expected, UiLanguageService.IsSupported(code));
     }
+
+    // ------------------------------------------------------------------
+    // MatchesUri — pins the avares:// URI matching against multiple URI
+    // surfaces (OriginalString / ToString / AbsolutePath). The
+    // 2026-05-17 part-8 bug fix was triggered by Apply silently
+    // returning when AbsolutePath came back empty in AOT-trimmed
+    // builds; the post-fix matcher checks every surface so any one of
+    // them being populated is enough.
+    // ------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("avares://CrimsonAtomtic/Resources/Strings/en.axaml",      "en")]
+    [InlineData("avares://CrimsonAtomtic/Resources/Strings/ja.axaml",      "ja")]
+    [InlineData("avares://CrimsonAtomtic/Resources/Strings/zh-TW.axaml",   "zh-TW")]
+    public void MatchesUri_AvaresUri_MatchesViaOriginalStringFallback(string uriStr, string code)
+    {
+        var uri = new System.Uri(uriStr, System.UriKind.Absolute);
+        Assert.True(UiLanguageService.MatchesUri(
+            uri,
+            $"/{code}.axaml",
+            $"/Resources/Strings/{code}.axaml"));
+    }
+
+    [Theory]
+    [InlineData("avares://CrimsonAtomtic/Resources/Strings/en.axaml",    "ja")]
+    [InlineData("avares://CrimsonAtomtic/Resources/Strings/zh-TW.axaml", "en")]
+    [InlineData("avares://CrimsonAtomtic/Resources/Strings/ja.axaml",    "zh-TW")]
+    public void MatchesUri_AvaresUri_RejectsOtherLanguages(string uriStr, string code)
+    {
+        var uri = new System.Uri(uriStr, System.UriKind.Absolute);
+        Assert.False(UiLanguageService.MatchesUri(
+            uri,
+            $"/{code}.axaml",
+            $"/Resources/Strings/{code}.axaml"));
+    }
+
+    [Fact]
+    public void MatchesUri_HttpUri_MatchesByAbsolutePath()
+    {
+        // Sanity check that the matcher works for well-formed schemes
+        // where AbsolutePath is reliably populated (the avares-only
+        // failure mode isn't a general matcher bug).
+        var uri = new System.Uri("https://example.com/Resources/Strings/en.axaml");
+        Assert.True(UiLanguageService.MatchesUri(uri, "/en.axaml", "/Resources/Strings/en.axaml"));
+    }
 }

@@ -3,7 +3,36 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-17 part 7 (paz_list_dir binding — basemap tile discovery prerequisite for the deferred world-map UX).
+> Last updated: 2026-05-17 part 8 (AOT bug fix: UI language switch silently no-op'd because the avares:// URI matcher relied on AbsolutePath which is empty in trimmed AOT publishes).
+>
+> ## ✅ This session — what shipped (2026-05-17 part 8)
+>
+> One AOT-specific bug fix. User-reported symptoms in the published
+> binary: clicking Tools → UI Language to switch languages updated the
+> menu checkmark but didn't repaint the UI; restarting the app showed
+> the persisted pick in the menu but the UI still rendered in the
+> startup language. All three symptoms tracked back to a single root
+> cause.
+>
+> | Area | Scope |
+> |---|---|
+> | **UiLanguageService.Apply URI matching** | `Apply()` walked `Application.Resources.MergedDictionaries` looking for the target language's `ResourceInclude` by matching `Source.AbsolutePath.EndsWith("/Resources/Strings/<code>.axaml")`. In Debug builds Avalonia's avares:// scheme parser populates `AbsolutePath` correctly. In **AOT-trimmed publishes** the parser registration can be partially elided, leaving `AbsolutePath` empty for the same URIs that round-trip fine in Debug — so the `EndsWith` check failed for every entry, `target` came back null, and `Apply` returned silently with no reorder. The UI then stayed pinned to whatever language happened to be last in App.axaml's declared order (zh-TW). The menu checkmark update path runs after `Apply` regardless of outcome, hence the symptom of "checkmark moves but UI doesn't repaint". The startup `Apply` from `App.OnFrameworkInitializationCompleted` also silently failed — so even after restart with a persisted "en" pick, the dictionary order stayed at the App.axaml-declared en/ja/zh-TW with zh-TW winning by virtue of being last. Fix: the new `MatchesUri` helper checks **three** URI surfaces in order — `OriginalString` (always-set verbatim form, no parser dependency), `ToString()` (canonical), `AbsolutePath` (parsed path — empty in the AOT regression). First non-empty match wins. New public `ApplyOutcome` enum exposed via `LastApplyOutcome` property captures the outcome of each call (Swapped / AlreadyActive / UnsupportedCode / DictionaryNotFound) so future silent failures surface for diagnosis. 7 new unit tests pin the matcher against the three shipped avares:// URIs (positive + negative cases) plus a well-formed https:// fallback case. |
+>
+> Tests: **274 → 281** (+7 MatchesUri tests). Debug build clean. **Visual verification deferred** to the user since the bug only manifests in AOT publishes — Debug `dotnet run` worked fine throughout because Avalonia's avares parser is fully wired in Debug. The user should rebuild the AOT bundle (`scripts\package_aot.ps1`) and confirm Tools → UI Language now repaints the UI live.
+>
+> ### Open follow-ons noted during this session
+>
+> - **AOT publish smoke test**: there's no automated check that the published AOT binary's UI language switch actually repaints. The unit test added here verifies the matcher logic, but the full chain (AOT publish → launch → menu pick → repaint) still requires manual verification per publish. Worth automating if a similar AOT-only regression surfaces again.
+> - **Surface `LastApplyOutcome` in the UI** when it lands on `DictionaryNotFound` (currently it's a code-only diagnostic). A status-bar message or a small "couldn't switch — see logs" alert would let users diagnose without dropping to the developer.
+>
+> ### Open follow-ons carried over (no change)
+>
+> - World-map UX layer (deferred — DataGrid first vs full basemap dialog; basemap rendering needs DDS decoding + game-extracted asset shipping decision).
+> - Safe re-attempt of "+ Add Dye" with per-prefab slot picker (from part 5).
+> - Pattern B v2 for multi-objective SA challenges (from part 1).
+> - OCT forum post URL placeholder (from part 1).
+>
+> ---
 >
 > ## ✅ This session — what shipped (2026-05-17 part 7)
 >
