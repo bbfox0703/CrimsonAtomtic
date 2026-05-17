@@ -35,10 +35,27 @@
 >   `MissionStateData` rows, the button just grays out silently. Could
 >   surface the skip reason as a tooltip (the diagnostic plumbing is
 >   already in place for the bulk sweep — just needs a tooltip binding).
-> - **Add dye to undyed item**: per-slot absent→present already works
->   via `SetScalarFieldPresent`, but adding a NEW dye element to an
->   item whose `_itemDyeDataList` is empty needs an upstream
->   `set_object_list_present` ABI in `crimson-rs`. Defer until demand.
+> - **Add dye to undyed item — READY TO CONSUME** (2026-05-17 vendor refresh, `crimson-rs` at `21f1883`):
+>   the upstream `crimson_save_set_object_list_present` C ABI has
+>   landed. Contract: `present_flag=1` flips mask bit + auto-materializes
+>   `count=1` with a default-empty element (element class borrowed from
+>   any sibling block of the same parent class with the field present);
+>   caller then drives RGBA / material / color-group via existing
+>   `set_scalar_field_present` against element 0. `present_flag=0` is
+>   byte-identical to never-present. New error code `NOT_OBJECT_LIST = -23`
+>   for meta_kind ∉ {6,7} rejection; `NOT_FOUND` if no template sibling
+>   exists in the save (UX needs to handle: prompt user to dye one item
+>   in-game first). Pinned upstream by
+>   `c_abi_object_list_present_roundtrip_dye_data_list_slot104`. Consume
+>   plan: rebuild `crimson_rs.dll` (`.\scripts\build_rust.ps1`) → add
+>   `[LibraryImport]` on `NativeMethods` + `NOT_OBJECT_LIST` constant →
+>   wrap on `ISaveLoader`/`NativeSaveLoader` mirroring `SetScalarFieldPresent`
+>   path shape → add "+ Add Dye" button to `DyeEditorViewModel` for rows
+>   with absent `_itemDyeDataList` → remove the deferred-note comment
+>   at `src/CrimsonAtomtic.Ui/ViewModels/DyeEditorViewModel.cs:22-25` →
+>   one integration test mirroring the Rust round-trip. Full vendor-side
+>   contract docs at
+>   [`vendor/crimson-rs/docs/dye-editor-scope.md`](../vendor/crimson-rs/docs/dye-editor-scope.md) §v2.
 > - **OCT forum post**: `docs/oct/features-highlights.md` has a
 >   placeholder `*(GitHub URL — fill in before posting)*` to fix
 >   before pasting into the forum.
