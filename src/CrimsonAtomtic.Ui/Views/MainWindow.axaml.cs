@@ -668,47 +668,6 @@ public sealed partial class MainWindow : Window
         // "No dyed items found in this save." when the scan returns
         // empty — single code path for both states.
 
-        // Per-row "+ Add" → materialize a default-empty dye element
-        // via the SetObjectListPresent toggle ABI, then refresh.
-        masterVm.AddDyeRequested += async row =>
-        {
-            var confirmTitle = (string?)this.FindResource("DyeEditorAddConfirmTitle")
-                               ?? "Add dye to this item?";
-            var confirmBody = (string?)this.FindResource("DyeEditorAddConfirmBody")
-                              ?? "A default-empty dye element will be added.";
-            if (!await ConfirmDialog.ShowAsync(this, confirmTitle, confirmBody))
-            {
-                return;
-            }
-            try
-            {
-                vm.GetSaveLoader().SetObjectListPresent(
-                    row.BlockIndex,
-                    row.BuildPathToItem(),
-                    (int)row.DyeListFieldIndex,
-                    makePresent: true);
-            }
-            catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex) when (ex.ErrorCode == -16)
-            {
-                var noTplTitle = (string?)this.FindResource("DyeEditorAddNoTemplateTitle")
-                                 ?? "No dye template in this save";
-                var noTplBody = (string?)this.FindResource("DyeEditorAddNoTemplateBody")
-                                ?? "Dye one item in-game first to establish a template.";
-                await ConfirmDialog.ShowAlertAsync(this, noTplTitle, noTplBody);
-                return;
-            }
-            catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex)
-            {
-                var failTitle = (string?)this.FindResource("DyeEditorAddFailedTitle")
-                                ?? "Could not add dye";
-                await ConfirmDialog.ShowAlertAsync(this, failTitle,
-                    $"{ex.Message} (code {ex.ErrorCode})");
-                return;
-            }
-            masterVm.NotifyChildApplied();
-            await masterVm.RefreshAsync();
-        };
-
         // Per-row Edit → open the child slot editor.
         masterVm.EditRequested += row =>
         {

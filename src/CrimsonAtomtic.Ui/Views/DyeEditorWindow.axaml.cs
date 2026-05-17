@@ -28,20 +28,4 @@ public sealed partial class DyeEditorWindow : Window
             vm.RequestEdit(row);
         }
     }
-
-    /// <summary>
-    /// Per-row "+ Add" button (un-dyed eligible items): forwards to
-    /// <see cref="DyeEditorViewModel.RequestAddDye"/>. The MainWindow
-    /// handler runs the confirm dialog + <c>SetObjectListPresent</c>
-    /// call + refresh.
-    /// </summary>
-    private void OnAddButtonClick(object? sender, RoutedEventArgs e)
-    {
-        if (sender is not Control source) return;
-        if (source.DataContext is not DyeEditorItemRow row) return;
-        if (DataContext is DyeEditorViewModel vm)
-        {
-            vm.RequestAddDye(row);
-        }
-    }
 }

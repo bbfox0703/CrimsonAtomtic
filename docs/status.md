@@ -3,7 +3,38 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-17 part 4 (DyeSlot palette picker UX — visual 109-cell grid replaces freeform R/G/B inputs).
+> Last updated: 2026-05-17 part 5 (rolled back "+ Add Dye" UX — slot-number specification is unsafe without per-prefab valid-slot lookup; SetObjectListPresent ABI binding kept).
+>
+> ## ✅ This session — what shipped (2026-05-17 part 5)
+>
+> One revert commit. The "+ Add Dye to undyed item" UX shipped in part 2
+> was rolled back the same day after user testing surfaced a soundness
+> problem: `crimson_save_set_object_list_present(makePresent=true)`
+> materializes a single dye element with a default `_dyeSlotNo` (0),
+> but each item's valid `_dyeSlotNo` set varies per `PartPrefabKey` —
+> some items accept `0..3`, others only `0..1`, etc. Writing a dye to
+> an unsupported slot is unsafe; doing this right needs a per-item
+> slot picker driven by `partprefabdyeslotinfo`'s slot-count lookup
+> (already loaded; UX work deferred).
+>
+> | Area | Scope |
+> |---|---|
+> | **"+ Add Dye" UX rollback** | DyeEditor scan reverts to surfacing only items with `HasDyeData` flag set (no longer includes un-dyed equipped items). `DyeEditorItemRow.CanAddDye` / `CanEditDye` properties + ctor param removed. `AddDyeRequested` event + `RequestAddDye` method removed from the master VM. `DyeEditorWindow.axaml` Action column reverts to a single Edit button (no more Panel with conditional Edit/Add). `MainWindow.OnEditItemDyesClick` drops the AddDyeRequested handler (~40 lines + confirm dialog + NOT_FOUND alert). en/ja/zh-TW resource strings reverted (DyeEditorHeader text + 7 Add-related strings dropped). |
+> | **What's kept** | (a) The `SetObjectListPresent` C ABI binding on `NativeSaveLoader` + `ISaveLoader` + `NOT_OBJECT_LIST = -23` constant — useful primitive, no UX surface, contract-pinned by the roundtrip test. (b) The `ListAllItems` walker refactor of Dye + Sockets editors — independent fix that resolves the missing-mercenary-gear bug. (c) The palette picker UX from part 4 — separate feature, works fine. |
+>
+> Tests: **269/269 pass** (no test changes — the rolled-back code had no tests of its own). Debug build clean.
+>
+> ### Open follow-ons noted during this session
+>
+> - **Safe "+ Add Dye"** (deferred): re-attempt with proper slot-picker UX. Steps: (1) lookup item's `PartPrefabKey` via the existing `ItemKey → PartPrefabKey` bridge; (2) query `partprefabdyeslotinfo.LookupSlotCount(partPrefabKey)` for the valid slot count; (3) UI step asking the user to pick a slot 0..N-1; (4) after `SetObjectListPresent(makePresent=true)` materializes element 0, patch its `_dyeSlotNo` via `SetScalarField` to the picked value. The vendor ABI for steps 1-2 is already loaded — just needs UX + integration.
+>
+> ### Open follow-ons carried over (no change)
+>
+> - Visual verification of palette picker (from part 4).
+> - Pattern B v2 for multi-objective SA challenges (from part 1).
+> - OCT forum post URL placeholder (from part 1).
+>
+> ---
 >
 > ## ✅ This session — what shipped (2026-05-17 part 4)
 >

@@ -84,20 +84,11 @@
         <DataGridTemplateColumn Header="{DynamicResource DyeEditorColAction}" Width="90">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:DyeEditorItemRow">
-              <Panel>
-                <Button Content="{DynamicResource DyeEditorEdit}"
-                        ToolTip.Tip="{DynamicResource DyeEditorEditTip}"
-                        Padding="6,2"
-                        MinHeight="0"
-                        IsVisible="{Binding CanEditDye}"
-                        Click="OnEditButtonClick" />
-                <Button Content="{DynamicResource DyeEditorAdd}"
-                        ToolTip.Tip="{DynamicResource DyeEditorAddTip}"
-                        Padding="6,2"
-                        MinHeight="0"
-                        IsVisible="{Binding CanAddDye}"
-                        Click="OnAddButtonClick" />
-              </Panel>
+              <Button Content="{DynamicResource DyeEditorEdit}"
+                      ToolTip.Tip="{DynamicResource DyeEditorEditTip}"
+                      Padding="6,2"
+                      MinHeight="0"
+                      Click="OnEditButtonClick" />
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>

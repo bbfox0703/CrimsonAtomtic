@@ -127,16 +127,6 @@ public sealed partial class DyeEditorViewModel : ObservableObject
     public void RequestEdit(DyeEditorItemRow row) => EditRequested?.Invoke(row);
 
     /// <summary>
-    /// Raised when the user clicks a row's "+ Add" button on an
-    /// un-dyed but dye-eligible item. The hosting MainWindow handles
-    /// the confirm dialog + <see cref="ISaveLoader.SetObjectListPresent"/>
-    /// call + refresh.
-    /// </summary>
-    public event Action<DyeEditorItemRow>? AddDyeRequested;
-
-    public void RequestAddDye(DyeEditorItemRow row) => AddDyeRequested?.Invoke(row);
-
-    /// <summary>
     /// Called by the host after a child editor applied at least one
     /// edit, so the master VM can mark itself dirty. (The child VM
     /// owns the actual writes.)
@@ -169,30 +159,25 @@ public sealed partial class DyeEditorViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Scan the save for dye-relevant items via the single-FFI
-    /// <see cref="ISaveLoader.ListAllItems"/> enumerator. Surfaces:
-    /// <list type="bullet">
-    ///   <item><b>Dyed items</b> (<see cref="ItemRecordFlags.HasDyeData"/>
-    ///     set, all container kinds) — row carries Edit action.</item>
-    ///   <item><b>Un-dyed equipped items</b>
-    ///     (<see cref="ContainerKind.ActiveEquip"/> /
-    ///     <see cref="ContainerKind.ActiveUseReserve"/> /
-    ///     <see cref="ContainerKind.MercenaryEquip"/>) whose
-    ///     <c>_itemDyeDataList</c> field exists in schema but is
-    ///     absent — row carries "+ Add" action that materializes a
-    ///     default empty dye via
-    ///     <see cref="ISaveLoader.SetObjectListPresent"/>.</item>
-    /// </list>
-    /// Inventory bags' un-dyed items are intentionally skipped —
-    /// players dye worn gear, not stockpiled materials, and including
-    /// the full inventory would flood the list with hundreds of
-    /// non-dyeable consumables.
+    /// Scan the save for dyed items via the single-FFI
+    /// <see cref="ISaveLoader.ListAllItems"/> enumerator. Surfaces
+    /// every item with <see cref="ItemRecordFlags.HasDyeData"/> set
+    /// across all container kinds (active equip / reserve / inventory /
+    /// mercenary equip / mercenary inventory). NPC follower gear is
+    /// filtered out via
+    /// <see cref="LocalizationProvider.IsPlayerEditableItem"/> (which
+    /// also widens to the 8 player-controlled mounts whose
+    /// <c>_ownedCharacterKey</c> is absent).
     /// </summary>
     /// <remarks>
-    /// IS_PLAYER_OWNED widening (mounts whose <c>_ownedCharacterKey</c>
-    /// is absent — slot103 Tiuta_kliff + Stefano) goes through
-    /// <see cref="LocalizationProvider.IsPlayerEditableItem"/>; NPC
-    /// followers get filtered out by the strict flag.
+    /// <b>Note</b>: "+ Add Dye to undyed item" UX was prototyped
+    /// (2026-05-17 part 2) and rolled back the same day — the
+    /// <c>SetObjectListPresent</c> ABI materializes a single
+    /// element with default <c>_dyeSlotNo</c>, but each item supports
+    /// a different per-prefab valid-slot set, so unsafe slot numbers
+    /// were the failure mode. Doing this properly needs the
+    /// <c>partprefabdyeslotinfo</c> per-prefab slot-count lookup
+    /// (already loaded) plus a slot-picker step; deferred.
     /// </remarks>
     private static List<DyeEditorItemRow> ScanForDyedItems(
         ISaveLoader loader,
@@ -203,9 +188,8 @@ public sealed partial class DyeEditorViewModel : ObservableObject
         var detailsCache = new Dictionary<uint, BlockDetails>();
         foreach (var rec in loader.ListAllItems(out _))
         {
+            if (!rec.HasDyeData) continue;
             if (!localization.IsPlayerEditableItem(rec)) continue;
-            var includeUndyed = !rec.HasDyeData && IsEquippedKind(rec.Container);
-            if (!rec.HasDyeData && !includeUndyed) continue;
             if (!detailsCache.TryGetValue(rec.BlockIndex, out var top))
             {
                 try
@@ -220,7 +204,7 @@ public sealed partial class DyeEditorViewModel : ObservableObject
             }
             var item = DescendToItem(top, rec);
             if (item is null) continue;
-            TryAddRow(
+            TryAddIfDyed(
                 results, localization, (int)rec.BlockIndex,
                 firstStepFieldIdx: rec.PathStep0Field,
                 firstStepElementIdx: rec.PathStep0Element,
@@ -230,25 +214,14 @@ public sealed partial class DyeEditorViewModel : ObservableObject
                 item: item);
             if (results.Count >= MaxResults) break;
         }
-        // Sort: dyed rows first (most actionable), then un-dyed; within
-        // each group by source label then item name.
+        // Sort by source label then by item name — predictable ordering.
         results.Sort((a, b) =>
         {
-            var byKind = a.CanAddDye.CompareTo(b.CanAddDye); // false (dyed) before true (add)
-            if (byKind != 0) return byKind;
-            var byBag = string.CompareOrdinal(a.BagLabel, b.BagLabel);
-            return byBag != 0 ? byBag : string.CompareOrdinal(a.ItemNameEnglish, b.ItemNameEnglish);
+            var c = string.CompareOrdinal(a.BagLabel, b.BagLabel);
+            return c != 0 ? c : string.CompareOrdinal(a.ItemNameEnglish, b.ItemNameEnglish);
         });
         return results;
     }
-
-    private static bool IsEquippedKind(ContainerKind kind) => kind switch
-    {
-        ContainerKind.ActiveEquip => true,
-        ContainerKind.ActiveUseReserve => true,
-        ContainerKind.MercenaryEquip => true,
-        _ => false,
-    };
 
     /// <summary>
     /// Descend a 2-step path from <paramref name="top"/> to the inner
@@ -290,7 +263,7 @@ public sealed partial class DyeEditorViewModel : ObservableObject
         return null;
     }
 
-    private static void TryAddRow(
+    private static void TryAddIfDyed(
         List<DyeEditorItemRow> sink,
         LocalizationProvider localization,
         int blockIndex,
@@ -317,15 +290,12 @@ public sealed partial class DyeEditorViewModel : ObservableObject
                 dyeListField = f;
             }
         }
-        if (dyeListField is null)
+        if (dyeListField is null
+            || !dyeListField.Present
+            || dyeListField.Elements is not { Count: > 0 } dyeSlots)
         {
-            // Item's schema lacks the dye field entirely (some non-equipment
-            // ItemSaveData variants) — can't add dye even via the toggle ABI.
             return;
         }
-        var isDyed = dyeListField.Present
-            && dyeListField.Elements is { Count: > 0 };
-        var dyeSlots = isDyed ? dyeListField.Elements! : null;
         var nameEn = localization.LookupItemName(itemKey, LocalizationProvider.DefaultLanguage)
                      ?? localization.ItemInfoStringKey(itemKey)
                      ?? itemKey.ToString(CultureInfo.InvariantCulture);
@@ -348,13 +318,12 @@ public sealed partial class DyeEditorViewModel : ObservableObject
             secondStepFieldIndex: secondStepFieldIdx,
             secondStepElementIndex: secondStepElementIdx,
             dyeListFieldIndex: (uint)dyeListField.FieldIndex,
-            dyeSlotCount: dyeSlots?.Count ?? 0,
+            dyeSlotCount: dyeSlots.Count,
             bagLabel: bagLabel,
             itemKey: itemKey,
             itemNameEnglish: nameEn,
             itemNameSecondary: nameSecondary,
-            itemNameDisplay: nameDisplay,
-            canAddDye: !isDyed));
+            itemNameDisplay: nameDisplay));
     }
 
     private static bool TryParseScalarUInt(string formatted, out ulong value)
@@ -418,8 +387,7 @@ public sealed partial class DyeEditorItemRow : ObservableObject
         uint itemKey,
         string itemNameEnglish,
         string? itemNameSecondary,
-        string itemNameDisplay,
-        bool canAddDye)
+        string itemNameDisplay)
     {
         BlockIndex = blockIndex;
         FirstStepFieldIndex = firstStepFieldIndex;
@@ -434,7 +402,6 @@ public sealed partial class DyeEditorItemRow : ObservableObject
         ItemNameSecondary = itemNameSecondary;
         ItemName = itemNameDisplay;
         ItemKeyText = itemKey.ToString(CultureInfo.InvariantCulture);
-        CanAddDye = canAddDye;
     }
 
     /// <summary>Top-level block index (InventorySaveData or EquipmentSaveData).</summary>
@@ -483,19 +450,6 @@ public sealed partial class DyeEditorItemRow : ObservableObject
     /// </summary>
     public string ItemName { get; }
     public string ItemKeyText { get; }
-
-    /// <summary>
-    /// True when this row represents an un-dyed but dye-eligible item.
-    /// Drives the AXAML to render an "Add" button instead of the
-    /// "Edit" button. The Add action calls
-    /// <see cref="ISaveLoader.SetObjectListPresent"/> to materialize
-    /// a default empty dye element; the master VM then re-scans so
-    /// the row flips to <c>CanAddDye=false</c> + slot count 1.
-    /// </summary>
-    public bool CanAddDye { get; }
-
-    /// <summary>True when this row carries an editable dye list (Edit button).</summary>
-    public bool CanEditDye => !CanAddDye && DyeSlotCount > 0;
 
     /// <summary>
     /// Build the descent path that addresses this item's

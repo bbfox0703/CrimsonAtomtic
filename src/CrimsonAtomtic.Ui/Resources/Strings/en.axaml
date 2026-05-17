@@ -117,7 +117,7 @@
 
   <!-- Dye editor master dialog -->
   <sys:String x:Key="DyeEditorWindowTitle">Edit item dyes</sys:String>
-  <sys:String x:Key="DyeEditorHeader">Per-item dye editing. Lists items whose _itemDyeDataList is present (Edit) and equipped items that don't have dye data yet but support it (+ Add). Click Edit to mutate R/G/B/A + grime + material + color group on individual slots; click + Add to materialize a default empty dye element you can then color.</sys:String>
+  <sys:String x:Key="DyeEditorHeader">Per-item dye editing. Lists every item whose _itemDyeDataList is present + non-empty. Click Edit to mutate R/G/B/A + grime + material + color group on individual slots.</sys:String>
   <sys:String x:Key="DyeEditorSearchPlaceholder">Filter by item name, bag, or ItemKey…</sys:String>
   <sys:String x:Key="DyeEditorColIcon">Icon</sys:String>
   <sys:String x:Key="DyeEditorColBag">Bag</sys:String>
@@ -127,13 +127,6 @@
   <sys:String x:Key="DyeEditorColAction">Action</sys:String>
   <sys:String x:Key="DyeEditorEdit">Edit…</sys:String>
   <sys:String x:Key="DyeEditorEditTip">Open the per-slot editor for this item's dye list. The dialog stays open after applying so you can edit several slots in sequence.</sys:String>
-  <sys:String x:Key="DyeEditorAdd">+ Add</sys:String>
-  <sys:String x:Key="DyeEditorAddTip">Materialize a default-empty dye element on this item. After it lands, click Edit to color it.</sys:String>
-  <sys:String x:Key="DyeEditorAddConfirmTitle">Add dye to this item?</sys:String>
-  <sys:String x:Key="DyeEditorAddConfirmBody">A default-empty dye element will be added to this item's _itemDyeDataList. You can then click Edit to set the colour / material / color group.</sys:String>
-  <sys:String x:Key="DyeEditorAddNoTemplateTitle">No dye template in this save</sys:String>
-  <sys:String x:Key="DyeEditorAddNoTemplateBody">The toggle ABI needs at least one already-dyed item in the save to copy the element schema from. Dye one item in-game first (any clothing/armor), save, reload here, and retry.</sys:String>
-  <sys:String x:Key="DyeEditorAddFailedTitle">Could not add dye</sys:String>
   <sys:String x:Key="DyeEditorClose">Close</sys:String>
   <sys:String x:Key="DyeEditorNotAvailableTitle">No dyed items in this save</sys:String>
   <sys:String x:Key="DyeEditorNotAvailableBody">No item carried _itemDyeDataList with at least one slot. Either the player hasn't dyed anything yet, or this save schema has _itemDyeDataList under a different field name (re-run vendor/crimson-rs/_probe_item_dye_data to verify).</sys:String>

@@ -128,7 +128,7 @@
 
   <!-- Dye editor master dialog -->
   <sys:String x:Key="DyeEditorWindowTitle">アイテムの染色を編集</sys:String>
-  <sys:String x:Key="DyeEditorHeader">アイテム単位で染色を編集します。_itemDyeDataList を持つアイテム (Edit)、および染色をサポートする装備中アイテムで未染色のもの (+ Add) を一覧表示します。Edit で各スロットの R/G/B/A + グライム + マテリアル + カラーグループを変更、+ Add でデフォルト空の染色要素を生成して後で Edit から色付けできます。</sys:String>
+  <sys:String x:Key="DyeEditorHeader">アイテム単位で染色を編集します。_itemDyeDataList が存在し非空の全アイテムを一覧表示します。Edit をクリックすると各スロットの R/G/B/A + グライム + マテリアル + カラーグループを変更できます。</sys:String>
   <sys:String x:Key="DyeEditorSearchPlaceholder">アイテム名、バッグ、ItemKey で絞り込み…</sys:String>
   <sys:String x:Key="DyeEditorColIcon">アイコン</sys:String>
   <sys:String x:Key="DyeEditorColBag">バッグ</sys:String>
@@ -138,13 +138,6 @@
   <sys:String x:Key="DyeEditorColAction">操作</sys:String>
   <sys:String x:Key="DyeEditorEdit">編集…</sys:String>
   <sys:String x:Key="DyeEditorEditTip">このアイテムの染色リストに対するスロット単位のエディタを開きます。Apply 後もダイアログは開いたままなので、複数スロットを連続で編集できます。</sys:String>
-  <sys:String x:Key="DyeEditorAdd">+ 追加</sys:String>
-  <sys:String x:Key="DyeEditorAddTip">このアイテムにデフォルト空の染色要素を追加します。生成後に Edit から色付けしてください。</sys:String>
-  <sys:String x:Key="DyeEditorAddConfirmTitle">このアイテムに染色を追加しますか？</sys:String>
-  <sys:String x:Key="DyeEditorAddConfirmBody">このアイテムの _itemDyeDataList にデフォルト空の染色要素が追加されます。その後 Edit から色 / マテリアル / カラーグループを設定できます。</sys:String>
-  <sys:String x:Key="DyeEditorAddNoTemplateTitle">このセーブには染色テンプレートがありません</sys:String>
-  <sys:String x:Key="DyeEditorAddNoTemplateBody">toggle ABI は要素 schema のコピー元として、少なくとも 1 つの染色済みアイテムを必要とします。先にゲーム内で任意の衣服 / 防具を染色して保存し、本ツールを再読み込みしてから再試行してください。</sys:String>
-  <sys:String x:Key="DyeEditorAddFailedTitle">染色を追加できませんでした</sys:String>
   <sys:String x:Key="DyeEditorClose">閉じる</sys:String>
   <sys:String x:Key="DyeEditorNotAvailableTitle">このセーブには染色済みアイテムがありません</sys:String>
   <sys:String x:Key="DyeEditorNotAvailableBody">_itemDyeDataList を少なくとも 1 スロット保持するアイテムがありません。プレイヤーがまだ何も染色していないか、または本セーブの schema が _itemDyeDataList を別のフィールド名で保持しています (vendor/crimson-rs/_probe_item_dye_data を再実行して確認してください)。</sys:String>
