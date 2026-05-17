@@ -31,9 +31,12 @@
 >   basemap affine constants live in `PositionedEntityRecord` docstring
 >   for either path.
 >
+> ### Open follow-ons resolved this session
+>
+> - ~~Visual verification of palette picker~~ (from part 4) — **confirmed working** end-to-end by the user (Tools → Edit Item Dyes → Edit → Pick renders the 109-cell grid, highlights the current color, cell-click updates the row swatch + dismisses the modal).
+>
 > ### Open follow-ons carried over (no change)
 >
-> - Visual verification of palette picker (from part 4).
 > - Safe re-attempt of "+ Add Dye" with per-prefab slot picker (from part 5).
 > - Pattern B v2 for multi-objective SA challenges (from part 1).
 > - OCT forum post URL placeholder (from part 1).
