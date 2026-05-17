@@ -336,6 +336,7 @@
   <sys:String x:Key="EditPanelMakeAbsentTip">將此 scalar 的存在位元關掉 — 該欄位從 block 移除 (mask bit 清掉，payload bytes 丟棄)。要復原就輸入一個值再按 Apply。</sys:String>
   <sys:String x:Key="MarkChallengeCompleteButton">✓ 標記挑戰完成 (Pattern B v1)</sys:String>
   <sys:String x:Key="MarkChallengeCompleteTip">引擎自然單一挑戰完成 (Pattern B v1)。只有當遊戲已對此挑戰做過偵測、顯示為可用 (你已在遊戲中撿起封印神器) 時才會啟用。會寫入相關項目 — 與遊戲本身在已完成、但尚未領取的狀態的情況完全相同。生活部份的挑戰可能不適用。尚未完整測試 — 請先備份你的存檔。</sys:String>
+  <sys:String x:Key="MarkChallengeSkipReasonPrefix">已停用 — 原因：</sys:String>
   <sys:String x:Key="ConfirmDialogYes">是</sys:String>
   <sys:String x:Key="ConfirmDialogNo">否</sys:String>
   <sys:String x:Key="ElementsColBulkFill">批次</sys:String>

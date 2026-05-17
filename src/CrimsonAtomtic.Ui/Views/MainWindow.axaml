@@ -399,16 +399,18 @@
               <TextBlock Grid.Column="4" Text="{DynamicResource FieldsUndecoded}" Opacity="0.6" />
               <TextBlock Grid.Column="5" Text="{Binding UndecodedRangesText}" FontFamily="Cascadia Code,Consolas,monospace" />
             </Grid>
-            <!-- Block-action bar: "Mark Challenge Complete" appears when the
-                 current frame is a catalog MissionStateData challenge that
-                 isn't already at _state=5. The VM gates IsCurrentChallengeMarkable
-                 on class + key + state checks; the bar's IsVisible binds to
-                 the same flag, so it disappears as soon as the user navigates
-                 elsewhere or the edit lands. -->
+            <!-- Block-action bar: "Mark Challenge Complete" stays VISIBLE
+                 on every MissionStateData catalog row (IsCurrentNavOnMissionStateRow),
+                 and ENABLES only when the row is fully eligible
+                 (IsCurrentChallengeMarkable). The tooltip surfaces either the
+                 action description (when eligible) or the skip reason from the
+                 bulk-sweep diagnostic plumbing (when disabled) so the user can
+                 see why the button is grayed out instead of guessing. -->
             <Button Content="{DynamicResource MarkChallengeCompleteButton}"
-                    ToolTip.Tip="{DynamicResource MarkChallengeCompleteTip}"
+                    ToolTip.Tip="{Binding CurrentChallengeMarkTooltip}"
                     Command="{Binding MarkCurrentChallengeCompleteCommand}"
-                    IsVisible="{Binding IsCurrentChallengeMarkable}"
+                    IsVisible="{Binding IsCurrentNavOnMissionStateRow}"
+                    IsEnabled="{Binding IsCurrentChallengeMarkable}"
                     HorizontalAlignment="Left"
                     Padding="10,4"
                     MinHeight="0" />

@@ -325,6 +325,7 @@
   <sys:String x:Key="EditPanelMakeAbsentTip">Flip this scalar's presence bit off — the field is removed from the block (mask bit cleared, payload bytes dropped). Reverse it by typing a value and clicking Apply.</sys:String>
   <sys:String x:Key="MarkChallengeCompleteButton">✓ Mark Challenge Complete (Pattern B v1)</sys:String>
   <sys:String x:Key="MarkChallengeCompleteTip">Engine-faithful single-challenge completion (Pattern B v1). Only enables when the game has already detected this challenge as available (you've picked up the sealed artifact in-game). Writes the relevant entries — exactly what the game itself writes for a completed-but-unclaimed state. Living-type challenges may not apply. NOT FULLY TESTED — back up your save first.</sys:String>
+  <sys:String x:Key="MarkChallengeSkipReasonPrefix">Disabled — reason:</sys:String>
   <sys:String x:Key="ConfirmDialogYes">Yes</sys:String>
   <sys:String x:Key="ConfirmDialogNo">No</sys:String>
   <sys:String x:Key="ElementsColBulkFill">Bulk</sys:String>

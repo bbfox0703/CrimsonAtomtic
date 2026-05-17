@@ -336,6 +336,7 @@
   <sys:String x:Key="EditPanelMakeAbsentTip">このスカラーの存在ビットをオフに反転 — フィールドが block から削除されます (mask bit クリア、payload bytes 破棄)。値を入力して Apply をクリックすると元に戻せます。</sys:String>
   <sys:String x:Key="MarkChallengeCompleteButton">✓ チャレンジ完了をマーク (Pattern B v1)</sys:String>
   <sys:String x:Key="MarkChallengeCompleteTip">エンジン忠実な単一チャレンジ完了 (Pattern B v1)。ゲームが既にこのチャレンジを検出し、利用可能と表示している (ゲーム内で封印遺物を入手済み) 場合のみ有効化されます。関連エントリを書き込みます — 完了済みだが未受領の状態でゲーム自身が書き込む内容と完全に同じです。生活系のチャレンジには適用されない場合があります。完全テスト未済 — まず必ずセーブをバックアップしてください。</sys:String>
+  <sys:String x:Key="MarkChallengeSkipReasonPrefix">無効 — 理由:</sys:String>
   <sys:String x:Key="ConfirmDialogYes">はい</sys:String>
   <sys:String x:Key="ConfirmDialogNo">いいえ</sys:String>
   <sys:String x:Key="ElementsColBulkFill">一括</sys:String>

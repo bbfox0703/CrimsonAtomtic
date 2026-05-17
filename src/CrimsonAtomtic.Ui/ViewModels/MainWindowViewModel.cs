@@ -1707,7 +1707,68 @@ public sealed partial class MainWindowViewModel(
     /// _state field changes.
     /// </para>
     /// </remarks>
-    public bool IsCurrentChallengeMarkable => TryReadCurrentChallengeContext(out _);
+    public bool IsCurrentChallengeMarkable => TryReadCurrentChallengeContext(out _, out _);
+
+    /// <summary>
+    /// True when navigation is on a <c>MissionStateData</c> catalog row
+    /// (class + path of length 1). Drives the "Mark Challenge Complete"
+    /// button's <b>visibility</b> — independent of eligibility, so the
+    /// button stays present on every catalog row and grays out (with
+    /// tooltip explanation) when the row itself is ineligible.
+    /// </summary>
+    public bool IsCurrentNavOnMissionStateRow
+    {
+        get
+        {
+            if (_navStack.Count == 0
+                || _navStack.Peek() is not BlockFrame frame
+                || !string.Equals(frame.Block.ClassName, "MissionStateData", StringComparison.Ordinal)
+                || SelectedBlock is null
+                || frame.Path is not { Count: 1 })
+            {
+                return false;
+            }
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Tooltip text for the "Mark Challenge Complete" button. When the
+    /// challenge is eligible, returns the action-description string
+    /// (<c>MarkChallengeCompleteTip</c> resource). When the row is on
+    /// a <c>MissionStateData</c> catalog but ineligible, returns
+    /// "<c>{MarkChallengeSkipReasonPrefix}</c> {skip reason}" so the
+    /// user can see <i>why</i> the button is disabled (replaces the
+    /// pre-2026-05-17 silent grey-out). Empty string when the button
+    /// isn't visible at all.
+    /// </summary>
+    public string CurrentChallengeMarkTooltip
+    {
+        get
+        {
+            if (!IsCurrentNavOnMissionStateRow)
+            {
+                return string.Empty;
+            }
+            var markable = TryReadCurrentChallengeContext(out _, out var skipReason);
+            if (markable)
+            {
+                return LookupUiResourceString("MarkChallengeCompleteTip") ?? string.Empty;
+            }
+            var prefix = LookupUiResourceString("MarkChallengeSkipReasonPrefix") ?? "Disabled:";
+            return $"{prefix} {skipReason ?? "(unknown reason)"}";
+        }
+    }
+
+    private static string? LookupUiResourceString(string key)
+    {
+        if (Avalonia.Application.Current?.TryGetResource(key, null, out var v) == true
+            && v is string s)
+        {
+            return s;
+        }
+        return null;
+    }
 
     /// <summary>
     /// Mark the currently-displayed catalog <c>MissionStateData</c>
@@ -1765,7 +1826,7 @@ public sealed partial class MainWindowViewModel(
     private async Task MarkCurrentChallengeCompleteAsync()
     {
         BulkOpStatus = null;
-        if (!TryReadCurrentChallengeContext(out var ctx)
+        if (!TryReadCurrentChallengeContext(out var ctx, out _)
             || ConfirmRequested is not { } ask
             || _loadedPath is null)
         {
@@ -1862,8 +1923,7 @@ public sealed partial class MainWindowViewModel(
             BulkOpStatus = $"Mark failed: {error.Message}. "
                            + "Save state may be partial — reload without writing to revert.";
         }
-        OnPropertyChanged(nameof(IsCurrentChallengeMarkable));
-        MarkCurrentChallengeCompleteCommand.NotifyCanExecuteChanged();
+        NotifyMarkChallengeStateChanged();
     }
 
     /// <summary>
@@ -2254,8 +2314,7 @@ public sealed partial class MainWindowViewModel(
                 OnPropertyChanged(nameof(WindowTitle));
             }
         }
-        OnPropertyChanged(nameof(IsCurrentChallengeMarkable));
-        MarkCurrentChallengeCompleteCommand.NotifyCanExecuteChanged();
+        NotifyMarkChallengeStateChanged();
     }
 
     /// <summary>
@@ -2498,9 +2557,11 @@ public sealed partial class MainWindowViewModel(
     /// Returns false (with default <paramref name="ctx"/>) when any
     /// precondition fails.
     /// </summary>
-    private bool TryReadCurrentChallengeContext(out CurrentChallengeContext ctx)
+    private bool TryReadCurrentChallengeContext(
+        out CurrentChallengeContext ctx, out string? skipReason)
     {
         ctx = default;
+        skipReason = null;
         if (_navStack.Count == 0
             || _navStack.Peek() is not BlockFrame frame
             || !string.Equals(frame.Block.ClassName, "MissionStateData", StringComparison.Ordinal)
@@ -2508,16 +2569,13 @@ public sealed partial class MainWindowViewModel(
             // Path must be exactly one step (the missionStateList element).
             || frame.Path is not { Count: 1 } path1)
         {
+            skipReason = "navigation not on a MissionStateData catalog row";
             return false;
         }
         var pathStep = path1[0];
-        // Per-row caller doesn't surface the skip reason today (the
-        // Mark Challenge button just hides via IsCurrentChallengeMarkable).
-        // Adding a tooltip with the reason would be a follow-up — for
-        // now just discard the reason.
         return TryBuildChallengeContextFromCatalogRow(
             topBlock.Index, (int)pathStep.FieldIndex, (int)pathStep.ElementIndex,
-            out ctx, out _);
+            out ctx, out skipReason);
     }
 
     /// <summary>
@@ -2904,8 +2962,7 @@ public sealed partial class MainWindowViewModel(
         }
         // Block-action visibility may have changed (e.g. _state on the
         // current MissionStateData was just promoted to 5).
-        OnPropertyChanged(nameof(IsCurrentChallengeMarkable));
-        MarkCurrentChallengeCompleteCommand.NotifyCanExecuteChanged();
+        NotifyMarkChallengeStateChanged();
     }
 
     /// <summary>
@@ -4653,7 +4710,20 @@ public sealed partial class MainWindowViewModel(
         OnPropertyChanged(nameof(ElementsCountText));
         // Block-action visibility — depends on current frame's class +
         // resolved field values, so re-check on every nav change.
+        NotifyMarkChallengeStateChanged();
+    }
+
+    /// <summary>
+    /// Re-evaluate the "Mark Challenge Complete" button's visibility +
+    /// enablement + tooltip after a nav change or a save mutation that
+    /// might have flipped eligibility (e.g. <c>_state</c> promoted to 5
+    /// on the current row).
+    /// </summary>
+    private void NotifyMarkChallengeStateChanged()
+    {
         OnPropertyChanged(nameof(IsCurrentChallengeMarkable));
+        OnPropertyChanged(nameof(IsCurrentNavOnMissionStateRow));
+        OnPropertyChanged(nameof(CurrentChallengeMarkTooltip));
         MarkCurrentChallengeCompleteCommand.NotifyCanExecuteChanged();
     }
 
