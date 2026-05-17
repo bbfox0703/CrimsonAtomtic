@@ -15,6 +15,9 @@
 - **paz-containers.md** — asset archives: `.paz`, `.pamt`, `.papgt`, `.paloc`, trie buffers
 - **ui-design.md** — UI/UX principles for the editor, with the design constraints they derive from
 - **crimsonforge-coverage-gaps.md** — what NattKh's CrimsonForge modding tool can decode that we can't (yet); the canonical "look here when you don't know how to parse format X" pointer
+- **oct/** — opencheattables.com phpBB forum-post drafts. Contains
+  `phpBB-markdown-syntax.md` (the dialect reference) and
+  `features-highlights.md` (the post draft for an announcement)
 
 ## How to extend
 

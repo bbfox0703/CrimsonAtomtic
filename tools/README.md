@@ -47,9 +47,10 @@ print full usage when run with no args.
 
 | Tool                   | Status | Purpose                                                          |
 | ---------------------- | ------ | ---------------------------------------------------------------- |
-| `inspect_save.py`      | TODO   | Interactive REPL on a parsed save                                |
-| `inspect_pabgb.py`     | TODO   | Hex / field viewer for a single PABGB file                       |
-| `_proto_<format>.py`   | as-needed | Scratch parser prototyping — to be deleted once promoted to `crimson-rs` |
+| `inspect_save_body.py`    | DONE   | Hex / field viewer for a decoded save body                  |
+| `inspect_save_section.py` | DONE   | Per-block / per-class slice of a save body                  |
+| `sa-investigations/`      | DONE   | Sealed Abyss Artifact RE scratch — 8 named scripts retained from the multi-objective challenge investigation; see folder README |
+| `_proto_<format>.py`      | as-needed | Scratch parser prototyping — to be deleted once promoted to `crimson-rs` |
 
 ### `analyze/`
 

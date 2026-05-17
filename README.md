@@ -53,8 +53,10 @@ The UI ships with a left-rail navigator over the decoded save and a focused
 set of Tools-menu bulk operations. Highlights:
 
 - **Generic block / field editor** — every TOC block surfaced as a tree;
-  per-field edit with typed validation, present/absent toggle, undo journal,
-  and a close-on-dirty save prompt.
+  per-field edit with typed validation, present/absent toggle, change
+  journal, and a close-on-dirty save prompt. Composite scalars
+  (`float3` / `float4` / `quaternion` / `uint4`) display + edit through a
+  single bracketed textbox (e.g. `"[1.5, 2.0, -3.25]"` for a position).
 - **Inventory** — virtualised lists per container, item picker with icons
   via the on-disk `IconCache/`, add-to-bag, fill-stacks-to-max (per bag and
   across all inventories), remove-element.
@@ -63,30 +65,61 @@ set of Tools-menu bulk operations. Highlights:
   an Apply-Set toolbar, automatic `_validSocketCount` bump.
 - **Dye editor** — per-item slot editor with R/G/B/A + grime + material
   (palette tier) + colour-group dropdowns, all resolved live from the
-  three dye gamedata bridges.
+  three dye gamedata bridges. Async load + "Loading dyed items…"
+  feedback for large saves.
 - **Sealed Abyss Artifact challenges** — per-row "Mark Challenge Complete"
   (Pattern B v1: FAR tracker flip + X_2 sub-mission insert) plus
-  **Tools → Complete All Held Sealed Abyss Artifact Challenges** which
-  sweeps every held artifact in one action.
+  **Tools → Complete All Sealed Abyss Artifact Challenges** which sweeps
+  every challenge whose data shape qualifies, regardless of whether the
+  artifact item is still held. Bulk dialog shows per-key skip reasons so
+  out-of-scope cases (multi-objective Living_*/Cooking shapes) are
+  explicitly explained. Deferred-redecode batch collapses ~423 body
+  re-decodes into one (200× wall-clock speedup on the 141-challenge
+  sweep).
 - **Abyss Gates** — bulk **Unlock All Abyss Gates (Map Discovery)** for
   the knowledge layer plus a per-gate Lock/Unlock dialog for the gate-state
   layer.
 - **Vendor Buyback** — list every item the player has sold to vendors
   (StoreKey resolved live via `storeinfo.pabgb`), per-row Remove to
-  free a buyback slot; two-pass filter (store-name match expands to
-  every sold item in that store; item-name narrows per-row).
+  free a buyback slot, per-row **Jump…** to open the item in the main
+  block editor for stack / endurance / sockets / dye edits; two-pass
+  filter (store-name match expands to every sold item in that store;
+  item-name narrows per-row).
 - **Mercenary rename** — with character portrait column driven by the
   PAZ NPC portrait pipeline, plus generic class glyphs (🐎 / 🛒 / 🎈 /
   🦌 / 👤) for mounts / wagons / animals / NPCs that don't ship a
   per-character portrait.
 - **Browse Items / Browse Characters / NPCs** — reference dialogs over the
-  full `iteminfo` and `characterinfo` tables.
+  full `iteminfo` and `characterinfo` tables. The character browser
+  doubles as a **modal CharacterKey picker** invoked from the main
+  edit panel for `CharacterKey`-typed scalar fields.
+- **Browse Character References** — flat-list every save-side
+  `CharacterKey` reference (top-level + nested) via the
+  `crimson_save_list_character_refs` C ABI; per-row **Jump…** navigates
+  the main block tree to the containing block. Banner warns that
+  reference linkage is best-effort across different field contexts.
 - **Find Items** — cross-bag search with per-row Go button that jumps the
   main window straight to the item-detail view.
 - **Auto-find saves on launch** — Steam / Epic / Game Pass plain-folder
   probe + most-recent preference + per-platform backup tree.
+- **First-launch disclaimer** — bilingual (中文 + English) modal shown
+  once per machine; acceptance persisted to `settings.json`. Version-
+  gated so future material changes can re-prompt every user.
+- **32 key-resolver bridges** — name resolution for `MissionKey`,
+  `QuestKey`, `StageKey`, `KnowledgeKey`, `CharacterKey`, `SkillKey`,
+  `StoreKey`, `MercenaryKey`, `RegionKey`, `ItemGroupKey`, etc. — all
+  decoded live from the game's own gamedata catalogs so the user sees
+  "Hernandian Honor Guard Armor / 赫南迪安榮譽近衛盔甲" instead of
+  `9102 <u32>`.
 
 See [docs/status.md](docs/status.md) for the full feature ledger and roadmap.
+
+### Forum post drafts
+
+A pre-built feature-highlights post in
+[opencheattables.com phpBB markdown](docs/oct/phpBB-markdown-syntax.md)
+is checked in at [docs/oct/features-highlights.md](docs/oct/features-highlights.md)
+— ready to paste into a forum announcement after filling in the GitHub URL.
 
 ## Stack
 

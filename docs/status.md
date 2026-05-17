@@ -3,7 +3,47 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-16 part 17 (deferred-redecode batch on the bulk SA challenge sweep — 200× wall-clock win, measured on the live save).
+> Last updated: 2026-05-17 (character refs browser + CharacterKey picker + first-launch disclaimer; composite-scalar setters; bulk SA diagnostics; four UX fixes; 13 niche bridges).
+>
+> ## ✅ This session — what shipped (2026-05-17)
+>
+> Five related commits landed today, all pushed to `dev` and FF-merged
+> into `main`. Final tip: `9906c00`.
+>
+> | Area | Scope |
+> |---|---|
+> | **13 niche `crimson-rs` bridges** (`69f1a01`) | Consumed vendor commit `115e4d8`. New `[LibraryImport]` + `Native<X>Catalog` wrappers for: HouseKey / RoyalSupplyKey / CraftToolKey / CraftToolGroupKey / TriggerRegionInfoKey / GamePlayVariableKey / GlobalGameEventInfoKey / GlobalGameEventGroupKey / GameAdviceInfoKey / GameAdviceGroupKey / ReserveSlotKey / RegionKey / ItemGroupKey. Single `TryBootstrapNicheBridges` + generic `TryLoadNicheBridge<T>` helper opens the group-0008 PAMT once + extracts all 13 pairs. 78 new exports total; 1 new live-install smoke test (`NicheBridges_LiveInstall_LoadAllAndResolveKnownKeys`). |
+> | **Dye Item-column secondary-language + 3× deferred-redecode wrappers** (`b140b60`) | Fix: Dye master dialog's Item column was binding `ItemNameEnglish` only (Secondary language never showed). Fix mirrors Sockets editor pattern — pre-format `"English / Secondary"` into a new `ItemName` property, AXAML binds to that, filter still substring-matches each language separately. Plus: `loader.RunDeferred(...)` wrapped around Sockets Apply-Set, Dye slot multi-Apply, and Unlock-All-Abyss-Gates per-key inject — each collapses N body re-decodes to 1, same contract + partial-success semantics as the SA bulk sweep. |
+> | **Four UX feedback items** (`f64f6c2`) | (1) Rename Mercenary: dropped the manually-implemented `CanApply` gate (wasn't wired to `NotifyCanExecuteChanged`); TextBox uses `UpdateSourceTrigger=PropertyChanged`; window widened 900→1280 with column resizes. (2) Dye Editor: filtered blocks by class BEFORE `LoadBlockDetails` (was loading every block in the save → 10-20× speedup before async even helps) + new `RefreshAsync` runs on thread pool + ctor sets `IsLoading=true` so the dialog paints "Loading dyed items…" immediately. (3) Vendor Buyback: new per-row **Jump…** button → closes the dialog + navigates the main editor's block tree to the buyback item via new `NavigateToVendorBuybackItemAsync`. (4) Bulk SA sweep: dropped both held-artifact gates (outer + inner `HoldsAnySealedAbyssArtifact`) per user directive; added `out string? skipReason` to `TryBuildChallengeContextFromCatalogRow` + `BulkSaPreview.SkipDetails` list surfaced per-key in the confirm dialog so users see exactly which challenges were skipped and why. Investigation against slot102/105/106/107 revealed multi-objective Living_*/Cooking-style challenges store sub-steps with **negative-encoded** keys (`0xFFFFxxxx`) which the missioninfo anchor-scan parser filters out → Pattern B v1 X_2 lookup fails → correctly skipped. Pattern B v1 is verified only on linear single-step SA challenges; multi-objective shape needs a future Pattern B v2. |
+> | **F32x3 / F32x4 / U32x4 typed setters** (`3aecd06`) | Consumed vendor commits `94c7a96` (typed display variants) + `23a9e0d` (typed setters) + `c9343f8` (dynamic_array inline JSON). Chose byte-packing in C# over wiring the 6 new typed setter `[LibraryImport]` entries — functionally equivalent (both produce the same 12 / 16 LE byte payload via the existing generic `SetScalarField`), less ABI surface. `ScalarFieldEditing.SupportedTypeTags` += `{f32x3, f32x4, u32x4}`; `TryEncode` adds bracketed / bare comma-separated parsers; `TryInferTypeTagFromSchema` accepts `float3` / `float4` / `Quaternion` / `uint4` / `SceneObjectUuid` size-gated. 15 new test cases; 200/200 → 215/215. dynamic_array inline display is automatic on DLL rebuild. |
+> | **Character Refs Browser + CharacterKey picker + first-launch disclaimer** (`59b6d88`) | Consumed vendor commit `88ef779` (`crimson_save_list_character_refs`). New `CharacterRefRecord` (16-byte `repr(C)`) + `ISaveLoader.ListCharacterRefs(out version)` wrapper mirroring the inventory enumerator two-call dance. **Tools → Browse Character References** dialog lists every save-side CharacterKey reference (top-level + nested) with portrait + resolved name + Jump-to-block button → new `MainWindowViewModel.NavigateToTopLevelBlockAsync`. **Modal pick mode** added to existing `CharacterPickerWindow` — new **"Pick character…"** button in the edit panel visible when `SelectedField.TypeName == "CharacterKey"`; modal returns selected key which fills the textbox for Apply. Both dialogs carry bilingual warning banner about reference linkage. **First-launch disclaimer**: `AppSettings.DisclaimerAcceptedVersion` (version-gated) + `DisclaimerDialog` shown on `MainWindow.Opened`; Accept persists version 1 + continues, Decline calls `desktop.Shutdown()`. Bilingual body (中文 + English). 215/215 → 216/216. |
+> | **Documentation + scratch reorg** (`9906c00`) | Promoted 8 of 10 `tools/inspect/_proto_*.py` SA investigation scripts to `tools/inspect/sa-investigations/` with stable names + curated README.md (dropped two one-off probes). New `docs/oct/` folder: `phpBB-markdown-syntax.md` (opencheattables.com markdown dialect reference) + `features-highlights.md` (forum-post draft using that dialect). README / docs index updates to match. |
+>
+> Tests progression across the session: **190/190 → 191/191 → 200/200 → 215/215 → 216/216**. Debug build clean at every commit. All work on `dev` then FF-merged into `main`; both branches in sync at `9906c00`.
+>
+> ### Open follow-ons noted during this session
+>
+> - **Pattern B v2 for multi-objective SA challenges**: needs RE diff of
+>   slot106 (progress 2/3) → slot107 (progress 3/3, reward unclaimed)
+>   → post-claim to determine the engine-natural completion shape for
+>   challenges with negative-keyed sub-steps. Either a `crimson-rs`
+>   parser change to surface those rows OR a C# byte-scan fallback that
+>   recovers the key directly from `missioninfo.pabgb` bytes. Diagnostic
+>   scripts retained in `tools/inspect/sa-investigations/`.
+> - **CharacterKey picker tooltip**: when `TryReadCurrentChallengeContext`
+>   returns false for a per-row "Mark Challenge Complete" button on
+>   `MissionStateData` rows, the button just grays out silently. Could
+>   surface the skip reason as a tooltip (the diagnostic plumbing is
+>   already in place for the bulk sweep — just needs a tooltip binding).
+> - **Add dye to undyed item**: per-slot absent→present already works
+>   via `SetScalarFieldPresent`, but adding a NEW dye element to an
+>   item whose `_itemDyeDataList` is empty needs an upstream
+>   `set_object_list_present` ABI in `crimson-rs`. Defer until demand.
+> - **OCT forum post**: `docs/oct/features-highlights.md` has a
+>   placeholder `*(GitHub URL — fill in before posting)*` to fix
+>   before pasting into the forum.
+>
+> ---
 >
 > ## ✅ This session — what shipped (2026-05-16 part 17)
 >
