@@ -1,0 +1,101 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        mc:Ignorable="d"
+        d:DesignWidth="480"
+        d:DesignHeight="520"
+        x:Class="CrimsonAtomtic.Ui.Views.DyePalettePickerWindow"
+        x:DataType="vm:DyePalettePickerViewModel"
+        Title="{DynamicResource DyePalettePickerWindowTitle}"
+        Icon="/Assets/MainIcon.ico"
+        Width="480" Height="520"
+        MinWidth="380" MinHeight="380"
+        CanResize="True"
+        WindowStartupLocation="CenterOwner"
+        FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
+
+  <DockPanel LastChildFill="True" Margin="12">
+    <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,8">
+      <TextBlock Text="{Binding HeaderText}" FontWeight="Bold" />
+      <TextBlock Text="{Binding SubHeaderText}" Opacity="0.7" />
+      <!-- Off-grid banner shown when the current dye's RGB doesn't
+           match any palette position (CE-modified saves or values
+           set via the raw scalar editor). Picking will replace it
+           with an on-grid color. -->
+      <Border IsVisible="{Binding !CurrentIsOnGrid}"
+              Background="#33ff8800"
+              BorderBrush="#ff8800"
+              BorderThickness="1"
+              CornerRadius="3"
+              Padding="8,4"
+              Margin="0,4,0,0">
+        <TextBlock Text="{DynamicResource DyePalettePickerOffGridBanner}"
+                   TextWrapping="Wrap"
+                   FontSize="12" />
+      </Border>
+    </StackPanel>
+
+    <StackPanel DockPanel.Dock="Bottom"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="8"
+                Margin="0,8,0,0">
+      <Button Content="{DynamicResource DyePalettePickerCancel}"
+              Click="OnCancelClick"
+              MinWidth="80" />
+    </StackPanel>
+
+    <!-- Palette grid. 10-column UniformGrid lays the 109 cells out as
+         9 grayscale (row 0, col 0-8) + 10 chromatic tiers × 10 cols
+         (rows 1-10) — matches the vendor's documented layout exactly
+         since the palette is enumerated in that order. Each cell is a
+         color swatch button that confirms its color on click and
+         dismisses the dialog. -->
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto">
+      <ItemsControl ItemsSource="{Binding Cells}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <UniformGrid Columns="10" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:DyePaletteCell">
+            <!-- Cell: thin border around a colored panel. Selected (current)
+                 cell gets a thicker dark ring so the user can see which
+                 color is currently applied. -->
+            <Button Command="{Binding PickCommand}"
+                    ToolTip.Tip="{Binding Tooltip}"
+                    Padding="0"
+                    Margin="2"
+                    Width="36" Height="36"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Stretch"
+                    BorderThickness="0"
+                    Background="Transparent"
+                    Cursor="Hand">
+              <Border Background="{Binding Brush}"
+                      BorderBrush="Black"
+                      BorderThickness="1"
+                      CornerRadius="2">
+                <!-- Inner overlay for the current-cell indicator: a
+                     bold ring rendered only when IsCurrent=true. -->
+                <Border BorderBrush="White"
+                        BorderThickness="2"
+                        CornerRadius="1"
+                        Margin="2"
+                        IsVisible="{Binding IsCurrent}">
+                  <Border BorderBrush="Black"
+                          BorderThickness="2"
+                          CornerRadius="1" />
+                </Border>
+              </Border>
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

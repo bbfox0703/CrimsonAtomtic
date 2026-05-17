@@ -141,13 +141,20 @@
   <!-- Dye slot editor child dialog -->
   <sys:String x:Key="DyeSlotEditorWindowTitle">Edit dye slots</sys:String>
   <sys:String x:Key="DyeSlotColSlot">Slot</sys:String>
+  <sys:String x:Key="DyeSlotColColor">Color</sys:String>
   <sys:String x:Key="DyeSlotColGrime">Grime</sys:String>
   <sys:String x:Key="DyeSlotColMaterial">Material</sys:String>
   <sys:String x:Key="DyeSlotColColorGroup">Color group</sys:String>
   <sys:String x:Key="DyeSlotColAction">Action</sys:String>
   <sys:String x:Key="DyeSlotColStatus">Status</sys:String>
+  <sys:String x:Key="DyeSlotPick">Pick…</sys:String>
   <sys:String x:Key="DyeSlotApply">Apply</sys:String>
   <sys:String x:Key="DyeSlotEditorClose">Close</sys:String>
+
+  <!-- Dye palette picker modal -->
+  <sys:String x:Key="DyePalettePickerWindowTitle">Pick a dye color</sys:String>
+  <sys:String x:Key="DyePalettePickerCancel">Cancel</sys:String>
+  <sys:String x:Key="DyePalettePickerOffGridBanner">The currently-applied color is not on this theme's palette (probably set by an external tool). Picking any cell will replace it with an on-grid color.</sys:String>
   <sys:String x:Key="AbyssGatesWindowTitle">Edit Abyss Gates</sys:String>
   <sys:String x:Key="AbyssGatesHeader">Per-gate Lock/Unlock toggle. Writes _initStateNameHash on every nested FieldGimmickSaveData element inside FieldSaveData._fieldGimmickSaveDataList (Default 0x866c7489 ↔ Activated 0xe300acfe). Idle (scenery) and Unknown rows are read-only to avoid destabilising non-gate gimmicks. Saves to the file on next File → Save.</sys:String>
   <sys:String x:Key="AbyssGatesColOwnerLevel">Owner level</sys:String>

@@ -3,7 +3,31 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-17 part 3 (dye palette accessor bindings — finding: dye is a 109-position grid, not freeform RGB).
+> Last updated: 2026-05-17 part 4 (DyeSlot palette picker UX — visual 109-cell grid replaces freeform R/G/B inputs).
+>
+> ## ✅ This session — what shipped (2026-05-17 part 4)
+>
+> One commit consuming the part-3 palette ABIs end-to-end into the
+> DyeSlot editor UX. No vendor change in this part.
+>
+> | Area | Scope |
+> |---|---|
+> | **DyeSlot palette picker UI** | The per-row R/G/B/A NumericUpDown columns in `DyeSlotEditorWindow` are replaced with a single visual "Color" column showing a colored swatch + "Pick…" button. Clicking Pick opens a new modal `DyePalettePickerWindow` that renders the row's color group as a 10-column UniformGrid of 109 clickable color cells (9 grayscale + 10×10 chromatic per vendor's documented layout). Cell-click → confirms + closes (no separate OK button) → row's R/G/B properties update + swatch repaints; user still hits the row's Apply to persist. The picker uses the part-3 `PaletteSize` / `PaletteAt` ABIs to enumerate cells and `PositionForRgb` to highlight the currently-applied cell with a black/white ring. Off-grid CE-modified RGBs (no matching palette position) trigger an orange-tinted banner: "The currently-applied color is not on this theme's palette (probably set by an external tool). Picking any cell will replace it with an on-grid color." Bilingual strings (en / ja / zh-TW) for the new picker window + the "Color" column header + "Pick…" button + off-grid banner. The old NumericUpDown columns are gone — power users who want raw byte access can still use the underlying scalar editor in the block-tree view. Alpha is intentionally hidden in the picker (every palette position uses 0xFF per vendor docs); `ApplyPickedColor` defensively normalizes A to 0xFF if it was 0. |
+>
+> Tests: **269/269 pass** (no new tests — pure UI plumbing over the part-3 ABIs which already have a roundtrip test). Debug build clean. **UI not yet visually verified end-to-end** — the AXAML compiles, the VM types check, but I haven't launched the app to see the grid render. Next session pick-up should open Tools → Edit Item Dyes → click Edit on any dyed row → click Pick to confirm: (a) the grid renders 109 cells, (b) the current color shows with a ring, (c) clicking a cell closes the modal and updates the swatch, (d) Apply persists.
+>
+> ### Open follow-ons noted during this session
+>
+> - **Visual verification of palette picker** — see caveat above. If the UniformGrid or Border ring doesn't render as expected, the Cell template in `DyePalettePickerWindow.axaml` is the place to iterate.
+> - **Disable Pick button when no color group selected** — current behavior silently no-ops if `SelectedColorGroup` is null (e.g. brand-new dye element). Should disable the button via `CanExecute` on `RequestPickColorCommand` for cleaner UX.
+> - **Palette position tooltip on cells** — currently shows "Position N · #rrggbb" which is RE-engineer-flavored. Could swap to per-tier names if/when a `(tier, column) → human-readable` mapping is RE'd.
+>
+> ### Open follow-ons carried over (no change)
+>
+> - **Pattern B v2 for multi-objective SA challenges** (from part 1).
+> - **OCT forum post URL placeholder** (from part 1).
+>
+> ---
 >
 > ## ✅ This session — what shipped (2026-05-17 part 3)
 >

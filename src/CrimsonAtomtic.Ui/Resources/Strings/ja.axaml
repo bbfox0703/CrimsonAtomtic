@@ -152,13 +152,20 @@
   <!-- Dye slot editor child dialog -->
   <sys:String x:Key="DyeSlotEditorWindowTitle">染色スロットを編集</sys:String>
   <sys:String x:Key="DyeSlotColSlot">スロット</sys:String>
+  <sys:String x:Key="DyeSlotColColor">色</sys:String>
   <sys:String x:Key="DyeSlotColGrime">グライム</sys:String>
   <sys:String x:Key="DyeSlotColMaterial">マテリアル</sys:String>
   <sys:String x:Key="DyeSlotColColorGroup">カラーグループ</sys:String>
   <sys:String x:Key="DyeSlotColAction">操作</sys:String>
   <sys:String x:Key="DyeSlotColStatus">ステータス</sys:String>
+  <sys:String x:Key="DyeSlotPick">色を選択…</sys:String>
   <sys:String x:Key="DyeSlotApply">適用</sys:String>
   <sys:String x:Key="DyeSlotEditorClose">閉じる</sys:String>
+
+  <!-- Dye palette picker modal -->
+  <sys:String x:Key="DyePalettePickerWindowTitle">染色を選択</sys:String>
+  <sys:String x:Key="DyePalettePickerCancel">キャンセル</sys:String>
+  <sys:String x:Key="DyePalettePickerOffGridBanner">現在の色はこのテーマのパレット上にありません (外部ツールで設定された可能性)。いずれかのセルをクリックするとパレット上の色で置き換えられます。</sys:String>
   <sys:String x:Key="AbyssGatesWindowTitle">アビスゲートを編集</sys:String>
   <sys:String x:Key="AbyssGatesHeader">ゲート単位でロック/アンロックを切り替えます。FieldSaveData._fieldGimmickSaveDataList 内の各 FieldGimmickSaveData 要素に対し _initStateNameHash を書き込みます (Default 0x866c7489 ↔ Activated 0xe300acfe)。Idle (情景) と Unknown の行は読み取り専用です — 非ゲート系 gimmick の安定性を損なわないためです。変更内容は次回の File → Save で書き込まれます。</sys:String>
   <sys:String x:Key="AbyssGatesColOwnerLevel">所属レベル</sys:String>

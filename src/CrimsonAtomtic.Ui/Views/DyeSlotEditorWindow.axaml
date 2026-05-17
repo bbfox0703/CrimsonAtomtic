@@ -50,39 +50,31 @@
                             Binding="{Binding SlotLabel}"
                             Width="110"
                             IsReadOnly="True" />
-        <DataGridTemplateColumn Header="R" Width="64">
+        <!-- Color column: replaces the previous R/G/B/A NumericUpDowns
+             with a visual swatch + "Pick…" button. The engine snaps
+             every in-game dye to one of the color group's 109 palette
+             positions (see vendor/crimson-rs/docs/dye-editor-scope.md
+             §"Recommended C# editor UX"), so the off-grid byte-level
+             control that NumericUpDowns gave was an illusion — the
+             palette grid is the correct UX. Off-grid CE-modified
+             values still work (Apply writes whatever R/G/B is in the
+             row; the picker just won't highlight a current cell for
+             them). -->
+        <DataGridTemplateColumn Header="{DynamicResource DyeSlotColColor}" Width="170">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:DyeSlotRow">
-              <NumericUpDown Value="{Binding R}" Minimum="0" Maximum="255"
-                             ShowButtonSpinner="False" Increment="1"
-                             HorizontalContentAlignment="Right" />
-            </DataTemplate>
-          </DataGridTemplateColumn.CellTemplate>
-        </DataGridTemplateColumn>
-        <DataGridTemplateColumn Header="G" Width="64">
-          <DataGridTemplateColumn.CellTemplate>
-            <DataTemplate x:DataType="vm:DyeSlotRow">
-              <NumericUpDown Value="{Binding G}" Minimum="0" Maximum="255"
-                             ShowButtonSpinner="False" Increment="1"
-                             HorizontalContentAlignment="Right" />
-            </DataTemplate>
-          </DataGridTemplateColumn.CellTemplate>
-        </DataGridTemplateColumn>
-        <DataGridTemplateColumn Header="B" Width="64">
-          <DataGridTemplateColumn.CellTemplate>
-            <DataTemplate x:DataType="vm:DyeSlotRow">
-              <NumericUpDown Value="{Binding B}" Minimum="0" Maximum="255"
-                             ShowButtonSpinner="False" Increment="1"
-                             HorizontalContentAlignment="Right" />
-            </DataTemplate>
-          </DataGridTemplateColumn.CellTemplate>
-        </DataGridTemplateColumn>
-        <DataGridTemplateColumn Header="A" Width="64">
-          <DataGridTemplateColumn.CellTemplate>
-            <DataTemplate x:DataType="vm:DyeSlotRow">
-              <NumericUpDown Value="{Binding A}" Minimum="0" Maximum="255"
-                             ShowButtonSpinner="False" Increment="1"
-                             HorizontalContentAlignment="Right" />
+              <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Border Width="28" Height="28"
+                        Background="{Binding SwatchBrush}"
+                        BorderBrush="Black"
+                        BorderThickness="1"
+                        CornerRadius="2"
+                        ToolTip.Tip="{Binding SwatchHex}" />
+                <Button Content="{DynamicResource DyeSlotPick}"
+                        Command="{Binding RequestPickColorCommand}"
+                        Padding="6,2"
+                        MinHeight="0" />
+              </StackPanel>
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>

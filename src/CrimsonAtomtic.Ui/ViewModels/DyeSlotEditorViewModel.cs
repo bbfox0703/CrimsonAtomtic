@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CrimsonAtomtic.RustInterop;
@@ -254,6 +255,25 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
     internal void LoaderRunDeferred(Action body) => _loader.RunDeferred(body);
 
     /// <summary>
+    /// Raised when a row's "Pick…" button is clicked. The hosting
+    /// window's code-behind subscribes and opens the modal palette
+    /// picker dialog, then calls <see cref="DyeSlotRow.ApplyPickedColor"/>
+    /// on the row when the user commits a selection.
+    /// </summary>
+    public event Action<DyeSlotRow>? PickColorRequested;
+
+    internal void RequestPickColor(DyeSlotRow row) => PickColorRequested?.Invoke(row);
+
+    /// <summary>
+    /// Resolve the dye color-group catalog needed by the picker. Returns
+    /// null when characterinfo / dye gamedata isn't loaded (offline
+    /// fallback — the picker UI then disables itself rather than
+    /// crashing).
+    /// </summary>
+    public NativeDyeColorGroupInfoCatalog? DyeColorGroupCatalog =>
+        _localization.DyeColorGroupInfo;
+
+    /// <summary>
     /// Apply one scalar mutation against a specific dye-slot scalar
     /// field. Path: <c>(blockIdx, [(invField, invIdx), (itemField,
     /// itemIdx), (dyeField, slotIdx)], scalarField)</c>. Promotes
@@ -336,11 +356,34 @@ public sealed partial class DyeSlotRow : ObservableObject
     public sbyte SlotNo { get; }
     public string SlotLabel { get; }
 
-    [ObservableProperty] private byte _r;
-    [ObservableProperty] private byte _g;
-    [ObservableProperty] private byte _b;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SwatchBrush))]
+    [NotifyPropertyChangedFor(nameof(SwatchHex))]
+    private byte _r;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SwatchBrush))]
+    [NotifyPropertyChangedFor(nameof(SwatchHex))]
+    private byte _g;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SwatchBrush))]
+    [NotifyPropertyChangedFor(nameof(SwatchHex))]
+    private byte _b;
+
     [ObservableProperty] private byte _a;
     [ObservableProperty] private sbyte _grime;
+
+    /// <summary>
+    /// Solid color brush for the per-row swatch in the editor's "Color"
+    /// column. Alpha forced to 0xFF for visibility — the underlying
+    /// <see cref="A"/> field is preserved separately and written
+    /// through Apply unchanged.
+    /// </summary>
+    public IBrush SwatchBrush => new SolidColorBrush(Color.FromRgb(R, G, B));
+
+    /// <summary>Hex preview "#rrggbb" — drives the swatch tooltip.</summary>
+    public string SwatchHex => $"#{R:X2}{G:X2}{B:X2}";
 
     /// <summary>
     /// Currently-selected material option. <c>null</c> when the slot's
@@ -452,6 +495,35 @@ public sealed partial class DyeSlotRow : ObservableObject
             r, g, b, a, grime, colorGroupKey, materialKey,
             rPres, gPres, bPres, aPres, grimePres, cgPres, matPres,
             selCg, selMat);
+    }
+
+    /// <summary>
+    /// Fired when the user clicks the per-row "Pick…" button. The
+    /// editor window's code-behind handles the event by opening
+    /// <c>DyePalettePickerWindow</c> modally; on close the chosen
+    /// RGB lands back here via <see cref="ApplyPickedColor"/>.
+    /// </summary>
+    [RelayCommand]
+    private void RequestPickColor() => _parent.RequestPickColor(this);
+
+    /// <summary>
+    /// Called by the editor window's code-behind after the modal
+    /// picker dialog closed with a chosen RGB. Updates the row's
+    /// editable <see cref="R"/> / <see cref="G"/> / <see cref="B"/>
+    /// (the <see cref="A"/> alpha + <see cref="SelectedColorGroup"/>
+    /// theme are left untouched — palette positions are always
+    /// alpha=0xFF per vendor docs and the theme picker is a separate
+    /// dropdown). The user still needs to click Apply on this row
+    /// to persist the change.
+    /// </summary>
+    internal void ApplyPickedColor(byte r, byte g, byte b)
+    {
+        R = r;
+        G = g;
+        B = b;
+        // Defensive: if A is currently absent or 0, normalize to 0xFF
+        // since every palette position uses opaque alpha in-game.
+        if (A == 0) A = 0xFF;
     }
 
     [RelayCommand]

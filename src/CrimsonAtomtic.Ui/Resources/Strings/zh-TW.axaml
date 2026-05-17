@@ -152,13 +152,20 @@
   <!-- Dye slot editor child dialog -->
   <sys:String x:Key="DyeSlotEditorWindowTitle">編輯染色槽</sys:String>
   <sys:String x:Key="DyeSlotColSlot">孔</sys:String>
+  <sys:String x:Key="DyeSlotColColor">顏色</sys:String>
   <sys:String x:Key="DyeSlotColGrime">髒污</sys:String>
   <sys:String x:Key="DyeSlotColMaterial">材質</sys:String>
   <sys:String x:Key="DyeSlotColColorGroup">色彩群組</sys:String>
   <sys:String x:Key="DyeSlotColAction">動作</sys:String>
   <sys:String x:Key="DyeSlotColStatus">狀態</sys:String>
+  <sys:String x:Key="DyeSlotPick">選色…</sys:String>
   <sys:String x:Key="DyeSlotApply">套用</sys:String>
   <sys:String x:Key="DyeSlotEditorClose">關閉</sys:String>
+
+  <!-- Dye palette picker modal -->
+  <sys:String x:Key="DyePalettePickerWindowTitle">選擇染色</sys:String>
+  <sys:String x:Key="DyePalettePickerCancel">取消</sys:String>
+  <sys:String x:Key="DyePalettePickerOffGridBanner">目前的顏色不在此主題的色盤內 (可能是外部工具設定的)。點任何色格都會用色盤上的顏色取代它。</sys:String>
   <sys:String x:Key="AbyssGatesWindowTitle">編輯阿比斯之門</sys:String>
   <sys:String x:Key="AbyssGatesHeader">逐門切換鎖定/解鎖。針對 FieldSaveData._fieldGimmickSaveDataList 內每個 FieldGimmickSaveData 元素寫入 _initStateNameHash (Default 0x866c7489 ↔ Activated 0xe300acfe)。Idle (場景) 與 Unknown 列為唯讀，避免破壞非門類 gimmick 的穩定性。改動會在下一次 File → Save 寫回存檔。</sys:String>
   <sys:String x:Key="AbyssGatesColOwnerLevel">擁有者關卡</sys:String>
