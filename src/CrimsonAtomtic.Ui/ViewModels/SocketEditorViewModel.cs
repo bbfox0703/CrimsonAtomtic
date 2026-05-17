@@ -449,16 +449,44 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         }
         var applyCount = Math.Min(set.GemKeys.Count, target.MaxSocketCount);
         var changed = 0;
-        for (var i = 0; i < applyCount; i++)
+        // Wrap the per-slot Apply loop in a deferred-redecode batch
+        // (see vendor/crimson-rs/docs/save-deferred-redecode.md). Each
+        // empty→fill transition fires SetScalarFieldsPresentBatch which
+        // is length-changing; without the batch every flip triggers a
+        // full body re-decode (~25ms on a 5MB body), so a 5-slot Apply
+        // pays ~5 re-decodes. With the batch every flip stays in the
+        // in-memory tree and the trailing commit runs ONE encode +
+        // parse + decode pass.
+        //
+        // ApplyGemPick catches CrimsonSaveException internally + sets
+        // row.LastError + returns void, so the loop never lets an
+        // exception escape — the deferred batch sees normal completion
+        // and commits the partial progress (matches the pre-batch
+        // partial-success UX). A commit-time MUTATION_INVALID surfaces
+        // as the outer try/catch falling through to the error footer.
+        try
         {
-            if (!rows.TryGetValue(i, out var row)) continue;
-            var newKey = set.GemKeys[i];
-            if (row.IsFilled && row.CurrentGemKey == newKey)
+            _loader.RunDeferred(() =>
             {
-                continue; // already what we want
-            }
-            ApplyGemPick(row, newKey);
-            changed++;
+                for (var i = 0; i < applyCount; i++)
+                {
+                    if (!rows.TryGetValue(i, out var row)) continue;
+                    var newKey = set.GemKeys[i];
+                    if (row.IsFilled && row.CurrentGemKey == newKey)
+                    {
+                        continue; // already what we want
+                    }
+                    ApplyGemPick(row, newKey);
+                    changed++;
+                }
+            });
+        }
+        catch (CrimsonSaveException commitEx)
+        {
+            StatusMessage = $"Apply Set: {set.Label} — commit failed after {changed} slot(s): "
+                + $"{commitEx.Message} (code {commitEx.ErrorCode}). "
+                + "Reload the save without writing to revert.";
+            return;
         }
         if (changed == 0)
         {

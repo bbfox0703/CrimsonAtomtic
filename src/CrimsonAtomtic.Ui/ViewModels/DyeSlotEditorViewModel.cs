@@ -245,6 +245,15 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Expose <see cref="ISaveLoader.RunDeferred"/> to the per-row
+    /// <see cref="DyeSlotRow"/> so its Apply command can wrap a batch
+    /// of scalar writes in one deferred-redecode pass. Kept as a thin
+    /// pass-through so the loader instance itself stays private to
+    /// the parent VM.
+    /// </summary>
+    internal void LoaderRunDeferred(Action body) => _loader.RunDeferred(body);
+
+    /// <summary>
     /// Apply one scalar mutation against a specific dye-slot scalar
     /// field. Path: <c>(blockIdx, [(invField, invIdx), (itemField,
     /// itemIdx), (dyeField, slotIdx)], scalarField)</c>. Promotes
@@ -482,15 +491,49 @@ public sealed partial class DyeSlotRow : ObservableObject
         }
 
         var appliedLabels = new List<string>(writes.Count);
-        foreach (var w in writes)
+        // Wrap the per-Apply writes in a deferred-redecode batch (see
+        // vendor/crimson-rs/docs/save-deferred-redecode.md). Up to 7
+        // scalar mutations land per Apply; any absent→present
+        // transition (SetScalarFieldPresent) is length-changing and
+        // would otherwise trigger one full body re-decode per call
+        // (~25ms on a 5MB body). With the batch every write stays in
+        // the in-memory tree and the trailing commit does ONE encode +
+        // parse + decode pass.
+        //
+        // TryWriteScalar catches CrimsonSaveException internally,
+        // surfaces the error via the out parameter, and we break out of
+        // the foreach on first failure. RunDeferred sees the normal
+        // return and commits whatever already landed (matches the
+        // pre-batch partial-success behaviour where the writes that
+        // succeeded before the failure stayed). A commit-time
+        // MUTATION_INVALID is caught at the outer level and surfaced.
+        try
         {
-            if (!_parent.TryWriteScalar(SlotIndex, w.FieldIdx, w.WasPresent, w.Bytes,
-                                        out var err))
+            _parent.LoaderRunDeferred(() =>
             {
-                LastError = $"{w.Label}: {err}";
-                return;
-            }
-            appliedLabels.Add(w.Label);
+                foreach (var w in writes)
+                {
+                    if (!_parent.TryWriteScalar(SlotIndex, w.FieldIdx, w.WasPresent, w.Bytes,
+                                                out var err))
+                    {
+                        LastError = $"{w.Label}: {err}";
+                        return;
+                    }
+                    appliedLabels.Add(w.Label);
+                }
+            });
+        }
+        catch (CrimsonSaveException commitEx)
+        {
+            LastError = $"Commit failed: {commitEx.Message} (code {commitEx.ErrorCode}). "
+                + "Reload the save without writing to revert.";
+            return;
+        }
+        if (LastError is not null && appliedLabels.Count == 0)
+        {
+            // First write failed pre-commit — LastError already set to
+            // "<Label>: <err>". Leave it as-is.
+            return;
         }
         // Single per-slot journal entry aggregates which scalars
         // flipped, so the user's change list reads "Edited dye on
