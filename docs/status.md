@@ -3,19 +3,65 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-17 part 11 (UI language switch finally fixed — two real root causes: XAML compiler inlines ResourceInclude as ResourceDictionary (no Source URI exposed), and InvariantGlobalization makes CultureInfo.Name always empty).
+> Last updated: 2026-05-18 part 14 (World Map parchment composite shipped but **user-reported visual mismatch** — the blur_height layer + road_sdf layer don't agree on world coverage, so roads land in the wrong places relative to the coastline. Iteration paused; tomorrow's session should validate per-layer world ranges and likely fall back to the 785-tile terrain composite where world coverage is known per-tile).
 >
 > ## 🎯 Next-session quick pickup
 >
-> Working tree clean, `dev` + `main` aligned at `5ce00e2`. AOT bundle
-> staged at `dist\win-x64\CrimsonAtomtic.exe` (2026-05-17 22:05).
-> Test suite **281/281**. No urgent blockers — all open items below
-> are pick-by-appetite.
+> Working tree being committed at the end of this session. Test suite
+> **287/287** still. AOT bundle freshly rebuilt to `dist\win-x64\`
+> after part 14. **One known regression** — see "World Map parchment
+> composite layer-alignment bug" in the follow-ons. Next-session
+> pickup should start with the inspection helpers in
+> `src/CrimsonAtomtic.Tests/WorldMapLayerInspectionTests.cs` to
+> validate per-layer world coverage before re-attempting the composite.
 >
-> ### Open follow-ons (consolidated across parts 1–11)
+> ### Open follow-ons (consolidated across parts 1–14)
 >
 > Sized small → large, freshest-context first:
 >
+> - **🐞 World Map parchment composite layer-alignment bug** (part 14
+>   — user-reported 2026-05-18): the parchment basemap is generated
+>   but `cd_worldmap_blur_height.dds` (land/water mask) and
+>   `cd_worldmap_road_sdf_32768x32768.dds` (road network) don't agree
+>   on world coverage — roads appear in the water region instead of
+>   over land, and the cream-coloured land area doesn't fill the
+>   playable continent shape from the JPG. Same 8192² dimensions but
+>   the two layers are sampling different rectangles of the world.
+>   Next-session diagnostic steps:
+>   1. Run `WorldMapLayerInspectionTests.Inspect_EachLayerAsStandalonePng`
+>      to dump each layer as its own PNG to
+>      `%LOCALAPPDATA%\CrimsonAtomtic\WorldMap\inspect\layer_*.png`.
+>   2. Compare against `D:\Github\crimson-rs\out\worldmap\world-map-1024.jpg`
+>      to find each layer's world coverage rectangle (e.g. crop +
+>      offset).
+>   3. Either align by cropping/offsetting per layer in
+>      `WorldMapCompositor`, or pivot to **Path B (terrain tiles)** —
+>      stitch the 785 per-chunk 512² tiles in
+>      `0015/leveldata/rootlevel/terrain/color/`; each tile name
+>      embeds its `_X_Y_` chunk coords so world coverage is
+>      unambiguous. The terrain-color tile inspection helper
+>      (`Inspect_TerrainColorTilesIn0015`) is staged for that path.
+>   4. If pivoting to Path B, the per-pixel scale is 0.5 px / world
+>      unit (512² per 1000-unit chunk), giving a ~14,332² stitched
+>      output before downsampling — needs a sensible cache size
+>      target (3K-4K likely).
+> - **World Map visual verification** (part 12) — Phase 1 ships but I
+>   only smoke-tested compile + tests + extraction. Markers and the
+>   pan/zoom UI haven't been visually verified against a real save
+>   loaded in the running app. Re-test after the layer-alignment bug
+>   is fixed; otherwise the markers will look mis-placed for the
+>   wrong reason.
+> - **World Map affine calibration** (part 14) — the
+>   `WorldMapAffine.ParchmentComposite` constants
+>   (`scaleX = 0.183`, `offsetX = 2515`, `offsetY = 1864` on a 4096²
+>   canvas) are arithmetic from the web-map fit, not a least-squares
+>   fit against landmarks on the composite output. Active char at
+>   world (−10502, −4373) lands somewhere around pixel (593, 1058).
+>   Pin-point accuracy needs landmark anchoring (user-facing "drag two
+>   landmarks" calibration step, or an offline fit analogous to
+>   `vendor/crimson-rs/scripts/worldmap_tp_fit.py`). Previous
+>   `GlobalColormap` and `NavigatorGuide` affines were scrapped along
+>   with the corresponding basemap swaps in parts 13 + 14.
 > - **Surface "no dictionary found" in the UI** (part 11) — when
 >   `UiLanguageService.LastApplyOutcome == DictionaryNotFound` the menu
 >   pick is silently swallowed. A status-bar message or alert would
@@ -40,11 +86,31 @@
 >   picker (rolled back in part 5; recipe documented inline at the
 >   part-5 entry). Needs the `partprefabdyeslotinfo.LookupSlotCount`
 >   gamedata bridge (already loaded) + a small slot-picker UX step.
-> - **World-map UX layer** (parts 6 + 7) — both backing ABIs
->   (`list_field_positions` + `paz_list_dir`) bound. Next step is a
->   scope decision: read-only DataGrid (no basemap image required) vs.
->   full visual basemap dialog (needs a game-extracted DDS — asset
->   license / repo-shipping question to settle first).
+> - **World Map Phase 2 — filters + name resolution** (part 12
+>   roadmap) — checkbox per region, hover tooltip showing the
+>   localized owner name (CharacterKey → display name via the
+>   existing localization bridge), click-marker side panel with full
+>   record fields. Phase 1 markers carry placeholder `OwnerLabel`
+>   strings like "Mercenary #1234"; the proper resolver hookup is
+>   straightforward but deferred.
+> - **World Map Phase 3 — interactive editing** (part 12 roadmap) —
+>   drag-to-move a marker writes the underlying `_position` bytes via
+>   `SetScalarFieldsBatch`. Requires careful validation (don't drag
+>   into geometry, don't move uniqueness-coupled gimmicks) and a
+>   confirm step before persistence. RISKY — leave until the basemap
+>   accuracy is good enough to trust visual placement.
+> - **World Map Path B — terrain-tile compositor** (part 12 roadmap)
+>   — instead of the single 2048² `global_colormap.dds`, composite
+>   the 785 per-chunk 512² tiles in `0015/.../terrain/color/` into a
+>   higher-resolution basemap (~14,332² stitched). User picked this as
+>   a separate path back in the session-start question. Adds detail
+>   but multiplies the cache size (~3 MB → ~30+ MB) and the
+>   composite time (one-shot job; cached after).
+> - **Marker performance optimisation** (part 12) — the 3,317-marker
+>   `ItemsControl`-on-`Canvas` rendering may lag during pan / zoom on
+>   slower hardware. If user reports laggy interaction, swap the
+>   `ItemsControl` for a custom `Control` overriding `Render(...)`
+>   that draws all markers in a single Skia pass.
 > - **Pattern B v2 for multi-objective SA challenges** (from part 1)
 >   — RE-heavy; needs slot106 → slot107 → post-claim diff to determine
 >   the engine-natural completion shape for negative-keyed sub-step
@@ -65,6 +131,156 @@
 > 2. `dotnet test src/CrimsonAtomtic.Tests/CrimsonAtomtic.Tests.csproj --no-build` — should be 281/281
 > 3. For UI changes: launch via `dotnet run` (or F5 in VS) and exercise the changed surface
 > 4. For shippable changes: `.\build.cmd publish` → smoke-test `dist\win-x64\CrimsonAtomtic.exe`
+>
+> ---
+>
+> ## ✅ This session — what shipped (2026-05-17 part 14)
+>
+> Basemap is now a runtime parchment-style composite. User reviewed
+> part 13's `cd_global_map_navigator_guide_00.dds` and called it
+> "also NG" — the navigator guide ships with Korean region labels +
+> the abyss-grid checkerboard around the playable continent, which
+> doesn't match what they want. The user-pinned reference look is
+> `crimson-desert-full-world-map.jpg` (parchment-cream land,
+> muted-teal water, road network) — a community-fetched JPG with a
+> PowerPyx.com watermark, not shippable from our side. There's no
+> single game asset that matches; the game UI composites the look at
+> runtime from multiple layers. We replicate that compositing locally
+> to a 4096² PNG cache.
+>
+> | Area | Scope |
+> |---|---|
+> | **`WorldMapCompositor`** | New `Services/WorldMapCompositor.cs` that takes three DDS byte streams + outputs a parchment-style PNG. Layer mapping: (1) `cd_worldmap_blur_height.dds` (8192² L8 / DDPF_LUMINANCE grayscale; **R = elevation**, 0 = sea floor, ≥40 = land) drives the land/water silhouette with depth-shaded water (deeper blue offshore) + height-modulated land brightness (subtle relief shading); (2) `cd_worldmap_paper_pattern.dds` (512² BC1 tileable parchment texture) fills the land via wraparound sampling; (3) `cd_worldmap_road_sdf_32768x32768.dds` (8192² L8 SDF; histogram pinned: road network packed into bytes 120..135, mode at 0 for far-from-road) overlays a warm-gray road line on top of land with a smooth 8-byte ramp for anti-aliased edges. Output is 4096×4096 RGBA (16M pixels) — composited by direct-buffer iteration with precomputed per-axis source-pixel index tables (8 KB) so the hot loop is just an array lookup + 1 conditional + 2 splats. ~5-10 second runtime + ~400 MB transient buffer for the 8192² source decodes. |
+> | **L8 / DDPF_LUMINANCE decoder path** | `IconImageEncoder.ParseDdsHeader` previously rejected any DDS without DDPF_FOURCC; both `blur_height` and `road_sdf` are uncompressed 8-bit grayscale (DDPF_LUMINANCE, R-mask = 0xFF). Branch added: FOURCC → BC1/BC3, LUMINANCE → new L8 case. `DecodeBlocks` short-circuits to new `DecodeL8(pixels, w, h)` which splats the single luminance byte to R/G/B (alpha = 255). Pinned by the live-install test below. |
+> | **`WorldMapBasemapService` rewired** | The cache path swaps to `parchment_basemap.png`. `EnsureBasemapAsync` now extracts three layer DDSes from `0012/` (blur_height + road_sdf under `ui/texture/image/worldmap/`, paper_pattern under `ui/texture/`) and runs them through the compositor on a background thread (one `Task.Run` covers all three extracts + the composite + the encode so the UI dispatcher doesn't see the 5-10 s synchronous cost). |
+> | **`WorldMapAffine.ParchmentComposite`** | New 4096² affine: `scaleX = 0.183`, `offsetX = 2515`, `scaleZ = −0.183`, `offsetY = 1864`. Derived arithmetically from the web-map fit (5178×5240, scale 0.432, world origin at pixel (5937.5, 1864.08)) → playable continent on the composite occupies the inner ~2200×2700 of the 4096² canvas; per-pixel scale ≈ 0.183 px/world-unit. Old `GlobalColormap` (part 12) + `NavigatorGuide` (part 13) affines removed. |
+> | **Tests + i18n** | `WorldMapBasemapServiceTests` smoke pin shifted to 4096×4096 + the new affine pair (`WebMap5178x5240` + `ParchmentComposite` — `WebMap` kept as the regression baseline since the affine was originally fit against it). Bilingual extracting-message strings updated across en/ja/zh-TW to mention the three composite layers + the ~10 s first-launch cost. |
+>
+> Tests: **287/287 pass** (same count — the new L8 path is covered by the existing live-install smoke). Debug build clean. **AOT publish verified** — `dist\win-x64\CrimsonAtomtic.exe` rebuilt clean. **UI still not visually verified by me end-to-end** — only the composite PNG was reviewed in isolation; the user should open Tools → World Map and confirm the markers overlay correctly on the new basemap.
+>
+> ### Open follow-ons noted during this session
+>
+> - **🐞 Layer alignment bug** — user opened the composite and reported
+>   roads land in the ocean + the cream land area doesn't match the
+>   playable continent shape. `cd_worldmap_blur_height.dds` and
+>   `cd_worldmap_road_sdf_32768x32768.dds` are both 8192² but don't
+>   share the same world coverage; the compositor naively scales both
+>   to the 4096² output, mixing the misaligned content. Full
+>   description + reproduction steps moved to the "🐞 World Map
+>   parchment composite layer-alignment bug" entry in the consolidated
+>   follow-on list above.
+> - **Likely pivot to Path B (terrain tiles)** — the 785 per-chunk
+>   tiles in `0015/leveldata/rootlevel/terrain/color/` have unambiguous
+>   world coverage (each = 1 chunk = 1000 world units, indexed by
+>   `_X_Y_` in the filename). Stitching them yields a 14,332² basemap
+>   with byte-perfect alignment guarantees; downsample to 3K-4K for
+>   the cache. The `Inspect_TerrainColorTilesIn0015` helper is staged.
+> - **Same calibration drift as parts 12 + 13** — the new parchment affine is still arithmetic, not a fit. Active char projected to ~(593, 1058) on 4096²; markers should cluster around the right region but expect a few-percent residual.
+> - **Region labels missing** — the web JPG carries text labels for HERNAND / ILLUZ / CRIMSON DESERT / DEMENISS / DELESYA; our composite ships geography only. Could be added by rendering text at known label coords (would need a per-region label table + world coords) or by extracting the 234 region-title decals from `ui/texture/image/worldmapregiontitle/` and compositing them at their gamedata-defined positions.
+> - **Anti-aliasing on the coastline** — the land/water mask uses a hard threshold (height ≥ 40 = land). A 2-3 pixel soft transition would smooth the coastline.
+>
+> ### Open follow-ons carried over (no change)
+>
+> - World Map Phase 2 (filters + name resolution) (from part 12).
+> - World Map Phase 3 (interactive editing) (from part 12).
+> - World Map Path B terrain-tile compositor (from part 12 — now mostly subsumed by this part's compositor).
+> - Marker rendering performance (from part 12).
+> - Owner-label resolution (from part 12).
+> - Surface LastApplyOutcome in the UI (from part 11).
+> - AOT publish smoke test (from part 8).
+> - Headless Avalonia integration test for language switching (from parts 9 + 11).
+> - Safe re-attempt of "+ Add Dye" with per-prefab slot picker (from part 5).
+> - Pattern B v2 for multi-objective SA challenges (from part 1).
+> - OCT forum post URL placeholder (from part 1).
+>
+> ---
+>
+> ## ✅ This session — what shipped (2026-05-17 part 13)
+>
+> Basemap source swap. User reviewed part 12's output and reported the
+> 2048×2048 `global_colormap.dds` basemap "isn't what the player sees";
+> the actual in-game map looks like the web-fetched JPG with colored
+> regions + labels. Cross-referencing the vendor's worldmap-plotting
+> doc, the right asset is **`cd_global_map_navigator_guide_00.dds`** —
+> explicitly tagged "Game's in-engine world map (faction-colored, chunk
+> grid visible)". Visual inspection confirmed: this is the same map the
+> player sees in the in-game UI (1024×1024 BC1, region tints, region
+> labels, chunk-grid abyss border around the playable continent).
+>
+> | Area | Scope |
+> |---|---|
+> | **Basemap source swap** | `WorldMapBasemapService` now extracts from `0000/object/texture/cd_global_map_navigator_guide_00.dds` (was `0015/leveldata/rootlevel/terrain/global/global_colormap.dds`). Cached PNG renamed `global_colormap.png` → `navigator_guide.png` so the old cache doesn't shadow the new asset. Group probe witness also flipped to `0000/0.pamt`. |
+> | **New affine for navigator guide** | `WorldMapAffine.GlobalColormap` removed, `WorldMapAffine.NavigatorGuide` added: scale-X = 700/11984 ≈ 0.0584, scale-Z = -700/12101 ≈ -0.0579, world origin pixel (964, 449). Derived arithmetically — playable continent assumed to occupy the inner 700×700 of the 1024² image (rest is abyss-grid border), world-origin position scaled from the web-map fit's pixel (5937.5, 1864.08) on its 5178×5240 image proportionally. Not a least-squares fit; calibration follow-on noted. |
+> | **i18n + tests + handler** | Three language strings updated (the "extracting basemap" body now mentions `cd_global_map_navigator_guide_00.dds` and group `0000`). `WorldMapBasemapServiceTests` pin shifted to 1024×1024 + the new affine pair. `MainWindow.axaml.cs` passes `WorldMapAffine.NavigatorGuide` to the VM constructor. |
+>
+> Tests: **287/287 pass** (same count as part 12). Debug build clean. **AOT publish verified** — `dist\win-x64\CrimsonAtomtic.exe` rebuilt (26.1 MB). **UI still not visually verified by me** — the user should open Tools → World Map again and confirm the new basemap looks like the in-game UI map (which it should, since the inspection-extracted PNG was the deciding visual).
+>
+> ### Open follow-ons noted during this session
+>
+> - **Same calibration drift as part 12** — the navigator-guide affine
+>   is still arithmetic, not a fit. Markers should land in roughly the
+>   right region but expect a few-percent residual. The calibration
+>   follow-on from part 12 still applies.
+> - **Higher-resolution layered composite** is even more attractive
+>   now that we've committed to "show what the player sees" — the
+>   navigator guide is only 1024×1024, so dense gimmick clusters will
+>   pixel-pile. Compositing `bitmap_region.dds` + road SDF + region
+>   titles at 4K-8K would give a much higher-fidelity basemap. Still
+>   a Phase-2+ item.
+>
+> ### Open follow-ons carried over (no change)
+>
+> - World Map Phase 2 (filters + name resolution) (from part 12).
+> - World Map Phase 3 (interactive editing) (from part 12).
+> - World Map Path B terrain-tile compositor (from part 12).
+> - Marker rendering performance (from part 12).
+> - Owner-label resolution (from part 12).
+> - Surface LastApplyOutcome in the UI (from part 11).
+> - AOT publish smoke test (from part 8).
+> - Headless Avalonia integration test for language switching (from parts 9 + 11).
+> - Safe re-attempt of "+ Add Dye" with per-prefab slot picker (from part 5).
+> - Pattern B v2 for multi-objective SA challenges (from part 1).
+> - OCT forum post URL placeholder (from part 1).
+>
+> ---
+>
+> ## ✅ This session — what shipped (2026-05-17 part 12)
+>
+> World Map UX Phase 1. User asked to develop the Tools → World Map
+> dialog (deferred since parts 6 + 7 when the two backing ABIs landed)
+> with three explicit feature picks: yaw arrows, region-tint markers,
+> mouse coord readout + distance ruler, PNG export. Phase 2 (filters,
+> name resolution, tooltips) and Phase 3 (drag-to-move editing) are
+> queued in the roadmap but deliberately out of scope.
+>
+> | Area | Scope |
+> |---|---|
+> | **`WorldMapAffine` value-record** | New `Services/WorldMapAffine.cs` defines the world-coord → basemap-pixel affine plus the inverse. Two pinned instances: `WebMap5178x5240` (the 5178×5240 user-fetched JPG — kept as a regression baseline since the vendor's affine was fit against it; we don't ship the JPG) and `GlobalColormap` (the game-extracted 2048×2048 colormap, with scale + offsets derived from chunk-grid math: 2048 / 14332 world units, centred on the world origin). The `GlobalColormap` constants are an educated guess — chunk-grid arithmetic without a least-squares fit against known landmarks. Expect ~50 px residual; precise calibration is a follow-on. Inverse method enables the mouse-coord readout (basemap pixel → world coords) and the distance ruler (two basemap clicks → world-unit Δ). |
+> | **`WorldMapBasemapService`** | Extracts `global_colormap.dds` from `0015/leveldata/rootlevel/terrain/global/` via `IPazExtractor.ExtractFile`, decodes the BC3 DDS via the new public `IconImageEncoder.DecodeDdsToRgba` (factored out of the existing icon path; the BC1/BC3 kernel is reused, only the resize+WebP encode step is unique to icons), and writes a full-resolution PNG to `%LOCALAPPDATA%\CrimsonAtomtic\WorldMap\global_colormap.png`. Same on-demand-from-user-install pattern as `IconExtractionService` — no asset shipped with the editor, sidesteps the asset-license question. `EnsureBasemapAsync(paz, gameRoot, forceRefresh: false)` returns the cached path on second call. The DDS-to-PNG pipeline uses a new `IconImageEncoder.EncodeRgbaAsPng(rgba, w, h)` helper (lossless full-res, distinct from the icon-side WebP encoder). |
+> | **`WorldMapViewModel`** | Holds the loaded basemap `Bitmap` (eagerly loaded in constructor), every `PositionedEntityRecord` from `loader.ListFieldPositions(out _)` precomputed into `WorldMapMarker` records (pixel position via affine + yaw in degrees + region key + owner-label placeholder), three per-kind `ObservableCollection`s (ActiveChar / Mercenary / Gimmick) so the per-kind filter checkboxes drop entire AXAML layers via `IsVisible` rather than per-item visibility bindings (perf — 3,000+ items), and the small bits of UI state: `ZoomScale` (1.0 default, bound to the `ScaleTransform` since AXAML doesn't auto-generate fields for non-Control elements), `CursorCoordsText`, distance-tool state machine (`Idle` → `WaitingForFirst` → `WaitingForSecond` → final-text), region-coloring toggle. Region color: a deterministic HSL hue derived from `_fieldInfoKey` via a Knuth-multiplier hash → hue space — different regions get visually distinct colors without us curating a region→color table. |
+> | **`WorldMapWindow.axaml`** | DockPanel-laid window with: toolbar of three per-kind checkboxes (with live count labels), yaw-arrow + region-tint toggles, distance-tool + export-PNG + close buttons. Map surface: `ScrollViewer` wrapping a `Grid` (sized to basemap dims) with a `ScaleTransform.RenderTransform` (bound to `ZoomScale`); three `ItemsControl` layers over the per-kind collections (gimmicks under, mercenaries middle, active char top); a top-most distance-overlay `Canvas` with two ruler dots + a dashed connector line. Marker visuals: gimmick = 4×4 ellipse (no yaw arrow, no per-marker `Grid` wrapper — 3,240 of them, performance-sensitive), mercenary = 14×14 blue triangle with yaw line, active char = 18×18 gold 5-point star with yaw line. Marker fill: a `MultiBinding` over (Kind, FieldInfoKey, UseRegionColoring) → `SolidColorBrush` via the new `WorldMapMarkerBrushConverter` (kind-color or region-color depending on the toggle). Marker positioning: `ContentPresenter` style setter pins `Canvas.Left/Top` to `PixelX/Y` via `ReflectionBinding` (compiled binding fails inside `ItemsControl.Styles` since the Window's `x:DataType` resolves the binding type incorrectly for ContentPresenter children — `ReflectionBinding` falls through to runtime DataContext resolution). |
+> | **Code-behind: pan + zoom + distance + export** | `WorldMapWindow.axaml.cs`: pan via left/middle mouse drag (anchor on Pressed, update `ScrollViewer.Offset` on Moved, release on Released — `e.Pointer.Capture(MapStage)` keeps drag alive when the cursor exits the map area); zoom via `PointerWheel` (step factor 1.15, clamped to [0.1, 8.0], **zoom-around-cursor math** — after the scale change, shifts `ScrollViewer.Offset` by `pointerOnStage × (newScale − oldScale)` so the pixel under the cursor stays in place; without this the view drifts away from where the user is looking, which feels broken); coord readout updates on every PointerMoved via `vm.UpdateCursorWorldCoords(px, py)`; distance-tool clicks route through `vm.HandleDistanceClick(px, py)` when the tool is armed; export via `RenderTargetBitmap.Render(MapStage)` at the native basemap resolution (snapshots + restores the current zoom level so the export is always 1:1, regardless of how far the user has zoomed). |
+> | **Menu wiring + i18n** | New `MenuItem Header="{DynamicResource MenuWorldMap}"` under Tools, gated on `HasSave`. `OnWorldMapClick` handler in MainWindow.axaml.cs: requires loaded save + non-empty `Localization.GameRoot`, surfaces alert dialogs for the two pre-launch failure modes (no game install, basemap extract failed), then constructs + shows `WorldMapWindow`. Bilingual strings added for the menu header + 17 dialog-internal strings (window title, three filter labels with tooltips, yaw / region / distance / export toggles, status-bar placeholders, two pre-launch alerts). en/ja/zh-TW all updated. |
+> | **Tests** | New `WorldMapBasemapServiceTests` (6 tests, **281 → 287**): live-install end-to-end smoke (extracts the DDS, decodes to PNG, verifies PNG magic + 2048×2048 dims — pins that a future game patch swapping `global_colormap.dds` to a BC format we don't decode surfaces here), affine round-trip property (world → pixel → world reproduces input within 1e-6 for both affines + several known coords), web-map affine regression pin against the vendor's `(−10502.729, −4373.9663) → (1399.9, 3758.3)` calibration point. |
+>
+> Tests: **281 → 287** (+6 World Map). Debug build clean, 0 errors / 0 warnings. **UI not visually verified end-to-end** — the AXAML compiles, the VM types check, the basemap extracts correctly (PNG inspected, shows the Pywel continent reddish-desert + green forest), but I haven't watched the window render with all 3,317 markers overlaid. Next session pick-up should open Tools → World Map and confirm the visual checklist in the "Next-session quick pickup" callout above.
+>
+> ### Open follow-ons noted during this session
+>
+> - **Affine calibration drift** (see follow-ons above) — the `GlobalColormap` affine is an educated guess. Markers will land in roughly the right region but may be visibly off. Pin-point accuracy needs landmark anchoring.
+> - **Phase 2 (filters + tooltips) and Phase 3 (drag-to-edit)** — both in the roadmap, both deferred. Phase 3 is risky and needs the affine fix first.
+> - **Path B (terrain-tile compositor)** — user picked "both" for the basemap-source question at session start. Phase 1 ships Path A (single 2048² colormap); Path B (785-tile composite for higher resolution) is the same shape but scaled up + needs tile-grid stitching code. Roadmap follow-on.
+> - **Marker rendering performance** — 3,000+ `ContentPresenter`s on a `Canvas` may chug. If so, swap for a single custom `Control` drawing all markers in `Render(DrawingContext)`.
+> - **Owner-label resolution** — markers carry placeholder labels (`"Mercenary #1234"`, `"Gimmick 0xabcd"`). Wiring through the existing `LocalizationProvider` to surface the localized CharacterKey / GimmickInfoKey display name is straightforward but deferred to Phase 2's tooltip work.
+>
+> ### Open follow-ons carried over (no change)
+>
+> - Surface LastApplyOutcome in the UI (from part 11).
+> - AOT publish smoke test (from part 8).
+> - Headless Avalonia integration test for language switching (from parts 9 + 11).
+> - Safe re-attempt of "+ Add Dye" with per-prefab slot picker (from part 5).
+> - Pattern B v2 for multi-objective SA challenges (from part 1).
+> - OCT forum post URL placeholder (from part 1).
 >
 > ---
 >

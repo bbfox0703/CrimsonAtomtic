@@ -771,6 +771,69 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Tools → World Map handler. Phase 1 read-only world-map dialog:
+    /// extracts <c>global_colormap.dds</c> from the user's game install
+    /// on first launch (cached afterwards in
+    /// <c>%LOCALAPPDATA%\CrimsonAtomtic\WorldMap\</c>), then opens the
+    /// <see cref="WorldMapWindow"/> with markers plotted from
+    /// <c>crimson_save_list_field_positions</c>. Surfaces alerts for
+    /// the two failure modes that can land before the window opens
+    /// (no game install set, basemap extract failed).
+    /// </summary>
+    private async void OnWorldMapClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm
+            || vm.LoadedPath is null)
+        {
+            return;
+        }
+        var loc = vm.Localization;
+        if (string.IsNullOrEmpty(loc.GameRoot))
+        {
+            var title = (string?)this.FindResource("WorldMapNoGameTitle")
+                        ?? "Game install required";
+            var body = (string?)this.FindResource("WorldMapNoGameBody")
+                       ?? "Set the install folder via Tools → Set Game Install Folder, then try again.";
+            await ConfirmDialog.ShowAlertAsync(this, title, body);
+            return;
+        }
+
+        string basemapPath;
+        try
+        {
+            basemapPath = await Services.WorldMapBasemapService.EnsureBasemapAsync(
+                loc.Paz, loc.GameRoot!);
+        }
+        catch (Exception ex)
+        {
+            var title = (string?)this.FindResource("WorldMapExtractFailedTitle")
+                        ?? "Could not extract basemap";
+            await ConfirmDialog.ShowAlertAsync(this, title, ex.Message);
+            return;
+        }
+
+        ViewModels.WorldMapViewModel mapVm;
+        try
+        {
+            mapVm = new ViewModels.WorldMapViewModel(
+                vm.GetSaveLoader(),
+                loc,
+                basemapPath,
+                Services.WorldMapAffine.ParchmentComposite);
+        }
+        catch (Exception ex)
+        {
+            var title = (string?)this.FindResource("WorldMapExtractFailedTitle")
+                        ?? "Could not open world map";
+            await ConfirmDialog.ShowAlertAsync(this, title, ex.Message);
+            return;
+        }
+
+        var window = new WorldMapWindow { DataContext = mapVm };
+        window.Show(this);
+    }
+
+    /// <summary>
     /// Tools → Edit Abyss Gates… handler. Walks the loaded save
     /// asynchronously to build the per-gate list, then opens the
     /// dialog. Closes the dialog and flips the main VM's dirty flag

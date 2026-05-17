@@ -58,12 +58,56 @@ public static class IconImageEncoder
         return ResizeAndEncode(rgba, width, height, targetSize, quality);
     }
 
+    /// <summary>
+    /// Decode <paramref name="ddsBytes"/> to a raw RGBA8888 buffer at the
+    /// DDS's native resolution. Used by the world-map basemap pipeline,
+    /// which needs the unscaled pixels to drive its own composite step
+    /// (icons go through <see cref="EncodeDdsToWebp"/> instead, which
+    /// scales to a fixed icon target).
+    /// </summary>
+    public static (byte[] Rgba, int Width, int Height) DecodeDdsToRgba(
+        ReadOnlySpan<byte> ddsBytes)
+    {
+        var (width, height, format, pixelOffset) = ParseDdsHeader(ddsBytes);
+        var rgba = DecodeBlocks(ddsBytes[pixelOffset..], width, height, format);
+        return (rgba, width, height);
+    }
+
+    /// <summary>
+    /// Encode an RGBA8888 buffer at <paramref name="width"/>×<paramref name="height"/>
+    /// as a PNG. Lossless, suitable for the basemap cache where the user
+    /// wants pixel-perfect colour. <paramref name="rgba"/> length must be
+    /// <c>width * height * 4</c>.
+    /// </summary>
+    public static byte[] EncodeRgbaAsPng(byte[] rgba, int width, int height)
+    {
+        ArgumentNullException.ThrowIfNull(rgba);
+        ArgumentOutOfRangeException.ThrowIfLessThan(width, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(height, 1);
+        if (rgba.Length != width * height * 4)
+        {
+            throw new ArgumentException(
+                $"rgba buffer is {rgba.Length} bytes but {width}×{height}×4 = {width * height * 4} expected.",
+                nameof(rgba));
+        }
+        var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+        using var bitmap = new SKBitmap(info);
+        Marshal.Copy(rgba, 0, bitmap.GetPixels(), rgba.Length);
+        using var image = SKImage.FromBitmap(bitmap);
+        // SKEncodedImageFormat.Png ignores the quality argument; pass 100
+        // for consistency with the API shape.
+        using var encoded = image.Encode(SKEncodedImageFormat.Png, 100);
+        return encoded.ToArray();
+    }
+
     // ── Header parsing ─────────────────────────────────────────────────────
 
     private enum BcFormat
     {
         Bc1, // DXT1 (opaque or 1-bit alpha)
         Bc3, // DXT5
+        L8,  // DDPF_LUMINANCE 8bpp — used by the worldmap blur_height /
+             // road_sdf layers we composite into the parchment basemap
     }
 
     private static (int Width, int Height, BcFormat Format, int PixelOffset) ParseDdsHeader(
@@ -86,24 +130,37 @@ public static class IconImageEncoder
             throw new InvalidDataException(
                 $"Invalid DDS dimensions: {width}×{height}.");
         }
-        // FourCC lives at offset 84. Pixel format size at 76 = 32, flags
-        // at 80 should have DDPF_FOURCC (0x4) set for BC textures.
+        // FourCC at offset 84; pixel-format flags at 80. Branch on
+        // DDPF_FOURCC (0x4) = BC compressed vs DDPF_LUMINANCE (0x20000)
+        // = uncompressed 8-bit grayscale. The latter is how the
+        // worldmap blur_height + road_sdf layers ship.
         var pfFlags = MemoryMarshal.Read<uint>(dds[80..]);
-        if ((pfFlags & 0x4) == 0)
+        if ((pfFlags & 0x4) != 0)
         {
-            throw new InvalidDataException(
-                "DDS pixel format does not have DDPF_FOURCC set — non-BC textures aren't supported.");
+            var fourCc = dds.Slice(84, 4);
+            var format = fourCc switch
+            {
+            [(byte)'D', (byte)'X', (byte)'T', (byte)'1'] => BcFormat.Bc1,
+            [(byte)'D', (byte)'X', (byte)'T', (byte)'5'] => BcFormat.Bc3,
+                _ => throw new InvalidDataException(
+                    $"Unsupported DDS FourCC '{System.Text.Encoding.ASCII.GetString(fourCc)}' " +
+                    "— only DXT1 (BC1) and DXT5 (BC3) are implemented today."),
+            };
+            return (width, height, format, 128);
         }
-        var fourCc = dds.Slice(84, 4);
-        var format = fourCc switch
+        if ((pfFlags & 0x20000) != 0)
         {
-        [(byte)'D', (byte)'X', (byte)'T', (byte)'1'] => BcFormat.Bc1,
-        [(byte)'D', (byte)'X', (byte)'T', (byte)'5'] => BcFormat.Bc3,
-            _ => throw new InvalidDataException(
-                $"Unsupported DDS FourCC '{System.Text.Encoding.ASCII.GetString(fourCc)}' " +
-                "— only DXT1 (BC1) and DXT5 (BC3) are implemented today."),
-        };
-        return (width, height, format, 128);
+            var bitCount = MemoryMarshal.Read<uint>(dds[88..]);
+            if (bitCount != 8)
+            {
+                throw new InvalidDataException(
+                    $"Unsupported LUMINANCE bit count: {bitCount} (expected 8).");
+            }
+            return (width, height, BcFormat.L8, 128);
+        }
+        throw new InvalidDataException(
+            $"DDS pixel format flags 0x{pfFlags:X} indicate neither BC (DDPF_FOURCC=0x4) " +
+            "nor grayscale (DDPF_LUMINANCE=0x20000) — unsupported.");
     }
 
     // ── BC block decode ────────────────────────────────────────────────────
@@ -111,6 +168,10 @@ public static class IconImageEncoder
     private static byte[] DecodeBlocks(
         ReadOnlySpan<byte> pixels, int width, int height, BcFormat format)
     {
+        if (format == BcFormat.L8)
+        {
+            return DecodeL8(pixels, width, height);
+        }
         var rgba = new byte[width * height * 4];
         var blocksX = (width + 3) / 4;
         var blocksY = (height + 3) / 4;
@@ -147,6 +208,31 @@ public static class IconImageEncoder
                 WriteBlockToImage(blockRgba, rgba, bx * 4, by * 4, width, height);
                 blockOffset += blockSize;
             }
+        }
+        return rgba;
+    }
+
+    /// <summary>
+    /// Decode an uncompressed 8-bit grayscale (L8 / DDPF_LUMINANCE)
+    /// pixel block to an RGBA8888 buffer. The single luminance byte is
+    /// splatted to R/G/B (alpha = 255).
+    /// </summary>
+    private static byte[] DecodeL8(ReadOnlySpan<byte> pixels, int width, int height)
+    {
+        var pxCount = width * height;
+        if (pixels.Length < pxCount)
+        {
+            throw new InvalidDataException(
+                $"L8 DDS pixel data is {pixels.Length} bytes but {width}x{height} needs {pxCount}.");
+        }
+        var rgba = new byte[pxCount * 4];
+        for (var i = 0; i < pxCount; i++)
+        {
+            var l = pixels[i];
+            rgba[(i * 4) + 0] = l;
+            rgba[(i * 4) + 1] = l;
+            rgba[(i * 4) + 2] = l;
+            rgba[(i * 4) + 3] = 0xFF;
         }
         return rgba;
     }

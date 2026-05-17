@@ -374,4 +374,28 @@
   <sys:String x:Key="ElementsFilterPlaceholder">キー、名前、クラスで絞り込み…</sys:String>
   <sys:String x:Key="NavigationBack">← 戻る</sys:String>
 
+  <!-- ワールドマップダイアログ（ツールメニュー） -->
+  <sys:String x:Key="MenuWorldMap">ワールドマップ(_W)…</sys:String>
+  <sys:String x:Key="WorldMapWindowTitle">ワールドマップ</sys:String>
+  <sys:String x:Key="WorldMapToggleActiveCharTip">アクティブキャラのマーカーを表示します。</sys:String>
+  <sys:String x:Key="WorldMapToggleMercTip">傭兵 / 騎乗マウントのマーカーを表示します（_spawnPosition のある対象のみ）。</sys:String>
+  <sys:String x:Key="WorldMapToggleGimmicksTip">フィールドギミックのマーカーを表示します（slot103 で約 3,240 件）。</sys:String>
+  <sys:String x:Key="WorldMapToggleYawArrows">向き矢印</sys:String>
+  <sys:String x:Key="WorldMapToggleYawArrowsTip">各マーカーの上に向きを示す短い線を描画します。</sys:String>
+  <sys:String x:Key="WorldMapToggleRegionColoring">地域別カラー</sys:String>
+  <sys:String x:Key="WorldMapToggleRegionColoringTip">種類別の固定色を _fieldInfoKey ベースの地域別色相に切り替えます。</sys:String>
+  <sys:String x:Key="WorldMapToggleDistanceTool">距離計測</sys:String>
+  <sys:String x:Key="WorldMapToggleDistanceToolTip">ボタン押下後、マップ上の 2 点をクリックすると 2 点間のワールド単位距離を表示します。</sys:String>
+  <sys:String x:Key="WorldMapExportPng">PNG をエクスポート…</sys:String>
+  <sys:String x:Key="WorldMapExportPngTip">現在のマップ + マーカーをネイティブ解像度の PNG として保存します。</sys:String>
+  <sys:String x:Key="WorldMapExportPickerTitle">ワールドマップ PNG をエクスポート</sys:String>
+  <sys:String x:Key="WorldMapClose">閉じる</sys:String>
+  <sys:String x:Key="WorldMapNoSaveTitle">セーブが読み込まれていません</sys:String>
+  <sys:String x:Key="WorldMapNoSaveBody">先に File → Open Save でセーブを開いてからワールドマップを開いてください。</sys:String>
+  <sys:String x:Key="WorldMapNoGameTitle">ゲームインストール先が必要</sys:String>
+  <sys:String x:Key="WorldMapNoGameBody">ワールドマップは Crimson Desert のインストールフォルダからマップテクスチャを取り出します。Tools → Set Game Install Folder でフォルダを設定してから再度お試しください。</sys:String>
+  <sys:String x:Key="WorldMapExtractingTitle">マップを取り出し中</sys:String>
+  <sys:String x:Key="WorldMapExtractingBody">0012 の blur_height + paper pattern + 道路 SDF を合成して parchment 風マップを生成中 — 初回約 10 秒、以降はキャッシュを再利用します。</sys:String>
+  <sys:String x:Key="WorldMapExtractFailedTitle">マップを取り出せませんでした</sys:String>
+
 </ResourceDictionary>

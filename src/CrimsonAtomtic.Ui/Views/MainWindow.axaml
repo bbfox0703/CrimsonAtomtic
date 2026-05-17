@@ -124,6 +124,9 @@
         <MenuItem Header="{DynamicResource MenuVendorBuyback}"
                   Click="OnVendorBuybackClick"
                   IsEnabled="{Binding HasSave}" />
+        <MenuItem Header="{DynamicResource MenuWorldMap}"
+                  Click="OnWorldMapClick"
+                  IsEnabled="{Binding HasSave}" />
         <Separator />
         <MenuItem Header="{DynamicResource MenuReviewChanges}"
                   Click="OnReviewChangesClick"

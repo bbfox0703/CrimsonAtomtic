@@ -1,0 +1,287 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        xmlns:svc="using:CrimsonAtomtic.Ui.Services"
+        mc:Ignorable="d"
+        d:DesignWidth="1100"
+        d:DesignHeight="780"
+        x:Class="CrimsonAtomtic.Ui.Views.WorldMapWindow"
+        x:DataType="vm:WorldMapViewModel"
+        x:Name="Root"
+        Title="{DynamicResource WorldMapWindowTitle}"
+        Icon="/Assets/MainIcon.ico"
+        Width="1100" Height="780"
+        MinWidth="640" MinHeight="480"
+        FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
+
+  <DockPanel LastChildFill="True" Margin="8">
+
+    <!-- ── Toolbar ─────────────────────────────────────────────────── -->
+    <Grid DockPanel.Dock="Top"
+          ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto"
+          ColumnSpacing="10"
+          Margin="0,0,0,8"
+          VerticalAlignment="Center">
+      <CheckBox Grid.Column="0"
+                IsChecked="{Binding ShowActiveChar, Mode=TwoWay}"
+                Content="{Binding ActiveCharCount, StringFormat='Active char ({0})'}"
+                ToolTip.Tip="{DynamicResource WorldMapToggleActiveCharTip}" />
+      <CheckBox Grid.Column="1"
+                IsChecked="{Binding ShowMercenaries, Mode=TwoWay}"
+                Content="{Binding MercenaryCount, StringFormat='Mercenaries ({0})'}"
+                ToolTip.Tip="{DynamicResource WorldMapToggleMercTip}" />
+      <CheckBox Grid.Column="2"
+                IsChecked="{Binding ShowGimmicks, Mode=TwoWay}"
+                Content="{Binding GimmickCount, StringFormat='Gimmicks ({0})'}"
+                ToolTip.Tip="{DynamicResource WorldMapToggleGimmicksTip}" />
+      <Border Grid.Column="3" Width="1" Background="{DynamicResource SystemControlForegroundBaseLowBrush}" Opacity="0.5"/>
+      <CheckBox Grid.Column="4"
+                IsChecked="{Binding ShowYawArrows, Mode=TwoWay}"
+                Content="{DynamicResource WorldMapToggleYawArrows}"
+                ToolTip.Tip="{DynamicResource WorldMapToggleYawArrowsTip}" />
+      <CheckBox Grid.Column="5"
+                IsChecked="{Binding UseRegionColoring, Mode=TwoWay}"
+                Content="{DynamicResource WorldMapToggleRegionColoring}"
+                ToolTip.Tip="{DynamicResource WorldMapToggleRegionColoringTip}" />
+      <!-- Spacer -->
+      <Button Grid.Column="7"
+              Content="{DynamicResource WorldMapToggleDistanceTool}"
+              Command="{Binding ToggleDistanceToolCommand}"
+              ToolTip.Tip="{DynamicResource WorldMapToggleDistanceToolTip}" />
+      <Button Grid.Column="8"
+              Content="{DynamicResource WorldMapExportPng}"
+              Click="OnExportClick"
+              ToolTip.Tip="{DynamicResource WorldMapExportPngTip}" />
+      <Button Grid.Column="9"
+              Content="{DynamicResource WorldMapClose}"
+              Click="OnCloseClick"
+              MinWidth="80" />
+    </Grid>
+
+    <!-- ── Status bar ──────────────────────────────────────────────── -->
+    <Grid DockPanel.Dock="Bottom"
+          ColumnDefinitions="*,Auto,Auto"
+          ColumnSpacing="16"
+          Margin="0,8,0,0">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding CursorCoordsText}"
+                 Opacity="0.7"
+                 FontFamily="Consolas, Menlo, monospace"
+                 VerticalAlignment="Center"
+                 TextTrimming="CharacterEllipsis" />
+      <TextBlock Grid.Column="1"
+                 Text="{Binding DistanceText}"
+                 Opacity="0.8"
+                 VerticalAlignment="Center"
+                 TextTrimming="CharacterEllipsis" />
+      <TextBlock Grid.Column="2"
+                 Text="{Binding TotalMarkerCount, StringFormat='{}{0:N0} markers'}"
+                 Opacity="0.6"
+                 VerticalAlignment="Center" />
+    </Grid>
+
+    <!-- ── Map surface (pan + zoom via code-behind handlers) ────────── -->
+    <Border BorderThickness="1"
+            BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+            Background="#101010">
+      <ScrollViewer x:Name="MapScroll"
+                    HorizontalScrollBarVisibility="Auto"
+                    VerticalScrollBarVisibility="Auto">
+        <!-- The Grid is the zoom target. PointerHandlers on it drive
+             pan + zoom + distance picks. Canvas children share the
+             scale transform with the basemap image so markers stay
+             pixel-aligned across zoom levels. -->
+        <Grid x:Name="MapStage"
+              Width="{Binding BasemapWidth}"
+              Height="{Binding BasemapHeight}"
+              PointerMoved="OnMapPointerMoved"
+              PointerPressed="OnMapPointerPressed"
+              PointerReleased="OnMapPointerReleased"
+              PointerWheelChanged="OnMapPointerWheel">
+          <Grid.RenderTransform>
+            <ScaleTransform ScaleX="{Binding ZoomScale}" ScaleY="{Binding ZoomScale}" />
+          </Grid.RenderTransform>
+
+          <!-- Basemap -->
+          <Image Source="{Binding Basemap}"
+                 Width="{Binding BasemapWidth}"
+                 Height="{Binding BasemapHeight}"
+                 Stretch="None"
+                 RenderOptions.BitmapInterpolationMode="MediumQuality" />
+
+          <!-- Gimmick layer (under everything else; small dots, no
+               per-marker yaw arrow for performance — 3,240 elements). -->
+          <ItemsControl ItemsSource="{Binding GimmickMarkers}"
+                        IsVisible="{Binding ShowGimmicks}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <Canvas />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.Styles>
+              <!-- Inline x:DataType on each binding scopes compiled-
+                   binding type resolution to WorldMapMarker (the item's
+                   DataContext on each ContentPresenter). Without the
+                   inline scope, the compiler resolves against the
+                   Window's x:DataType (the VM) and fails. AOT-safe:
+                   compiled binding, no reflection at runtime. -->
+              <Style Selector="ContentPresenter">
+                <Setter Property="Canvas.Left" Value="{Binding PixelX, x:DataType=vm:WorldMapMarker}" />
+                <Setter Property="Canvas.Top" Value="{Binding PixelY, x:DataType=vm:WorldMapMarker}" />
+              </Style>
+            </ItemsControl.Styles>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:WorldMapMarker">
+                <Ellipse Width="4" Height="4"
+                         Stroke="#101010" StrokeThickness="0.5">
+                  <Ellipse.RenderTransform>
+                    <TranslateTransform X="-2" Y="-2" />
+                  </Ellipse.RenderTransform>
+                  <Ellipse.Fill>
+                    <MultiBinding Converter="{x:Static svc:WorldMapMarkerBrushConverter.Instance}">
+                      <Binding Path="Kind" />
+                      <Binding Path="FieldInfoKey" />
+                      <Binding Path="DataContext.UseRegionColoring" ElementName="Root" />
+                    </MultiBinding>
+                  </Ellipse.Fill>
+                </Ellipse>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <!-- Mercenary layer -->
+          <ItemsControl ItemsSource="{Binding MercenaryMarkers}"
+                        IsVisible="{Binding ShowMercenaries}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <Canvas />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.Styles>
+              <!-- Inline x:DataType on each binding scopes compiled-
+                   binding type resolution to WorldMapMarker (the item's
+                   DataContext on each ContentPresenter). Without the
+                   inline scope, the compiler resolves against the
+                   Window's x:DataType (the VM) and fails. AOT-safe:
+                   compiled binding, no reflection at runtime. -->
+              <Style Selector="ContentPresenter">
+                <Setter Property="Canvas.Left" Value="{Binding PixelX, x:DataType=vm:WorldMapMarker}" />
+                <Setter Property="Canvas.Top" Value="{Binding PixelY, x:DataType=vm:WorldMapMarker}" />
+              </Style>
+            </ItemsControl.Styles>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:WorldMapMarker">
+                <Grid Width="14" Height="14">
+                  <Grid.RenderTransform>
+                    <TransformGroup>
+                      <RotateTransform Angle="{Binding YawDegrees}" CenterX="7" CenterY="7" />
+                      <TranslateTransform X="-7" Y="-7" />
+                    </TransformGroup>
+                  </Grid.RenderTransform>
+                  <!-- Yaw arrow: line from centre upward when toggle is on. -->
+                  <Line StartPoint="7,7" EndPoint="7,-2"
+                        Stroke="#FFFFFF" StrokeThickness="1.5"
+                        IsVisible="{Binding DataContext.ShowYawArrows, ElementName=Root}" />
+                  <!-- Triangle marker -->
+                  <Path StrokeThickness="1" Stroke="#101010">
+                    <Path.Fill>
+                      <MultiBinding Converter="{x:Static svc:WorldMapMarkerBrushConverter.Instance}">
+                        <Binding Path="Kind" />
+                        <Binding Path="FieldInfoKey" />
+                        <Binding Path="DataContext.UseRegionColoring" ElementName="Root" />
+                      </MultiBinding>
+                    </Path.Fill>
+                    <Path.Data>
+                      <PathGeometry Figures="M 7,2 L 12,12 L 2,12 Z" />
+                    </Path.Data>
+                  </Path>
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <!-- Active-character layer (top — 1 marker, gold star outline) -->
+          <ItemsControl ItemsSource="{Binding ActiveCharMarkers}"
+                        IsVisible="{Binding ShowActiveChar}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <Canvas />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.Styles>
+              <!-- Inline x:DataType on each binding scopes compiled-
+                   binding type resolution to WorldMapMarker (the item's
+                   DataContext on each ContentPresenter). Without the
+                   inline scope, the compiler resolves against the
+                   Window's x:DataType (the VM) and fails. AOT-safe:
+                   compiled binding, no reflection at runtime. -->
+              <Style Selector="ContentPresenter">
+                <Setter Property="Canvas.Left" Value="{Binding PixelX, x:DataType=vm:WorldMapMarker}" />
+                <Setter Property="Canvas.Top" Value="{Binding PixelY, x:DataType=vm:WorldMapMarker}" />
+              </Style>
+            </ItemsControl.Styles>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:WorldMapMarker">
+                <Grid Width="18" Height="18">
+                  <Grid.RenderTransform>
+                    <TransformGroup>
+                      <RotateTransform Angle="{Binding YawDegrees}" CenterX="9" CenterY="9" />
+                      <TranslateTransform X="-9" Y="-9" />
+                    </TransformGroup>
+                  </Grid.RenderTransform>
+                  <Line StartPoint="9,9" EndPoint="9,-4"
+                        Stroke="#FFFFFF" StrokeThickness="2"
+                        IsVisible="{Binding DataContext.ShowYawArrows, ElementName=Root}" />
+                  <!-- 5-point star -->
+                  <Path Stroke="#101010" StrokeThickness="1.5">
+                    <Path.Fill>
+                      <MultiBinding Converter="{x:Static svc:WorldMapMarkerBrushConverter.Instance}">
+                        <Binding Path="Kind" />
+                        <Binding Path="FieldInfoKey" />
+                        <Binding Path="DataContext.UseRegionColoring" ElementName="Root" />
+                      </MultiBinding>
+                    </Path.Fill>
+                    <Path.Data>
+                      <PathGeometry Figures="M 9,1 L 11,7 L 17,7 L 12,11 L 14,17 L 9,13 L 4,17 L 6,11 L 1,7 L 7,7 Z" />
+                    </Path.Data>
+                  </Path>
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <!-- Distance tool overlay (top-most). Hidden when neither
+               point is picked; partial when only first is picked. -->
+          <Canvas IsHitTestVisible="False">
+            <Ellipse Canvas.Left="{Binding DistancePoint1X}"
+                     Canvas.Top="{Binding DistancePoint1Y}"
+                     Width="10" Height="10"
+                     Fill="#FFFFFF80" Stroke="#000000" StrokeThickness="1"
+                     IsVisible="{Binding HasDistancePoint1}">
+              <Ellipse.RenderTransform>
+                <TranslateTransform X="-5" Y="-5" />
+              </Ellipse.RenderTransform>
+            </Ellipse>
+            <Ellipse Canvas.Left="{Binding DistancePoint2X}"
+                     Canvas.Top="{Binding DistancePoint2Y}"
+                     Width="10" Height="10"
+                     Fill="#FFFFFF80" Stroke="#000000" StrokeThickness="1"
+                     IsVisible="{Binding HasDistancePoint2}">
+              <Ellipse.RenderTransform>
+                <TranslateTransform X="-5" Y="-5" />
+              </Ellipse.RenderTransform>
+            </Ellipse>
+            <!-- Line between the two points (only when both are picked). -->
+            <Line StartPoint="{Binding DistancePoint1AsAvaloniaPoint}"
+                  EndPoint="{Binding DistancePoint2AsAvaloniaPoint}"
+                  Stroke="#FFFFFFCC" StrokeThickness="1.5"
+                  StrokeDashArray="4,3"
+                  IsVisible="{Binding HasDistancePoint2}" />
+          </Canvas>
+        </Grid>
+      </ScrollViewer>
+    </Border>
+  </DockPanel>
+</Window>
