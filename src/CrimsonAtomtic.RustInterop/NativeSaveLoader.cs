@@ -1902,6 +1902,19 @@ internal static partial class NativeMethods
         out nuint outRequired,
         out uint outCount);
 
+    // List every file in a PAMT directory as a flat 272-byte repr(C)
+    // record stream. Powers the world-map basemap discovery pipeline —
+    // pair with PazExtractFile to pull each discovered file. Same
+    // two-call buffer-dance shape as ListAllItems / ListFieldPositions.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_paz_list_dir",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static unsafe partial int PazListDir(
+        string pamtPath,
+        string directory,
+        PazFileEntry* outEntries,
+        nuint capacityEntries,
+        out nuint outCountEntries);
+
     // ── Main quest chapter rollup (curated static table) ────────────────────
     //
     // No handle, no file load — pure static data backed by the curated

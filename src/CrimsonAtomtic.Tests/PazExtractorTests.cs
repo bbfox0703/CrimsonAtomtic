@@ -223,4 +223,92 @@ public sealed class PazExtractorTests
         Assert.True(cat.EntryCount > 50_000,
             $"localizationstring_{code}.paloc: expected >50k entries, got {cat.EntryCount}");
     }
+
+    /// <summary>
+    /// Live-install check that <c>crimson_paz_list_dir</c> enumerates
+    /// the terrain color tile directory + each entry's filename round-
+    /// trips through <c>ExtractFile</c>. This is the discovery primitive
+    /// for the deferred world-map basemap composition (vendor commit
+    /// 090a73d). Skips cleanly when no game install is reachable.
+    /// </summary>
+    [Fact]
+    public void ListDir_LiveInstall_EnumeratesTerrainColorTiles()
+    {
+        if (!File.Exists("crimson_rs.dll"))
+        {
+            return;
+        }
+        var installRoot = FindEnglishPamt() is { } p
+            ? Path.GetDirectoryName(Path.GetDirectoryName(p))
+            : null;
+        if (installRoot is null)
+        {
+            return;
+        }
+        var pamt = Path.Combine(installRoot, "0015", "0.pamt");
+        if (!File.Exists(pamt))
+        {
+            return;
+        }
+        var extractor = new NativePazExtractor();
+        var entries = extractor.ListDir(pamt, "leveldata/rootlevel/terrain/color");
+
+        // Vendor pinned 785 tiles in 1.07 — defensive lower bound
+        // tolerates a future patch that adjusts the world bounds.
+        Assert.True(entries.Count >= 100,
+            $"expected >=100 terrain color tiles, got {entries.Count}");
+
+        // Every entry has a non-empty filename, a positive uncompressed
+        // size, and no truncated names (256-byte buffer is comfortable
+        // for the observed terrain_X_Y_color_c.dds pattern).
+        foreach (var e in entries)
+        {
+            Assert.False(string.IsNullOrEmpty(e.Name),
+                "every PazFileEntry should expose a non-empty Name");
+            Assert.True(e.UncompressedSize > 0,
+                $"{e.Name}: expected UncompressedSize > 0, got {e.UncompressedSize}");
+            Assert.False(e.NameTruncated,
+                $"{e.Name}: terrain filenames shouldn't trip the 256-byte name truncation flag");
+        }
+
+        // At least one tile matches the documented terrain_X_Y_color_c.dds
+        // pattern — proves the directory contents are what we expect, not
+        // some unrelated PAZ payload.
+        Assert.Contains(entries, e =>
+            e.Name.StartsWith("terrain_", StringComparison.Ordinal)
+            && e.Name.EndsWith("_color_c.dds", StringComparison.Ordinal));
+
+        // Round-trip: feed the first entry's filename straight into
+        // ExtractFile + verify DDS magic. Pins that list_dir's reported
+        // name is usable verbatim by extract_file (no path normalisation
+        // gap between the two).
+        var sample = entries[0];
+        var bytes = extractor.ExtractFile(pamt, "leveldata/rootlevel/terrain/color", sample.Name);
+        Assert.NotEmpty(bytes);
+        Assert.True(
+            bytes.Length >= 4
+                && bytes[0] == 0x44 && bytes[1] == 0x44
+                && bytes[2] == 0x53 && bytes[3] == 0x20,
+            $"expected DDS magic at start of {sample.Name}");
+    }
+
+    [Fact]
+    public void ListDir_NotFoundDirectory_ThrowsCrimsonSaveException()
+    {
+        if (!File.Exists("crimson_rs.dll")) return;
+        var pamt = FindEnglishPamt();
+        if (pamt is null) return;
+        var extractor = new NativePazExtractor();
+        var ex = Assert.Throws<CrimsonSaveException>(() =>
+            extractor.ListDir(pamt, "not/a/real/dir"));
+        Assert.Equal(-16, ex.ErrorCode); // NOT_FOUND
+    }
+
+    [Fact]
+    public void ListDir_RejectsNullOrEmptyArgs()
+    {
+        var extractor = new NativePazExtractor();
+        Assert.Throws<ArgumentException>(() => extractor.ListDir("", "x"));
+        Assert.Throws<ArgumentNullException>(() => extractor.ListDir("x", null!));
+    }
 }

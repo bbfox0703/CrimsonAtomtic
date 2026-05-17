@@ -46,4 +46,35 @@ public interface IPazExtractor
     /// Same shape as <see cref="ExtractFile"/> failures.
     /// </exception>
     (byte[] Buffer, int Count) ListNpcPortraits(string pamtPath);
+
+    /// <summary>
+    /// Enumerate every file in <paramref name="directory"/> inside the
+    /// PAZ group whose manifest is at <paramref name="pamtPath"/>. Each
+    /// record carries the leaf filename + compressed / uncompressed
+    /// sizes + the partial-compression + name-truncated flags — enough
+    /// to drive <see cref="ExtractFile"/> per entry without a second
+    /// PAMT walk.
+    /// </summary>
+    /// <param name="pamtPath">Absolute path to the group's
+    /// <c>0.pamt</c>.</param>
+    /// <param name="directory">In-archive directory path,
+    /// e.g. <c>leveldata/rootlevel/terrain/color</c> (no trailing
+    /// slash; no leading slash).</param>
+    /// <returns>
+    /// Flat list of every file in that directory. Empty when the
+    /// directory exists but has no files.
+    /// </returns>
+    /// <exception cref="CrimsonSaveException">
+    /// <c>NOT_FOUND (-16)</c> when <paramref name="directory"/> isn't
+    /// in the PAMT; <c>IO (-3)</c> for filesystem failures;
+    /// <c>BODY_PARSE (-9)</c> for malformed PAMT;
+    /// <c>INVALID_PATH (-2)</c> for bad UTF-8 in either path.
+    /// </exception>
+    /// <remarks>
+    /// Each call re-parses the PAMT (no caching). For 0012's ~750 KB
+    /// PAMT that's a few ms — cheap but not free. Callers walking
+    /// many directories from the same PAMT may want to add their own
+    /// outer cache.
+    /// </remarks>
+    IReadOnlyList<PazFileEntry> ListDir(string pamtPath, string directory);
 }

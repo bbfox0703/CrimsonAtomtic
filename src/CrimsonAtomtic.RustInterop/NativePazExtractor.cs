@@ -90,6 +90,41 @@ public sealed class NativePazExtractor : IPazExtractor
         }
     }
 
+    public IReadOnlyList<PazFileEntry> ListDir(string pamtPath, string directory)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(pamtPath);
+        ArgumentNullException.ThrowIfNull(directory);
+        unsafe
+        {
+            nuint count = 0;
+            int rc = NativeMethods.PazListDir(
+                pamtPath, directory, null, 0, out count);
+            if (rc == NativeMethods.OK && count == 0)
+            {
+                return Array.Empty<PazFileEntry>();
+            }
+            if (rc != NativeMethods.BUFFER_TOO_SMALL)
+            {
+                throw new CrimsonSaveException(rc,
+                    $"crimson_paz_list_dir({pamtPath}, {directory}) " +
+                    $"size query failed: {ErrorName(rc)}");
+            }
+            var buf = new PazFileEntry[(int)count];
+            fixed (PazFileEntry* p = buf)
+            {
+                rc = NativeMethods.PazListDir(
+                    pamtPath, directory, p, count, out _);
+            }
+            if (rc != NativeMethods.OK)
+            {
+                throw new CrimsonSaveException(rc,
+                    $"crimson_paz_list_dir({pamtPath}, {directory}) " +
+                    $"fill failed: {ErrorName(rc)}");
+            }
+            return buf;
+        }
+    }
+
     private static string ErrorName(int code) => code switch
     {
         NativeMethods.OK                    => "OK",

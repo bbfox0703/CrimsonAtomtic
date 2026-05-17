@@ -3,7 +3,38 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-17 part 6 (positioned-entity enumerator binding — crimson-rs cd02b28 lights up world-map plotting; UX deferred).
+> Last updated: 2026-05-17 part 7 (paz_list_dir binding — basemap tile discovery prerequisite for the deferred world-map UX).
+>
+> ## ✅ This session — what shipped (2026-05-17 part 7)
+>
+> One commit consuming the new `crimson_paz_list_dir` C ABI from
+> vendor `090a73d`. Vendor refreshed `cd02b28` → `090a73d` (upstream
+> force-pushed; `aeb2fa2` is content-equivalent to our previously
+> consumed `cd02b28` `crimson_save_list_field_positions` so no
+> re-work needed on that surface — only the new tile-discovery ABI
+> shipped here).
+>
+> | Area | Scope |
+> |---|---|
+> | **PAZ directory enumerator binding** | New `crimson_paz_list_dir(pamt_path, directory)` upstream ABI lists every file in a PAMT directory as a flat 272-byte `repr(C)` `CrimsonPazFileEntry` stream — filename (256-byte fixed buffer) + `compressed_size` + `uncompressed_size` + `is_partial` + `name_truncated`. Built as the discovery primitive for the player-facing world map (procedurally composited at runtime from ~785 terrain color tiles in `0015/leveldata/rootlevel/terrain/color` + sibling height / normal / region layers + 2 prestitched `0012/.../worldmap/*.dds` files + 234 region-title decals). New `PazFileEntry` blittable struct uses `[InlineArray(256)]` for the name buffer so the public surface stays a single 272-byte value with a managed `Name` string accessor (NUL-stripped, UTF-8 decoded). `IPazExtractor.ListDir` exposes the wrapper with the same two-call buffer-dance shape as the other enumerators. Three new tests: live-install terrain-tile enumeration with round-trip extraction of the first tile (verifies DDS magic — pins that `list_dir`'s reported filename feeds straight into `extract_file` without normalization gaps) + `NOT_FOUND` for an unknown directory + `ArgumentException` for null/empty args. |
+>
+> Tests: **271 → 274** (+3 PAZ tests). Debug build clean.
+>
+> ### Open follow-ons noted during this session
+>
+> - **None new** — `paz_list_dir` is the second of the two ABIs feeding
+>   the deferred World Map UX (the first being `list_field_positions`
+>   from part 6). Both bindings now exist; the UX decision still
+>   stands.
+>
+> ### Open follow-ons carried over (no change)
+>
+> - World-map UX layer (deferred — DataGrid first vs full basemap dialog; basemap rendering needs DDS decoding + game-extracted asset shipping decision).
+> - Safe re-attempt of "+ Add Dye" with per-prefab slot picker (from part 5).
+> - Pattern B v2 for multi-objective SA challenges (from part 1).
+> - OCT forum post URL placeholder (from part 1).
+>
+> ---
 >
 > ## ✅ This session — what shipped (2026-05-17 part 6)
 >
