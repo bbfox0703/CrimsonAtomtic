@@ -3,7 +3,33 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-17 (character refs browser + CharacterKey picker + first-launch disclaimer; composite-scalar setters; bulk SA diagnostics; four UX fixes; 13 niche bridges).
+> Last updated: 2026-05-17 part 2 (cross-container item enumerator + Dye/Sockets walk-once refactor; "+ Add Dye" via ObjectList presence toggle; Mark-Challenge skip-reason tooltip; main + side quest rollup bridges).
+>
+> ## ✅ This session — what shipped (2026-05-17 part 2)
+>
+> Three commits landed today on top of part 1, all pushed to `dev`. Final
+> tip: `f85c4e5`. Vendor `crimson-rs` refreshed `21f1883` → `4ee430b`
+> (8 upstream commits, +5604 LOC) — consumed below.
+>
+> | Area | Scope |
+> |---|---|
+> | **`list_all_items` + `set_object_list_present` + quest rollup bindings** (`ab01db2`) | Consumed 7 new C ABI exports from the vendor refresh. New 64-byte `repr(C)` `ItemRecord` blittable struct (layout-pin test) + `ContainerKind` enum + `ItemRecordFlags` constants. `ISaveLoader.ListAllItems(out version)` exposes the single-FFI cross-container walk (`ActiveEquip` + `ActiveUseReserve` + `Inventory` + `MercenaryEquip` + `MercenaryInventory`, 829 items vs the inventory-only 545 on slot103). `LocalizationProvider.IsPlayerEditableItem` widens the strict `IS_PLAYER_OWNED` flag to admit the 8 player-controlled mounts whose `_ownedCharacterKey` is absent (`Riding_*` / `Animal_*` / `Vehicle_*` prefix per upstream recipe); new `FormatItemSourceLabel` is the single source of truth for the inventory / sockets / dye editors' source-column label. **`ISaveLoader.SetObjectListPresent`** + `NOT_OBJECT_LIST = -23` constant — closes the ObjectList-toggle path used by "+ Add Dye" (below). Live-save roundtrip test handles both ≥ 2-dyed and solo-dyed save edge cases (solo case correctly returns `NOT_FOUND`). **Two static facade catalogs** — `NativeMainQuestChapter` (~170 rows Prologue + 12 chapters + Epilogue) + `NativeSideQuestFaction` (84 quests / 22 factions, both directions); no handle / no file load — pure static lookups. 13 new tests (3 ItemRecord + 1 SetObjectListPresent + 9 rollup bridges + roundtrip). |
+> | **Dye + Sockets walk `ListAllItems` + "+ Add Dye" UX** (`70fae58`) | Both editors used to walk every top-level block, filter by class (`InventorySaveData` / `EquipmentSaveData`), then drill into nested item lists by field name (~150 LOC of dual `CollectFromInventory` / `CollectFromEquipment` walkers across the two editors). Rewritten to a single `ListAllItems` FFI call → filter by `HasDyeData` / `HasSocketData` flag + `IsPlayerEditableItem` widening → descend each record's 2-step path to find the inner `ItemSaveData`. **Real bug fix**: the prior walkers ignored `MercenaryClanSaveData` entirely; 245 `MercenaryEquip` + 20 `MercenaryInventory` items (mounts' equipped gear + inactive Damine/Oongka equip) were silently invisible to both editors. Both surfaces now show those items labeled e.g. "Riding_Horse_Black_31378 (Equipped)". **"+ Add Dye" UX**: Dye editor's scan now surfaces un-dyed equipped items (`ActiveEquip` / `ActiveUseReserve` / `MercenaryEquip` — inventory bags excluded to keep list manageable) as "+ Add" rows alongside the existing "Edit" rows. Click "+ Add" → confirm dialog → `SetObjectListPresent(makePresent=true)` materializes a default-empty dye element → master VM refresh. `NOT_FOUND` (no template sibling in the save) surfaces a localized alert explaining the user must dye one item in-game first. Bilingual strings added (en / ja / zh-TW). Dropped unused `_blocks` ctor param + 7 orphan constants in each editor; cleaned up obsolete v1-scope docstring. |
+> | **Mark-Challenge-Complete skip-reason tooltip** (`f85c4e5`) | Pre-refactor: the per-row "Mark Challenge Complete" button used a single `IsCurrentChallengeMarkable` gate bound to `IsVisible` — on an ineligible `MissionStateData` row the button silently vanished, leaving the user with no signal whether they were on the wrong kind of row or on the right row with a missing precondition. Split into `IsCurrentNavOnMissionStateRow` (visibility — class + path-of-length-1 only) + `IsCurrentChallengeMarkable` (enablement — full eligibility, unchanged) + new `CurrentChallengeMarkTooltip` that composes the localized tooltip text: eligible → `MarkChallengeCompleteTip` resource (unchanged), ineligible → `{MarkChallengeSkipReasonPrefix} {skipReason}` reusing the existing bulk-sweep `TryBuildChallengeContextFromCatalogRow(..., out string? skipReason)` plumbing. The user now sees exactly which gate failed (e.g. "adjacent twin _state != 5 (artifact never picked up)" or "FAR tracker (key 0x...) not found in _missionStateList"). Three navigation-bump call sites consolidated through a new `NotifyMarkChallengeStateChanged` helper. |
+>
+> Tests across the session: **257 → 268** (+11 net: 3 layout/cross-container + 1 SetObjectListPresent roundtrip + 9 quest rollup; existing tests unaffected). Debug build clean at every commit. Three commits on `dev`; FF merge into `main` pending.
+>
+> ### Open follow-ons noted during this session
+>
+> - **Pattern B v2 for multi-objective SA challenges** (carried over from part 1, unchanged): still needs RE diff of slot106 → slot107 → post-claim. Diagnostic scripts retained in `tools/inspect/sa-investigations/`.
+> - **OCT forum post URL placeholder** (carried over from part 1, unchanged): `docs/oct/features-highlights.md` placeholder `*(GitHub URL — fill in before posting)*` still needs filling.
+>
+> ### Open follow-ons resolved this session
+>
+> - ~~Add dye to undyed item~~ — **shipped** (`70fae58`). `+ Add Dye` button materializes a default-empty dye element via the new `SetObjectListPresent` toggle; `NOT_FOUND` UX prompts the user to dye one item in-game first when no template sibling exists. Deferred-note comment at the previous `DyeEditorViewModel.cs:22-25` removed in the refactor.
+> - ~~CharacterKey picker tooltip~~ — **shipped** (`f85c4e5`). (Originally misnamed in the part-1 follow-on list — the task was the Mark-Challenge-Complete button tooltip, not the CharacterKey picker. Now uses the existing `skipReason` plumbing to explain why the button is grayed out.)
+>
+> ---
 >
 > ## ✅ This session — what shipped (2026-05-17)
 >
