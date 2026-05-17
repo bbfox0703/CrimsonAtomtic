@@ -142,6 +142,56 @@ public interface ISaveLoader
     IReadOnlyList<InventoryItemRecord> ListInventoryItems(out ulong version);
 
     /// <summary>
+    /// Flat-list every player-relevant item slot across all five
+    /// container kinds in the currently-loaded save (active equip /
+    /// active reserve / inventory / mercenary equip / mercenary
+    /// inventory). One FFI call returns every record needed to drive
+    /// the dye, socket, and item-edit UIs without a per-block
+    /// <see cref="LoadBlockDetails"/> walk.
+    /// </summary>
+    /// <param name="version">
+    /// Out parameter — receives the handle's mutation counter at the
+    /// moment the list was read. Pair with
+    /// <see cref="GetMutationVersion"/> later to detect whether the
+    /// snapshot's positional fields (block index + descent path) are
+    /// still valid — they go stale on the next length-changing mutation.
+    /// </param>
+    /// <returns>
+    /// Flat list of every player-relevant item slot. Empty when the
+    /// save has zero items across all kinds. The records carry both
+    /// the descent path (for <c>SetScalarFieldPath</c>-style edits)
+    /// and inline flags (<see cref="ItemRecordFlags.IsPlayerOwned"/>,
+    /// <see cref="ItemRecordFlags.HasDyeData"/>, … ) for fast
+    /// client-side filtering.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// Slot103 baseline: 829 records (18 active equip + 1 active
+    /// reserve + 545 inventory + 245 mercenary equip + 20 mercenary
+    /// inventory). 619 of those carry
+    /// <see cref="ItemRecordFlags.IsPlayerOwned"/>; the remaining 210
+    /// are NPC followers' gear (filter out for editor surfaces).
+    /// </para>
+    /// <para>
+    /// Two known mounts (<c>Riding_Horse_Tiuta_Unique_2050_kliff</c>,
+    /// <c>Animal_Stefano_Wild_31364</c>) have <c>_ownedCharacterKey</c>
+    /// absent and fall outside the strict
+    /// <see cref="ItemRecordFlags.IsPlayerOwned"/> rule. The C# editor
+    /// widens these via
+    /// <c>LocalizationProvider.IsPlayerEditableItem</c> which checks
+    /// owner template name prefixes (<c>Riding_*</c> / <c>Animal_*</c>
+    /// / <c>Vehicle_*</c>). See
+    /// <c>vendor/crimson-rs/docs/dye-editor-scope.md</c>
+    /// §"C# editor — IS_PLAYER_OWNED widening recipe".
+    /// </para>
+    /// <para>
+    /// Requires a prior <see cref="Load"/> call. Throws
+    /// <see cref="InvalidOperationException"/> when no save is loaded.
+    /// </para>
+    /// </remarks>
+    IReadOnlyList<ItemRecord> ListAllItems(out ulong version);
+
+    /// <summary>
     /// Flat-list every <c>CharacterKey</c>-typed reference across every
     /// top-level block + every ObjectList / Locator descendant in the
     /// currently-loaded save. One FFI call replaces the recursive
@@ -328,6 +378,44 @@ public interface ISaveLoader
         int fieldIndex,
         bool makePresent,
         ReadOnlySpan<byte> initialBytes);
+
+    /// <summary>
+    /// Toggle the presence of an <c>ObjectList</c> field
+    /// (<c>meta_kind 6</c> or <c>7</c>). Closes the "add dye to undyed
+    /// item" path: <paramref name="makePresent"/> = true flips the
+    /// mask bit + auto-materializes a <c>count=1</c> list with one
+    /// default-empty element. The caller drives the element's scalars
+    /// via the existing <see cref="SetScalarFieldPresent"/> /
+    /// <see cref="SetScalarField(int, ReadOnlySpan{PathStep}, int, ReadOnlySpan{byte})"/>
+    /// paths afterwards.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Error codes:
+    /// <list type="bullet">
+    ///   <item><c>NOT_OBJECT_LIST (-23)</c>: target field's schema
+    ///     <c>meta_kind</c> isn't 6/7 (scalar / inline-bytes /
+    ///     dynamic-array fields use the matching present-toggle ABI).</item>
+    ///   <item><c>NOT_FOUND (-16)</c>: <paramref name="makePresent"/>
+    ///     = true with no sibling block in the save providing a
+    ///     template element. UX should prompt the user to perform the
+    ///     equivalent action in-game once (e.g. "dye one item") so the
+    ///     schema sample becomes available.</item>
+    /// </list>
+    /// <c>makePresent=false</c> is byte-identical to never-present;
+    /// the round-trip is well-defined (present→absent→present yields
+    /// the same default empty element each time).
+    /// </para>
+    /// <para>
+    /// Full contract:
+    /// <c>vendor/crimson-rs/docs/dye-editor-scope.md</c> §v2.
+    /// </para>
+    /// </remarks>
+    void SetObjectListPresent(
+        int blockIndex,
+        ReadOnlySpan<PathStep> path,
+        int fieldIndex,
+        bool makePresent);
 
     /// <summary>
     /// Apply many <see cref="ScalarPresentBatchOp"/> presence-flips in

@@ -279,6 +279,42 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         }
     }
 
+    public IReadOnlyList<ItemRecord> ListAllItems(out ulong version)
+    {
+        var cached = RequireLoaded(nameof(ListAllItems));
+        // Same two-call buffer dance as ListInventoryItems.
+        unsafe
+        {
+            nuint count = 0;
+            ulong v = 0;
+            int rc = NativeMethods.ListAllItems(
+                cached, null, 0, out count, out v);
+            if (rc == NativeMethods.OK && count == 0)
+            {
+                version = v;
+                return Array.Empty<ItemRecord>();
+            }
+            if (rc != NativeMethods.BUFFER_TOO_SMALL)
+            {
+                throw new CrimsonSaveException(rc,
+                    $"crimson_save_list_all_items size query failed: {ErrorName(rc)}");
+            }
+            var buf = new ItemRecord[(int)count];
+            fixed (ItemRecord* p = buf)
+            {
+                rc = NativeMethods.ListAllItems(
+                    cached, p, count, out _, out v);
+            }
+            if (rc != NativeMethods.OK)
+            {
+                throw new CrimsonSaveException(rc,
+                    $"crimson_save_list_all_items fill failed: {ErrorName(rc)}");
+            }
+            version = v;
+            return buf;
+        }
+    }
+
     /// <summary>
     /// Flat-list every <c>CharacterKey</c>-typed scalar (and every
     /// element of <c>DynamicArray&lt;CharacterKey&gt;</c>) across every
@@ -904,6 +940,72 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         }
     }
 
+    /// <summary>
+    /// Toggle the presence of an <c>ObjectList</c> field. Closes the
+    /// "add dye to undyed item" path: <c>makePresent=true</c> flips the
+    /// mask bit + auto-materializes a <c>count=1</c> list with one
+    /// default-empty element (element class copied from any sibling
+    /// block of the same parent class with the field present).
+    /// Caller drives the element's scalars via
+    /// <see cref="SetScalarFieldPresent"/> /
+    /// <see cref="SetScalarField(int, ReadOnlySpan{PathStep}, int, ReadOnlySpan{byte})"/>
+    /// afterwards.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Error codes:
+    /// <list type="bullet">
+    ///   <item><c>NOT_OBJECT_LIST (-23)</c>: target field's schema
+    ///     <c>meta_kind</c> isn't 6 or 7 (scalar / inline-bytes /
+    ///     dynamic-array fields use different presence-toggle ABIs).</item>
+    ///   <item><c>NOT_FOUND (-16)</c>: <c>makePresent=true</c> with
+    ///     no sibling block in the save providing a template element.
+    ///     UX: prompt the user to perform the equivalent action
+    ///     in-game first (e.g. "dye one item") so the schema sample
+    ///     becomes available.</item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// <c>makePresent=false</c> is byte-identical to never-present:
+    /// the field's mask bit clears, existing elements are discarded.
+    /// Round-trip-safe — present→absent→present yields the same
+    /// default empty element each time.
+    /// </para>
+    /// <para>
+    /// Full contract: <c>vendor/crimson-rs/docs/dye-editor-scope.md</c> §v2.
+    /// </para>
+    /// </remarks>
+    public void SetObjectListPresent(
+        int blockIndex,
+        ReadOnlySpan<PathStep> path,
+        int fieldIndex,
+        bool makePresent)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
+
+        var cached = RequireLoaded(nameof(SetObjectListPresent));
+        unsafe
+        {
+            fixed (PathStep* pPath = path)
+            {
+                var rc = NativeMethods.SetObjectListPresent(
+                    cached,
+                    (uint)blockIndex,
+                    pPath,
+                    (nuint)path.Length,
+                    (uint)fieldIndex,
+                    makePresent ? 1 : 0);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_save_set_object_list_present(block={blockIndex}, path_len={path.Length}, " +
+                        $"field={fieldIndex}, present={makePresent}) failed: {ErrorName(rc)}");
+                }
+            }
+        }
+    }
+
     public byte[] MakeEmptyElementBytes(int classIndex)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(classIndex);
@@ -1361,6 +1463,9 @@ internal static partial class NativeMethods
     // vendor/crimson-rs/docs/save-deferred-redecode.md).
     public const int BATCH_IN_PROGRESS        = -21;
     public const int BATCH_NOT_OPEN           = -22;
+    // Object-list presence-toggle error (per
+    // vendor/crimson-rs/docs/dye-editor-scope.md §v2).
+    public const int NOT_OBJECT_LIST          = -23;
     public const int PANIC                 = -99;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -1563,6 +1668,15 @@ internal static partial class NativeMethods
         byte* initBytes,
         nuint initLen);
 
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_set_object_list_present")]
+    public static unsafe partial int SetObjectListPresent(
+        CrimsonSaveHandle handle,
+        uint blockIdx,
+        PathStep* path,
+        nuint pathLen,
+        uint fieldIdx,
+        int presentFlag);
+
     [LibraryImport(LibraryName, EntryPoint = "crimson_save_make_empty_element_bytes")]
     public static unsafe partial int MakeEmptyElementBytes(
         CrimsonSaveHandle handle,
@@ -1671,6 +1785,29 @@ internal static partial class NativeMethods
         out nuint outCountRecords,
         out ulong outVersion);
 
+    // ── Cross-container item flat enumeration ───────────────────────────────
+    //
+    // Single-FFI walk of every player-relevant item slot across five
+    // container kinds (ActiveEquip / ActiveUseReserve / Inventory /
+    // MercenaryEquip / MercenaryInventory). 64-byte repr(C) records,
+    // blittable to C# ItemRecord. The third out-param is the
+    // mutation-version snapshot — callers pair it with the records so
+    // a later GetMutationVersion call detects staleness.
+    //
+    // Replaces / supersedes ListInventoryItems for editors that need
+    // equipped gear or mercenary-side items. The two ABIs coexist —
+    // ListInventoryItems is retained for callers that only care about
+    // the inventory bags (e.g. the dye/sockets editors' v1 walkers
+    // before they were rewritten).
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_list_all_items")]
+    public static unsafe partial int ListAllItems(
+        CrimsonSaveHandle handle,
+        ItemRecord* outRecords,
+        nuint capacityRecords,
+        out nuint outCountRecords,
+        out ulong outVersion);
+
     // ── CharacterKey reference flat enumeration ─────────────────────────────
     //
     // Walks every top-level block + descends into ObjectList / Locator
@@ -1710,6 +1847,69 @@ internal static partial class NativeMethods
         byte* outBuf, nuint outBufLen,
         out nuint outRequired,
         out uint outCount);
+
+    // ── Main quest chapter rollup (curated static table) ────────────────────
+    //
+    // No handle, no file load — pure static data backed by the curated
+    // (chapter, arc, mission) rows in
+    // vendor/crimson-rs/docs/ref-gamedata/main-quest-list.md. ~170 rows
+    // across Prologue + 12 chapters + Epilogue.
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_main_quest_table_entry_count")]
+    public static partial int MainQuestTableEntryCount(out uint outCount);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_main_quest_table_get_entry")]
+    public static unsafe partial int MainQuestTableGetEntry(
+        uint idx,
+        byte* chapterBuf, nuint chapterBufLen, out nuint chapterRequired,
+        byte* arcBuf, nuint arcBufLen, out nuint arcRequired,
+        byte* missionBuf, nuint missionBufLen, out nuint missionRequired);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_main_quest_chapter_for_arc",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static unsafe partial int MainQuestChapterForArc(
+        string arcTitle, byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_main_quest_chapter_for_mission",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static unsafe partial int MainQuestChapterForMission(
+        string missionTitle, byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_main_quest_arc_for_mission",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static unsafe partial int MainQuestArcForMission(
+        string missionTitle, byte* buf, nuint bufLen, out nuint required);
+
+    // ── Side quest faction rollup (curated static table) ────────────────────
+    //
+    // Sibling of main_quest_chapter — flat (quest_title, faction_name)
+    // rollup from vendor/crimson-rs/docs/ref-gamedata/side-quest-list.md.
+    // 84 quests across 22 factions.
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_side_quest_table_entry_count")]
+    public static partial int SideQuestTableEntryCount(out uint outCount);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_side_quest_table_get_entry")]
+    public static unsafe partial int SideQuestTableGetEntry(
+        uint idx,
+        byte* questBuf, nuint questBufLen, out nuint questRequired,
+        byte* factionBuf, nuint factionBufLen, out nuint factionRequired);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_side_quest_faction_for_quest",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static unsafe partial int SideQuestFactionForQuest(
+        string questTitle, byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_side_quest_quest_count_for_faction",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int SideQuestQuestCountForFaction(
+        string factionName, out uint outCount);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_side_quest_quest_at_for_faction",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static unsafe partial int SideQuestQuestAtForFaction(
+        string factionName, uint idx,
+        byte* buf, nuint bufLen, out nuint required);
 
     // ── ItemInfo bridge (iteminfo.pabgb) ────────────────────────────────────
 

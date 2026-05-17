@@ -1167,6 +1167,125 @@ public sealed class LocalizationProvider : IDisposable
         _characterInfo?.LookupStringKey(characterKey);
 
     /// <summary>
+    /// Mount / vehicle / animal template-name prefixes that the editor
+    /// treats as "player-controlled" when the strict
+    /// <see cref="ItemRecordFlags.IsPlayerOwned"/> flag misses (i.e.
+    /// the enclosing mercenary has <c>_ownedCharacterKey</c> absent).
+    /// Pearl Abyss uses these consistently across 1.05–1.07; sanity-
+    /// check against a fresh save after a new patch.
+    /// </summary>
+    /// <remarks>
+    /// Source: <c>vendor/crimson-rs/docs/dye-editor-scope.md</c>
+    /// §"C# editor — IS_PLAYER_OWNED widening recipe".
+    /// </remarks>
+    private static readonly string[] PlayerMountNamePrefixes =
+    {
+        "Riding_",   // Tiuta horses, balloons, wagons, …
+        "Animal_",   // tamed wild animals (Black Horse, Stefano, …)
+        "Vehicle_",  // generic vehicle templates
+    };
+
+    /// <summary>
+    /// Decide whether an <see cref="ItemRecord"/> from
+    /// <see cref="ISaveLoader.ListAllItems"/> should be exposed in the
+    /// editor's equipment-related UI tabs (dye / gem socket / item
+    /// edit / search).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Fast path: the strict
+    /// <see cref="ItemRecordFlags.IsPlayerOwned"/> flag covers the
+    /// common case (619 / 829 records on the slot103 baseline).
+    /// </para>
+    /// <para>
+    /// Slow path: for mercenary kinds without the flag set, resolve
+    /// the owner's template name via <see cref="LookupCharacterInternalName"/>
+    /// and admit any whose name starts with
+    /// <c>Riding_*</c> / <c>Animal_*</c> / <c>Vehicle_*</c>. This
+    /// widens the slot103 acceptance from 619 to 627 records (the
+    /// 3 Tiuta_kliff equip items + 5 Stefano equip items). NPC
+    /// mercenaries still get rejected because their template names
+    /// start with <c>NHM_*</c> / <c>NHW_*</c> / <c>NDM_*</c>.
+    /// </para>
+    /// <para>
+    /// The C ABI does NOT promote
+    /// <see cref="ItemRecordFlags.IsPlayerOwned"/> automatically for
+    /// these mounts because doing so would couple the all-items hot
+    /// path to a characterinfo.pabgb load on every refresh — keeping
+    /// the widening on the C# side preserves the enumerator as a
+    /// gamedata-free, no-allocation operation.
+    /// </para>
+    /// </remarks>
+    public bool IsPlayerEditableItem(ItemRecord record)
+    {
+        if (record.IsPlayerOwned)
+        {
+            return true;
+        }
+        // Slow path only matters for mercenary kinds — active kinds
+        // always carry the strict flag.
+        if (record.Container != ContainerKind.MercenaryEquip &&
+            record.Container != ContainerKind.MercenaryInventory)
+        {
+            return false;
+        }
+        var name = LookupCharacterInternalName(record.OwnerCharacterKey);
+        if (string.IsNullOrEmpty(name))
+        {
+            return false;
+        }
+        foreach (var prefix in PlayerMountNamePrefixes)
+        {
+            if (name.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Friendly source label for an <see cref="ItemRecord"/> — drives
+    /// the "Bag" / "Equipped" / "Mount: …" column in the item-list
+    /// editors (sockets / dye / future search). Single source of
+    /// truth so both editors render consistently.
+    /// </summary>
+    /// <remarks>
+    /// Inventory rows resolve through
+    /// <see cref="ResolveByFieldTypeName"/> against the record's
+    /// <see cref="ItemRecord.InventoryKey"/> (the actual
+    /// <c>_inventoryKey</c> value, NOT the list position); mercenary
+    /// rows resolve the owner via <see cref="LookupCharacterInternalName"/>.
+    /// </remarks>
+    public string FormatItemSourceLabel(ItemRecord record)
+    {
+        switch (record.Container)
+        {
+            case ContainerKind.Inventory:
+                var bagLabel = ResolveByFieldTypeName("InventoryKey", record.InventoryKey);
+                return string.IsNullOrEmpty(bagLabel)
+                    ? $"InventoryKey {record.InventoryKey}"
+                    : bagLabel;
+            case ContainerKind.ActiveEquip:
+                return "Equipped";
+            case ContainerKind.ActiveUseReserve:
+                return "Quick-Use Reserve";
+            case ContainerKind.MercenaryEquip:
+            case ContainerKind.MercenaryInventory:
+                var ownerName = LookupCharacterInternalName(record.OwnerCharacterKey)
+                                ?? $"CharacterKey {record.OwnerCharacterKey}";
+                var suffix = record.Container == ContainerKind.MercenaryEquip
+                    ? "Equipped"
+                    : "Inventory";
+                return record.OwnerIsMainMercenary
+                    ? $"{ownerName} (Main, {suffix})"
+                    : $"{ownerName} ({suffix})";
+            default:
+                return $"ContainerKind {(uint)record.Container}";
+        }
+    }
+
+    /// <summary>
     /// Game-defined max_stack_count for an item. Returns <c>null</c>
     /// when the iteminfo bridge isn't loaded or the key isn't known.
     /// Drives the "Set to max stack" UX in the edit panel.

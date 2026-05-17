@@ -1,5 +1,6 @@
 using CrimsonAtomtic.RustInterop;
 using CrimsonAtomtic.SaveModel;
+using CrimsonAtomtic.Ui.ViewModels;
 using Xunit;
 
 namespace CrimsonAtomtic.Tests;
@@ -1329,6 +1330,165 @@ public sealed class NativeSaveLoaderTests
         // Version stamp is stable across a pure read.
         var stillFresh = loader.GetMutationVersion();
         Assert.Equal(snapshotVersion, stillFresh);
+    }
+
+    [Fact]
+    public void ItemRecord_LayoutMatchesRustReprC()
+    {
+        // The 64-byte size + 8-byte alignment is part of the C ABI
+        // surface (see vendor/crimson-rs/src/c_abi/all_items.rs's
+        // const_assert). Pin it on the C# side so a future struct
+        // edit that breaks blittability surfaces here.
+        Assert.Equal(64, System.Runtime.InteropServices.Marshal.SizeOf<ItemRecord>());
+
+        // Container kind discriminants are part of the ABI — never
+        // reassign. Mirror the const block in c_abi/all_items.rs.
+        Assert.Equal(0u, (uint)ContainerKind.ActiveEquip);
+        Assert.Equal(1u, (uint)ContainerKind.ActiveUseReserve);
+        Assert.Equal(2u, (uint)ContainerKind.Inventory);
+        Assert.Equal(3u, (uint)ContainerKind.MercenaryEquip);
+        Assert.Equal(4u, (uint)ContainerKind.MercenaryInventory);
+
+        // Flag bits must match the Rust item_record_flags module.
+        Assert.Equal(1u << 0, ItemRecordFlags.Locked);
+        Assert.Equal(1u << 1, ItemRecordFlags.NewMark);
+        Assert.Equal(1u << 2, ItemRecordFlags.HasDyeData);
+        Assert.Equal(1u << 3, ItemRecordFlags.HasSocketData);
+        Assert.Equal(1u << 4, ItemRecordFlags.OwnerIsMainMercenary);
+        Assert.Equal(1u << 5, ItemRecordFlags.IsPlayerOwned);
+    }
+
+    [Fact]
+    public void ListAllItems_LiveSave_ReturnsRecordsAcrossContainerKinds()
+    {
+        var path = FindLiveSave();
+        if (path is null) return;
+        var loader = new NativeSaveLoader();
+        loader.Load(path);
+
+        var items = loader.ListAllItems(out var snapshotVersion);
+        Assert.Equal(0u, snapshotVersion);  // fresh load
+        Assert.NotEmpty(items);             // any played save has items
+
+        // Smoke checks shared across every record.
+        var seenKinds = new HashSet<ContainerKind>();
+        foreach (var rec in items)
+        {
+            Assert.True(rec.ItemKey > 0, "ItemKey 0 should not appear in the flat list");
+            // v1 always emits a 2-step descent path; future kinds may
+            // change this but the ABI contract requires honouring
+            // PathLen rather than hardcoding 2.
+            Assert.Equal(2u, rec.PathLen);
+            // Container kind must be one of the documented constants.
+            Assert.InRange((uint)rec.Container, 0u, 4u);
+            seenKinds.Add(rec.Container);
+            // BlockIndex is u32 indexing into the save's TOC — defensive
+            // smoke check (no upper bound without a second call).
+            Assert.True(rec.BlockIndex < 100_000);
+        }
+
+        // Cross-container enumeration is the whole point of the new
+        // ABI — assert we see at least the inventory + one of the
+        // equipment / mercenary kinds (any active save has equipped
+        // gear; very fresh saves may lack mercenaries but always have
+        // an active equip list).
+        Assert.Contains(ContainerKind.Inventory, seenKinds);
+        Assert.True(
+            seenKinds.Contains(ContainerKind.ActiveEquip) ||
+            seenKinds.Contains(ContainerKind.MercenaryEquip),
+            "Expected at least one equipped-gear record (active or mercenary).");
+
+        // At least one record must carry IS_PLAYER_OWNED — the active
+        // character's inventory always counts.
+        Assert.Contains(items, r => r.IsPlayerOwned);
+
+        // Path-step constructor matches the row data — exercising
+        // ToPathSteps() catches accidental field-order drift in the
+        // C# struct.
+        var sample = items[0];
+        var steps = sample.ToPathSteps();
+        Assert.Equal(2, steps.Length);
+        Assert.Equal(sample.PathStep0Field, steps[0].FieldIndex);
+        Assert.Equal(sample.PathStep0Element, steps[0].ElementIndex);
+        Assert.Equal(sample.PathStep1Field, steps[1].FieldIndex);
+        Assert.Equal(sample.PathStep1Element, steps[1].ElementIndex);
+
+        // Version stamp is stable across a pure read.
+        var stillFresh = loader.GetMutationVersion();
+        Assert.Equal(snapshotVersion, stillFresh);
+    }
+
+    [Fact]
+    public void SetObjectListPresent_LiveSave_RoundtripsDyeList()
+    {
+        var path = FindLiveSave();
+        if (path is null) return;
+        var loader = new NativeSaveLoader();
+        loader.Load(path);
+
+        var items = loader.ListAllItems(out _);
+        var dyedCount = items.Count(r => r.HasDyeData);
+        if (dyedCount == 0) return; // brand-new character — nothing to exercise.
+
+        // Pick the first dyed item as the mutation target.
+        var sample = items.First(r => r.HasDyeData);
+        var path2 = sample.ToPathSteps();
+        var dyeListFieldName = DyeEditorViewModel.DyeListFieldName;
+
+        // Look up the _itemDyeDataList field index from the live block.
+        var top = loader.LoadBlockDetails(path, (int)sample.BlockIndex);
+        var dyeField = ResolveDyeField(top, sample, dyeListFieldName);
+        var dyeFieldIdx = dyeField.FieldIndex;
+        Assert.True(dyeField.Present, "Precondition: HasDyeData flag implies field present");
+
+        var versionBefore = loader.GetMutationVersion();
+
+        // present → absent always works.
+        loader.SetObjectListPresent((int)sample.BlockIndex, path2, dyeFieldIdx, makePresent: false);
+        var versionAfterRemove = loader.GetMutationVersion();
+        Assert.True(versionAfterRemove > versionBefore,
+            "Removing a present list must bump the mutation version");
+
+        // absent → present re-materializes count=1 default empty element,
+        // but only if the resolver can find a template sibling elsewhere
+        // in the save. With ≥ 2 originally dyed items the OTHER dyed
+        // item supplies the template; with exactly 1 originally dyed
+        // item we just removed the only template, so re-add will
+        // correctly return NOT_FOUND.
+        if (dyedCount >= 2)
+        {
+            loader.SetObjectListPresent((int)sample.BlockIndex, path2, dyeFieldIdx, makePresent: true);
+            var versionAfterAdd = loader.GetMutationVersion();
+            Assert.True(versionAfterAdd > versionAfterRemove,
+                "Adding a default empty list must bump the mutation version");
+
+            var topAfter = loader.LoadBlockDetails(path, (int)sample.BlockIndex);
+            var dyeFieldAfter = ResolveDyeField(topAfter, sample, dyeListFieldName);
+            Assert.True(dyeFieldAfter.Present, "Re-added dye list must be present");
+            Assert.NotNull(dyeFieldAfter.Elements);
+            Assert.True(dyeFieldAfter.Elements!.Count >= 1,
+                "Re-added dye list must contain >= 1 default empty element");
+        }
+        else
+        {
+            // Solo dyed item: NOT_FOUND is the documented contract.
+            // -16 mirrors error::NOT_FOUND in vendor/crimson-rs/src/c_abi/mod.rs.
+            var ex = Assert.Throws<CrimsonSaveException>(() =>
+                loader.SetObjectListPresent(
+                    (int)sample.BlockIndex, path2, dyeFieldIdx, makePresent: true));
+            Assert.Equal(-16, ex.ErrorCode);
+        }
+    }
+
+    private static DecodedFieldRow ResolveDyeField(
+        BlockDetails top, ItemRecord rec, string dyeListFieldName)
+    {
+        var step0 = top.Fields.First(f => f.FieldIndex == rec.PathStep0Field);
+        var step1Host = step0.Elements![(int)rec.PathStep0Element];
+        var step1 = step1Host.Fields.First(f => f.FieldIndex == rec.PathStep1Field);
+        var item = step1.Child ?? step1.Elements![(int)rec.PathStep1Element];
+        return item.Fields.First(f =>
+            string.Equals(f.Name, dyeListFieldName, StringComparison.Ordinal));
     }
 
     [Fact]
