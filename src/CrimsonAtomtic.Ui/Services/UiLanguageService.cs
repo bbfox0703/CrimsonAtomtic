@@ -57,10 +57,53 @@ public sealed class UiLanguageService
 
     private readonly Application _app;
 
+    /// <summary>
+    /// Snapshot of language-dictionary references captured at
+    /// construction time, keyed by language code. Once populated,
+    /// <see cref="Apply"/> doesn't need to re-parse URIs — it works
+    /// purely by indexing this map and rebuilding the MergedDictionaries
+    /// collection with a <c>Clear() + Add()</c> pattern (the only
+    /// reordering shape Avalonia 11.3.12 propagates as a
+    /// <c>ResourcesChanged</c> event the visual tree picks up — verified
+    /// against the working AOBMaker pattern).
+    /// </summary>
+    private readonly Dictionary<string, IResourceProvider> _dictByCode =
+        new(System.StringComparer.OrdinalIgnoreCase);
+
     public UiLanguageService(Application app)
     {
         _app = app;
         Current = DefaultCode;
+        SnapshotDictionaries();
+    }
+
+    /// <summary>
+    /// Walk <c>App.Resources.MergedDictionaries</c> ONCE at construction
+    /// time and capture each language dictionary's
+    /// <see cref="IResourceProvider"/> by code. After this, every
+    /// <see cref="Apply"/> call is positional — no URI re-parsing per
+    /// swap, no AOT-fragile <c>AbsolutePath</c> dependency in the hot
+    /// path.
+    /// </summary>
+    private void SnapshotDictionaries()
+    {
+        var merged = _app.Resources.MergedDictionaries;
+        foreach (var item in merged)
+        {
+            if (item is not Avalonia.Markup.Xaml.Styling.ResourceInclude ri
+                || ri.Source is not { } src)
+            {
+                continue;
+            }
+            foreach (var code in SupportedCodes)
+            {
+                if (MatchesUri(src, $"/{code}.axaml", $"/Resources/Strings/{code}.axaml"))
+                {
+                    _dictByCode[code] = ri;
+                    break;
+                }
+            }
+        }
     }
 
     /// <summary>Currently-applied language code. Defaults to <see cref="DefaultCode"/> until <see cref="Apply"/> is called.</summary>
@@ -165,127 +208,52 @@ public sealed class UiLanguageService
             return;
         }
 
-        var merged = _app.Resources.MergedDictionaries;
-
-        // Find the ResourceInclude whose Source URI references
-        // /<code>.axaml. We check BOTH `OriginalString` (verbatim avares
-        // URI as declared in App.axaml — always set and identical across
-        // Debug + AOT) AND `AbsolutePath` (post-parser path component).
-        //
-        // Why both: the avares:// scheme's URI parser path is registered
-        // by Avalonia at startup, but in fully-trimmed AOT publishes the
-        // registration can be partially elided, leaving AbsolutePath
-        // empty for the same URI that round-trips fine in Debug. The
-        // OriginalString fallback bypasses the parser entirely and was
-        // the silent root cause of the 2026-05-17 "language menu doesn't
-        // repaint in AOT" bug — pre-fix Apply() returned a clean no-op
-        // when AbsolutePath came back empty, leaving the user with a
-        // checkmark moving but the UI frozen on the start-up language.
-        var needleSlash = $"/{languageCode}.axaml";
-        var needlePath  = $"/Resources/Strings/{languageCode}.axaml";
-        IResourceProvider? target = null;
-        int targetIdx = -1;
-        for (int i = 0; i < merged.Count; i++)
+        if (!_dictByCode.TryGetValue(languageCode, out var active))
         {
-            if (merged[i] is not Avalonia.Markup.Xaml.Styling.ResourceInclude ri
-                || ri.Source is not { } src)
-            {
-                continue;
-            }
-            if (MatchesUri(src, needleSlash, needlePath))
-            {
-                target = ri;
-                targetIdx = i;
-                break;
-            }
-        }
-
-        // Defensive: language dictionary not registered in App.axaml —
-        // skip silently rather than crashing. Current stays at its
-        // previous value so the UI keeps rendering in the prior language.
-        // Surfaced via LastApplyOutcome so callers (status bar, dialog)
-        // can route the silent failure to the user.
-        if (target is null)
-        {
+            // Snapshot didn't capture this code at construction — either
+            // App.axaml is missing the entry or the URI matcher couldn't
+            // identify any of the entries (the AOT regression part 8
+            // hardened against).
             LastApplyOutcome = ApplyOutcome.DictionaryNotFound;
             return;
         }
 
-        // No-op when the target is already last (the active position).
-        if (targetIdx == merged.Count - 1)
-        {
-            Current = languageCode;
-            LastApplyOutcome = ApplyOutcome.AlreadyActive;
-            return;
-        }
+        var merged = _app.Resources.MergedDictionaries;
 
-        // Move-to-end. Note: in Avalonia 11.3.12 the AvaloniaList
-        // ForEachItem callbacks attached by ResourceDictionary's
-        // MergedDictionaries setup only manage AddOwner / RemoveOwner
-        // — they do NOT raise ResourcesChanged on the parent dictionary
-        // for a RemoveAt+Add of the SAME item instance. So the visual
-        // tree's DynamicResource listeners never get notified that
-        // their resolved values may have changed, and the UI keeps
-        // rendering the pre-swap language. We fix this by explicitly
-        // raising the event after the reorder via the public
-        // IResourceHost.NotifyHostedResourcesChanged surface.
+        // Rebuild via Clear() + Add() — the AOBMaker-proven pattern.
         //
-        // Verified upstream:
+        // Why not RemoveAt + Add (the previous broken approach): in
+        // Avalonia 11.3.12, ResourceDictionary's MergedDictionaries is
+        // an AvaloniaList whose ForEachItem callbacks only manage
+        // AddOwner / RemoveOwner on per-item add / remove. An in-place
+        // RemoveAt + Add of the SAME item instance does NOT propagate
+        // a ResourcesChanged event the visual tree picks up, so
+        // DynamicResource bindings never re-evaluate and the UI keeps
+        // rendering the pre-swap language. Verified against
         // https://github.com/AvaloniaUI/Avalonia/blob/release/11.3.12/src/Avalonia.Base/Controls/ResourceDictionary.cs
-        // (MergedDictionaries setup, item callbacks)
-        // https://github.com/AvaloniaUI/Avalonia/blob/release/11.3.12/src/Avalonia.Base/Controls/IResourceHost.cs
-        // (NotifyHostedResourcesChanged is public)
-        merged.RemoveAt(targetIdx);
-        merged.Add(target);
-
-        // Notify every visual tree that resources changed. The
-        // Application itself is an IResourceHost2 (the lookup root for
-        // App.Resources-scoped DynamicResource bindings), so firing on
-        // it covers most of the tree; we also walk open windows
-        // defensively since some bindings attach to the TopLevel's
-        // resource host rather than the Application.
-        RaiseResourcesChanged();
+        // and cross-checked against the working AOBMaker pattern at
+        // D:\Github\AOBMaker\src\AOBMaker.UI\I18n\Lang.cs
+        // (Lang.ApplyLanguageOrder).
+        //
+        // Clear() + sequential Add() fires the right cascade: every Add
+        // re-AddOwner's the dictionary on the host, which re-emits the
+        // resource set into the visual tree's lookup chain. The
+        // non-active dictionaries land FIRST (lower priority); the
+        // active one goes LAST (Avalonia walks MergedDictionaries in
+        // reverse for duplicate-key resolution, so last-merged wins).
+        merged.Clear();
+        foreach (var code in SupportedCodes)
+        {
+            if (!string.Equals(code, languageCode, System.StringComparison.OrdinalIgnoreCase)
+                && _dictByCode.TryGetValue(code, out var other))
+            {
+                merged.Add(other);
+            }
+        }
+        merged.Add(active);
 
         Current = languageCode;
         LastApplyOutcome = ApplyOutcome.Swapped;
-    }
-
-    /// <summary>
-    /// Explicitly fire <see cref="IResourceHost.NotifyHostedResourcesChanged"/>
-    /// on the Application + every open top-level window. Use after
-    /// reordering <c>MergedDictionaries</c> — Avalonia 11.3.12 does not
-    /// auto-raise <c>ResourcesChanged</c> for in-place reorders, so
-    /// without this kick the visual tree's DynamicResource bindings
-    /// never re-evaluate.
-    /// </summary>
-    private void RaiseResourcesChanged()
-    {
-        // 11.3.12 hasn't exposed the static Empty surface yet — use a
-        // direct ctor (the type is a marker, no payload semantics).
-        var args = new ResourcesChangedEventArgs();
-
-        // Application-level — picks up bindings whose nearest IResourceHost
-        // ancestor is the Application itself.
-        if (_app is IResourceHost appHost)
-        {
-            try { appHost.NotifyHostedResourcesChanged(args); }
-            catch { /* defensive — never let a notification glitch kill the swap */ }
-        }
-
-        // Per-window — TopLevel listeners propagate ResourcesChanged
-        // down their visual tree, refreshing every DynamicResource
-        // binding regardless of which IResourceHost it subscribed to.
-        if (_app.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
-        {
-            foreach (var window in desktop.Windows)
-            {
-                if (window is IResourceHost winHost)
-                {
-                    try { winHost.NotifyHostedResourcesChanged(args); }
-                    catch { /* same defensive guard */ }
-                }
-            }
-        }
     }
 
     /// <summary>

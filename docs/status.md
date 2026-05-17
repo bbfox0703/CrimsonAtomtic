@@ -3,7 +3,37 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-17 part 9 (real root-cause fix for UI language switch in AOT: Avalonia's MergedDictionaries reorder doesn't auto-raise ResourcesChanged; explicit NotifyHostedResourcesChanged required).
+> Last updated: 2026-05-17 part 10 (UI language switch — third time's the charm via AOBMaker-proven Clear+Add pattern; previous RemoveAt+Add + manual NotifyHostedResourcesChanged still didn't repaint).
+>
+> ## ✅ This session — what shipped (2026-05-17 part 10)
+>
+> Part 9's "manually raise ResourcesChanged" still didn't make the UI
+> repaint in AOT — confirmed by the user against a fresh AOT bundle.
+> Pivoted to the proven working pattern from a sibling repo
+> (`D:\Github\AOBMaker\src\AOBMaker.UI\I18n\Lang.cs`) which ships
+> language switching in Avalonia 11.3 AOT.
+>
+> | Area | Scope |
+> |---|---|
+> | **UiLanguageService rewrite to Clear+Add pattern** | The AOBMaker pattern, distilled: (1) at construction time, snapshot each language's `IResourceProvider` from `Application.Resources.MergedDictionaries` into a `Dictionary<string, IResourceProvider>` keyed by code. (2) On every `Apply(code)`, call `merged.Clear()` then `merged.Add(...)` the non-active dictionaries first, then the active one last. **`Clear()` fires the AvaloniaList's reset notification which Avalonia 11.3 DOES propagate as a `ResourcesChanged` event down the visual tree** — that's the cascade `DynamicResource` bindings listen on. The previous `RemoveAt + Add` of the same item instance never triggered the cascade (the `AvaloniaList.ForEachItem` callbacks only manage AddOwner/RemoveOwner; for an in-place reorder of a single instance, no resource-change notification fires). Even part 9's manual `IResourceHost.NotifyHostedResourcesChanged` calls weren't enough — the visual-tree resolver caches DynamicResource lookups in a way that needs the actual collection reset to invalidate, not just an external event. (Verified empirically: AOBMaker uses Clear+Add and works; CrimsonAtomtic with manual NotifyHostedResourcesChanged on top of RemoveAt+Add didn't.) Side benefit: snapshot-at-construction means `Apply` no longer parses URIs — robust against any future avares://-scheme regression. Part 8's URI matcher + `MatchesUri` helper stays, but is now used only ONCE at construction inside `SnapshotDictionaries` to map URI → code; the per-Apply hot path is pure dictionary lookup + Clear+Add. |
+>
+> Tests: 281/281 still pass (the 7 part-8 MatchesUri tests cover the snapshot-time URI matching, which is still in use). Debug build clean. Fresh AOT bundle at `dist\win-x64\CrimsonAtomtic.exe`.
+>
+> ### Open follow-ons noted during this session
+>
+> - **None new** — if part 10's Clear+Add doesn't fix it, the root cause is in a completely different layer (something the AOBMaker repro disproves), and we'd need a different investigation entirely.
+>
+> ### Open follow-ons carried over (no change)
+>
+> - Headless Avalonia integration test for language switching (from part 9).
+> - AOT publish smoke test (from part 8).
+> - Surface LastApplyOutcome in the UI (from part 8).
+> - World-map UX layer (deferred).
+> - Safe re-attempt of "+ Add Dye" with per-prefab slot picker (from part 5).
+> - Pattern B v2 for multi-objective SA challenges (from part 1).
+> - OCT forum post URL placeholder (from part 1).
+>
+> ---
 >
 > ## ✅ This session — what shipped (2026-05-17 part 9)
 >
