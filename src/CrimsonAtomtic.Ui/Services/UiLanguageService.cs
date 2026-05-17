@@ -110,6 +110,19 @@ public sealed class UiLanguageService
     /// swap, no AOT-fragile <c>AbsolutePath</c> dependency in the hot
     /// path.
     /// </summary>
+    /// <summary>
+    /// Marker key each shipped language dictionary carries with the
+    /// language's own code as its value. The XAML compiler in Avalonia
+    /// 11.3 inlines <c>&lt;ResourceInclude&gt;</c> targets directly as
+    /// <c>Avalonia.Controls.ResourceDictionary</c> instances, which
+    /// don't expose the original Source URI — so we can't identify
+    /// each merged dictionary by its file path. Probing this marker
+    /// key on each dictionary is the AOT-safe and reorder-safe
+    /// alternative. See Resources/Strings/en.axaml etc. for the
+    /// declarations.
+    /// </summary>
+    private const string LangCodeMarkerKey = "__UiLangCode__";
+
     private void SnapshotDictionaries()
     {
         var merged = _app.Resources.MergedDictionaries;
@@ -118,30 +131,39 @@ public sealed class UiLanguageService
         for (int i = 0; i < merged.Count; i++)
         {
             var item = merged[i];
-            var typeName = item?.GetType().FullName ?? "<null>";
-            Log($"  [{i}] type={typeName}");
-
-            // Try the documented Avalonia 11.x type first.
-            if (item is Avalonia.Markup.Xaml.Styling.ResourceInclude ri && ri.Source is { } src)
+            if (item is not IResourceProvider provider)
             {
-                Log($"      ResourceInclude.Source.OriginalString='{src.OriginalString}'");
-                foreach (var code in SupportedCodes)
-                {
-                    if (MatchesUri(src, $"/{code}.axaml", $"/Resources/Strings/{code}.axaml"))
-                    {
-                        _dictByCode[code] = ri;
-                        Log($"      matched code='{code}'");
-                        break;
-                    }
-                }
+                Log($"  [{i}] not an IResourceProvider (type={item?.GetType().FullName ?? "<null>"})");
                 continue;
             }
 
-            // Item type isn't Avalonia.Markup.Xaml.Styling.ResourceInclude
-            // — log the full type name so we can see what compiled XAML
-            // actually emits in this Avalonia build and target it
-            // explicitly.
-            Log($"      <unrecognised type — add a branch above to claim it>");
+            // Probe the per-language marker key. Direct dictionary
+            // indexer is the cleanest path — every shipped language
+            // dictionary carries `<sys:String x:Key="__UiLangCode__">…</sys:String>`
+            // verbatim. Skip silently if a non-language dictionary
+            // happens to live in MergedDictionaries.
+            string? code = null;
+            if (item is Avalonia.Controls.ResourceDictionary rd
+                && rd.TryGetValue(LangCodeMarkerKey, out var raw)
+                && raw is string s
+                && !string.IsNullOrEmpty(s))
+            {
+                code = s;
+            }
+
+            if (code is null)
+            {
+                Log($"  [{i}] type={item.GetType().FullName} — no {LangCodeMarkerKey} marker, skipped");
+                continue;
+            }
+            if (!IsSupported(code))
+            {
+                Log($"  [{i}] code='{code}' not in SupportedCodes, skipped");
+                continue;
+            }
+
+            _dictByCode[code] = provider;
+            Log($"  [{i}] code='{code}' claimed (provider type={item.GetType().FullName})");
         }
     }
 

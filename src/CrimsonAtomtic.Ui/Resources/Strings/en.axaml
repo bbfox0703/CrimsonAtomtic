@@ -2,6 +2,13 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=System.Runtime">
 
+  <!-- Language marker — UiLanguageService snapshots Application.Resources.MergedDictionaries
+       at startup and uses this key to identify which dictionary is which.
+       Required because the XAML compiler inlines <ResourceInclude> targets
+       as Avalonia.Controls.ResourceDictionary, which doesn't expose the
+       original Source URI. Don't remove. -->
+  <sys:String x:Key="__UiLangCode__">en</sys:String>
+
   <!-- Window / chrome -->
   <sys:String x:Key="WindowTitle">CrimsonAtomtic</sys:String>
 

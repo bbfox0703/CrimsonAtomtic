@@ -13,6 +13,9 @@
     docs and source code.
   -->
 
+  <!-- Language marker — see en.axaml for rationale. Don't remove. -->
+  <sys:String x:Key="__UiLangCode__">ja</sys:String>
+
   <!-- Window / chrome -->
   <sys:String x:Key="WindowTitle">CrimsonAtomtic</sys:String>
 
