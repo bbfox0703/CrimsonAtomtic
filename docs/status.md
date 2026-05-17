@@ -3,7 +3,51 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-17 part 10 (UI language switch — third time's the charm via AOBMaker-proven Clear+Add pattern; previous RemoveAt+Add + manual NotifyHostedResourcesChanged still didn't repaint).
+> Last updated: 2026-05-17 part 11 (UI language switch finally fixed — two real root causes: XAML compiler inlines ResourceInclude as ResourceDictionary (no Source URI exposed), and InvariantGlobalization makes CultureInfo.Name always empty).
+>
+> ## ✅ This session — what shipped (2026-05-17 part 11)
+>
+> The UI language switch bug from parts 8/9/10 — finally resolved via
+> two distinct fixes after a diagnostic-log iteration with the user
+> surfaced the real root causes. Parts 8/9/10's earlier theories
+> (avares URI parser AOT regression, Avalonia not auto-raising
+> ResourcesChanged on reorder, AOBMaker-style Clear+Add) were each
+> plausible mechanisms but none was the actual blocker for this
+> codebase. The diag log revealed:
+> - `SnapshotDictionaries: merged.Count=3` — the dictionaries ARE in
+>   `Application.Resources.MergedDictionaries` at startup
+> - `[0] type=Avalonia.Controls.ResourceDictionary` (not `ResourceInclude`)
+> - `<unrecognised type — add a branch above to claim it>`
+>
+> So Avalonia 11.3's XAML compiler inlines `<ResourceInclude Source="…">`
+> targets directly as `Avalonia.Controls.ResourceDictionary` instances
+> in the merged list. That concrete type **does not expose the original
+> Source URI** (we hit CS1061 trying to read it). The previous
+> URI-based snapshot returned 0 entries because nothing in the list
+> matched the `ResourceInclude` type-check.
+>
+> | Area | Scope |
+> |---|---|
+> | **`__UiLangCode__` marker key for snapshot identification** | Each shipped language dictionary now carries `<sys:String x:Key="__UiLangCode__">{code}</sys:String>` in en.axaml / ja.axaml / zh-TW.axaml. `SnapshotDictionaries` probes each merged `ResourceDictionary` for this key via the standard IDictionary indexer (no reflection, AOT-safe) and uses the value to identify which language each entry is. Independent of: the concrete Avalonia type used for the dictionary, the order entries appear in App.axaml, the URI scheme registration state. AOBMaker's same use case works without the marker key because it relies on positional indexing (merged[0] = en, [1] = zh-TW, [2] = ja), trusting App.axaml's declared order — the marker-key approach is slightly more robust against future App.axaml reorders. |
+> | **Win32 `GetUserDefaultUILanguage` for auto-detect** | User report on a zh-TW OS: the app auto-detected English instead of Traditional Chinese. Root cause: csproj sets `<InvariantGlobalization>true</InvariantGlobalization>` for AOT binary-size reasons, which makes .NET strip globalization data — `CultureInfo.CurrentUICulture.Name` returns `""` regardless of OS UI language, so `DetectFromCulture` always falls through to English. AOBMaker doesn't set this flag, hence its culture-based detect works. Fix: new `DetectFromOsUiLanguage()` P/Invokes Win32 `GetUserDefaultUILanguage()` which returns a 16-bit LCID independent of .NET's globalization configuration. The LCID's primary-language bits (low 10) + sublanguage bits (next 6) classify directly: primary 0x11 → ja, primary 0x04 + sublang ∈ {1=TW, 3=HK, 5=MO} → zh-TW, else en. New `ResolveActiveFromOs(string?)` overload mirrors `ResolveActive` but uses the Win32 detector. `App.axaml.cs` startup + `MainWindowViewModel.SetUiLanguage` now call this overload. Used `DllImport` instead of `[LibraryImport]` for the kernel32 P/Invoke since the source generator requires `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>` which the Ui project doesn't enable. |
+> | **The Clear+Add reorder pattern from part 10** | Kept — once the snapshot actually populates (this part 11), Clear+Add is the correct reorder shape because `Clear()` fires AvaloniaList's Reset notification which Avalonia 11.3 propagates as `ResourcesChanged` down the visual tree. Parts 8/9's URI matching hardening + LastApplyOutcome diagnostic also stays in place for defense-in-depth. |
+>
+> Tests: **281/281 still pass.** Debug verified end-to-end via the diagnostic log (cleaned up before this final commit since the bug is resolved). AOT bundle rebuilt at `dist\win-x64\CrimsonAtomtic.exe`.
+>
+> ### Open follow-ons noted during this session
+>
+> - **Surface "no dictionary found" in the UI** when `LastApplyOutcome == DictionaryNotFound` — currently silent. If a future regression breaks the marker-key probing (e.g. someone removes `__UiLangCode__` from a new language file), the UI would silently freeze without a clue. A status-bar message would help.
+> - **Headless Avalonia integration test for language switching** (carried forward from part 9) — the unit tests cover matcher logic + Win32 detect classification but not the actual swap-and-repaint chain. A `Avalonia.Headless` test harness could verify end-to-end. Worth adding if a fourth regression surfaces.
+>
+> ### Open follow-ons carried over (no change)
+>
+> - AOT publish smoke test (from part 8).
+> - World-map UX layer (deferred).
+> - Safe re-attempt of "+ Add Dye" with per-prefab slot picker (from part 5).
+> - Pattern B v2 for multi-objective SA challenges (from part 1).
+> - OCT forum post URL placeholder (from part 1).
+>
+> ---
 >
 > ## ✅ This session — what shipped (2026-05-17 part 10)
 >

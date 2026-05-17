@@ -75,31 +75,6 @@ public sealed class UiLanguageService
         _app = app;
         Current = DefaultCode;
         SnapshotDictionaries();
-        Log($"ctor: snapshot captured {_dictByCode.Count} entries " +
-            $"(keys=[{string.Join(",", _dictByCode.Keys)}])");
-    }
-
-    /// <summary>
-    /// Diagnostic log path under <c>%LOCALAPPDATA%\CrimsonAtomtic\</c>.
-    /// Every <see cref="Apply"/> + ctor logs to this file so failures
-    /// (snapshot empty, MergedDictionaries unexpectedly mutated, etc.)
-    /// can be inspected after the fact without standing up a debugger.
-    /// </summary>
-    private static readonly string DiagLogPath = System.IO.Path.Combine(
-        System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
-        "CrimsonAtomtic",
-        "ui_language_diag.log");
-
-    private static void Log(string message)
-    {
-        try
-        {
-            var dir = System.IO.Path.GetDirectoryName(DiagLogPath);
-            if (!string.IsNullOrEmpty(dir)) System.IO.Directory.CreateDirectory(dir);
-            System.IO.File.AppendAllText(DiagLogPath,
-                $"[{System.DateTime.Now:HH:mm:ss.fff}] {message}\n");
-        }
-        catch { /* never let logging kill the swap */ }
     }
 
     /// <summary>
@@ -126,44 +101,21 @@ public sealed class UiLanguageService
     private void SnapshotDictionaries()
     {
         var merged = _app.Resources.MergedDictionaries;
-        Log($"SnapshotDictionaries: merged.Count={merged.Count}");
-
-        for (int i = 0; i < merged.Count; i++)
+        foreach (var item in merged)
         {
-            var item = merged[i];
-            if (item is not IResourceProvider provider)
-            {
-                Log($"  [{i}] not an IResourceProvider (type={item?.GetType().FullName ?? "<null>"})");
-                continue;
-            }
-
+            if (item is not IResourceProvider provider) continue;
             // Probe the per-language marker key. Direct dictionary
             // indexer is the cleanest path — every shipped language
             // dictionary carries `<sys:String x:Key="__UiLangCode__">…</sys:String>`
             // verbatim. Skip silently if a non-language dictionary
             // happens to live in MergedDictionaries.
-            string? code = null;
             if (item is Avalonia.Controls.ResourceDictionary rd
                 && rd.TryGetValue(LangCodeMarkerKey, out var raw)
-                && raw is string s
-                && !string.IsNullOrEmpty(s))
+                && raw is string code
+                && IsSupported(code))
             {
-                code = s;
+                _dictByCode[code] = provider;
             }
-
-            if (code is null)
-            {
-                Log($"  [{i}] type={item.GetType().FullName} — no {LangCodeMarkerKey} marker, skipped");
-                continue;
-            }
-            if (!IsSupported(code))
-            {
-                Log($"  [{i}] code='{code}' not in SupportedCodes, skipped");
-                continue;
-            }
-
-            _dictByCode[code] = provider;
-            Log($"  [{i}] code='{code}' claimed (provider type={item.GetType().FullName})");
         }
     }
 
@@ -370,11 +322,8 @@ public sealed class UiLanguageService
     /// </remarks>
     public void Apply(string languageCode)
     {
-        Log($"Apply('{languageCode}') called. Current='{Current}'");
-
         if (!IsSupported(languageCode))
         {
-            Log($"  → UnsupportedCode (SupportedCodes=[{string.Join(",", SupportedCodes)}])");
             LastApplyOutcome = ApplyOutcome.UnsupportedCode;
             return;
         }
@@ -382,13 +331,11 @@ public sealed class UiLanguageService
         if (!_dictByCode.TryGetValue(languageCode, out var active))
         {
             // Snapshot didn't capture this code at construction.
-            Log($"  → DictionaryNotFound. snapshot keys=[{string.Join(",", _dictByCode.Keys)}]");
             LastApplyOutcome = ApplyOutcome.DictionaryNotFound;
             return;
         }
 
         var merged = _app.Resources.MergedDictionaries;
-        Log($"  pre-Clear merged.Count={merged.Count}");
 
         // Rebuild via Clear() + Add() — the AOBMaker-proven pattern.
         //
@@ -421,20 +368,6 @@ public sealed class UiLanguageService
             }
         }
         merged.Add(active);
-
-        Log($"  post-rebuild merged.Count={merged.Count}");
-        // Probe a known key to confirm the swap actually lands in
-        // resource resolution. WindowTitle exists in every shipped
-        // dictionary, so a successful resolve here proves the
-        // Application's resource lookup sees the new active language.
-        if (_app.Resources.TryGetResource("WindowTitle", null, out var probe) && probe is string ps)
-        {
-            Log($"  TryGetResource('WindowTitle') = \"{ps}\"");
-        }
-        else
-        {
-            Log($"  TryGetResource('WindowTitle') = <not resolved>");
-        }
 
         Current = languageCode;
         LastApplyOutcome = ApplyOutcome.Swapped;
