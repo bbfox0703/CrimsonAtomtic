@@ -75,6 +75,31 @@ public sealed class UiLanguageService
         _app = app;
         Current = DefaultCode;
         SnapshotDictionaries();
+        Log($"ctor: snapshot captured {_dictByCode.Count} entries " +
+            $"(keys=[{string.Join(",", _dictByCode.Keys)}])");
+    }
+
+    /// <summary>
+    /// Diagnostic log path under <c>%LOCALAPPDATA%\CrimsonAtomtic\</c>.
+    /// Every <see cref="Apply"/> + ctor logs to this file so failures
+    /// (snapshot empty, MergedDictionaries unexpectedly mutated, etc.)
+    /// can be inspected after the fact without standing up a debugger.
+    /// </summary>
+    private static readonly string DiagLogPath = System.IO.Path.Combine(
+        System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
+        "CrimsonAtomtic",
+        "ui_language_diag.log");
+
+    private static void Log(string message)
+    {
+        try
+        {
+            var dir = System.IO.Path.GetDirectoryName(DiagLogPath);
+            if (!string.IsNullOrEmpty(dir)) System.IO.Directory.CreateDirectory(dir);
+            System.IO.File.AppendAllText(DiagLogPath,
+                $"[{System.DateTime.Now:HH:mm:ss.fff}] {message}\n");
+        }
+        catch { /* never let logging kill the swap */ }
     }
 
     /// <summary>
@@ -202,23 +227,25 @@ public sealed class UiLanguageService
     /// </remarks>
     public void Apply(string languageCode)
     {
+        Log($"Apply('{languageCode}') called. Current='{Current}'");
+
         if (!IsSupported(languageCode))
         {
+            Log($"  → UnsupportedCode (SupportedCodes=[{string.Join(",", SupportedCodes)}])");
             LastApplyOutcome = ApplyOutcome.UnsupportedCode;
             return;
         }
 
         if (!_dictByCode.TryGetValue(languageCode, out var active))
         {
-            // Snapshot didn't capture this code at construction — either
-            // App.axaml is missing the entry or the URI matcher couldn't
-            // identify any of the entries (the AOT regression part 8
-            // hardened against).
+            // Snapshot didn't capture this code at construction.
+            Log($"  → DictionaryNotFound. snapshot keys=[{string.Join(",", _dictByCode.Keys)}]");
             LastApplyOutcome = ApplyOutcome.DictionaryNotFound;
             return;
         }
 
         var merged = _app.Resources.MergedDictionaries;
+        Log($"  pre-Clear merged.Count={merged.Count}");
 
         // Rebuild via Clear() + Add() — the AOBMaker-proven pattern.
         //
@@ -251,6 +278,20 @@ public sealed class UiLanguageService
             }
         }
         merged.Add(active);
+
+        Log($"  post-rebuild merged.Count={merged.Count}");
+        // Probe a known key to confirm the swap actually lands in
+        // resource resolution. WindowTitle exists in every shipped
+        // dictionary, so a successful resolve here proves the
+        // Application's resource lookup sees the new active language.
+        if (_app.Resources.TryGetResource("WindowTitle", null, out var probe) && probe is string ps)
+        {
+            Log($"  TryGetResource('WindowTitle') = \"{ps}\"");
+        }
+        else
+        {
+            Log($"  TryGetResource('WindowTitle') = <not resolved>");
+        }
 
         Current = languageCode;
         LastApplyOutcome = ApplyOutcome.Swapped;
