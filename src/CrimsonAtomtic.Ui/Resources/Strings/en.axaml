@@ -255,7 +255,7 @@
   <sys:String x:Key="DisclaimerTitle">CrimsonAtomtic — Disclaimer</sys:String>
   <sys:String x:Key="DisclaimerAccept">I Accept</sys:String>
   <sys:String x:Key="DisclaimerDecline">Quit</sys:String>
-  <sys:String x:Key="DisclaimerBody">This editor is provided as-is with no warranty of correct operation and no exhaustive validation of save structures. The author accepts no responsibility for any data corruption, save damage, or account-related issues that may result from its use.&#x0a;&#x0a;Clicking "I Accept" confirms you have read and agreed to the above and accept all risks of using this tool.</sys:String>
+  <sys:String x:Key="DisclaimerBody">This editor is provided as-is with no warranty of correct operation and no exhaustive validation of save structures. The author accepts no responsibility for any data corruption, save damage, account-related issues, or features that don't work as expected — and is under no obligation to fix them.&#x0a;&#x0a;Clicking "I Accept" confirms you have read and agreed to the above and accept all risks of using this tool.</sys:String>
 
   <!-- Empty workspace -->
   <sys:String x:Key="EmptyTitle">No save loaded</sys:String>
@@ -317,7 +317,7 @@
   <sys:String x:Key="EditPanelMakeAbsent">Make absent</sys:String>
   <sys:String x:Key="EditPanelMakeAbsentTip">Flip this scalar's presence bit off — the field is removed from the block (mask bit cleared, payload bytes dropped). Reverse it by typing a value and clicking Apply.</sys:String>
   <sys:String x:Key="MarkChallengeCompleteButton">✓ Mark Challenge Complete (Pattern B v1)</sys:String>
-  <sys:String x:Key="MarkChallengeCompleteTip">Engine-faithful single-challenge completion (Pattern B v1). Only enables when the engine has already done discovery for this challenge (you've picked up the reward artifact in-game). Writes the FAR tracker (_state=5 + _completedTime + visible tag) and creates the X_2 sub-mission entry — exactly what the engine writes for an unclaimed completion. Catalog + adjacent twin are NOT touched; the engine fills those in when you claim the reward in-game. NOT FULLY TESTED — back up your save first.</sys:String>
+  <sys:String x:Key="MarkChallengeCompleteTip">Engine-faithful single-challenge completion (Pattern B v1). Only enables when the game has already detected this challenge as available (you've picked up the sealed artifact in-game). Writes the relevant entries — exactly what the game itself writes for a completed-but-unclaimed state. Living-type challenges may not apply. NOT FULLY TESTED — back up your save first.</sys:String>
   <sys:String x:Key="ConfirmDialogYes">Yes</sys:String>
   <sys:String x:Key="ConfirmDialogNo">No</sys:String>
   <sys:String x:Key="ElementsColBulkFill">Bulk</sys:String>

@@ -266,7 +266,7 @@
   <sys:String x:Key="DisclaimerTitle">CrimsonAtomtic — 免責事項</sys:String>
   <sys:String x:Key="DisclaimerAccept">同意する</sys:String>
   <sys:String x:Key="DisclaimerDecline">終了</sys:String>
-  <sys:String x:Key="DisclaimerBody">本エディタは現状のまま (as-is) 提供されており、正しく動作することの保証も、全ての save 構造に対する網羅的な検証も行われていません。本ツールの使用により生じたデータ破損、セーブの損傷、アカウント関連のいかなる問題についても、作者は一切責任を負いません。&#x0a;&#x0a;「同意する」を押すと、上記内容を読み同意したものとみなされ、本ツール使用に伴うすべてのリスクを受け入れたことになります。</sys:String>
+  <sys:String x:Key="DisclaimerBody">本エディタは現状のまま (as-is) 提供されており、正しく動作することの保証も、全ての save 構造に対する網羅的な検証も行われていません。本ツールの使用により生じたデータ破損、セーブの損傷、アカウント関連の問題、またはツール内の機能が期待通りに動作しないことについて、作者は一切責任を負わず、修正の義務も負いません。&#x0a;&#x0a;「同意する」を押すと、上記内容を読み同意したものとみなされ、本ツール使用に伴うすべてのリスクを受け入れたことになります。</sys:String>
 
   <!-- Empty workspace -->
   <sys:String x:Key="EmptyTitle">セーブが読み込まれていません</sys:String>
@@ -328,7 +328,7 @@
   <sys:String x:Key="EditPanelMakeAbsent">absent にする</sys:String>
   <sys:String x:Key="EditPanelMakeAbsentTip">このスカラーの存在ビットをオフに反転 — フィールドが block から削除されます (mask bit クリア、payload bytes 破棄)。値を入力して Apply をクリックすると元に戻せます。</sys:String>
   <sys:String x:Key="MarkChallengeCompleteButton">✓ チャレンジ完了をマーク (Pattern B v1)</sys:String>
-  <sys:String x:Key="MarkChallengeCompleteTip">エンジン忠実な単一チャレンジ完了 (Pattern B v1)。エンジンが既にこのチャレンジを discovery 済み (ゲーム内で報酬遺物を入手済み) の場合のみ有効化されます。FAR tracker (_state=5 + _completedTime + visible タグ) を書き込み、X_2 サブミッションエントリを作成します — 未受領の完了状態でエンジン自身が書き込む内容と完全に同じです。Catalog と adjacent twin は触れません。ゲーム内で報酬を受領した際にエンジンが自然に埋めます。完全テスト未済 — まず必ずセーブをバックアップしてください。</sys:String>
+  <sys:String x:Key="MarkChallengeCompleteTip">エンジン忠実な単一チャレンジ完了 (Pattern B v1)。ゲームが既にこのチャレンジを検出し、利用可能と表示している (ゲーム内で封印遺物を入手済み) 場合のみ有効化されます。関連エントリを書き込みます — 完了済みだが未受領の状態でゲーム自身が書き込む内容と完全に同じです。生活系のチャレンジには適用されない場合があります。完全テスト未済 — まず必ずセーブをバックアップしてください。</sys:String>
   <sys:String x:Key="ConfirmDialogYes">はい</sys:String>
   <sys:String x:Key="ConfirmDialogNo">いいえ</sys:String>
   <sys:String x:Key="ElementsColBulkFill">一括</sys:String>

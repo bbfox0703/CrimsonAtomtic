@@ -30,7 +30,7 @@
   <sys:String x:Key="SetGameInstallFolderInvalidTitle">這個資料夾看起來不像 Crimson Desert 安裝目錄</sys:String>
   <sys:String x:Key="SetGameInstallFolderInvalidBody">所選資料夾不包含必要的素材檔 (0020\0.pamt)。請選擇包含遊戲 0000\、0020\、… 各個 pack group 的目錄 — 通常是 &lt;Steam library&gt;\steamapps\common\Crimson Desert，或是 Epic / 為 Game Pass 拷貝出來的素材資料夾。</sys:String>
   <sys:String x:Key="MenuRenameMercenary">傭兵改名(_M)…</sys:String>
-  <sys:String x:Key="MenuEditItemSockets">編輯物品鑲嵌孔(_S)…</sys:String>
+  <sys:String x:Key="MenuEditItemSockets">編輯物品插槽(_S)…</sys:String>
   <sys:String x:Key="SocketEditorHeader">逐孔填入 / 變更 / 清除。Fill 與 Change 操作會將耐久 (Endurance) 重設為 65535 (最大值)，避免新鑲入的高階寶石繼承舊孔的耗損值。當你填入一個索引超過物品目前上限的孔時，_validSocketCount 會自動上修 (讓該孔在遊戲中可見)。底層 list 預先配置的任何孔都可以填 (一般是 5 個)，不受遊戲資料定義的上限限制。改動會在下一次 File → Save 寫回存檔。</sys:String>
   <sys:String x:Key="SocketEditorColBag">背包</sys:String>
   <sys:String x:Key="SocketEditorColItem">物品</sys:String>
@@ -45,7 +45,7 @@
   <sys:String x:Key="SocketEditorClearGem">清除</sys:String>
   <sys:String x:Key="SocketEditorChangeGemTip">開啟寶石選擇器，覆寫這個已填入的孔。會將 _currentEndurance 重設為 65535 (最大值)，讓高階寶石從滿耐久開始。</sys:String>
   <sys:String x:Key="SocketEditorFillGemTip">開啟寶石選擇器，填入這個空孔。必要時會自動上修 _validSocketCount，讓該孔在遊戲中可見。</sys:String>
-  <sys:String x:Key="SocketEditorClearGemTip">把這個鑲嵌孔退回成空。_currentEndurance 和 _itemKey 都會變成 absent；mask 翻成 [0x00]。</sys:String>
+  <sys:String x:Key="SocketEditorClearGemTip">把這個插槽退回成空。_currentEndurance 和 _itemKey 都會變成 absent；mask 翻成 [0x00]。</sys:String>
   <sys:String x:Key="SocketEditorColState">狀態</sys:String>
   <sys:String x:Key="SocketEditorApplySetItemLabel">套用組合至：</sys:String>
   <sys:String x:Key="SocketEditorApplySetSetLabel">組合：</sys:String>
@@ -57,12 +57,12 @@
 
   <!-- Custom gem sets editor (launched from Sockets editor toolbar) -->
   <sys:String x:Key="CustomGemSetsWindowTitle">編輯自訂寶石組合</sys:String>
-  <sys:String x:Key="CustomGemSetsHeader">三組使用者可自訂的寶石組合，會與內建的三組一起出現在鑲嵌孔編輯器的 Apply-Set 工具列中。每組有一個標籤 + 最多 5 個 ItemKey 項目 (空白格會被略過)。套用含 N 個項目的組合會覆寫目標物品的 0..N-1 孔，[N..max] 範圍的孔保持不動。按下儲存後寫入 settings.json。</sys:String>
+  <sys:String x:Key="CustomGemSetsHeader">三組使用者可自訂的寶石組合，會與內建的三組一起出現在插槽編輯器的 Apply-Set 工具列中。每組有一個標籤 + 最多 5 個 ItemKey 項目 (空白格會被略過)。套用含 N 個項目的組合會覆寫目標物品的 0..N-1 孔，[N..max] 範圍的孔保持不動。按下儲存後寫入 settings.json。</sys:String>
   <sys:String x:Key="CustomGemSetsSave">儲存</sys:String>
   <sys:String x:Key="CustomGemSetsClose">關閉</sys:String>
   <sys:String x:Key="SocketEditorClose">關閉</sys:String>
   <sys:String x:Key="SocketEditorNotAvailableTitle">此存檔沒有已鑲嵌寶石的孔</sys:String>
-  <sys:String x:Key="SocketEditorNotAvailableBody">載入的存檔沒有任何物品有已填入的鑲嵌孔 (或根本沒有任何物品帶有 _socketSaveDataList)。在遊戲中鑲入一顆寶石後，已填入的孔就會出現在這裡。</sys:String>
+  <sys:String x:Key="SocketEditorNotAvailableBody">載入的存檔沒有任何物品有已填入的插槽 (或根本沒有任何物品帶有 _socketSaveDataList)。在遊戲中鑲入一顆寶石後，已填入的孔就會出現在這裡。</sys:String>
   <sys:String x:Key="SocketEditorPickerTitle">選擇寶石</sys:String>
   <sys:String x:Key="RenameMercenaryHeader">為傭兵 / 寵物改名。「名稱」欄顯示由 CharacterKey 解析出來的角色 / 樣板名稱 (與主視窗 mercenaryDataList 名稱欄同源) — 用來辨識每一列。你自訂的改名 (已存於 _mercenaryName) 不會顯示 — read-side FFI 尚未實作。輸入新名稱並逐列按下 Apply。改動會在下一次 File → Save 寫回存檔。</sys:String>
   <sys:String x:Key="RenameMercenaryColIdx">索引</sys:String>
@@ -105,7 +105,7 @@
   <sys:String x:Key="VendorBuybackRemove">移除</sys:String>
   <sys:String x:Key="VendorBuybackRemoveTip">從該商人的回購佇列刪除此筆。該格空出後其他物品才能流轉進來。此操作在 session 內無法復原；要回復就重新載入存檔但不要寫入即可。</sys:String>
   <sys:String x:Key="VendorBuybackJump">跳轉…</sys:String>
-  <sys:String x:Key="VendorBuybackJumpTip">關閉此對話框，並在主編輯器的 block 樹中開啟該回購物品。從那裡可以用通用欄位編輯器修改堆疊數量、耐久、鑲嵌孔、染色等 — 介面與背包物品相同。</sys:String>
+  <sys:String x:Key="VendorBuybackJumpTip">關閉此對話框，並在主編輯器的 block 樹中開啟該回購物品。從那裡可以用通用欄位編輯器修改堆疊數量、耐久、插槽、染色等 — 介面與背包物品相同。</sys:String>
   <sys:String x:Key="VendorBuybackClose">關閉</sys:String>
   <sys:String x:Key="VendorBuybackNotAvailableTitle">沒有商人回購紀錄</sys:String>
   <sys:String x:Key="VendorBuybackNotAvailableBody">載入的存檔沒有任何 StoreDataSaveData 帶有非空的 _storeSoldItemDataList。請先在遊戲中賣物給商人以建立回購佇列。</sys:String>
@@ -121,7 +121,7 @@
   <sys:String x:Key="ChangeSummaryColSummary">變更</sys:String>
   <sys:String x:Key="ChangeSummarySave">儲存</sys:String>
   <sys:String x:Key="ChangeSummaryDiscard">捨棄</sys:String>
-  <sys:String x:Key="ChangeSummaryDiscardExit">捨棄並退出</sys:String>
+  <sys:String x:Key="ChangeSummaryDiscardExit">捨棄存檔並退出</sys:String>
   <sys:String x:Key="ChangeSummaryCancel">取消</sys:String>
   <sys:String x:Key="ChangeSummaryNoChangesTitle">沒有待寫入的變更</sys:String>
   <sys:String x:Key="ChangeSummaryNoChangesBody">自載入存檔 (或上次 File → Save) 起，沒有任何編輯紀錄。</sys:String>
@@ -137,13 +137,13 @@
   <sys:String x:Key="DyeEditorColSlotCount">孔數</sys:String>
   <sys:String x:Key="DyeEditorColAction">動作</sys:String>
   <sys:String x:Key="DyeEditorEdit">編輯…</sys:String>
-  <sys:String x:Key="DyeEditorEditTip">為此物品的染色清單開啟逐孔編輯器。對話框在套用後不會關閉，方便連續編輯多個孔位。</sys:String>
+  <sys:String x:Key="DyeEditorEditTip">為此物品的染色清單開啟逐孔編輯器。對話框在套用後不會關閉，方便連續編輯多個槽位。</sys:String>
   <sys:String x:Key="DyeEditorClose">關閉</sys:String>
   <sys:String x:Key="DyeEditorNotAvailableTitle">此存檔沒有已染色物品</sys:String>
   <sys:String x:Key="DyeEditorNotAvailableBody">沒有任何物品攜帶至少一格的 _itemDyeDataList。可能是玩家還沒染色過任何東西，或是此存檔 schema 把 _itemDyeDataList 放在不同的欄位名底下 (請重跑 vendor/crimson-rs/_probe_item_dye_data 確認)。</sys:String>
 
   <!-- Dye slot editor child dialog -->
-  <sys:String x:Key="DyeSlotEditorWindowTitle">編輯染色孔</sys:String>
+  <sys:String x:Key="DyeSlotEditorWindowTitle">編輯染色槽</sys:String>
   <sys:String x:Key="DyeSlotColSlot">孔</sys:String>
   <sys:String x:Key="DyeSlotColGrime">髒污</sys:String>
   <sys:String x:Key="DyeSlotColMaterial">材質</sys:String>
@@ -266,7 +266,7 @@
   <sys:String x:Key="DisclaimerTitle">CrimsonAtomtic — 免責聲明</sys:String>
   <sys:String x:Key="DisclaimerAccept">我同意</sys:String>
   <sys:String x:Key="DisclaimerDecline">離開</sys:String>
-  <sys:String x:Key="DisclaimerBody">本編輯器以「現狀」方式提供，不保證能正常運作，也沒有針對所有 save 結構做詳盡驗證。對於使用本工具可能造成的資料錯誤、存檔毀損或任何遊戲帳號相關問題，作者不負任何責任。&#x0a;&#x0a;按下「我同意」即表示您已閱讀並同意上述條款，並接受使用本工具的全部風險。</sys:String>
+  <sys:String x:Key="DisclaimerBody">本編輯器以「現狀」方式提供，不保證能正常運作，也沒有針對所有存檔結構做詳細驗證。對於使用本工具可能造成的資料錯誤、存檔毀損或任何遊戲帳號相關問題，或是工具中的功能無法如期使用、作者不負任何責任、也不會負責修復。&#x0a;&#x0a;按下「我同意」即表示您已閱讀並同意上述條款，並接受使用本工具的全部風險。</sys:String>
 
   <!-- Empty workspace -->
   <sys:String x:Key="EmptyTitle">尚未載入存檔</sys:String>
@@ -328,7 +328,7 @@
   <sys:String x:Key="EditPanelMakeAbsent">標為缺席 (absent)</sys:String>
   <sys:String x:Key="EditPanelMakeAbsentTip">將此 scalar 的存在位元關掉 — 該欄位從 block 移除 (mask bit 清掉，payload bytes 丟棄)。要復原就輸入一個值再按 Apply。</sys:String>
   <sys:String x:Key="MarkChallengeCompleteButton">✓ 標記挑戰完成 (Pattern B v1)</sys:String>
-  <sys:String x:Key="MarkChallengeCompleteTip">引擎自然單一挑戰完成 (Pattern B v1)。只有當引擎已對此挑戰做過 discovery (你已在遊戲中撿起獎勵神器) 時才會啟用。寫入 FAR tracker (_state=5 + _completedTime + visible tag) 並建立 X_2 子任務項目 — 與引擎在未領取的已完成狀態下會寫入的內容完全相同。Catalog 與 adjacent twin 不會被動到；那部份引擎會在你於遊戲中領取獎勵時自然填上。尚未完整測試 — 請先備份你的存檔。</sys:String>
+  <sys:String x:Key="MarkChallengeCompleteTip">引擎自然單一挑戰完成 (Pattern B v1)。只有當遊戲已對此挑戰做過偵測、顯示為可用 (你已在遊戲中撿起封印神器) 時才會啟用。會寫入相關項目 — 與遊戲本身在已完成、但尚未領取的狀態的情況完全相同。生活部份的挑戰可能不適用。尚未完整測試 — 請先備份你的存檔。</sys:String>
   <sys:String x:Key="ConfirmDialogYes">是</sys:String>
   <sys:String x:Key="ConfirmDialogNo">否</sys:String>
   <sys:String x:Key="ElementsColBulkFill">批次</sys:String>
