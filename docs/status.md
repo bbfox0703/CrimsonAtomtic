@@ -944,28 +944,40 @@ is on PATH (the script `#requires -Version 7`).
 3. `.\scripts\package_aot.ps1` glues steps 1 + dotnet publish + summary into
    one command. `-SkipRustBuild` for C#-only iteration.
 
-## Pick up here (next concrete task)
+## Pick up here (historical snapshot — see top of file for current state)
 
-Pattern B v1 has been verified end-to-end on slot102 against four
-challenges across three series: **Shield II, Spear I, Hooves II, and
-Slash III**. The recipe writes the pre-claim FAR-tracker shape; the
-in-game UI shows the challenge as "completed, reward not claimed"
+> ⚠ **This section is the 2026-05-15 handoff snapshot.** Read the
+> `2026-05-17` entry at the top of this file for the **current**
+> open follow-ons. Both this preamble and the roadmap table below
+> have been retroactively struck-through where features shipped after
+> the snapshot was taken; everything checked off as ✅ has matching
+> commits in the dev/main history.
+
+Pattern B v1 was originally verified end-to-end on slot102 against
+four challenges across three series: **Shield II, Spear I, Hooves II,
+and Slash III**. The recipe writes the pre-claim FAR-tracker shape;
+the in-game UI shows the challenge as "completed, reward not claimed"
 after reload, the user can pick up the artifact reward, and the
 catalog row + alertHistory fill in naturally. **Category restriction
 removed** — any MissionStateData row with the right FAR-tracker shape
 is eligible (user takes responsibility for the FAR-shape match).
-**Inventory safety gate added** — the button only enables when at
-least one Sealed Abyss Artifact item is currently in the user's
-inventory; the warning dialog reinforces "you must hold the matching
-artifact for THIS challenge". See the SA work above for full context.
+~~Inventory safety gate added — the button only enables when at least
+one Sealed Abyss Artifact item is currently in the user's inventory…~~
+**[2026-05-17: held-inventory gate REMOVED]** — eligibility is now
+purely save-side data shape (catalog + adjacent twin state=5 + FAR
+tracker present). Bulk variant shipped with per-key skip-reason
+diagnostics (see top entry). Multi-objective Living_*/Cooking shapes
+remain out-of-scope; await a future Pattern B v2.
 
-**Next session — pick by appetite from the porting roadmap below.**
-The 5 features were surveyed against the predecessor save editor
+~~**Next session — pick by appetite from the porting roadmap below.**~~
+**[2026-05-17: roadmap exhausted]** — items #1 / #3 / #4 / #5 / #6 /
+#7 / #8 / #9 shipped; #2 (Item Pack import) deferred by user choice.
+The original 5-pick survey against the predecessor save editor
 (`D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS`, mined once for
-ideas per CLAUDE.md rule 11) and ordered EASY → MEDIUM. No need to
-do them all at once.
+ideas per CLAUDE.md rule 11) is fully consumed. For the current
+open-task list see the top of this file.
 
-### Porting roadmap — 5 picks (EASY → MEDIUM)
+### Porting roadmap — 5 picks (EASY → MEDIUM) (historical, all 9 items resolved)
 
 | # | Feature | Difficulty | Notes |
 |---|---|---|---|
@@ -975,8 +987,8 @@ do them all at once.
 | 4 | ~~**Sockets editor (fill / clear / swap gems, up to 5 sockets/item)**~~ | ~~MEDIUM~~ | ✅ **v1 (swap-only) shipped 2026-05-15 part 5.** Tools → Edit Item Sockets… surfaces every filled socket across inventory; per-row Change Gem… opens a gem-filtered Item Picker (`Item_Stat_AbyssGear_*` / `Item_Skill_AbyssGear_*`) → writes new gem `_itemKey` via `SetScalarField`. Fill/clear/unlock deferred per predecessor's safe-edit contract (empty-socket fill needs in-game Witch NPC; socket-count unlock has triple-coupled-write risk). |
 | 5 | ~~**Dye editor (RGB / material / grime)**~~ | ~~MEDIUM~~ | ✅ **Shipped 2026-05-16 part 9.** Master `Tools → Edit Item Dyes…` lists every dyed item; per-row Edit opens a child slot editor (R/G/B/A NumericUpDowns + grime + material/color-group dropdowns + per-slot Apply). v1 scope = edit-existing-dye only; add-dye-to-undyed-item deferred until upstream `set_object_list_present` ABI ships. All three `dye*.pabgb` gamedata bridges from the 2026-05-16 vendor refresh bound + integrated into `LocalizationProvider` (replaces the PyQt5 reference editor's `dye_slot_counts.json`). |
 | 6 | ~~**Unlock All Abyss Gates (Knowledge bulk-append)**~~ | ~~EASY~~ | ✅ **Shipped 2026-05-15 part 8** as TWO Tools menu items: (a) **Unlock All Abyss Gates (Map Discovery)** — bulk knowledge inject covering the discovery-flag layer (`KnowledgeSaveData._list`), keyset harvested live from `knowledgeinfo.pabgb` by prefix match (no JSON pack vendored); (b) **Edit Abyss Gates (Lock/Unlock per gate)** — per-gate dialog for the gate-state layer (`FieldGimmickSaveData._initStateNameHash`, three known constants from `vendor/crimson-rs/docs/abyss-gate-map.md`). v1 limitation on the per-gate dialog: walks top-level FieldGimmickSaveData only, nested blocks deferred. |
-| 7 | **Wire CharacterKey through the new `character_info` C ABI bridge** | EASY | Pure C# work — Rust side already shipped (`vendor/crimson-rs/src/c_abi/character_info.rs`). Currently C# resolves CharacterKey via the generic PALOC byte path (`TypeNameToTypeByte["CharacterKey"] = 0x30`); the bridge adds (a) **cat-byte hi-byte strip** (`lo24 = key & 0x00FF_FFFF`), (b) **internal-name fallback** when PALOC misses (e.g. `"FieldNPC_Bandit_Lvl3"`), (c) up to 22% PALOC display + ~100% internal-name coverage on the 221-key sample save. Adds `NativeCharacterInfoCatalog` (mirror of `NativeSkillInfoCatalog`), moves CharacterKey from `TypeNameToTypeByte` to `TableDrivenKeyTypes`, adds `"CharacterKey" => DisplayOrFallback(_characterInfo, …)` in `ResolveKeyTableOne`. Closes the `FieldNPCSaveData._characterKey` half of deferred item #5. |
-| 8 | **NPC portrait pipeline + Rename Mercenary portrait column** | MEDIUM | Pure C# work — Rust side already shipped (`crimson_paz_list_npc_portraits` + `crimson_characterinfo_resolve_portrait`). Two-step: (1) enumerate NPC portrait DDS paths from a PAZ group's PAMT (the function already filters out animal / riding / pet / wagon — only real NPC head-shots), (2) per-CharacterKey, call `resolve_portrait` with the loaded `characterinfo` + PALOC + portrait list → best-scoring DDS path + score (0–100; below ~30 is noise). New `PortraitProvider` mirrors `IconProvider`'s lazy-load + Bitmap-cache shape; extracted DDS files land in `%LOCALAPPDATA%\CrimsonAtomtic\PortraitCache\`. Rename Mercenary dialog grows a Portrait column (drives off `ResolvedCharacterName` + `CharacterKey`). Depends on #7. |
+| 7 | ~~**Wire CharacterKey through the new `character_info` C ABI bridge**~~ | ~~EASY~~ | ✅ **Shipped** (rolled in with the Tier 1 / Tier 2 key-resolver wave, before this roadmap was last updated). `NativeCharacterInfoCatalog` lives at `src/CrimsonAtomtic.RustInterop/NativeKeyInfoCatalogs.cs`, `CharacterKey` is in `LocalizationProvider.TableDrivenKeyTypes`, and `ResolveKeyTableOne` routes through `DisplayOrFallback(_characterInfo, ...)` with the lo24 cat-byte strip + internal-name fallback. |
+| 8 | ~~**NPC portrait pipeline + Rename Mercenary portrait column**~~ | ~~MEDIUM~~ | ✅ **Shipped.** `PortraitProvider` (`src/CrimsonAtomtic.Ui/Services/PortraitProvider.cs`) lazy-loads `.dds` portraits into `%LOCALAPPDATA%\CrimsonAtomtic\PortraitCache\` via `crimson_characterinfo_resolve_portrait`. `MercenaryRow.StartPortraitLoad` kicks off the background load on row construction; Rename Mercenary dialog renders the Image when one matches above the score threshold, falling back to the per-category Unicode glyph (`🐎` / `🛒` / `🎈` / `🦌` / `👤` / `🐾` / `❔`) otherwise. The same `PortraitProvider` instance also drives the Browse Characters / NPCs picker (#9) and the new Character Refs Browser (2026-05-17). |
 | 9 | ~~**Browse Characters / NPCs dialog**~~ | ~~EASY~~ | ✅ **Shipped 2026-05-15 part 6.** Tools → Browse Characters / NPCs… mirrors "Browse Items" but is driven by `characterinfo.pabgb` + the portrait pipeline. `CharacterPickerViewModel` enumerates every `(CharacterKey, internal_name)` pair via `crimson_characterinfo_get_entry` (two-call), joins each with PALOC-resolved display name (English + optional secondary), and shows an NPC portrait when one matches above `MinAcceptableScore`. Read-only — no Add-to-bag analog. Useful for FieldNPC investigation work (deferred item #5's other half). |
 
 **Lower-priority deferred items** (the older list — none blocking; pick by appetite):
