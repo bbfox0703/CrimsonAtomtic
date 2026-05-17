@@ -213,12 +213,45 @@ public sealed class UiLanguageService
     }
 
     /// <summary>
+    /// Same shape as <see cref="ResolveActive(string?, CultureInfo)"/>
+    /// but uses <see cref="DetectFromOsUiLanguage"/> for the auto-detect
+    /// fallback, bypassing .NET's <c>InvariantGlobalization</c>-stripped
+    /// <see cref="CultureInfo"/>. Use this from runtime code paths;
+    /// the CultureInfo-taking overload stays for unit-testing
+    /// synthetic cultures.
+    /// </summary>
+    public static string ResolveActiveFromOs(string? settingsUiLanguage)
+    {
+        if (!string.IsNullOrEmpty(settingsUiLanguage))
+        {
+            foreach (var supported in SupportedCodes)
+            {
+                if (string.Equals(supported, settingsUiLanguage, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    return supported;
+                }
+            }
+        }
+        return DetectFromOsUiLanguage(CultureInfo.CurrentUICulture);
+    }
+
+    /// <summary>
     /// Folds an arbitrary <see cref="CultureInfo"/> into one of the
     /// supported codes. Public for direct use by the "Auto" menu item
     /// (it surfaces what auto-detect WOULD pick if the user reset their
     /// preference). Falls through to <see cref="DefaultCode"/> for any
     /// culture we don't ship a dictionary for.
     /// </summary>
+    /// <remarks>
+    /// When the running build has <c>InvariantGlobalization=true</c>
+    /// (CrimsonAtomtic does, for AOT binary-size reasons), .NET reports
+    /// every culture's <see cref="CultureInfo.Name"/> as the empty
+    /// string regardless of the OS UI language. That breaks
+    /// CultureInfo-only detection. Use
+    /// <see cref="DetectFromOsUiLanguage"/> instead at startup — it
+    /// P/Invokes <c>GetUserDefaultUILanguage</c> directly and bypasses
+    /// the .NET globalization restriction.
+    /// </remarks>
     public static string DetectFromCulture(CultureInfo currentCulture)
     {
         var name = currentCulture.Name;
@@ -241,6 +274,80 @@ public sealed class UiLanguageService
         }
 
         return DefaultCode;
+    }
+
+    /// <summary>
+    /// Detect the supported UI language code from the Windows OS UI
+    /// language directly, bypassing .NET's <c>CultureInfo</c> facade.
+    /// This is the AOT-friendly + <c>InvariantGlobalization</c>-safe
+    /// alternative to <see cref="DetectFromCulture"/> — it P/Invokes
+    /// the Win32 <c>GetUserDefaultUILanguage</c> which returns a 16-bit
+    /// LCID independent of .NET's globalization configuration.
+    /// </summary>
+    /// <remarks>
+    /// LCID layout (Microsoft docs): low 10 bits = primary language,
+    /// next 6 bits = sublanguage. We classify on those two fields:
+    /// <list type="bullet">
+    ///   <item>primary 0x11 (Japanese) → <see cref="CodeJa"/></item>
+    ///   <item>primary 0x04 (Chinese) with sublanguage in
+    ///     {1 (zh-TW), 3 (zh-HK), 5 (zh-MO)} → <see cref="CodeZhTw"/>.
+    ///     We don't ship a Simplified Chinese dictionary so
+    ///     sublanguages 2 (zh-CN) / 4 (zh-SG) fall through.</item>
+    ///   <item>anything else → <see cref="DefaultCode"/></item>
+    /// </list>
+    /// When the P/Invoke fails or returns 0, falls back to
+    /// <see cref="DetectFromCulture"/> against <paramref name="cultureFallback"/>
+    /// — useful for headless tests where the Win32 API isn't available
+    /// (the test passes a synthetic <see cref="CultureInfo"/>).
+    /// </remarks>
+    public static string DetectFromOsUiLanguage(CultureInfo cultureFallback)
+    {
+        ushort lcid;
+        try
+        {
+            lcid = NativeMethods.GetUserDefaultUILanguage();
+        }
+        catch
+        {
+            // Non-Windows platform or P/Invoke load failure — defer to
+            // the .NET culture-based detector.
+            return DetectFromCulture(cultureFallback);
+        }
+        if (lcid == 0)
+        {
+            return DetectFromCulture(cultureFallback);
+        }
+
+        int primary = lcid & 0x3FF;
+        int sub = (lcid >> 10) & 0x3F;
+
+        if (primary == 0x11) return CodeJa;              // Japanese
+        if (primary == 0x04 && (sub == 1 || sub == 3 || sub == 5))
+        {
+            return CodeZhTw;                              // Traditional Chinese (TW/HK/MO)
+        }
+        return DefaultCode;
+    }
+
+    private static class NativeMethods
+    {
+        // Win32 GetUserDefaultUILanguage — returns LCID of the user's
+        // preferred UI language. Independent of .NET's CultureInfo +
+        // InvariantGlobalization, so it's the only reliable signal for
+        // OS UI language in an InvariantGlobalization build.
+        //
+        // Using DllImport instead of the source-generated LibraryImport
+        // because the latter requires <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        // on the project, which CrimsonAtomtic.Ui doesn't have. AOT
+        // marshalling for a parameterless ushort-returning function is
+        // trivial — DllImport handles it fine without warnings.
+        [System.Runtime.InteropServices.DllImport(
+            "kernel32.dll",
+            EntryPoint = "GetUserDefaultUILanguage",
+            ExactSpelling = true)]
+        [System.Runtime.InteropServices.DefaultDllImportSearchPaths(
+            System.Runtime.InteropServices.DllImportSearchPath.System32)]
+        internal static extern ushort GetUserDefaultUILanguage();
     }
 
     /// <summary>

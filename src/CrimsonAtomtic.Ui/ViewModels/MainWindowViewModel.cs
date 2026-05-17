@@ -579,8 +579,10 @@ public sealed partial class MainWindowViewModel(
         // render now, which is the same auto-detect path App.axaml.cs
         // uses at startup.
         var existing = AppSettingsStore.Load(paths.LocalAppDataDirectory);
-        var effective = UiLanguageService.ResolveActive(
-            code, System.Globalization.CultureInfo.CurrentUICulture);
+        // ResolveActiveFromOs uses the Win32 detector — required because
+        // the build sets <InvariantGlobalization>true</InvariantGlobalization>
+        // (see App.axaml.cs for the rationale).
+        var effective = UiLanguageService.ResolveActiveFromOs(code);
         uiLanguage.Apply(effective);
 
         // Persist the user's PICK (which may be null = auto), not the

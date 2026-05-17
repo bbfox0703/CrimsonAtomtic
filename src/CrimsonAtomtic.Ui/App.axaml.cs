@@ -62,8 +62,14 @@ public sealed class App : Application
             // DynamicResource so subsequent runtime swaps via Tools →
             // UI Language pick up live without restarting the app.
             var uiLanguage = new UiLanguageService(this);
-            var effectiveLanguage = UiLanguageService.ResolveActive(
-                settings.UiLanguage, System.Globalization.CultureInfo.CurrentUICulture);
+            // Use the Win32-backed detector — .NET's CultureInfo facade
+            // reports InvariantCulture in this build (csproj has
+            // <InvariantGlobalization>true</InvariantGlobalization> for
+            // AOT binary-size reasons), so CurrentUICulture.Name is "" on
+            // every OS and culture-based detect would always fall back to
+            // English. GetUserDefaultUILanguage bypasses that.
+            var effectiveLanguage = UiLanguageService.ResolveActiveFromOs(
+                settings.UiLanguage);
             uiLanguage.Apply(effectiveLanguage);
 
             // Icon cache wiring. Fixed location under
