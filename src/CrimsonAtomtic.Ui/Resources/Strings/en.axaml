@@ -71,7 +71,7 @@
   <sys:String x:Key="RenameMercenaryNotAvailableBody">The loaded save doesn't have a MercenaryClanSaveData block, or its _mercenaryDataList is empty / unreadable. Mercenaries appear here once you've recruited at least one in-game.</sys:String>
   <sys:String x:Key="MenuFillAllStacks">Fill _All Stacks Across Every Inventory…</sys:String>
   <sys:String x:Key="MenuUnlockAllAbyssGates">_Unlock All Abyss Gates (Map Discovery)…</sys:String>
-  <sys:String x:Key="MenuBulkCompleteHeldSAChallenges">_Complete All Held Sealed Abyss Artifact Challenges…</sys:String>
+  <sys:String x:Key="MenuBulkCompleteHeldSAChallenges">_Complete Eligible Held Sealed Abyss Artifact Challenges…</sys:String>
   <sys:String x:Key="MenuEditAbyssGates">_Edit Abyss Gates (Lock/Unlock per gate)…</sys:String>
   <sys:String x:Key="MenuEditItemDyes">Edit Item _Dyes…</sys:String>
   <sys:String x:Key="MenuVendorBuyback">_Vendor Buyback…</sys:String>

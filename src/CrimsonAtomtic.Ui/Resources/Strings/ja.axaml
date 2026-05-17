@@ -27,7 +27,7 @@
   <sys:String x:Key="MenuBrowseItems">アイテム一覧(_I)…</sys:String>
   <sys:String x:Key="MenuExtractIcons">ゲームデータからアイコンを抽出(_E)…</sys:String>
   <sys:String x:Key="MenuSetGameInstallFolder">ゲームインストールフォルダを設定(_G)…</sys:String>
-  <sys:String x:Key="SetGameInstallFolderInvalidTitle">このフォルダは Crimson Desert のインストール先には見えません</sys:String>
+  <sys:String x:Key="SetGameInstallFolderInvalidTitle">このフォルダは紅の砂漠 / Crimson Desert のインストール先には見えません</sys:String>
   <sys:String x:Key="SetGameInstallFolderInvalidBody">選択したフォルダに必要なアセットファイル (0020\0.pamt) が見つかりません。ゲームの 0000\、0020\、… の各 pack group を含むディレクトリを選んでください — 通常は &lt;Steam library&gt;\steamapps\common\Crimson Desert、または Epic / Game Pass 用にコピーしたアセットフォルダです。</sys:String>
   <sys:String x:Key="MenuRenameMercenary">傭兵の名前を変更(_M)…</sys:String>
   <sys:String x:Key="MenuEditItemSockets">アイテムのソケットを編集(_S)…</sys:String>
@@ -82,7 +82,7 @@
   <sys:String x:Key="RenameMercenaryNotAvailableBody">読み込まれたセーブに MercenaryClanSaveData block がないか、その _mercenaryDataList が空 / 読み込み不能です。ゲーム内で 1 体以上の傭兵を雇用すると、ここに傭兵リストが表示されます。</sys:String>
   <sys:String x:Key="MenuFillAllStacks">全インベントリのスタックを最大まで満たす(_A)…</sys:String>
   <sys:String x:Key="MenuUnlockAllAbyssGates">全てのアビスゲートをアンロック (マップ発見)(_U)…</sys:String>
-  <sys:String x:Key="MenuBulkCompleteHeldSAChallenges">所持中の封印アビス遺物チャレンジを全てクリア(_C)…</sys:String>
+  <sys:String x:Key="MenuBulkCompleteHeldSAChallenges">所持中で現在処理可能な封印アビス遺物チャレンジを全てクリア(_C)…</sys:String>
   <sys:String x:Key="MenuEditAbyssGates">アビスゲートを編集 (個別にロック/アンロック)(_E)…</sys:String>
   <sys:String x:Key="MenuEditItemDyes">アイテムの染色を編集(_D)…</sys:String>
   <sys:String x:Key="MenuVendorBuyback">商人の買い戻しリスト(_V)…</sys:String>

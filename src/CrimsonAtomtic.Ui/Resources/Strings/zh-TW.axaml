@@ -27,11 +27,11 @@
   <sys:String x:Key="MenuBrowseItems">瀏覽物品(_I)…</sys:String>
   <sys:String x:Key="MenuExtractIcons">從遊戲資料抽出圖示(_E)…</sys:String>
   <sys:String x:Key="MenuSetGameInstallFolder">設定遊戲安裝資料夾(_G)…</sys:String>
-  <sys:String x:Key="SetGameInstallFolderInvalidTitle">這個資料夾看起來不像 Crimson Desert 安裝目錄</sys:String>
+  <sys:String x:Key="SetGameInstallFolderInvalidTitle">這個資料夾看起來不像赤血沙漠 Crimson Desert 安裝目錄</sys:String>
   <sys:String x:Key="SetGameInstallFolderInvalidBody">所選資料夾不包含必要的素材檔 (0020\0.pamt)。請選擇包含遊戲 0000\、0020\、… 各個 pack group 的目錄 — 通常是 &lt;Steam library&gt;\steamapps\common\Crimson Desert，或是 Epic / 為 Game Pass 拷貝出來的素材資料夾。</sys:String>
   <sys:String x:Key="MenuRenameMercenary">傭兵改名(_M)…</sys:String>
   <sys:String x:Key="MenuEditItemSockets">編輯物品插槽(_S)…</sys:String>
-  <sys:String x:Key="SocketEditorHeader">逐孔填入 / 變更 / 清除。Fill 與 Change 操作會將耐久 (Endurance) 重設為 65535 (最大值)，避免新鑲入的高階寶石繼承舊孔的耗損值。當你填入一個索引超過物品目前上限的孔時，_validSocketCount 會自動上修 (讓該孔在遊戲中可見)。底層 list 預先配置的任何孔都可以填 (一般是 5 個)，不受遊戲資料定義的上限限制。改動會在下一次 File → Save 寫回存檔。</sys:String>
+  <sys:String x:Key="SocketEditorHeader">逐孔填入 / 變更 / 清除。Fill 與 Change 操作會將耐久 (Endurance) 重設為 65535 (最大值)，避免新鑲入的高階寶石繼承舊孔的耗損值。當你填入一個索引超過物品目前上限的孔時，_validSocketCount 會自動上修 (讓該孔在遊戲中可見)。底層 list 預先配置的任何孔都可以填 (一般是 5 個)，不受遊戲資料定義的上限限制。改動會在下一次存檔時寫回。</sys:String>
   <sys:String x:Key="SocketEditorColBag">背包</sys:String>
   <sys:String x:Key="SocketEditorColItem">物品</sys:String>
   <sys:String x:Key="SocketEditorColItemKey">ItemKey</sys:String>
@@ -62,9 +62,9 @@
   <sys:String x:Key="CustomGemSetsClose">關閉</sys:String>
   <sys:String x:Key="SocketEditorClose">關閉</sys:String>
   <sys:String x:Key="SocketEditorNotAvailableTitle">此存檔沒有已鑲嵌寶石的孔</sys:String>
-  <sys:String x:Key="SocketEditorNotAvailableBody">載入的存檔沒有任何物品有已填入的插槽 (或根本沒有任何物品帶有 _socketSaveDataList)。在遊戲中鑲入一顆寶石後，已填入的孔就會出現在這裡。</sys:String>
+  <sys:String x:Key="SocketEditorNotAvailableBody">載入的存檔沒有任何物品有已填入的插槽 (或根本沒有任何物品帶有 _socketSaveDataList)。在遊戲中鑲入一顆寶石後，已填入的槽位就會出現在這裡。</sys:String>
   <sys:String x:Key="SocketEditorPickerTitle">選擇寶石</sys:String>
-  <sys:String x:Key="RenameMercenaryHeader">為傭兵 / 寵物改名。「名稱」欄顯示由 CharacterKey 解析出來的角色 / 樣板名稱 (與主視窗 mercenaryDataList 名稱欄同源) — 用來辨識每一列。你自訂的改名 (已存於 _mercenaryName) 不會顯示 — read-side FFI 尚未實作。輸入新名稱並逐列按下 Apply。改動會在下一次 File → Save 寫回存檔。</sys:String>
+  <sys:String x:Key="RenameMercenaryHeader">為傭兵 / 寵物改名。「名稱」欄顯示由 CharacterKey 解析出來的角色 / 樣板名稱 (與主視窗 mercenaryDataList 名稱欄同源) — 用來辨識每一列。你自訂的改名 (已存於 _mercenaryName) 不會顯示 — read-side FFI 尚未實作。輸入新名稱並逐列按下 Apply。改動會在下一次存檔時儲存回檔案。</sys:String>
   <sys:String x:Key="RenameMercenaryColIdx">索引</sys:String>
   <sys:String x:Key="RenameMercenaryColMercNo">MercNo</sys:String>
   <sys:String x:Key="RenameMercenaryColCharKey">CharKey</sys:String>
@@ -81,9 +81,9 @@
   <sys:String x:Key="RenameMercenaryNotAvailableTitle">沒有可改名的傭兵</sys:String>
   <sys:String x:Key="RenameMercenaryNotAvailableBody">載入的存檔沒有 MercenaryClanSaveData block，或其 _mercenaryDataList 為空 / 無法讀取。在遊戲中招募至少一名傭兵後，傭兵列表就會出現在這裡。</sys:String>
   <sys:String x:Key="MenuFillAllStacks">把所有背包的堆疊都填到最大(_A)…</sys:String>
-  <sys:String x:Key="MenuUnlockAllAbyssGates">解鎖所有深淵之門 (地圖探索)(_U)…</sys:String>
-  <sys:String x:Key="MenuBulkCompleteHeldSAChallenges">完成所有持有的封印深淵神器挑戰(_C)…</sys:String>
-  <sys:String x:Key="MenuEditAbyssGates">編輯深淵之門 (每個門個別鎖/解鎖)(_E)…</sys:String>
+  <sys:String x:Key="MenuUnlockAllAbyssGates">解鎖所有阿比斯之門 (地圖探索)(_U)…</sys:String>
+  <sys:String x:Key="MenuBulkCompleteHeldSAChallenges">完成目前可處理的、所有持有的封印阿比斯神器挑戰(_C)…</sys:String>
+  <sys:String x:Key="MenuEditAbyssGates">編輯阿比斯之門 (每個門個別鎖/解鎖)(_E)…</sys:String>
   <sys:String x:Key="MenuEditItemDyes">編輯物品染色(_D)…</sys:String>
   <sys:String x:Key="MenuVendorBuyback">商人回購清單(_V)…</sys:String>
   <sys:String x:Key="MenuReviewChanges">檢視待寫入的變更(_R)…</sys:String>
@@ -115,7 +115,7 @@
   <sys:String x:Key="ChangeSummaryHeaderClose">有未儲存的變更 — 退出前先儲存？</sys:String>
   <sys:String x:Key="ChangeSummarySubHeaderClose">下列編輯尚未寫入磁碟。按「儲存」會寫入並關閉；按「捨棄並退出」會直接關閉 (磁碟上的舊狀態維持不變)；按「取消」會回到編輯器繼續編輯。</sys:String>
   <sys:String x:Key="ChangeSummaryHeaderReview">自上次儲存以來的變更</sys:String>
-  <sys:String x:Key="ChangeSummarySubHeaderReview">從載入存檔 (或上次 File → Save) 開始，透過 UI 套用過的編輯之唯讀清單。重新載入存檔可丟棄所有變更；File → Save 可寫入磁碟。</sys:String>
+  <sys:String x:Key="ChangeSummarySubHeaderReview">從載入存檔 (或上次存檔後) 開始，透過 UI 套用過的編輯之唯讀清單。重新載入存檔可丟棄所有變更；File → Save 可寫入磁碟。</sys:String>
   <sys:String x:Key="ChangeSummaryColTime">時間</sys:String>
   <sys:String x:Key="ChangeSummaryColCategory">區塊</sys:String>
   <sys:String x:Key="ChangeSummaryColSummary">變更</sys:String>
@@ -124,7 +124,7 @@
   <sys:String x:Key="ChangeSummaryDiscardExit">捨棄存檔並退出</sys:String>
   <sys:String x:Key="ChangeSummaryCancel">取消</sys:String>
   <sys:String x:Key="ChangeSummaryNoChangesTitle">沒有待寫入的變更</sys:String>
-  <sys:String x:Key="ChangeSummaryNoChangesBody">自載入存檔 (或上次 File → Save) 起，沒有任何編輯紀錄。</sys:String>
+  <sys:String x:Key="ChangeSummaryNoChangesBody">自載入存檔 (或上次寫回檔案後) 起，沒有任何編輯紀錄。</sys:String>
 
   <!-- Dye editor master dialog -->
   <sys:String x:Key="DyeEditorWindowTitle">編輯物品染色</sys:String>
@@ -152,7 +152,7 @@
   <sys:String x:Key="DyeSlotColStatus">狀態</sys:String>
   <sys:String x:Key="DyeSlotApply">套用</sys:String>
   <sys:String x:Key="DyeSlotEditorClose">關閉</sys:String>
-  <sys:String x:Key="AbyssGatesWindowTitle">編輯深淵之門</sys:String>
+  <sys:String x:Key="AbyssGatesWindowTitle">編輯阿比斯之門</sys:String>
   <sys:String x:Key="AbyssGatesHeader">逐門切換鎖定/解鎖。針對 FieldSaveData._fieldGimmickSaveDataList 內每個 FieldGimmickSaveData 元素寫入 _initStateNameHash (Default 0x866c7489 ↔ Activated 0xe300acfe)。Idle (場景) 與 Unknown 列為唯讀，避免破壞非門類 gimmick 的穩定性。改動會在下一次 File → Save 寫回存檔。</sys:String>
   <sys:String x:Key="AbyssGatesColOwnerLevel">擁有者關卡</sys:String>
   <sys:String x:Key="AbyssGatesColGimmick">Gimmick</sys:String>
@@ -165,7 +165,7 @@
   <sys:String x:Key="AbyssGatesUnlockTip">Default (未觸發) → Activated (已穿越)。將 _initStateNameHash 設為 0xe300acfe。</sys:String>
   <sys:String x:Key="AbyssGatesLockTip">Activated (已穿越) → Default (未觸發)。將 _initStateNameHash 復原為 0x866c7489。</sys:String>
   <sys:String x:Key="AbyssGatesClose">關閉</sys:String>
-  <sys:String x:Key="AbyssGatesNotAvailableTitle">此存檔沒有深淵之門</sys:String>
+  <sys:String x:Key="AbyssGatesNotAvailableTitle">此存檔沒有阿比斯之門</sys:String>
   <sys:String x:Key="AbyssGatesNotAvailableBody">FieldSaveData._fieldGimmickSaveDataList 內沒有任何 FieldGimmickSaveData 元素符合 gimmickinfo.pabgb 中的 abyss / hyperspace 白名單。可能是存檔還沒有 FieldSaveData root (遊戲非常早期)，或遊戲安裝路徑未設定使得 gimmickinfo 無法讀取。</sys:String>
   <sys:String x:Key="MenuFontSize">字型大小(_F)</sys:String>
   <sys:String x:Key="SummaryToggleTip">顯示 / 隱藏存檔摘要面板 — 把空間讓給主資料表格。</sys:String>
