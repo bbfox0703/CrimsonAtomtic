@@ -205,6 +205,105 @@ public sealed partial class MainWindowViewModel(
             $"{item.ClassName}[{rec.ItemElementIndex}]", item, path2));
     }
 
+    /// <summary>
+    /// Drives the Vendor Buyback dialog's per-row "Jump" button:
+    /// builds the nav stack down through
+    /// <c>StoreSaveData → _storeDataList[storeIdx] → _storeSoldItemDataList[itemIdx]</c>
+    /// so the user lands on the buyback item's <c>ItemSaveData</c>
+    /// detail view. The generic block editor there handles stack /
+    /// endurance / sockets / dye edits — same schema as inventory
+    /// items, so no dialog-local editor is needed.
+    /// </summary>
+    /// <remarks>
+    /// Mirrors <see cref="NavigateToInventoryItemAsync"/>'s race
+    /// control (<see cref="_suppressBlockSelectionLoad"/>). On any
+    /// drift between the Buyback dialog's cached indices and the
+    /// current save state (e.g. an in-flight remove shifted the
+    /// element list), the navigator silently stops at the deepest
+    /// frame it can build — caller can drill manually from there.
+    /// </remarks>
+    public async Task NavigateToVendorBuybackItemAsync(
+        int blockIndex, uint storeElementIdx, uint buybackElementIdx)
+    {
+        if (_loadedPath is null)
+        {
+            return;
+        }
+        BlockSummary? blockSummary = null;
+        foreach (var b in _allBlocks)
+        {
+            if (b.Index == blockIndex)
+            {
+                blockSummary = b;
+                break;
+            }
+        }
+        if (blockSummary is null)
+        {
+            DetailsError = $"Block #{blockIndex} not found in current save.";
+            return;
+        }
+
+        BlockDetails topDetails;
+        try
+        {
+            topDetails = await Task.Run(() =>
+                loader.LoadBlockDetails(_loadedPath, blockIndex)).ConfigureAwait(true);
+        }
+        catch (CrimsonSaveException ex)
+        {
+            DetailsError = $"{ex.Message} (code {ex.ErrorCode})";
+            return;
+        }
+
+        _suppressBlockSelectionLoad = true;
+        try { SelectedBlock = blockSummary; }
+        finally { _suppressBlockSelectionLoad = false; }
+
+        ClearNavigation();
+        PushFrame(new BlockFrame(topDetails.ClassName, topDetails, Array.Empty<PathStep>()));
+
+        // _storeDataList: object_list of StoreDataSaveData under StoreSaveData.
+        var storeListField = FindFieldByName(topDetails, "_storeDataList");
+        if (storeListField?.Elements is not { Count: > 0 } stores
+            || storeElementIdx >= (uint)stores.Count)
+        {
+            return;
+        }
+        PushFrame(new ElementsFrame(
+            $"{storeListField.Name}[{stores.Count}]",
+            stores,
+            Array.Empty<PathStep>(),
+            (uint)storeListField.FieldIndex));
+
+        var storeBlock = stores[(int)storeElementIdx];
+        var path1 = new[] { new PathStep((uint)storeListField.FieldIndex, storeElementIdx) };
+        PushFrame(new BlockFrame(
+            $"{storeBlock.ClassName}[{storeElementIdx}]", storeBlock, path1));
+
+        // _storeSoldItemDataList: object_list of ItemSaveData under StoreDataSaveData.
+        var buybackListField = FindFieldByName(storeBlock, "_storeSoldItemDataList");
+        if (buybackListField?.Elements is not { Count: > 0 } items
+            || buybackElementIdx >= (uint)items.Count)
+        {
+            return;
+        }
+        PushFrame(new ElementsFrame(
+            $"{buybackListField.Name}[{items.Count}]",
+            items,
+            path1,
+            (uint)buybackListField.FieldIndex));
+
+        var item = items[(int)buybackElementIdx];
+        var path2 = new[]
+        {
+            new PathStep((uint)storeListField.FieldIndex, storeElementIdx),
+            new PathStep((uint)buybackListField.FieldIndex, buybackElementIdx),
+        };
+        PushFrame(new BlockFrame(
+            $"{item.ClassName}[{buybackElementIdx}]", item, path2));
+    }
+
     private static DecodedFieldRow? FindFieldByName(BlockDetails block, string name)
     {
         foreach (var f in block.Fields)
@@ -1824,36 +1923,71 @@ public sealed partial class MainWindowViewModel(
             return;
         }
 
-        // Pre-flight on background thread: scan held artifacts → map
-        // to mission keys → find catalog rows → build contexts.
+        // Pre-flight on background thread: enumerate iteminfo SA
+        // artifacts → map to mission keys → find catalog rows whose
+        // FAR tracker exists → build contexts. The held-inventory gate
+        // was removed (2026-05-17) — eligibility is now purely the
+        // save-side data shape (catalog + adjacent twin + FAR tracker),
+        // so picked-up-but-no-longer-held artifacts also surface.
         var preview = await Task.Run(() => ScanBulkSealedArtifactCandidates(blocks));
 
-        if (preview.HeldArtifactCount == 0)
+        if (preview.KnownArtifactCount == 0)
         {
-            BulkOpStatus = "Nothing to do — no Sealed Abyss Artifact items in inventory.";
+            BulkOpStatus = "Nothing to do — no Sealed_Abyss_Artifact_* entries in iteminfo.pabgb. "
+                + "Is the game install configured?";
             return;
         }
         if (preview.Candidates.Count == 0)
         {
             BulkOpStatus =
-                $"Nothing to apply — {preview.HeldArtifactCount} artifact(s) held, but none has an "
-                + "eligible challenge: either the FAR tracker isn't present yet (artifact "
-                + "not picked up in-game), the catalog row is already at state=5, or the X_2 "
+                $"Nothing to apply — iteminfo lists {preview.KnownArtifactCount} SA artifact(s) but none has an "
+                + "eligible challenge in this save: either no FAR tracker exists yet (artifact "
+                + "never picked up), the catalog row is already at state=5, or the X_2 "
                 + "sub-mission key isn't in iteminfo. "
                 + $"({preview.SkippedNoMission} no-mission, {preview.SkippedNoFar} no-FAR, "
                 + $"{preview.SkippedAlreadyDone} already done, {preview.SkippedOther} other.)";
             return;
         }
 
+        // Build the per-key skip details section. Show every skipped
+        // entry rather than truncating — there are at most a couple
+        // dozen skips across the 141-row SA set and the user benefits
+        // from a complete picture (especially for "X_2 lookup failed",
+        // which currently affects multi-objective Living_*/Cooking
+        // challenges where Pattern B v1 doesn't apply).
+        string skipDetailSection;
+        if (preview.SkipDetails.Count == 0)
+        {
+            skipDetailSection = string.Empty;
+        }
+        else
+        {
+            var lines = new System.Text.StringBuilder();
+            lines.Append("\nSkipped challenges (per-key reason):\n");
+            foreach (var (k, n, r) in preview.SkipDetails)
+            {
+                var label = string.IsNullOrEmpty(n) ? $"{k}" : $"{k} ({n})";
+                lines.Append($"  • {label}: {r}\n");
+            }
+            skipDetailSection = lines.ToString();
+        }
+
         var msg =
             $"Mark {preview.Candidates.Count} Sealed Abyss Artifact challenge(s) complete "
             + "using Pattern B v1?\n\n"
-            + $"  Held artifacts in inventory: {preview.HeldArtifactCount}\n"
+            + $"  Known SA artifacts (iteminfo): {preview.KnownArtifactCount}\n"
             + $"  Eligible challenges to mark: {preview.Candidates.Count}\n"
             + $"  Skipped — already done: {preview.SkippedAlreadyDone}\n"
             + $"  Skipped — FAR tracker not ready: {preview.SkippedNoFar}\n"
             + $"  Skipped — no mission mapping: {preview.SkippedNoMission}\n"
-            + $"  Skipped — other (twin shape / X_2 lookup failed): {preview.SkippedOther}\n\n"
+            + $"  Skipped — other (twin shape / X_2 lookup failed): {preview.SkippedOther}\n"
+            + skipDetailSection
+            + "\n"
+            + "Eligibility now ignores whether the artifact is currently "
+            + "held — only the save-side challenge data shape matters. "
+            + "Pick up the artifact in-game once (creating the FAR tracker) "
+            + "and the challenge stays eligible even after the item is "
+            + "consumed.\n\n"
             + "Per-challenge writes: FAR tracker _state ← 5 + _completedTime stamped + visible "
             + "tag added; X_2 sub-mission entry cloned from FAR (when missing). Catalog row + "
             + "adjacent twin: UNTOUCHED — engine fills those at reward pickup.\n\n"
@@ -2028,16 +2162,29 @@ public sealed partial class MainWindowViewModel(
         {
             return default;
         }
-        // 1. Held SA artifacts → set of ItemKeys → set of mission keys
-        //    via the forward look_detail_mission_info lookup.
-        var heldArtifacts = ScanHeldSealedArtifactItemKeys(blocks);
-        if (heldArtifacts.Count == 0)
+        // 1. Enumerate every Sealed Abyss Artifact item key from
+        //    iteminfo (no "held in inventory" gate) and map each to its
+        //    challenge mission key via the forward
+        //    look_detail_mission_info lookup. The held-inventory check
+        //    was the wrong layer — the per-challenge eligibility gate
+        //    is "FAR tracker present in this save", which is created
+        //    once on first artifact pickup and stays around even after
+        //    the artifact item has been consumed / dropped. Filtering
+        //    by held inventory dropped legitimate candidates where the
+        //    user had picked up the artifact but no longer carried it.
+        //    Now we let TryBuildChallengeContextFromCatalogRow gate
+        //    purely on the save-side data shape.
+        var allArtifacts = new HashSet<uint>(
+            localization.EnumerateItemsByStringKeyPrefix("Sealed_Abyss_Artifact")
+                        .Select(p => p.ItemKey));
+        if (allArtifacts.Count == 0)
         {
-            return new BulkSaPreview(0, new List<CurrentChallengeContext>(), 0, 0, 0, 0);
+            return new BulkSaPreview(0, new List<CurrentChallengeContext>(), 0, 0, 0, 0,
+                Array.Empty<(uint, string?, string)>());
         }
         var missionKeyToArtifact = new Dictionary<uint, uint>();
         var skippedNoMission = 0;
-        foreach (var ik in heldArtifacts)
+        foreach (var ik in allArtifacts)
         {
             var mk = localization.GetItemLookDetailMissionInfo(ik);
             if (mk is null)
@@ -2052,8 +2199,9 @@ public sealed partial class MainWindowViewModel(
         if (missionKeyToArtifact.Count == 0)
         {
             return new BulkSaPreview(
-                heldArtifacts.Count, new List<CurrentChallengeContext>(),
-                skippedNoMission, 0, 0, 0);
+                allArtifacts.Count, new List<CurrentChallengeContext>(),
+                skippedNoMission, 0, 0, 0,
+                Array.Empty<(uint, string?, string)>());
         }
 
         // 2. Walk QuestSaveData blocks to find catalog rows whose
@@ -2063,6 +2211,11 @@ public sealed partial class MainWindowViewModel(
         var skippedNoFar = 0;
         var skippedAlreadyDone = 0;
         var skippedOther = 0;
+        // Per-key skip reasons so the dialog can pinpoint exactly which
+        // catalog rows were filtered out. Captures (catalog _key,
+        // internal name, reason string) for every row that
+        // TryBuildChallengeContextFromCatalogRow rejected.
+        var skipDetails = new List<(uint Key, string? Name, string Reason)>();
         foreach (var b in blocks)
         {
             if (!string.Equals(b.ClassName, "QuestSaveData", StringComparison.Ordinal))
@@ -2113,34 +2266,27 @@ public sealed partial class MainWindowViewModel(
                         skippedAlreadyDone++;
                         continue;
                     }
-                    if (!TryBuildChallengeContextFromCatalogRow(b.Index, fi, ei, out var ctx))
+                    if (!TryBuildChallengeContextFromCatalogRow(
+                        b.Index, fi, ei, out var ctx, out var skipReason))
                     {
-                        // Differentiate the common "FAR tracker absent" case
-                        // from other context-build failures via a cheap
-                        // peek at the adjacent twin.
-                        var twinIdx = ei + 1;
-                        if (twinIdx >= siblings.Count)
-                        {
-                            skippedOther++;
-                            continue;
-                        }
-                        var twinRow = siblings[twinIdx];
-                        DecodedFieldRow? twinKeyFld = null, twinStateFld = null;
-                        foreach (var f in twinRow.Fields)
-                        {
-                            if (twinKeyFld is null && f.Name == "_key") twinKeyFld = f;
-                            else if (twinStateFld is null && f.Name == "_state") twinStateFld = f;
-                        }
-                        if (twinKeyFld is null || twinStateFld is null
-                            || !TryParseScalarUInt(twinStateFld.Value, out var twinStateU64)
-                            || twinStateU64 != 5UL)
-                        {
-                            skippedNoFar++;
-                        }
-                        else
-                        {
-                            skippedOther++;
-                        }
+                        // Bucket the skip into NoFar / Other based on the
+                        // shape of skipReason. Twin-already-state=5 means
+                        // FAR tracker exists somewhere but downstream
+                        // gate failed; otherwise the artifact hasn't been
+                        // picked up yet.
+                        var noFarShape =
+                            skipReason is not null
+                            && (skipReason.Contains("artifact never picked up")
+                                || skipReason.Contains("artifact pickup")
+                                || skipReason.Contains("FAR tracker")
+                                    && skipReason.Contains("not found"));
+                        if (noFarShape) skippedNoFar++;
+                        else skippedOther++;
+                        // Capture a per-key entry so the dialog can show
+                        // exactly which challenges were skipped + why.
+                        skipDetails.Add(((uint)kU64,
+                            localization.MissionInfoStringKey((uint)kU64),
+                            skipReason ?? "(unknown reason)"));
                         continue;
                     }
                     candidates.Add(ctx);
@@ -2148,81 +2294,39 @@ public sealed partial class MainWindowViewModel(
             }
         }
         return new BulkSaPreview(
-            heldArtifacts.Count, candidates,
-            skippedNoMission, skippedNoFar, skippedAlreadyDone, skippedOther);
+            allArtifacts.Count, candidates,
+            skippedNoMission, skippedNoFar, skippedAlreadyDone, skippedOther,
+            skipDetails);
     }
+
+    // Note: the former `ScanHeldSealedArtifactItemKeys` helper was
+    // removed 2026-05-17 along with the held-inventory eligibility
+    // gate. If a future feature wants the "held SA artifacts" set
+    // separately, the recipe is:
+    //   localization.EnumerateItemsByStringKeyPrefix("Sealed_Abyss_Artifact")
+    //     intersected with the _inventorylist[*]._itemList[*]._itemKey
+    //     scan via loader.ListInventoryItems (one FFI call now).
 
     /// <summary>
-    /// Scan every <c>InventorySaveData</c> block for items whose
-    /// <c>_itemKey</c> matches the Sealed Abyss Artifact prefix.
-    /// Returns the distinct ItemKey set (so multiple stacked
-    /// artifacts of the same kind collapse to one entry).
+    /// Pre-flight result for the bulk SA challenge sweep.
+    /// <see cref="KnownArtifactCount"/> is the total number of
+    /// <c>Sealed_Abyss_Artifact_*</c> rows iteminfo carries (typically
+    /// 141 in 1.07) — NOT the inventory-held subset (that gate was
+    /// removed 2026-05-17). Eligibility is the save-side data shape
+    /// only.
+    /// <see cref="SkipDetails"/> carries per-key (catalog _key,
+    /// internal name, reason) tuples for every challenge that was
+    /// considered but rejected — surfaced in the confirm dialog so
+    /// users can see exactly which challenges were skipped and why.
     /// </summary>
-    private HashSet<uint> ScanHeldSealedArtifactItemKeys(IReadOnlyList<BlockSummary> blocks)
-    {
-        var held = new HashSet<uint>();
-        var artifactItemKeys = new HashSet<uint>(
-            localization.EnumerateItemsByStringKeyPrefix("Sealed_Abyss_Artifact")
-                        .Select(p => p.ItemKey));
-        if (artifactItemKeys.Count == 0)
-        {
-            return held;
-        }
-        foreach (var b in blocks)
-        {
-            if (!string.Equals(b.ClassName, "InventorySaveData", StringComparison.Ordinal))
-            {
-                continue;
-            }
-            BlockDetails top;
-            try { top = loader.LoadBlockDetails(_loadedPath!, b.Index); }
-            catch (CrimsonSaveException) { continue; }
-            foreach (var invList in top.Fields)
-            {
-                if (!string.Equals(invList.Name, "_inventorylist", StringComparison.Ordinal)
-                    || invList.Elements is not { Count: > 0 } bags)
-                {
-                    continue;
-                }
-                foreach (var bag in bags)
-                {
-                    foreach (var itemListField in bag.Fields)
-                    {
-                        if (!string.Equals(itemListField.Name, "_itemList", StringComparison.Ordinal)
-                            || itemListField.Elements is not { Count: > 0 } items)
-                        {
-                            continue;
-                        }
-                        foreach (var item in items)
-                        {
-                            foreach (var inner in item.Fields)
-                            {
-                                if (inner.Name != "_itemKey") continue;
-                                if (inner.Present
-                                    && TryParseScalarUInt(inner.Value, out var ikVal)
-                                    && ikVal <= uint.MaxValue
-                                    && artifactItemKeys.Contains((uint)ikVal))
-                                {
-                                    held.Add((uint)ikVal);
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return held;
-    }
-
-    /// <summary>Pre-flight result for the bulk SA challenge sweep.</summary>
     private readonly record struct BulkSaPreview(
-        int HeldArtifactCount,
+        int KnownArtifactCount,
         IReadOnlyList<CurrentChallengeContext> Candidates,
         int SkippedNoMission,
         int SkippedNoFar,
         int SkippedAlreadyDone,
-        int SkippedOther);
+        int SkippedOther,
+        IReadOnlyList<(uint Key, string? Name, string Reason)> SkipDetails);
 
     /// <summary>
     /// Find the largest <c>_completedTime</c> present across every
@@ -2294,8 +2398,13 @@ public sealed partial class MainWindowViewModel(
             return false;
         }
         var pathStep = path1[0];
+        // Per-row caller doesn't surface the skip reason today (the
+        // Mark Challenge button just hides via IsCurrentChallengeMarkable).
+        // Adding a tooltip with the reason would be a follow-up — for
+        // now just discard the reason.
         return TryBuildChallengeContextFromCatalogRow(
-            topBlock.Index, (int)pathStep.FieldIndex, (int)pathStep.ElementIndex, out ctx);
+            topBlock.Index, (int)pathStep.FieldIndex, (int)pathStep.ElementIndex,
+            out ctx, out _);
     }
 
     /// <summary>
@@ -2305,70 +2414,75 @@ public sealed partial class MainWindowViewModel(
     /// (wrapper above) and the Tools → Bulk Complete Held Sealed
     /// Artifact Challenges sweep.
     /// </summary>
+    /// <param name="skipReason">
+    /// When the method returns false, set to a human-readable reason
+    /// explaining which gate failed (X_2 follow-up lookup failed, FAR
+    /// tracker missing, etc.). Bulk sweep surfaces these in the
+    /// confirm dialog so the user can see which challenges were
+    /// skipped and why. Null when the method returns true.
+    /// </param>
     private bool TryBuildChallengeContextFromCatalogRow(
         int topBlockIdx,
         int listFieldIdx,
         int catalogElementIdx,
-        out CurrentChallengeContext ctx)
+        out CurrentChallengeContext ctx,
+        out string? skipReason)
     {
         ctx = default;
-        if (_loadedPath is null) return false;
+        skipReason = null;
+        if (_loadedPath is null) { skipReason = "no save loaded"; return false; }
 
         BlockDetails parentTop;
         try
         {
             parentTop = loader.LoadBlockDetails(_loadedPath, topBlockIdx);
         }
-        catch (CrimsonSaveException)
+        catch (CrimsonSaveException ex)
         {
+            skipReason = $"LoadBlockDetails failed: {ex.Message}";
             return false;
         }
-        if (listFieldIdx < 0 || listFieldIdx >= parentTop.Fields.Count) return false;
+        if (listFieldIdx < 0 || listFieldIdx >= parentTop.Fields.Count)
+        { skipReason = "listFieldIdx out of range"; return false; }
         var listField = parentTop.Fields[listFieldIdx];
         var siblings = listField.Elements;
         if (siblings is null || catalogElementIdx < 0 || catalogElementIdx >= siblings.Count)
-        {
-            return false;
-        }
+        { skipReason = "catalogElementIdx out of range"; return false; }
         var catalogRow = siblings[catalogElementIdx];
         if (!string.Equals(catalogRow.ClassName, "MissionStateData", StringComparison.Ordinal))
-        {
-            return false;
-        }
+        { skipReason = $"unexpected class '{catalogRow.ClassName}'"; return false; }
         DecodedFieldRow? keyFld = null, stateFld = null;
         foreach (var f in catalogRow.Fields)
         {
             if (keyFld is null && f.Name == "_key") keyFld = f;
             else if (stateFld is null && f.Name == "_state") stateFld = f;
         }
-        if (keyFld is null || stateFld is null) return false;
+        if (keyFld is null || stateFld is null)
+        { skipReason = "catalog row missing _key or _state field"; return false; }
         if (!TryParseScalarUInt(keyFld.Value, out var keyU64)
             || keyU64 == 0
             || keyU64 > uint.MaxValue
             || !TryParseScalarUInt(stateFld.Value, out var stateU64))
-        {
-            return false;
-        }
+        { skipReason = "catalog _key/_state could not be parsed"; return false; }
         // Catalog-only: negative-encoded engine-internal keys (0xFFFFxxxx) are
         // out of scope.
-        if (keyU64 >= 0xFFFF0000UL) return false;
-        if (stateU64 == 5UL) return false;
+        if (keyU64 >= 0xFFFF0000UL)
+        { skipReason = "catalog _key is negative-encoded (sub-step row, not a top-level catalog)"; return false; }
+        if (stateU64 == 5UL)
+        { skipReason = "already complete (catalog _state == 5)"; return false; }
         var name = localization.MissionInfoStringKey((uint)keyU64);
         // The recipe computes the X_2 follow-up sub-mission key from
         // `name + "_2"`, so we need a name.
         if (name is null)
-        {
-            return false;
-        }
+        { skipReason = $"missioninfo bridge has no internal name for key {keyU64}"; return false; }
 
         // 1. Adjacent twin
         var twinElementIdx = catalogElementIdx + 1;
-        if (twinElementIdx >= siblings.Count) return false;
+        if (twinElementIdx >= siblings.Count)
+        { skipReason = "no adjacent row (catalog is the last element)"; return false; }
         var twin = siblings[twinElementIdx];
         if (!string.Equals(twin.ClassName, "MissionStateData", StringComparison.Ordinal))
-        {
-            return false;
-        }
+        { skipReason = $"adjacent row class is '{twin.ClassName}', expected MissionStateData"; return false; }
         DecodedFieldRow? twinKeyFld = null, twinStateFld = null, twinCtFld = null, twinTagsFld = null;
         foreach (var f in twin.Fields)
         {
@@ -2377,22 +2491,19 @@ public sealed partial class MainWindowViewModel(
             else if (twinCtFld is null && f.Name == "_completedTime") twinCtFld = f;
             else if (twinTagsFld is null && f.Name == "_usedTagList") twinTagsFld = f;
         }
-        if (twinKeyFld is null || twinStateFld is null || twinCtFld is null || twinTagsFld is null) return false;
+        if (twinKeyFld is null || twinStateFld is null || twinCtFld is null || twinTagsFld is null)
+        { skipReason = "adjacent twin missing one of (_key, _state, _completedTime, _usedTagList)"; return false; }
         if (!TryParseScalarUInt(twinKeyFld.Value, out var twinKeyU64)
             || twinKeyU64 < 0xFFFF0000UL
             || twinKeyU64 > uint.MaxValue)
-        {
-            return false;
-        }
+        { skipReason = "adjacent twin _key is not negative-encoded (not an SA-shape twin)"; return false; }
         // Visibility gate: twin must be at state=5 + _completedTime present + 2+ tags.
         // That's the engine's "user has picked up the artifact" marker —
         // without it the recipe is unsafe (likely to leave the card hidden).
-        if (!TryParseScalarUInt(twinStateFld.Value, out var twinStateU64)
-            || twinStateU64 != 5UL
-            || !twinCtFld.Present)
-        {
-            return false;
-        }
+        if (!TryParseScalarUInt(twinStateFld.Value, out var twinStateU64) || twinStateU64 != 5UL)
+        { skipReason = "adjacent twin _state != 5 (artifact never picked up)"; return false; }
+        if (!twinCtFld.Present)
+        { skipReason = "adjacent twin _completedTime absent (artifact pickup incomplete)"; return false; }
         var twinKey = (uint)twinKeyU64;
         uint[] twinTags;
         var twinPath = new[] { new PathStep((uint)listFieldIdx, (uint)twinElementIdx) };
@@ -2401,16 +2512,28 @@ public sealed partial class MainWindowViewModel(
             twinTags = loader.DynamicArrayGetU32Elements(
                 topBlockIdx, twinPath, twinTagsFld.FieldIndex);
         }
-        catch (CrimsonSaveException)
-        {
-            return false;
-        }
-        if (twinTags.Length < 2) return false;
+        catch (CrimsonSaveException ex)
+        { skipReason = $"twin _usedTagList read failed: {ex.Message}"; return false; }
+        if (twinTags.Length < 2)
+        { skipReason = $"twin _usedTagList only has {twinTags.Length} entries (need 2: base + visible)"; return false; }
 
-        // 2. X_2 follow-up sub-mission key (catalog name + "_2")
+        // 2. X_2 follow-up sub-mission key (catalog name + "_2"). The
+        // anchor-scan missioninfo bridge drops negative-keyed rows
+        // (0xFFFFxxxx) so multi-objective challenges whose `_2`
+        // sub-step lives in that range (Living_*/Cooking series, etc.)
+        // can't be located via name-lookup. Pattern B v1 is verified
+        // only on linear single-step challenges (Shield II / Spear I /
+        // Hooves II / Slash III), so this skip is correct — the
+        // diagnostic just makes it visible.
         var followUpName = name + "_2";
         var followUpKeyOpt = localization.LookupMissionKeyByInternalName(followUpName);
-        if (followUpKeyOpt is not { } followUpKey) return false;
+        if (followUpKeyOpt is not { } followUpKey)
+        {
+            skipReason = $"X_2 follow-up '{followUpName}' not in missioninfo bridge "
+                + "(likely a multi-objective challenge with negative-keyed sub-steps; "
+                + "Pattern B v1 doesn't cover this shape)";
+            return false;
+        }
 
         // 3. FAR tracker — walk the list for entry with _key = twinKey - 1
         var farKey = twinKey - 1u;
@@ -2443,7 +2566,8 @@ public sealed partial class MainWindowViewModel(
                 break;
             }
         }
-        if (farElementIdx is not { } farIdx) return false;
+        if (farElementIdx is not { } farIdx)
+        { skipReason = $"FAR tracker (key 0x{(twinKey - 1u):X8}) not found in _missionStateList"; return false; }
 
         // Locate FAR tracker's field indices for the writes we'll do.
         var far = siblings[farIdx];
@@ -2455,17 +2579,17 @@ public sealed partial class MainWindowViewModel(
             else if (farTagsFld is null && f.Name == "_usedTagList") farTagsFld = f;
             else if (farBranchedFld is null && f.Name == "_branchedTime") farBranchedFld = f;
         }
-        if (farStateFld is null || farCtFld is null || farTagsFld is null || farBranchedFld is null) return false;
+        if (farStateFld is null || farCtFld is null || farTagsFld is null || farBranchedFld is null)
+        { skipReason = "FAR tracker missing one of (_state, _completedTime, _usedTagList, _branchedTime)"; return false; }
         // Skip if FAR is already at state=5 (engine has already marked completion;
         // user just needs to claim the reward in-game to push it to catalog).
         if (TryParseScalarUInt(farStateFld.Value, out var farStateU64) && farStateU64 == 5UL)
-        {
-            return false;
-        }
+        { skipReason = "FAR tracker already at state=5 (challenge engine-completed; claim reward in-game)"; return false; }
         // FAR's _branchedTime must already be present (engine sets it on
         // artifact pickup); the cloned X_2 entry needs this field to
         // exist so we can patch its value to the new ct.
-        if (!farBranchedFld.Present) return false;
+        if (!farBranchedFld.Present)
+        { skipReason = "FAR tracker _branchedTime absent (artifact pickup not recorded)"; return false; }
 
         var farPath = new[] { new PathStep((uint)listFieldIdx, (uint)farIdx) };
         uint[] farTags;
@@ -2474,19 +2598,15 @@ public sealed partial class MainWindowViewModel(
             farTags = loader.DynamicArrayGetU32Elements(
                 topBlockIdx, farPath, farTagsFld.FieldIndex);
         }
-        catch (CrimsonSaveException)
-        {
-            return false;
-        }
+        catch (CrimsonSaveException ex)
+        { skipReason = $"FAR _usedTagList read failed: {ex.Message}"; return false; }
 
-        // Safety gate: user must hold at least one Sealed Abyss Artifact
-        // item somewhere in their inventory. Pattern B v1 writes the
-        // pre-claim FAR-tracker state that the engine reconciles against
-        // an artifact pickup; with zero artifacts in inventory there's
-        // nothing for the engine to reconcile against on next load.
-        // We don't try to match THIS challenge → THE specific artifact —
-        // the user is responsible for selecting the right catalog row.
-        if (!HoldsAnySealedAbyssArtifact()) return false;
+        // Held-artifact gate removed 2026-05-17 (per user directive):
+        // the engine's eligibility signal is the FAR tracker's presence
+        // in the save (created once on first artifact pickup, stays
+        // around even after the item is consumed). Checking current
+        // inventory dropped legitimate candidates. The data-shape gates
+        // above are the only correctness-relevant ones.
 
         ctx = new CurrentChallengeContext(
             CatalogKey: (uint)keyU64,
@@ -2509,75 +2629,12 @@ public sealed partial class MainWindowViewModel(
         return true;
     }
 
-    /// <summary>
-    /// True when at least one Sealed Abyss Artifact item
-    /// (string-key prefix <c>Sealed_Abyss_Artifact</c>) is present
-    /// somewhere in the loaded save's <c>_inventorylist[*]._itemList[*]</c>.
-    /// Walks every <c>InventorySaveData</c> top block and returns on
-    /// first match. Relies on the NativeSaveLoader block cache so
-    /// repeated calls cost a hash lookup per block, not a full
-    /// FFI re-decode.
-    /// </summary>
-    private bool HoldsAnySealedAbyssArtifact()
-    {
-        if (_loadedPath is null || Summary is not { Blocks: { } blocks })
-        {
-            return false;
-        }
-        var artifactItemKeys = new HashSet<uint>(
-            localization.EnumerateItemsByStringKeyPrefix("Sealed_Abyss_Artifact")
-                        .Select(p => p.ItemKey));
-        if (artifactItemKeys.Count == 0)
-        {
-            return false;
-        }
-        foreach (var b in blocks)
-        {
-            if (!string.Equals(b.ClassName, "InventorySaveData", StringComparison.Ordinal))
-            {
-                continue;
-            }
-            BlockDetails top;
-            try { top = loader.LoadBlockDetails(_loadedPath, b.Index); }
-            catch (CrimsonSaveException) { continue; }
-            foreach (var invList in top.Fields)
-            {
-                if (!string.Equals(invList.Name, "_inventorylist", StringComparison.Ordinal)
-                    || invList.Elements is not { Count: > 0 } bags)
-                {
-                    continue;
-                }
-                foreach (var bag in bags)
-                {
-                    foreach (var itemListField in bag.Fields)
-                    {
-                        if (!string.Equals(itemListField.Name, "_itemList", StringComparison.Ordinal)
-                            || itemListField.Elements is not { Count: > 0 } items)
-                        {
-                            continue;
-                        }
-                        foreach (var item in items)
-                        {
-                            foreach (var inner in item.Fields)
-                            {
-                                if (inner.Name != "_itemKey") continue;
-                                if (inner.Present
-                                    && TryParseScalarUInt(inner.Value, out var ikVal)
-                                    && ikVal <= uint.MaxValue
-                                    && artifactItemKeys.Contains((uint)ikVal))
-                                {
-                                    return true;
-                                }
-                                // _itemKey is the first scalar; stop the inner walk.
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return false;
-    }
+    // HoldsAnySealedAbyssArtifact() removed 2026-05-17 along with the
+    // inner held-artifact gate in TryBuildChallengeContextFromCatalogRow.
+    // The data-shape gates (twin state=5 + completedTime + 2 tags, FAR
+    // tracker present + branchedTime + state≠5) are the only correctness-
+    // relevant checks; inventory presence was just noise that dropped
+    // legitimate "picked up + consumed" candidates.
 
     /// <summary>
     /// Addressing info for the in-focus catalog challenge plus its

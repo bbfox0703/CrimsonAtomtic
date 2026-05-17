@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CrimsonAtomtic.RustInterop;
 using CrimsonAtomtic.SaveModel;
@@ -88,7 +89,13 @@ public sealed partial class DyeEditorViewModel : ObservableObject
         _savePath = savePath;
         _blocks = blocks;
         SecondaryLanguage = localization.SecondaryLanguage;
-        Refresh();
+        // The scan walks every inventory + equipment block and can run
+        // ~1-2 seconds on a large save. Deliberately don't kick it off
+        // here — the host calls RefreshAsync after Show() so the dialog
+        // paints first with "Loading dyed items…" in the footer (driven
+        // by IsLoading via ResultsCountText) instead of freezing for a
+        // second.
+        IsLoading = true;
     }
 
     public string? SecondaryLanguage { get; }
@@ -96,6 +103,17 @@ public sealed partial class DyeEditorViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ResultsCountText))]
     private string? _searchText;
+
+    /// <summary>
+    /// True while <see cref="RefreshAsync"/> is running. Drives the
+    /// "Loading dyed items…" status message in
+    /// <see cref="ResultsCountText"/> so the dialog has a visible
+    /// indicator during the ~1-2s background scan instead of looking
+    /// frozen with an empty grid.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ResultsCountText))]
+    private bool _isLoading;
 
     public ObservableCollection<DyeEditorItemRow> Items { get; } = [];
 
@@ -105,6 +123,10 @@ public sealed partial class DyeEditorViewModel : ObservableObject
     {
         get
         {
+            if (IsLoading)
+            {
+                return "Loading dyed items…";
+            }
             if (!_localization.HasDyeGamedata)
             {
                 return "Dye gamedata not loaded — no game install configured. "
@@ -146,10 +168,27 @@ public sealed partial class DyeEditorViewModel : ObservableObject
 
     partial void OnSearchTextChanged(string? value) => ApplyFilter();
 
-    public void Refresh()
+    /// <summary>
+    /// Async refresh: runs the per-block walk on the thread pool and
+    /// republishes the results back on the UI thread. Drives
+    /// <see cref="IsLoading"/> for the "Loading dyed items…" footer.
+    /// Safe to call multiple times — every call replaces
+    /// <see cref="_allRows"/> atomically.
+    /// </summary>
+    public async Task RefreshAsync()
     {
-        _allRows = ScanForDyedItems(_loader, _localization, _savePath, _blocks);
-        ApplyFilter();
+        IsLoading = true;
+        try
+        {
+            var rows = await Task.Run(() =>
+                ScanForDyedItems(_loader, _localization, _savePath, _blocks));
+            _allRows = rows;
+            ApplyFilter();
+        }
+        finally
+        {
+            IsLoading = false;
+        }
     }
 
     /// <summary>
@@ -158,6 +197,15 @@ public sealed partial class DyeEditorViewModel : ObservableObject
     /// helper — same uniform "first-step + second-step" descent
     /// semantics the Sockets editor uses.
     /// </summary>
+    /// <remarks>
+    /// 2026-05-17: filter by ClassName BEFORE calling
+    /// <see cref="ISaveLoader.LoadBlockDetails"/>. The pre-fix walk
+    /// did the FFI load for every block in the save (~1000+ blocks
+    /// → ~1000 FFI roundtrips), then dropped the result on the
+    /// branch check. Filtering first cuts the load to ≤20 blocks
+    /// (InventorySaveData × N + 1 EquipmentSaveData) — typically
+    /// 10-20× speedup before the Task.Run wrapper even helps.
+    /// </remarks>
     private static List<DyeEditorItemRow> ScanForDyedItems(
         ISaveLoader loader,
         LocalizationProvider localization,
@@ -167,6 +215,14 @@ public sealed partial class DyeEditorViewModel : ObservableObject
         var results = new List<DyeEditorItemRow>();
         foreach (var b in blocks)
         {
+            bool isInventory = string.Equals(
+                b.ClassName, InventorySaveDataClass, StringComparison.Ordinal);
+            bool isEquipment = string.Equals(
+                b.ClassName, EquipmentSaveDataClass, StringComparison.Ordinal);
+            if (!isInventory && !isEquipment)
+            {
+                continue;
+            }
             BlockDetails details;
             try
             {
@@ -176,11 +232,11 @@ public sealed partial class DyeEditorViewModel : ObservableObject
             {
                 continue;
             }
-            if (string.Equals(b.ClassName, InventorySaveDataClass, StringComparison.Ordinal))
+            if (isInventory)
             {
                 CollectFromInventory(results, localization, b.Index, details);
             }
-            else if (string.Equals(b.ClassName, EquipmentSaveDataClass, StringComparison.Ordinal))
+            else
             {
                 CollectFromEquipment(results, localization, b.Index, details);
             }

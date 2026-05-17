@@ -93,6 +93,8 @@
   <sys:String x:Key="VendorBuybackColStatus">Status</sys:String>
   <sys:String x:Key="VendorBuybackRemove">Remove</sys:String>
   <sys:String x:Key="VendorBuybackRemoveTip">Delete this entry from the store's buyback queue. The slot frees up so other items can age in. Cannot be undone within the session; reload the save without writing to revert.</sys:String>
+  <sys:String x:Key="VendorBuybackJump">Jump…</sys:String>
+  <sys:String x:Key="VendorBuybackJumpTip">Close this dialog and open the buyback item in the main editor's block tree. Use the generic per-field editor there to modify stack count, endurance, sockets, dye, etc. — same surface as inventory items.</sys:String>
   <sys:String x:Key="VendorBuybackClose">Close</sys:String>
   <sys:String x:Key="VendorBuybackNotAvailableTitle">No vendor buyback entries</sys:String>
   <sys:String x:Key="VendorBuybackNotAvailableBody">The loaded save has no StoreDataSaveData entry with a non-empty _storeSoldItemDataList. Sell items to a vendor in-game to populate the buyback queue.</sys:String>

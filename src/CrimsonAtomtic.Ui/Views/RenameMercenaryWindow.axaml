@@ -4,8 +4,8 @@
         x:Class="CrimsonAtomtic.Ui.Views.RenameMercenaryWindow"
         x:DataType="vm:RenameMercenaryViewModel"
         Title="{StaticResource MenuRenameMercenary}"
-        Width="900" Height="540"
-        MinWidth="640" MinHeight="360"
+        Width="1280" Height="600"
+        MinWidth="960" MinHeight="360"
         FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
 
   <DockPanel LastChildFill="True" Margin="12">
@@ -50,11 +50,11 @@
                             IsReadOnly="True" />
         <DataGridTextColumn Header="{StaticResource RenameMercenaryColMercNo}"
                             Binding="{Binding MercNo}"
-                            Width="110"
+                            Width="80"
                             IsReadOnly="True" />
         <DataGridTextColumn Header="{StaticResource RenameMercenaryColCharKey}"
                             Binding="{Binding CharacterKey}"
-                            Width="110"
+                            Width="90"
                             IsReadOnly="True" />
         <!-- Portrait column. The real DDS-derived Image binds to the
              row's Portrait property which fills in asynchronously
@@ -95,11 +95,20 @@
                             Binding="{Binding EquipCount}"
                             Width="70"
                             IsReadOnly="True" />
+        <!-- New-name TextBox uses Mode=TwoWay + UpdateSourceTrigger=
+             PropertyChanged so the bound NewName field tracks each
+             keystroke. Default LostFocus binding meant the value only
+             commits when you tab away — coupled with the CanExecute
+             gate that's been removed, the user's first Apply click
+             could land before NewName updated, surfacing as a no-op.
+             PropertyChanged commits on every character so the textbox
+             is always in sync with the model. -->
         <DataGridTemplateColumn Header="{StaticResource RenameMercenaryColNewName}"
-                                Width="*">
+                                Width="*"
+                                MinWidth="220">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate DataType="vm:MercenaryRow">
-              <TextBox Text="{Binding NewName, Mode=TwoWay}"
+              <TextBox Text="{Binding NewName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                        VerticalAlignment="Center"
                        PlaceholderText="{StaticResource RenameMercenaryNewNameWatermark}" />
             </DataTemplate>

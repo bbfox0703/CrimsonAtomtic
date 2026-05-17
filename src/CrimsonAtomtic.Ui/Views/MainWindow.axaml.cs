@@ -610,15 +610,11 @@ public sealed partial class MainWindow : Window
                 $"{ex.Message} (code {ex.ErrorCode})");
             return;
         }
-        if (masterVm.TotalDyedItems == 0)
-        {
-            var title = (Application.Current?.FindResource("DyeEditorNotAvailableTitle") as string)
-                        ?? "No dyed items";
-            var body = (Application.Current?.FindResource("DyeEditorNotAvailableBody") as string)
-                       ?? "Scan returned 0 rows.";
-            _ = ConfirmDialog.ShowAlertAsync(this, title, body);
-            return;
-        }
+        // No upfront "no dyed items" check: the dialog opens
+        // immediately with "Loading dyed items…" in the footer; once
+        // RefreshAsync below finishes, the same footer flips to
+        // "No dyed items found in this save." when the scan returns
+        // empty — single code path for both states.
 
         // Per-row Edit → open the child slot editor.
         masterVm.EditRequested += row =>
@@ -643,8 +639,10 @@ public sealed partial class MainWindow : Window
                 {
                     masterVm.NotifyChildApplied();
                     // Re-scan so the master row count + per-row state
-                    // refresh against the new save body.
-                    masterVm.Refresh();
+                    // refresh against the new save body. Fire-and-forget
+                    // — the VM marks itself IsLoading so the footer
+                    // shows progress; we don't gate further UI on it.
+                    _ = masterVm.RefreshAsync();
                 }
             };
             child.Show(this);
@@ -659,6 +657,11 @@ public sealed partial class MainWindow : Window
             }
         };
         master.Show(this);
+        // Kick off the initial dyed-item scan AFTER the window paints.
+        // The VM constructor only stashes inputs + sets IsLoading=true,
+        // so the dialog renders immediately with "Loading dyed items…"
+        // in the footer; the actual block walk runs on the thread pool.
+        _ = masterVm.RefreshAsync();
     }
 
     /// <summary>
@@ -693,6 +696,18 @@ public sealed partial class MainWindow : Window
             return;
         }
         var child = new VendorBuybackWindow { DataContext = buybackVm };
+        // Per-row Jump → close the buyback dialog + navigate the main
+        // window's block tree to this sold item's ItemSaveData so the
+        // generic per-field editor can drive stack / endurance / sockets
+        // / dye edits exactly like an inventory item.
+        buybackVm.JumpToItemRequested += row =>
+        {
+            child.Close();
+            _ = vm.NavigateToVendorBuybackItemAsync(
+                row.BlockIndex,
+                row.StoreElementIdx,
+                row.BuybackElementIdx);
+        };
         child.Closed += (_, _) =>
         {
             if (buybackVm.IsDirty)

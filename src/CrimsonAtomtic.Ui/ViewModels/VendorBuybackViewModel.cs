@@ -94,6 +94,20 @@ public sealed partial class VendorBuybackViewModel : ObservableObject
     /// </summary>
     public bool IsDirty { get; private set; }
 
+    /// <summary>
+    /// Raised when a row's Jump-to button fires. The hosting
+    /// MainWindow subscribes, closes the buyback dialog, and asks the
+    /// main VM to navigate to this specific
+    /// <c>StoreSaveData._storeDataList[storeIdx]._storeSoldItemDataList[itemIdx]</c>
+    /// ItemSaveData so the generic block editor can drive
+    /// stack / endurance / sockets / dye edits.
+    /// </summary>
+    public event Action<VendorBuybackRow>? JumpToItemRequested;
+
+    /// <summary>Invoked by <see cref="VendorBuybackRow.Jump"/>.</summary>
+    internal void RequestJump(VendorBuybackRow row) =>
+        JumpToItemRequested?.Invoke(row);
+
     private VendorBuybackViewModel(
         ISaveLoader loader, LocalizationProvider localization,
         ChangeJournal journal, string savePath)
@@ -482,4 +496,16 @@ public sealed partial class VendorBuybackRow : ObservableObject
 
     [CommunityToolkit.Mvvm.Input.RelayCommand]
     private void Remove() => _parent.ApplyRemove(this);
+
+    /// <summary>
+    /// Jump to this sold item's ItemSaveData in the main window's
+    /// block tree. Closes the buyback dialog (handled by host) and
+    /// builds the nav stack down to
+    /// <c>StoreSaveData → _storeDataList[storeIdx] → _storeSoldItemDataList[itemIdx]</c>
+    /// so the user can use the generic block editor to mutate
+    /// stack / endurance / sockets / dye exactly like an inventory
+    /// item. No dialog-local editor needed.
+    /// </summary>
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void Jump() => _parent.RequestJump(this);
 }

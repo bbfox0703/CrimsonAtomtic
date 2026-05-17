@@ -82,14 +82,25 @@
                             Width="160"
                             FontFamily="Consolas, Menlo, monospace" />
         <DataGridTemplateColumn Header="{StaticResource VendorBuybackColAction}"
-                                Width="110">
+                                Width="200">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate DataType="vm:VendorBuybackRow">
-              <Button Content="{StaticResource VendorBuybackRemove}"
-                      ToolTip.Tip="{StaticResource VendorBuybackRemoveTip}"
-                      Command="{Binding RemoveCommand}"
-                      Padding="6,2" MinHeight="0"
-                      HorizontalAlignment="Stretch" />
+              <!-- Two actions per row: Jump opens the item in the
+                   main editor's block tree (use the generic block
+                   editor for stack / endurance / sockets / dye —
+                   same shape as inventory items); Remove deletes
+                   the buyback entry. -->
+              <StackPanel Orientation="Horizontal" Spacing="4"
+                          VerticalAlignment="Center">
+                <Button Content="{StaticResource VendorBuybackJump}"
+                        ToolTip.Tip="{StaticResource VendorBuybackJumpTip}"
+                        Command="{Binding JumpCommand}"
+                        Padding="6,2" MinHeight="0" />
+                <Button Content="{StaticResource VendorBuybackRemove}"
+                        ToolTip.Tip="{StaticResource VendorBuybackRemoveTip}"
+                        Command="{Binding RemoveCommand}"
+                        Padding="6,2" MinHeight="0" />
+              </StackPanel>
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>

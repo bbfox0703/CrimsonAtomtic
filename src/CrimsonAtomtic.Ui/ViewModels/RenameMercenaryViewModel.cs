@@ -497,12 +497,15 @@ public sealed partial class MercenaryRow : ObservableObject
     [ObservableProperty]
     private string? _lastError;
 
-    /// <summary>Apply button only enables once the user has typed something.</summary>
-    public bool CanApply => !string.IsNullOrEmpty(NewName);
-
-    partial void OnNewNameChanged(string? value) =>
-        OnPropertyChanged(nameof(CanApply));
-
-    [RelayCommand(CanExecute = nameof(CanApply))]
+    // Apply is always enabled. Empty NewName clears the custom rename
+    // (see ApplyRename's "(empty)" / "Cleared custom name on …" branch),
+    // which is a legitimate user action. The earlier CanApply gate
+    // depended on a manually-implemented bool that wasn't wired to
+    // ApplyCommand.NotifyCanExecuteChanged — the button effectively
+    // stuck disabled until you tabbed out of the textbox, which
+    // surfaced as "Apply 沒反應" against an obviously-typed value.
+    // Dropping the gate fixes the bug AND enables the clear-name flow
+    // without an extra "Clear" button.
+    [RelayCommand]
     private void Apply() => _parent.ApplyRename(this);
 }
