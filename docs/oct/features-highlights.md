@@ -1,112 +1,106 @@
-# **CrimsonAtomtic** — Crimson Desert Save Editor
+# CrimsonAtomtic — Crimson Desert Save Editor
 
-> Cross-version save editor for **Crimson Desert** — supports patches **1.05 / 1.06 / 1.07** with auto schema detection. Single-file Native AOT executable, no .NET runtime to install. Steam / Epic / Game Pass (plain folder) saves auto-detected.
+A free save editor for **Crimson Desert** — works with game patches **1.05 / 1.06 / 1.07** and finds your save file automatically whether you bought the game on Steam, Epic, or Game Pass.
 
----
-
-## Quick highlights
-
-| Area | What you get |
-|:-|:-|
-| **Save engine** | Full ChaCha20 + HMAC + LZ4 round-trip — *zero* tolerance for byte drift |
-| **Localization** | 14 PALOC languages mirrored from the game install (en / zh-tw / zh-cn / jpn / kor / ger / fre / ita / spa-es / spa-mx / rus / tur / pol / por-br) |
-| **Safety** | Auto-backup *before every write* — 6-version retention per slot, scoped per Steam / Epic / Game Pass |
-| **Editing surface** | Per-field scalar edits + 8 specialized dialogs + 7 bulk sweeps |
-| **Resolved names** | **32** key-resolver bridges (Item / Mission / Quest / Stage / Knowledge / Character / Skill / Store / Region / GameAdvice / …) |
-| **Native AOT** | ~24 MB single .exe, trimmed, no GC stalls on click |
+Just download one `.exe`, double-click it, no installer.
 
 ---
 
-## Specialized editors
+## Quick rundown
 
-- **Items** — Picker with icon search, multi-language name match, stack count, endurance, transferred-item tracking
-- **Sockets** — Fill / Change / Clear per slot, Apply Set (3 built-in + 3 user-defined gem sets), works on equipped gear AND inventory
-- **Dye** — RGBA + grime + material + color-group dropdowns, per-slot, driven by game's own `dye*.pabgb` (replaces the old PyQt5 JSON pack)
-- **Rename Mercenary / Pet** — UTF-8 in-save rename, portrait column with NPC head-shots from PAZ + class glyph fallback
-- **Vendor Buyback** — Lists every sold item across all stores; per-row Remove or *Jump to item in main editor*
-- **Abyss Gates** — Per-gate Lock/Unlock dialog AND bulk "Unlock All" (map discovery layer)
-- **Sealed Abyss Artifact Challenges** — Per-challenge **Mark Complete** + Bulk "Complete all". Pattern B v1 recipe verified on Shield II / Spear I / Hooves II / Slash III
-- **Item Dye master** — Lists every dyed item; Edit opens a per-item slot editor
-
----
-
-## Bulk operations (with **deferred-redecode batch** = 200× speedup)
-
-- [x] Bulk-complete held Sealed Abyss Artifact challenges
-- [x] Unlock all Abyss Gates (Knowledge bulk-inject)
-- [x] Fill all item stacks to max
-- [x] Drop all Sealed Abyss Artifacts from inventory
-- [x] Apply gem set across all sockets of a target item
-- [x] Multi-scalar Dye slot Apply
-- [ ] *(planned)* Bulk Pattern B v2 for multi-objective challenges
-
-> Every length-changing edit used to trigger a full body re-decode (~25 ms / 5 MB body). The deferred batch suspends per-call decode and commits *one* re-decode at end. Bulk SA sweep went from **~10 s → <1 s** on 141 challenges.
+- **Items** — edit stack counts and durability; search across every bag at once; fill all stacks to max with one click
+- **Dye your gear** — pick colors from a **visual palette grid** (the exact colors the game itself uses); change material (cloth / leather / metal) and grime per dye slot
+- **Sockets / Gems** — put any gem in any socket on any item (equipped or in bags); save your own gem sets for one-click apply
+- **Rename mounts, mercenaries, and pets** — give your horse a better name; full Unicode support
+- **Recover sold items** — accidentally sold something to a vendor? Vendor Buyback lists every item sitting in a store's queue, one click to bring it back
+- **Abyss Gates** — unlock individual gates or all of them at once
+- **Sealed Abyss Artifact challenges** — mark a challenge as complete after picking up the artifact in-game; a bulk version completes every eligible challenge in one click
+- **Find anything** — search all items by name in any of the 14 game languages; browse all 600+ characters with portraits
 
 ---
 
-## Discovery / navigation
+## In a bit more detail
 
-- **Find Items** — flat-list every item slot across all 18 containers + Go button to navigate the block tree
-- **Browse Characters / NPCs** — 600+ characters with portraits; doubles as a `CharacterKey` *picker* for field editing
-- **Browse Character References** — every `CharacterKey` referenced anywhere in the save (top-level + nested) with Jump-to-block
+### Items
 
-> ⚠ Browser + picker show a banner: *"資料串接不一定正確"* / *"Reference linkage is best-effort — cross-verify before relying on the resolved name."*
+Search the entire save by item name — the search box matches in **any of the 14 game languages**, so you can type 真皮 or *leather* or *cuir*, whatever language you play in. The editor walks every bag at once: your storage, your equipped gear, your mercenaries' inventories, and even your mounts' saddlebags.
+
+Per-item, you can change stack count, durability, the "new" flag, the lock flag — anything the game stores on the item. Or use **Fill stacks to max** to top up every stack across every bag in one go.
+
+### Dye
+
+A picker dialog with a **visual color palette** — the same 109 colors the in-game dye system uses for each theme. Click a color, the editor writes it back to your save. Works on items in your bags and items you (or Damine / Oongka / your mounts) are currently wearing.
+
+You can also change the material (cloth / leather / metal / etc.) and the dirt-and-wear level per slot.
+
+### Sockets / Gems
+
+Three actions per socket: **Fill** (empty → put a gem in), **Change** (replace one gem with another), **Clear** (gem → empty). Works on every socket-bearing item including currently equipped weapons and armor.
+
+The **Apply Set** dropdown lets you take a saved gem layout and apply it to a whole weapon in one click. 3 built-in sets are included; you can save 3 of your own under `Tools → Edit Custom Gem Sets`.
+
+### Mounts and Mercenaries
+
+Rename any of them — your horses, your wagon, your balloon, any tamed animal, any human follower. Full Unicode names supported.
+
+### Vendor Buyback
+
+Lists every item sitting in any store's buyback queue. Per-row **Remove** drops it (useful for cleanup); the **Jump…** button takes you straight to the item in the main editor view so you can edit it before recovering it.
+
+### Abyss Gates
+
+A per-gate dialog with Lock / Unlock toggles, OR a bulk **Unlock All** menu item. Useful if you want to skip the discovery-by-walking phase.
+
+### Sealed Abyss Artifact challenges
+
+If you've picked up a Sealed Abyss Artifact in-game but haven't triggered the challenge completion, the editor can write what the game would write naturally — then you just claim the reward in-game as if you completed the challenge yourself. Per-challenge button on each row, OR **Complete all held challenges** to run the whole batch.
+
+The button is grayed out (with a tooltip explaining why) for challenges that aren't ready — e.g. you haven't picked up the artifact yet, or you've already completed it.
+
+### Browse characters / NPCs
+
+A grid of every character in the game (600+) with portraits and resolved names. Useful as a reference, or as a picker when you're editing a field that wants a CharacterKey value.
 
 ---
 
-## What you can edit directly in the block tree
+## Safety
 
-For every scalar field the schema declares:
-
-```
-bool  u8/u16/u32/u64  i8/i16/i32/i64  f32  f64
-*Key typedefs (ItemKey, MissionKey, CharacterKey, …)
-StringInfoKey (Jenkins hash → name reverse)
-f32x3 / f32x4 / u32x4 composite (position, quaternion, SceneObjectUuid)
-```
-
-Inline `dynamic_array<u32>` / `<u64>` rendering shows contents inline (up to 12 elements, then a `… (N more)` continuation).
+- **Every** save edit creates a backup automatically — 6 versions kept per save slot
+- Backups stay organized per platform — Steam saves, Epic saves, and Game Pass saves don't mix
+- Use `File → Restore from Backup…` to roll back any time
+- If you try to quit with unsaved changes, the editor will ask first
 
 ---
 
-## Change journal
+## Languages
 
-Every mutation logs a per-operation summary. **Close-on-dirty modal** confirms before quitting with unsaved changes. Tools → Review Pending Changes lists everything since the last Save.
+In-game text (item names, quest titles, character names, …) shows in your game's language. All 14 are supported:
+
+English · 繁體中文 · 简体中文 · 日本語 · 한국어 · Deutsch · Français · Italiano · Español (ES + MX) · Русский · Türkçe · Polski · Português (BR)
+
+The editor's own menus are available in **English**, **繁體中文**, and **日本語** — switch any time under `Settings → Language`.
 
 ---
 
 ## Requirements
 
-- Windows 10 / 11 (x64)
-- A licensed Crimson Desert install (game files needed for icon / portrait / PALOC lookups — *the editor never touches your install*; reads only)
-- ~50 MB free under `%LOCALAPPDATA%\CrimsonAtomtic\` for icon cache + backup tree
+- Windows 10 or 11 (64-bit)
+- Crimson Desert installed on your PC (the editor reads icons, portraits, and translated names from the game folder — but **never modifies anything in your game install**)
+- About 50 MB free disk space for backups and the icon cache
+
+No .NET runtime to install. No installer to run.
 
 ---
 
-## Source / docs
+## ⚠ Please read before using
 
-- Source: *(GitHub URL — fill in before posting)*
-- Architecture notes: see `docs/architecture.md` and `docs/status.md` in the repo
-
----
-
-## Spoiler: under the hood
-
->! **Native core**: Rust crate (`crimson-rs`, MIT-licensed fork) reading binary save format with byte-perfect round-trip guarantees. PyO3 Python bindings for diff tooling + C ABI for the C# UI.
->! **UI**: Avalonia UI 12 on .NET 10, AOT-published.
->! **Save format**: header { magic, version, flags, payload_size, uncompressed_size } + ChaCha20-encrypted + HMAC-SHA256-tagged + LZ4-compressed body. Body = schema (TypeName + field layout per class) + TOC + per-block payloads.
->! **Localization**: PALOC binary catalog files extracted from the game's PAZ archives. `(typeByte, key)` → string lookup, plus a `lookup_display_name` hash-hop variant for Mission / Quest / Stage / Knowledge titles.
-
----
-
-## ⚠ Disclaimer
-
->! 本編輯器**不保證**能正常運作，也沒有針對所有 save 結構做詳細檢查。如使用後造成資料錯誤、存檔損壞或任何遊戲帳號相關問題，作者**不負任何責任**。
+>! This editor is provided **as-is** with no warranty. Editing save files is inherently risky — even with auto-backups, no tool can guarantee your save will keep working after a future game update.
 >!
->! This editor is provided **as-is** with no warranty of correct operation and no exhaustive validation of save structures. The author accepts **no responsibility** for any data corruption, save damage, or account-related issues that may result from its use.
+>! - The author is **not responsible** for save corruption, lost progress, account issues, or any other consequence
+>! - Always test on a backed-up save first
+>! - Steam / platform achievements only fire on the natural in-game completion path — completing content via the editor does **not** unlock achievements
+>! - This is a **single-player** tool — don't use it if Crimson Desert ever adds online modes
 >!
->! First-launch prompts an in-app dialog; accepting it persists to `%LOCALAPPDATA%\CrimsonAtomtic\settings.json` so the prompt only fires once per machine.
-
-* * *
-
-*Generated against the* `feat(c#): character refs browser + CharacterKey picker + first-launch disclaimer` *checkpoint, 2026-05-17.*
+>! 本編輯器**不保證**能正常運作。雖然每次寫入都會自動備份，但編輯存檔本身就有風險，且無法保證未來遊戲更新後仍能正常使用。作者**不負任何責任** — 包含存檔損壞、進度丟失、帳號封禁等任何後果。建議先在備份存檔上測試。Steam 或平台成就僅在遊戲內自然取得時觸發，無法透過編輯解鎖。
+>!
+>! 第一次啟動時會跳出同意對話框，同意後就不會再出現。
