@@ -3,362 +3,364 @@
                     xmlns:sys="clr-namespace:System;assembly=System.Runtime">
 
   <!--
-    TODO: Japanese translations. Currently a verbatim copy of en.axaml
-    so the i18n plumbing works end-to-end before translation begins.
-    Translate each <sys:String> value (NOT the x:Key attribute) into
-    Japanese; preserve the access-key underscore convention on menu
-    entries. Keep en.axaml as the source of truth — re-sync new keys
-    here whenever en.axaml gains entries.
+    Japanese (ja) translations.
+    en.axaml is the source of truth — sync new keys here when en.axaml
+    gains entries. Technical identifiers (save-file field names with
+    leading underscores, schema class names, file paths, hex constants,
+    build-identifier terms like Pattern B v1 / FAR tracker / PALOC /
+    HMAC / iteminfo) are intentionally preserved verbatim — these are
+    debug/forensic surfaces that need to be greppable across English
+    docs and source code.
   -->
 
   <!-- Window / chrome -->
   <sys:String x:Key="WindowTitle">CrimsonAtomtic</sys:String>
 
   <!-- Menu -->
-  <sys:String x:Key="MenuFile">_File</sys:String>
-  <sys:String x:Key="MenuOpenSave">_Open Save…</sys:String>
-  <sys:String x:Key="MenuSave">_Save</sys:String>
-  <sys:String x:Key="MenuSaveAs">Save _As…</sys:String>
-  <sys:String x:Key="MenuExit">E_xit</sys:String>
-  <sys:String x:Key="MenuTools">_Tools</sys:String>
-  <sys:String x:Key="MenuBrowseLocalization">_Browse Localization…</sys:String>
-  <sys:String x:Key="MenuBrowseItems">Browse _Items…</sys:String>
-  <sys:String x:Key="MenuExtractIcons">_Extract Icons from Game Data…</sys:String>
-  <sys:String x:Key="MenuSetGameInstallFolder">Set _Game Install Folder…</sys:String>
-  <sys:String x:Key="SetGameInstallFolderInvalidTitle">Folder doesn't look like a Crimson Desert install</sys:String>
-  <sys:String x:Key="SetGameInstallFolderInvalidBody">The selected folder doesn't contain the required asset file (0020\0.pamt). Pick the directory that contains the game's 0000\, 0020\, … pack groups — typically &lt;Steam library&gt;\steamapps\common\Crimson Desert or the Epic / asset folder you copied out for Game Pass.</sys:String>
-  <sys:String x:Key="MenuRenameMercenary">Rename _Mercenary…</sys:String>
-  <sys:String x:Key="MenuEditItemSockets">Edit Item _Sockets…</sys:String>
-  <sys:String x:Key="SocketEditorHeader">Per-slot Fill / Change / Clear. Endurance is reset to 65535 (max) on Fill + Change so a fresh greater gem doesn't inherit the old slot's worn value. _validSocketCount auto-bumps when you fill a slot whose index is past the item's current cap (so the slot becomes visible in-game). You can fill any slot the underlying list pre-allocates (typically up to 5), regardless of the gamedata-defined limit. Saves to file on next File → Save.</sys:String>
-  <sys:String x:Key="SocketEditorColBag">Bag</sys:String>
-  <sys:String x:Key="SocketEditorColItem">Item</sys:String>
+  <sys:String x:Key="MenuFile">ファイル(_F)</sys:String>
+  <sys:String x:Key="MenuOpenSave">セーブを開く(_O)…</sys:String>
+  <sys:String x:Key="MenuSave">保存(_S)</sys:String>
+  <sys:String x:Key="MenuSaveAs">名前を付けて保存(_A)…</sys:String>
+  <sys:String x:Key="MenuExit">終了(_X)</sys:String>
+  <sys:String x:Key="MenuTools">ツール(_T)</sys:String>
+  <sys:String x:Key="MenuBrowseLocalization">ローカライズ文字列を参照(_B)…</sys:String>
+  <sys:String x:Key="MenuBrowseItems">アイテム一覧(_I)…</sys:String>
+  <sys:String x:Key="MenuExtractIcons">ゲームデータからアイコンを抽出(_E)…</sys:String>
+  <sys:String x:Key="MenuSetGameInstallFolder">ゲームインストールフォルダを設定(_G)…</sys:String>
+  <sys:String x:Key="SetGameInstallFolderInvalidTitle">このフォルダは Crimson Desert のインストール先には見えません</sys:String>
+  <sys:String x:Key="SetGameInstallFolderInvalidBody">選択したフォルダに必要なアセットファイル (0020\0.pamt) が見つかりません。ゲームの 0000\、0020\、… の各 pack group を含むディレクトリを選んでください — 通常は &lt;Steam library&gt;\steamapps\common\Crimson Desert、または Epic / Game Pass 用にコピーしたアセットフォルダです。</sys:String>
+  <sys:String x:Key="MenuRenameMercenary">傭兵の名前を変更(_M)…</sys:String>
+  <sys:String x:Key="MenuEditItemSockets">アイテムのソケットを編集(_S)…</sys:String>
+  <sys:String x:Key="SocketEditorHeader">スロット単位で Fill / Change / Clear します。Fill と Change の際は耐久値 (Endurance) を 65535 (最大) にリセットするので、新しい上位ジェムが古いスロットの消耗値を引き継ぎません。アイテムの現在の上限を超える index にジェムを入れると _validSocketCount が自動的に引き上げられます (ゲーム内でスロットが見えるようになります)。基底の list が事前確保しているスロット (通常 5 まで) は、ゲームデータ上の上限に関わらず埋められます。変更内容は次回の File → Save で書き込まれます。</sys:String>
+  <sys:String x:Key="SocketEditorColBag">バッグ</sys:String>
+  <sys:String x:Key="SocketEditorColItem">アイテム</sys:String>
   <sys:String x:Key="SocketEditorColItemKey">ItemKey</sys:String>
-  <sys:String x:Key="SocketEditorColSocket">Slot</sys:String>
-  <sys:String x:Key="SocketEditorColCurrentGem">Current gem</sys:String>
+  <sys:String x:Key="SocketEditorColSocket">スロット</sys:String>
+  <sys:String x:Key="SocketEditorColCurrentGem">現在のジェム</sys:String>
   <sys:String x:Key="SocketEditorColCurrentGemKey">GemKey</sys:String>
-  <sys:String x:Key="SocketEditorColAction">Action</sys:String>
-  <sys:String x:Key="SocketEditorColApplied">Status</sys:String>
-  <sys:String x:Key="SocketEditorChangeGem">Change…</sys:String>
-  <sys:String x:Key="SocketEditorFillGem">Fill…</sys:String>
-  <sys:String x:Key="SocketEditorClearGem">Clear</sys:String>
-  <sys:String x:Key="SocketEditorChangeGemTip">Open the gem picker and overwrite this filled slot. Resets _currentEndurance to 65535 (max) so greater gems start fresh.</sys:String>
-  <sys:String x:Key="SocketEditorFillGemTip">Open the gem picker and fill this empty slot. Auto-bumps _validSocketCount on the parent item if needed so the slot becomes visible in-game.</sys:String>
-  <sys:String x:Key="SocketEditorClearGemTip">Demote this socket back to empty. Both _currentEndurance and _itemKey become absent; mask flips to [0x00].</sys:String>
-  <sys:String x:Key="SocketEditorColState">State</sys:String>
-  <sys:String x:Key="SocketEditorApplySetItemLabel">Apply set to:</sys:String>
-  <sys:String x:Key="SocketEditorApplySetSetLabel">Set:</sys:String>
-  <sys:String x:Key="SocketEditorApplySetApply">Apply</sys:String>
-  <sys:String x:Key="SocketEditorApplySetEditCustom">Edit custom sets…</sys:String>
-  <sys:String x:Key="SocketEditorApplySetEditCustomTip">Define / rename the three user-custom gem sets. Saved to settings.json.</sys:String>
-  <sys:String x:Key="SocketEditorFilterLabel">Filter:</sys:String>
-  <sys:String x:Key="SocketEditorFilterWatermark">Type to filter — item name / bag / item key shows all 5 slots; gem name / gem key narrows to matching slots only…</sys:String>
+  <sys:String x:Key="SocketEditorColAction">操作</sys:String>
+  <sys:String x:Key="SocketEditorColApplied">ステータス</sys:String>
+  <sys:String x:Key="SocketEditorChangeGem">変更…</sys:String>
+  <sys:String x:Key="SocketEditorFillGem">セット…</sys:String>
+  <sys:String x:Key="SocketEditorClearGem">クリア</sys:String>
+  <sys:String x:Key="SocketEditorChangeGemTip">ジェム選択ダイアログを開き、このスロットを上書きします。_currentEndurance を 65535 (最大) にリセットするので、上位ジェムは満タンから始まります。</sys:String>
+  <sys:String x:Key="SocketEditorFillGemTip">ジェム選択ダイアログを開き、この空きスロットを埋めます。必要に応じて親アイテムの _validSocketCount を自動的に引き上げ、ゲーム内でスロットを可視化します。</sys:String>
+  <sys:String x:Key="SocketEditorClearGemTip">このソケットを空に戻します。_currentEndurance と _itemKey の両方が absent になり、mask は [0x00] に反転します。</sys:String>
+  <sys:String x:Key="SocketEditorColState">状態</sys:String>
+  <sys:String x:Key="SocketEditorApplySetItemLabel">適用先：</sys:String>
+  <sys:String x:Key="SocketEditorApplySetSetLabel">セット：</sys:String>
+  <sys:String x:Key="SocketEditorApplySetApply">適用</sys:String>
+  <sys:String x:Key="SocketEditorApplySetEditCustom">カスタムセットを編集…</sys:String>
+  <sys:String x:Key="SocketEditorApplySetEditCustomTip">3 つのユーザーカスタムジェムセットを定義 / リネームします。settings.json に保存されます。</sys:String>
+  <sys:String x:Key="SocketEditorFilterLabel">フィルター：</sys:String>
+  <sys:String x:Key="SocketEditorFilterWatermark">入力で絞り込み — アイテム名 / バッグ / item key は 5 スロット全てを表示。ジェム名 / gem key は一致するスロットだけに絞り込み…</sys:String>
 
   <!-- Custom gem sets editor (launched from Sockets editor toolbar) -->
-  <sys:String x:Key="CustomGemSetsWindowTitle">Edit custom gem sets</sys:String>
-  <sys:String x:Key="CustomGemSetsHeader">Three user-definable gem sets surfaced alongside the built-in three in the Sockets editor's Apply-Set toolbar. Each set has a label + up to 5 ItemKey entries (blank cells are skipped). Applying a set with N entries overwrites slots 0..N-1 of the target item and leaves slots [N..max] alone. Saves to settings.json on click.</sys:String>
-  <sys:String x:Key="CustomGemSetsSave">Save</sys:String>
-  <sys:String x:Key="CustomGemSetsClose">Close</sys:String>
-  <sys:String x:Key="SocketEditorClose">Close</sys:String>
-  <sys:String x:Key="SocketEditorNotAvailableTitle">No filled sockets in this save</sys:String>
-  <sys:String x:Key="SocketEditorNotAvailableBody">The loaded save has no items with filled sockets (or no items with a _socketSaveDataList at all). Filled sockets appear here once you've embedded a gem in-game.</sys:String>
-  <sys:String x:Key="SocketEditorPickerTitle">Pick a gem</sys:String>
-  <sys:String x:Key="RenameMercenaryHeader">Rename mercenaries / pets. The Name column shows the character/template name resolved from CharacterKey (same source as the main window's mercenaryDataList Name column) — use it to recognise each row. Your custom rename (already stored as _mercenaryName) is NOT shown — read-side FFI pending. Type a new name and click Apply per row. Saves to the file on next File → Save.</sys:String>
-  <sys:String x:Key="RenameMercenaryColIdx">Index</sys:String>
+  <sys:String x:Key="CustomGemSetsWindowTitle">カスタムジェムセットを編集</sys:String>
+  <sys:String x:Key="CustomGemSetsHeader">ソケットエディタの Apply-Set ツールバーに、組み込みの 3 つと並んで表示される 3 つのユーザー定義ジェムセットです。各セットはラベル + 最大 5 個の ItemKey エントリ (空欄はスキップ) を持ちます。N 個のエントリを持つセットを適用すると、対象アイテムのスロット 0..N-1 が上書きされ、[N..max] は変更されません。クリックで settings.json に保存されます。</sys:String>
+  <sys:String x:Key="CustomGemSetsSave">保存</sys:String>
+  <sys:String x:Key="CustomGemSetsClose">閉じる</sys:String>
+  <sys:String x:Key="SocketEditorClose">閉じる</sys:String>
+  <sys:String x:Key="SocketEditorNotAvailableTitle">このセーブには埋まったソケットがありません</sys:String>
+  <sys:String x:Key="SocketEditorNotAvailableBody">読み込まれたセーブに、ジェムが入ったソケットを持つアイテムがありません (または _socketSaveDataList を持つアイテムが一つもありません)。ゲーム内でジェムを装着すると、ここに表示されます。</sys:String>
+  <sys:String x:Key="SocketEditorPickerTitle">ジェムを選択</sys:String>
+  <sys:String x:Key="RenameMercenaryHeader">傭兵 / ペットの名前を変更します。「名前」列には CharacterKey から解決されたキャラクター / テンプレート名が表示されます (メインウィンドウの mercenaryDataList の Name 列と同じソース) — 各行を識別するために使用してください。あなたのカスタム名 (_mercenaryName に保存済み) は表示されません — read-side FFI は未実装です。新しい名前を入力し、行ごとに Apply をクリックしてください。変更内容は次回の File → Save で書き込まれます。</sys:String>
+  <sys:String x:Key="RenameMercenaryColIdx">インデックス</sys:String>
   <sys:String x:Key="RenameMercenaryColMercNo">MercNo</sys:String>
   <sys:String x:Key="RenameMercenaryColCharKey">CharKey</sys:String>
-  <sys:String x:Key="RenameMercenaryColPortrait">Portrait</sys:String>
-  <sys:String x:Key="RenameMercenaryColCharName">Name</sys:String>
-  <sys:String x:Key="RenameMercenaryColType">Type</sys:String>
-  <sys:String x:Key="RenameMercenaryColEquip">Equip</sys:String>
-  <sys:String x:Key="RenameMercenaryColNewName">New name (UTF-8)</sys:String>
-  <sys:String x:Key="RenameMercenaryColApply">Action</sys:String>
-  <sys:String x:Key="RenameMercenaryColApplied">Applied</sys:String>
-  <sys:String x:Key="RenameMercenaryApply">Apply</sys:String>
-  <sys:String x:Key="RenameMercenaryClose">Close</sys:String>
-  <sys:String x:Key="RenameMercenaryNewNameWatermark">enter new name…</sys:String>
-  <sys:String x:Key="RenameMercenaryNotAvailableTitle">No mercenaries to rename</sys:String>
-  <sys:String x:Key="RenameMercenaryNotAvailableBody">The loaded save doesn't have a MercenaryClanSaveData block, or its _mercenaryDataList is empty / unreadable. Mercenaries appear here once you've recruited at least one in-game.</sys:String>
-  <sys:String x:Key="MenuFillAllStacks">Fill _All Stacks Across Every Inventory…</sys:String>
-  <sys:String x:Key="MenuUnlockAllAbyssGates">_Unlock All Abyss Gates (Map Discovery)…</sys:String>
-  <sys:String x:Key="MenuBulkCompleteHeldSAChallenges">_Complete All Held Sealed Abyss Artifact Challenges…</sys:String>
-  <sys:String x:Key="MenuEditAbyssGates">_Edit Abyss Gates (Lock/Unlock per gate)…</sys:String>
-  <sys:String x:Key="MenuEditItemDyes">Edit Item _Dyes…</sys:String>
-  <sys:String x:Key="MenuVendorBuyback">_Vendor Buyback…</sys:String>
-  <sys:String x:Key="MenuReviewChanges">_Review Pending Changes…</sys:String>
+  <sys:String x:Key="RenameMercenaryColPortrait">ポートレート</sys:String>
+  <sys:String x:Key="RenameMercenaryColCharName">名前</sys:String>
+  <sys:String x:Key="RenameMercenaryColType">種類</sys:String>
+  <sys:String x:Key="RenameMercenaryColEquip">装備</sys:String>
+  <sys:String x:Key="RenameMercenaryColNewName">新しい名前 (UTF-8)</sys:String>
+  <sys:String x:Key="RenameMercenaryColApply">操作</sys:String>
+  <sys:String x:Key="RenameMercenaryColApplied">適用済み</sys:String>
+  <sys:String x:Key="RenameMercenaryApply">適用</sys:String>
+  <sys:String x:Key="RenameMercenaryClose">閉じる</sys:String>
+  <sys:String x:Key="RenameMercenaryNewNameWatermark">新しい名前を入力…</sys:String>
+  <sys:String x:Key="RenameMercenaryNotAvailableTitle">名前を変更できる傭兵がいません</sys:String>
+  <sys:String x:Key="RenameMercenaryNotAvailableBody">読み込まれたセーブに MercenaryClanSaveData block がないか、その _mercenaryDataList が空 / 読み込み不能です。ゲーム内で 1 体以上の傭兵を雇用すると、ここに傭兵リストが表示されます。</sys:String>
+  <sys:String x:Key="MenuFillAllStacks">全インベントリのスタックを最大まで満たす(_A)…</sys:String>
+  <sys:String x:Key="MenuUnlockAllAbyssGates">全てのアビスゲートをアンロック (マップ発見)(_U)…</sys:String>
+  <sys:String x:Key="MenuBulkCompleteHeldSAChallenges">所持中の封印アビス遺物チャレンジを全てクリア(_C)…</sys:String>
+  <sys:String x:Key="MenuEditAbyssGates">アビスゲートを編集 (個別にロック/アンロック)(_E)…</sys:String>
+  <sys:String x:Key="MenuEditItemDyes">アイテムの染色を編集(_D)…</sys:String>
+  <sys:String x:Key="MenuVendorBuyback">商人の買い戻しリスト(_V)…</sys:String>
+  <sys:String x:Key="MenuReviewChanges">未保存の変更を確認(_R)…</sys:String>
 
   <!-- Vendor Buyback dialog (Tools menu) -->
-  <sys:String x:Key="VendorBuybackWindowTitle">Vendor Buyback</sys:String>
-  <sys:String x:Key="VendorBuybackHeader">View + Remove items the player has sold to vendors. Each row maps to one StoreDataSaveData._storeSoldItemDataList element. The Remove button deletes the entry from that store's buyback queue (frees the slot); subsequent siblings in the same store shift down by 1 automatically. "Move back to inventory" is a planned follow-up. Saves to file on next File → Save.</sys:String>
-  <sys:String x:Key="VendorBuybackFilterLabel">Filter:</sys:String>
-  <sys:String x:Key="VendorBuybackFilterWatermark">Type to filter — store name / store key shows every sold item in that store; item name / item key narrows per-row…</sys:String>
-  <sys:String x:Key="VendorBuybackColStore">Store</sys:String>
+  <sys:String x:Key="VendorBuybackWindowTitle">商人の買い戻し</sys:String>
+  <sys:String x:Key="VendorBuybackHeader">プレイヤーが商人に売却したアイテムを表示 + 削除します。各行は StoreDataSaveData._storeSoldItemDataList の要素 1 つに対応します。Remove ボタンはその商人の買い戻しキューからエントリを削除し (スロットを解放)、同じ商人の後続要素は自動的に 1 つ下にシフトします。「インベントリに戻す」機能は今後の予定です。変更内容は次回の File → Save で書き込まれます。</sys:String>
+  <sys:String x:Key="VendorBuybackFilterLabel">フィルター：</sys:String>
+  <sys:String x:Key="VendorBuybackFilterWatermark">入力で絞り込み — 商人名 / store key はその商人の全売却アイテムを表示。アイテム名 / item key は行単位で絞り込み…</sys:String>
+  <sys:String x:Key="VendorBuybackColStore">商人</sys:String>
   <sys:String x:Key="VendorBuybackColStoreKey">StoreKey</sys:String>
-  <sys:String x:Key="VendorBuybackColItem">Item</sys:String>
+  <sys:String x:Key="VendorBuybackColItem">アイテム</sys:String>
   <sys:String x:Key="VendorBuybackColItemKey">ItemKey</sys:String>
-  <sys:String x:Key="VendorBuybackColStack">Stack</sys:String>
-  <sys:String x:Key="VendorBuybackColEndurance">Endurance</sys:String>
-  <sys:String x:Key="VendorBuybackColSoldAt">SoldAt (ticks)</sys:String>
-  <sys:String x:Key="VendorBuybackColAction">Action</sys:String>
-  <sys:String x:Key="VendorBuybackColStatus">Status</sys:String>
-  <sys:String x:Key="VendorBuybackRemove">Remove</sys:String>
-  <sys:String x:Key="VendorBuybackRemoveTip">Delete this entry from the store's buyback queue. The slot frees up so other items can age in. Cannot be undone within the session; reload the save without writing to revert.</sys:String>
-  <sys:String x:Key="VendorBuybackJump">Jump…</sys:String>
-  <sys:String x:Key="VendorBuybackJumpTip">Close this dialog and open the buyback item in the main editor's block tree. Use the generic per-field editor there to modify stack count, endurance, sockets, dye, etc. — same surface as inventory items.</sys:String>
-  <sys:String x:Key="VendorBuybackClose">Close</sys:String>
-  <sys:String x:Key="VendorBuybackNotAvailableTitle">No vendor buyback entries</sys:String>
-  <sys:String x:Key="VendorBuybackNotAvailableBody">The loaded save has no StoreDataSaveData entry with a non-empty _storeSoldItemDataList. Sell items to a vendor in-game to populate the buyback queue.</sys:String>
+  <sys:String x:Key="VendorBuybackColStack">スタック</sys:String>
+  <sys:String x:Key="VendorBuybackColEndurance">耐久</sys:String>
+  <sys:String x:Key="VendorBuybackColSoldAt">売却時刻 (ticks)</sys:String>
+  <sys:String x:Key="VendorBuybackColAction">操作</sys:String>
+  <sys:String x:Key="VendorBuybackColStatus">ステータス</sys:String>
+  <sys:String x:Key="VendorBuybackRemove">削除</sys:String>
+  <sys:String x:Key="VendorBuybackRemoveTip">この商人の買い戻しキューから本エントリを削除します。スロットが空くと他のアイテムが流れ込めるようになります。セッション中は取り消し不可。元に戻すにはセーブを書き込まずに再読み込みしてください。</sys:String>
+  <sys:String x:Key="VendorBuybackJump">ジャンプ…</sys:String>
+  <sys:String x:Key="VendorBuybackJumpTip">このダイアログを閉じ、メインエディタの block ツリーで対象アイテムを開きます。そこからは通常の per-field エディタでスタック数、耐久、ソケット、染色などをインベントリアイテムと同じ感覚で編集できます。</sys:String>
+  <sys:String x:Key="VendorBuybackClose">閉じる</sys:String>
+  <sys:String x:Key="VendorBuybackNotAvailableTitle">商人の買い戻しエントリがありません</sys:String>
+  <sys:String x:Key="VendorBuybackNotAvailableBody">読み込まれたセーブに、非空の _storeSoldItemDataList を持つ StoreDataSaveData がありません。ゲーム内で商人にアイテムを売却し、買い戻しキューを作成してください。</sys:String>
 
   <!-- Change summary dialog (review pending edits + close-on-dirty confirm) -->
-  <sys:String x:Key="ChangeSummaryWindowTitle">Pending changes</sys:String>
-  <sys:String x:Key="ChangeSummaryHeaderClose">Unsaved changes — save before exiting?</sys:String>
-  <sys:String x:Key="ChangeSummarySubHeaderClose">The edits listed below haven't been written to disk yet. Save to commit them, Discard to exit without saving (the previous on-disk state is preserved), or Cancel to keep editing.</sys:String>
-  <sys:String x:Key="ChangeSummaryHeaderReview">Pending changes since last save</sys:String>
-  <sys:String x:Key="ChangeSummarySubHeaderReview">Read-only list of edits applied via the UI since the save was loaded (or since the last File → Save). Reload the save to drop all of them; File → Save to commit.</sys:String>
-  <sys:String x:Key="ChangeSummaryColTime">Time</sys:String>
-  <sys:String x:Key="ChangeSummaryColCategory">Area</sys:String>
-  <sys:String x:Key="ChangeSummaryColSummary">Change</sys:String>
-  <sys:String x:Key="ChangeSummarySave">Save</sys:String>
-  <sys:String x:Key="ChangeSummaryDiscard">Discard</sys:String>
-  <sys:String x:Key="ChangeSummaryDiscardExit">Discard &amp; exit</sys:String>
-  <sys:String x:Key="ChangeSummaryCancel">Cancel</sys:String>
-  <sys:String x:Key="ChangeSummaryNoChangesTitle">No pending changes</sys:String>
-  <sys:String x:Key="ChangeSummaryNoChangesBody">Nothing has been edited since the save was loaded (or since the last File → Save).</sys:String>
+  <sys:String x:Key="ChangeSummaryWindowTitle">未保存の変更</sys:String>
+  <sys:String x:Key="ChangeSummaryHeaderClose">未保存の変更があります — 終了前に保存しますか？</sys:String>
+  <sys:String x:Key="ChangeSummarySubHeaderClose">下記の編集はまだディスクに書き込まれていません。「保存」で書き込んで終了、「破棄して終了」で保存せず終了 (ディスク上の旧状態は維持)、「キャンセル」で編集を続行します。</sys:String>
+  <sys:String x:Key="ChangeSummaryHeaderReview">前回保存からの変更</sys:String>
+  <sys:String x:Key="ChangeSummarySubHeaderReview">セーブを読み込んで以降 (または前回の File → Save 以降) に UI から適用された編集の読み取り専用リストです。再読み込みで全変更を破棄、File → Save で書き込みます。</sys:String>
+  <sys:String x:Key="ChangeSummaryColTime">時刻</sys:String>
+  <sys:String x:Key="ChangeSummaryColCategory">領域</sys:String>
+  <sys:String x:Key="ChangeSummaryColSummary">変更</sys:String>
+  <sys:String x:Key="ChangeSummarySave">保存</sys:String>
+  <sys:String x:Key="ChangeSummaryDiscard">破棄</sys:String>
+  <sys:String x:Key="ChangeSummaryDiscardExit">破棄して終了</sys:String>
+  <sys:String x:Key="ChangeSummaryCancel">キャンセル</sys:String>
+  <sys:String x:Key="ChangeSummaryNoChangesTitle">未保存の変更はありません</sys:String>
+  <sys:String x:Key="ChangeSummaryNoChangesBody">セーブを読み込んで以降 (または前回の File → Save 以降)、編集は行われていません。</sys:String>
 
   <!-- Dye editor master dialog -->
-  <sys:String x:Key="DyeEditorWindowTitle">Edit item dyes</sys:String>
-  <sys:String x:Key="DyeEditorHeader">Per-item dye editing. Lists every item whose _itemDyeDataList is present + non-empty. Click Edit to mutate R/G/B/A + grime + material + color group on individual slots. v1 scope: edit-existing-dye only — adding dye to an undyed item is deferred until the upstream set_object_list_present ABI lands.</sys:String>
-  <sys:String x:Key="DyeEditorSearchPlaceholder">Filter by item name, bag, or ItemKey…</sys:String>
-  <sys:String x:Key="DyeEditorColIcon">Icon</sys:String>
-  <sys:String x:Key="DyeEditorColBag">Bag</sys:String>
-  <sys:String x:Key="DyeEditorColItem">Item</sys:String>
+  <sys:String x:Key="DyeEditorWindowTitle">アイテムの染色を編集</sys:String>
+  <sys:String x:Key="DyeEditorHeader">アイテム単位で染色を編集します。_itemDyeDataList が存在し非空の全アイテムを一覧表示します。Edit をクリックすると各スロットの R/G/B/A + グライム + マテリアル + カラーグループを変更できます。v1 スコープ：既存染色の編集のみ — 未染色アイテムへの染色追加は、上流の set_object_list_present ABI 提供を待ちます。</sys:String>
+  <sys:String x:Key="DyeEditorSearchPlaceholder">アイテム名、バッグ、ItemKey で絞り込み…</sys:String>
+  <sys:String x:Key="DyeEditorColIcon">アイコン</sys:String>
+  <sys:String x:Key="DyeEditorColBag">バッグ</sys:String>
+  <sys:String x:Key="DyeEditorColItem">アイテム</sys:String>
   <sys:String x:Key="DyeEditorColItemKey">ItemKey</sys:String>
-  <sys:String x:Key="DyeEditorColSlotCount">Slots</sys:String>
-  <sys:String x:Key="DyeEditorColAction">Action</sys:String>
-  <sys:String x:Key="DyeEditorEdit">Edit…</sys:String>
-  <sys:String x:Key="DyeEditorEditTip">Open the per-slot editor for this item's dye list. The dialog stays open after applying so you can edit several slots in sequence.</sys:String>
-  <sys:String x:Key="DyeEditorClose">Close</sys:String>
-  <sys:String x:Key="DyeEditorNotAvailableTitle">No dyed items in this save</sys:String>
-  <sys:String x:Key="DyeEditorNotAvailableBody">No item carried _itemDyeDataList with at least one slot. Either the player hasn't dyed anything yet, or this save schema has _itemDyeDataList under a different field name (re-run vendor/crimson-rs/_probe_item_dye_data to verify).</sys:String>
+  <sys:String x:Key="DyeEditorColSlotCount">スロット数</sys:String>
+  <sys:String x:Key="DyeEditorColAction">操作</sys:String>
+  <sys:String x:Key="DyeEditorEdit">編集…</sys:String>
+  <sys:String x:Key="DyeEditorEditTip">このアイテムの染色リストに対するスロット単位のエディタを開きます。Apply 後もダイアログは開いたままなので、複数スロットを連続で編集できます。</sys:String>
+  <sys:String x:Key="DyeEditorClose">閉じる</sys:String>
+  <sys:String x:Key="DyeEditorNotAvailableTitle">このセーブには染色済みアイテムがありません</sys:String>
+  <sys:String x:Key="DyeEditorNotAvailableBody">_itemDyeDataList を少なくとも 1 スロット保持するアイテムがありません。プレイヤーがまだ何も染色していないか、または本セーブの schema が _itemDyeDataList を別のフィールド名で保持しています (vendor/crimson-rs/_probe_item_dye_data を再実行して確認してください)。</sys:String>
 
   <!-- Dye slot editor child dialog -->
-  <sys:String x:Key="DyeSlotEditorWindowTitle">Edit dye slots</sys:String>
-  <sys:String x:Key="DyeSlotColSlot">Slot</sys:String>
-  <sys:String x:Key="DyeSlotColGrime">Grime</sys:String>
-  <sys:String x:Key="DyeSlotColMaterial">Material</sys:String>
-  <sys:String x:Key="DyeSlotColColorGroup">Color group</sys:String>
-  <sys:String x:Key="DyeSlotColAction">Action</sys:String>
-  <sys:String x:Key="DyeSlotColStatus">Status</sys:String>
-  <sys:String x:Key="DyeSlotApply">Apply</sys:String>
-  <sys:String x:Key="DyeSlotEditorClose">Close</sys:String>
-  <sys:String x:Key="AbyssGatesWindowTitle">Edit Abyss Gates</sys:String>
-  <sys:String x:Key="AbyssGatesHeader">Per-gate Lock/Unlock toggle. Writes _initStateNameHash on every nested FieldGimmickSaveData element inside FieldSaveData._fieldGimmickSaveDataList (Default 0x866c7489 ↔ Activated 0xe300acfe). Idle (scenery) and Unknown rows are read-only to avoid destabilising non-gate gimmicks. Saves to the file on next File → Save.</sys:String>
-  <sys:String x:Key="AbyssGatesColOwnerLevel">Owner level</sys:String>
+  <sys:String x:Key="DyeSlotEditorWindowTitle">染色スロットを編集</sys:String>
+  <sys:String x:Key="DyeSlotColSlot">スロット</sys:String>
+  <sys:String x:Key="DyeSlotColGrime">グライム</sys:String>
+  <sys:String x:Key="DyeSlotColMaterial">マテリアル</sys:String>
+  <sys:String x:Key="DyeSlotColColorGroup">カラーグループ</sys:String>
+  <sys:String x:Key="DyeSlotColAction">操作</sys:String>
+  <sys:String x:Key="DyeSlotColStatus">ステータス</sys:String>
+  <sys:String x:Key="DyeSlotApply">適用</sys:String>
+  <sys:String x:Key="DyeSlotEditorClose">閉じる</sys:String>
+  <sys:String x:Key="AbyssGatesWindowTitle">アビスゲートを編集</sys:String>
+  <sys:String x:Key="AbyssGatesHeader">ゲート単位でロック/アンロックを切り替えます。FieldSaveData._fieldGimmickSaveDataList 内の各 FieldGimmickSaveData 要素に対し _initStateNameHash を書き込みます (Default 0x866c7489 ↔ Activated 0xe300acfe)。Idle (情景) と Unknown の行は読み取り専用です — 非ゲート系 gimmick の安定性を損なわないためです。変更内容は次回の File → Save で書き込まれます。</sys:String>
+  <sys:String x:Key="AbyssGatesColOwnerLevel">所属レベル</sys:String>
   <sys:String x:Key="AbyssGatesColGimmick">Gimmick</sys:String>
   <sys:String x:Key="AbyssGatesColSaveKey">SaveKey</sys:String>
-  <sys:String x:Key="AbyssGatesColState">State</sys:String>
+  <sys:String x:Key="AbyssGatesColState">状態</sys:String>
   <sys:String x:Key="AbyssGatesColStateHash">Hash</sys:String>
-  <sys:String x:Key="AbyssGatesColAction">Action</sys:String>
-  <sys:String x:Key="AbyssGatesUnlock">Unlock</sys:String>
-  <sys:String x:Key="AbyssGatesLock">Lock</sys:String>
-  <sys:String x:Key="AbyssGatesUnlockTip">Default (untouched) → Activated (crossed). Sets _initStateNameHash to 0xe300acfe.</sys:String>
-  <sys:String x:Key="AbyssGatesLockTip">Activated (crossed) → Default (untouched). Sets _initStateNameHash back to 0x866c7489.</sys:String>
-  <sys:String x:Key="AbyssGatesClose">Close</sys:String>
-  <sys:String x:Key="AbyssGatesNotAvailableTitle">No abyss gates in this save</sys:String>
-  <sys:String x:Key="AbyssGatesNotAvailableBody">No nested FieldGimmickSaveData elements inside FieldSaveData._fieldGimmickSaveDataList matched the abyss / hyperspace allowlist from gimmickinfo.pabgb. Either the save has no FieldSaveData root yet (very early-game), or the game install is unconfigured so gimmickinfo isn't available.</sys:String>
-  <sys:String x:Key="MenuFontSize">_Font Size</sys:String>
-  <sys:String x:Key="SummaryToggleTip">Show / hide the Save Summary panel — claim more room for the main grids.</sys:String>
-  <sys:String x:Key="MenuLanguage">_Secondary Language</sys:String>
-  <sys:String x:Key="MenuLanguageOff">English only (no secondary)</sys:String>
+  <sys:String x:Key="AbyssGatesColAction">操作</sys:String>
+  <sys:String x:Key="AbyssGatesUnlock">アンロック</sys:String>
+  <sys:String x:Key="AbyssGatesLock">ロック</sys:String>
+  <sys:String x:Key="AbyssGatesUnlockTip">Default (未通過) → Activated (通過済み)。_initStateNameHash を 0xe300acfe に設定します。</sys:String>
+  <sys:String x:Key="AbyssGatesLockTip">Activated (通過済み) → Default (未通過)。_initStateNameHash を 0x866c7489 に戻します。</sys:String>
+  <sys:String x:Key="AbyssGatesClose">閉じる</sys:String>
+  <sys:String x:Key="AbyssGatesNotAvailableTitle">このセーブにアビスゲートがありません</sys:String>
+  <sys:String x:Key="AbyssGatesNotAvailableBody">FieldSaveData._fieldGimmickSaveDataList 内に、gimmickinfo.pabgb の abyss / hyperspace 許可リストに一致する FieldGimmickSaveData 要素がありません。セーブに FieldSaveData の root がまだないか (ゲーム序盤)、ゲームインストールパスが未設定で gimmickinfo を読めない可能性があります。</sys:String>
+  <sys:String x:Key="MenuFontSize">フォントサイズ(_F)</sys:String>
+  <sys:String x:Key="SummaryToggleTip">セーブサマリーパネルを表示 / 非表示 — メイングリッドにスペースを譲ります。</sys:String>
+  <sys:String x:Key="MenuLanguage">セカンダリ言語(_S)</sys:String>
+  <sys:String x:Key="MenuLanguageOff">英語のみ (セカンダリなし)</sys:String>
 
   <!-- UI language submenu (Tools → UI Language). Distinct from
        MenuLanguage above, which picks the in-game-data SECONDARY
        language; this picks the editor's own UI language. -->
-  <sys:String x:Key="MenuUiLanguage">_UI Language</sys:String>
-  <sys:String x:Key="MenuUiLanguageAuto">Auto (detect from OS)</sys:String>
+  <sys:String x:Key="MenuUiLanguage">UI 言語(_U)</sys:String>
+  <sys:String x:Key="MenuUiLanguageAuto">自動 (OS から検出)</sys:String>
   <sys:String x:Key="MenuUiLanguageEn">English</sys:String>
   <sys:String x:Key="MenuUiLanguageJa">日本語</sys:String>
   <sys:String x:Key="MenuUiLanguageZhTw">繁體中文</sys:String>
 
   <!-- Item-picker dialog -->
-  <sys:String x:Key="ItemPickerWindowTitle">Browse items</sys:String>
-  <sys:String x:Key="ItemPickerSearchPlaceholder">Filter by ItemKey, string id, or localized name…</sys:String>
-  <sys:String x:Key="ItemPickerColIcon">Icon</sys:String>
+  <sys:String x:Key="ItemPickerWindowTitle">アイテム一覧</sys:String>
+  <sys:String x:Key="ItemPickerSearchPlaceholder">ItemKey、string id、ローカライズ名で絞り込み…</sys:String>
+  <sys:String x:Key="ItemPickerColIcon">アイコン</sys:String>
   <sys:String x:Key="ItemPickerColKey">ItemKey</sys:String>
   <sys:String x:Key="ItemPickerColStringKey">String ID</sys:String>
-  <sys:String x:Key="ItemPickerColNameEnglish">Name (eng)</sys:String>
-  <sys:String x:Key="ItemPickerColCopy">Copy</sys:String>
-  <sys:String x:Key="ItemPickerCopyKeyTip">Copy the numeric ItemKey to the clipboard</sys:String>
-  <sys:String x:Key="ItemPickerCopyStringKeyTip">Copy iteminfo's internal string id to the clipboard</sys:String>
-  <sys:String x:Key="ItemPickerCopyNameTip">Copy the English name to the clipboard</sys:String>
-  <sys:String x:Key="ItemPickerCopyNameSecondaryTip">Copy the secondary-language name to the clipboard</sys:String>
+  <sys:String x:Key="ItemPickerColNameEnglish">名前 (eng)</sys:String>
+  <sys:String x:Key="ItemPickerColCopy">コピー</sys:String>
+  <sys:String x:Key="ItemPickerCopyKeyTip">数値の ItemKey をクリップボードにコピー</sys:String>
+  <sys:String x:Key="ItemPickerCopyStringKeyTip">iteminfo の内部 string id をクリップボードにコピー</sys:String>
+  <sys:String x:Key="ItemPickerCopyNameTip">英語名をクリップボードにコピー</sys:String>
+  <sys:String x:Key="ItemPickerCopyNameSecondaryTip">セカンダリ言語の名前をクリップボードにコピー</sys:String>
 
   <!-- Find-items dialog -->
-  <sys:String x:Key="MenuFindItems">_Find Items…</sys:String>
-  <sys:String x:Key="FindItemsWindowTitle">Find items (cross-bag)</sys:String>
-  <sys:String x:Key="FindItemsSearchPlaceholder">Filter by ItemKey, item name, bag name, or ItemNo…</sys:String>
-  <sys:String x:Key="FindItemsColIcon">Icon</sys:String>
-  <sys:String x:Key="FindItemsColBag">Bag</sys:String>
-  <sys:String x:Key="FindItemsColSlot">Slot</sys:String>
+  <sys:String x:Key="MenuFindItems">アイテムを検索(_F)…</sys:String>
+  <sys:String x:Key="FindItemsWindowTitle">アイテムを検索 (バッグ横断)</sys:String>
+  <sys:String x:Key="FindItemsSearchPlaceholder">ItemKey、アイテム名、バッグ名、ItemNo で絞り込み…</sys:String>
+  <sys:String x:Key="FindItemsColIcon">アイコン</sys:String>
+  <sys:String x:Key="FindItemsColBag">バッグ</sys:String>
+  <sys:String x:Key="FindItemsColSlot">スロット</sys:String>
   <sys:String x:Key="FindItemsColItemKey">ItemKey</sys:String>
-  <sys:String x:Key="FindItemsColItemName">Name (eng)</sys:String>
-  <sys:String x:Key="FindItemsColStack">Stack</sys:String>
-  <sys:String x:Key="FindItemsColFlags">Flags</sys:String>
+  <sys:String x:Key="FindItemsColItemName">名前 (eng)</sys:String>
+  <sys:String x:Key="FindItemsColStack">スタック</sys:String>
+  <sys:String x:Key="FindItemsColFlags">フラグ</sys:String>
   <sys:String x:Key="FindItemsColItemNo">ItemNo</sys:String>
-  <sys:String x:Key="FindItemsColAction">Action</sys:String>
-  <sys:String x:Key="FindItemsGotoButton">Go</sys:String>
-  <sys:String x:Key="FindItemsGotoTip">Jump the main window to this exact item slot — drills InventorySaveData → _inventorylist[N] → _itemList[M]. This dialog stays open.</sys:String>
-  <sys:String x:Key="FindItemsCopyKeyTip">Copy the numeric ItemKey to the clipboard</sys:String>
-  <sys:String x:Key="FindItemsCopyNameTip">Copy the English item name to the clipboard</sys:String>
+  <sys:String x:Key="FindItemsColAction">操作</sys:String>
+  <sys:String x:Key="FindItemsGotoButton">移動</sys:String>
+  <sys:String x:Key="FindItemsGotoTip">メインウィンドウをこのアイテムの正確なスロットへジャンプ — InventorySaveData → _inventorylist[N] → _itemList[M] までドリルダウンします。本ダイアログは開いたままです。</sys:String>
+  <sys:String x:Key="FindItemsCopyKeyTip">数値の ItemKey をクリップボードにコピー</sys:String>
+  <sys:String x:Key="FindItemsCopyNameTip">英語のアイテム名をクリップボードにコピー</sys:String>
   <sys:String x:Key="FindItemsFlagLockedTip">_isLocked = true</sys:String>
-  <sys:String x:Key="FindItemsFlagNewMarkTip">_isNewMark = true (item has the in-game "new" badge)</sys:String>
-  <sys:String x:Key="FindItemsRefresh">Refresh</sys:String>
+  <sys:String x:Key="FindItemsFlagNewMarkTip">_isNewMark = true (ゲーム内の「NEW」バッジが付いています)</sys:String>
+  <sys:String x:Key="FindItemsRefresh">更新</sys:String>
 
   <!-- Browse-characters dialog -->
-  <sys:String x:Key="MenuBrowseCharacters">Browse _Characters / NPCs…</sys:String>
-  <sys:String x:Key="CharacterPickerWindowTitle">Browse characters / NPCs</sys:String>
-  <sys:String x:Key="CharacterPickerSearchPlaceholder">Filter by CharacterKey, internal id, or localized name…</sys:String>
-  <sys:String x:Key="CharacterPickerColPortrait">Portrait</sys:String>
+  <sys:String x:Key="MenuBrowseCharacters">キャラクター / NPC を参照(_C)…</sys:String>
+  <sys:String x:Key="CharacterPickerWindowTitle">キャラクター / NPC を参照</sys:String>
+  <sys:String x:Key="CharacterPickerSearchPlaceholder">CharacterKey、内部 id、ローカライズ名で絞り込み…</sys:String>
+  <sys:String x:Key="CharacterPickerColPortrait">ポートレート</sys:String>
   <sys:String x:Key="CharacterPickerColKey">CharKey</sys:String>
-  <sys:String x:Key="CharacterPickerColInternal">Internal id</sys:String>
-  <sys:String x:Key="CharacterPickerColNameEnglish">Name (eng)</sys:String>
-  <sys:String x:Key="CharacterPickerColCopy">Copy</sys:String>
-  <sys:String x:Key="CharacterPickerCopyKeyTip">Copy the numeric CharacterKey to the clipboard</sys:String>
-  <sys:String x:Key="CharacterPickerCopyInternalTip">Copy characterinfo's internal id (e.g. "Yann_Friendly") to the clipboard</sys:String>
-  <sys:String x:Key="CharacterPickerCopyNameTip">Copy the English display name to the clipboard</sys:String>
-  <sys:String x:Key="CharacterPickerCopyNameSecondaryTip">Copy the secondary-language display name to the clipboard</sys:String>
+  <sys:String x:Key="CharacterPickerColInternal">内部 id</sys:String>
+  <sys:String x:Key="CharacterPickerColNameEnglish">名前 (eng)</sys:String>
+  <sys:String x:Key="CharacterPickerColCopy">コピー</sys:String>
+  <sys:String x:Key="CharacterPickerCopyKeyTip">数値の CharacterKey をクリップボードにコピー</sys:String>
+  <sys:String x:Key="CharacterPickerCopyInternalTip">characterinfo の内部 id (例: "Yann_Friendly") をクリップボードにコピー</sys:String>
+  <sys:String x:Key="CharacterPickerCopyNameTip">英語の表示名をクリップボードにコピー</sys:String>
+  <sys:String x:Key="CharacterPickerCopyNameSecondaryTip">セカンダリ言語の表示名をクリップボードにコピー</sys:String>
 
   <!-- Character refs browser (Tools menu) + per-field CharacterKey picker share
        the warning banner + Pick button strings below. -->
-  <sys:String x:Key="MenuBrowseCharacterRefs">Browse Character _References…</sys:String>
-  <sys:String x:Key="CharacterRefsBrowserWarning">⚠ Reference linkage is best-effort. The same CharacterKey can mean different things across different blocks/fields. This list enumerates every save field whose schema TypeName is "CharacterKey" — cross-verify in the raw editor.</sys:String>
-  <sys:String x:Key="CharacterRefsBrowserJump">Jump…</sys:String>
-  <sys:String x:Key="CharacterRefsBrowserJumpTip">Close this dialog and navigate the main editor's block tree to the top-level block containing this CharacterKey reference. From there drill manually to the specific field.</sys:String>
-  <sys:String x:Key="CharacterRefsBrowserFilterLabel">Filter:</sys:String>
-  <sys:String x:Key="CharacterRefsBrowserClose">Close</sys:String>
-  <sys:String x:Key="CharacterRefsBrowserCol_Portrait">Portrait</sys:String>
+  <sys:String x:Key="MenuBrowseCharacterRefs">キャラクター参照を参照(_R)…</sys:String>
+  <sys:String x:Key="CharacterRefsBrowserWarning">⚠ 参照のリンクはベストエフォートです。同じ CharacterKey が異なる block / フィールドの文脈で別の実体を意味することがあります。本リストは schema TypeName が "CharacterKey" の全フィールドを列挙するだけです — 生のエディタでクロス検証してください。</sys:String>
+  <sys:String x:Key="CharacterRefsBrowserJump">ジャンプ…</sys:String>
+  <sys:String x:Key="CharacterRefsBrowserJumpTip">このダイアログを閉じ、メインエディタの block ツリーで、当該 CharacterKey 参照を含むトップレベル block に移動します。そこから手動で目的のフィールドまでドリルダウンしてください。</sys:String>
+  <sys:String x:Key="CharacterRefsBrowserFilterLabel">フィルター：</sys:String>
+  <sys:String x:Key="CharacterRefsBrowserClose">閉じる</sys:String>
+  <sys:String x:Key="CharacterRefsBrowserCol_Portrait">ポートレート</sys:String>
   <sys:String x:Key="CharacterRefsBrowserCol_Block">Block</sys:String>
   <sys:String x:Key="CharacterRefsBrowserCol_BlockNum">Block #</sys:String>
-  <sys:String x:Key="CharacterRefsBrowserCol_Name">Character</sys:String>
+  <sys:String x:Key="CharacterRefsBrowserCol_Name">キャラクター</sys:String>
   <sys:String x:Key="CharacterRefsBrowserCol_Key">CharacterKey</sys:String>
-  <sys:String x:Key="CharacterRefsBrowserCol_Action">Action</sys:String>
+  <sys:String x:Key="CharacterRefsBrowserCol_Action">操作</sys:String>
 
   <!-- Picker shared with CharacterPickerWindow (Pick mode + warning banner)
        + edit panel button strings for the CharacterKey scalar field picker. -->
-  <sys:String x:Key="CharacterPickerWarning">⚠ Linkage is best-effort. A characterinfo.pabgb key may not refer to the same entity across different fields. Cross-verify in-game or against the main editor before relying on the resolved name.</sys:String>
-  <sys:String x:Key="CharacterPickerPick">Pick</sys:String>
-  <sys:String x:Key="CharacterPickerColPick">Pick</sys:String>
-  <sys:String x:Key="EditPanelPickCharacter">Pick character…</sys:String>
-  <sys:String x:Key="EditPanelPickCharacterTip">Open the character picker dialog. Select a row to fill the textbox with that CharacterKey value; click Apply to commit.</sys:String>
+  <sys:String x:Key="CharacterPickerWarning">⚠ リンクはベストエフォートです。characterinfo.pabgb の key は、フィールドの文脈によっては同じ実体を指さない場合があります。解決された名前に頼る前に、ゲーム画面やメインエディタでクロス検証してください。</sys:String>
+  <sys:String x:Key="CharacterPickerPick">選択</sys:String>
+  <sys:String x:Key="CharacterPickerColPick">選択</sys:String>
+  <sys:String x:Key="EditPanelPickCharacter">キャラクターを選択…</sys:String>
+  <sys:String x:Key="EditPanelPickCharacterTip">キャラクター選択ダイアログを開きます。行を選ぶとその CharacterKey 値がテキストボックスに入力されます。Apply をクリックして反映してください。</sys:String>
 
   <!-- Browse-localization dialog -->
-  <sys:String x:Key="LocalizationWindowTitle">Browse localization</sys:String>
-  <sys:String x:Key="LocalizationSearchPlaceholder">Filter by key or value…</sys:String>
+  <sys:String x:Key="LocalizationWindowTitle">ローカライズ文字列を参照</sys:String>
+  <sys:String x:Key="LocalizationSearchPlaceholder">キーまたは値で絞り込み…</sys:String>
   <sys:String x:Key="LocalizationColKey">Key</sys:String>
-  <sys:String x:Key="LocalizationColValue">Value</sys:String>
-  <sys:String x:Key="LocalizationColCopy">Copy</sys:String>
-  <sys:String x:Key="LocalizationCopyKeyTip">Copy the raw key to the clipboard</sys:String>
-  <sys:String x:Key="LocalizationCopyValueTip">Copy the English value to the clipboard</sys:String>
-  <sys:String x:Key="LocalizationCopyValue2Tip">Copy the secondary-language value to the clipboard</sys:String>
+  <sys:String x:Key="LocalizationColValue">値</sys:String>
+  <sys:String x:Key="LocalizationColCopy">コピー</sys:String>
+  <sys:String x:Key="LocalizationCopyKeyTip">生のキーをクリップボードにコピー</sys:String>
+  <sys:String x:Key="LocalizationCopyValueTip">英語の値をクリップボードにコピー</sys:String>
+  <sys:String x:Key="LocalizationCopyValue2Tip">セカンダリ言語の値をクリップボードにコピー</sys:String>
 
   <!-- First-launch legal disclaimer -->
-  <sys:String x:Key="DisclaimerTitle">CrimsonAtomtic — Disclaimer</sys:String>
-  <sys:String x:Key="DisclaimerAccept">I Accept</sys:String>
-  <sys:String x:Key="DisclaimerDecline">Quit</sys:String>
-  <sys:String x:Key="DisclaimerBody">This editor is provided as-is with no warranty of correct operation and no exhaustive validation of save structures. The author accepts no responsibility for any data corruption, save damage, or account-related issues that may result from its use.&#x0a;&#x0a;Clicking "I Accept" confirms you have read and agreed to the above and accept all risks of using this tool.</sys:String>
+  <sys:String x:Key="DisclaimerTitle">CrimsonAtomtic — 免責事項</sys:String>
+  <sys:String x:Key="DisclaimerAccept">同意する</sys:String>
+  <sys:String x:Key="DisclaimerDecline">終了</sys:String>
+  <sys:String x:Key="DisclaimerBody">本エディタは現状のまま (as-is) 提供されており、正しく動作することの保証も、全ての save 構造に対する網羅的な検証も行われていません。本ツールの使用により生じたデータ破損、セーブの損傷、アカウント関連のいかなる問題についても、作者は一切責任を負いません。&#x0a;&#x0a;「同意する」を押すと、上記内容を読み同意したものとみなされ、本ツール使用に伴うすべてのリスクを受け入れたことになります。</sys:String>
 
   <!-- Empty workspace -->
-  <sys:String x:Key="EmptyTitle">No save loaded</sys:String>
-  <sys:String x:Key="EmptyHint">Use File → Open Save to read a .save file.</sys:String>
+  <sys:String x:Key="EmptyTitle">セーブが読み込まれていません</sys:String>
+  <sys:String x:Key="EmptyHint">File → Open Save から .save ファイルを読み込んでください。</sys:String>
 
   <!-- Summary pane -->
-  <sys:String x:Key="SummaryHeader">Save summary</sys:String>
+  <sys:String x:Key="SummaryHeader">セーブサマリー</sys:String>
   <sys:String x:Key="SummarySlot">Slot</sys:String>
-  <sys:String x:Key="SummaryVersion">Version</sys:String>
+  <sys:String x:Key="SummaryVersion">バージョン</sys:String>
   <sys:String x:Key="SummaryHmac">HMAC</sys:String>
-  <sys:String x:Key="SummaryHmacOk">verified</sys:String>
-  <sys:String x:Key="SummaryHmacFail">FAILED</sys:String>
+  <sys:String x:Key="SummaryHmacOk">検証成功</sys:String>
+  <sys:String x:Key="SummaryHmacFail">失敗</sys:String>
   <sys:String x:Key="SummaryPayload">Payload</sys:String>
   <sys:String x:Key="SummaryBody">Body</sys:String>
   <sys:String x:Key="SummaryTypes">Schema types</sys:String>
   <sys:String x:Key="SummaryEntries">TOC entries</sys:String>
 
   <!-- Blocks pane -->
-  <sys:String x:Key="BlocksHeader">Top-level blocks</sys:String>
-  <sys:String x:Key="BlocksFilterPlaceholder">Filter blocks by class or index…</sys:String>
+  <sys:String x:Key="BlocksHeader">トップレベル blocks</sys:String>
+  <sys:String x:Key="BlocksFilterPlaceholder">クラスまたはインデックスで block を絞り込み…</sys:String>
   <sys:String x:Key="BlocksColIndex">#</sys:String>
   <sys:String x:Key="BlocksColClass">Class</sys:String>
   <sys:String x:Key="BlocksColOffset">Offset</sys:String>
   <sys:String x:Key="BlocksColSize">Size</sys:String>
-  <sys:String x:Key="BlocksColFields">Fields</sys:String>
+  <sys:String x:Key="BlocksColFields">フィールド数</sys:String>
 
   <!-- Field detail pane -->
-  <sys:String x:Key="FieldsHeader">Block fields</sys:String>
-  <sys:String x:Key="FieldsHint">Select a block above to inspect its fields.</sys:String>
+  <sys:String x:Key="FieldsHeader">Block フィールド</sys:String>
+  <sys:String x:Key="FieldsHint">上で block を選択して、そのフィールドを確認してください。</sys:String>
   <sys:String x:Key="FieldsColIndex">#</sys:String>
-  <sys:String x:Key="FieldsColName">Field</sys:String>
-  <sys:String x:Key="FieldsColType">Type</sys:String>
+  <sys:String x:Key="FieldsColName">フィールド</sys:String>
+  <sys:String x:Key="FieldsColType">型</sys:String>
   <sys:String x:Key="FieldsColKind">Kind</sys:String>
   <sys:String x:Key="FieldsColPresent">Present</sys:String>
-  <sys:String x:Key="FieldsColValue">Value</sys:String>
-  <sys:String x:Key="FieldsColResolvedName">Name</sys:String>
+  <sys:String x:Key="FieldsColValue">値</sys:String>
+  <sys:String x:Key="FieldsColResolvedName">名前</sys:String>
   <sys:String x:Key="FieldsColRange">Bytes</sys:String>
   <sys:String x:Key="FieldsMask">Mask</sys:String>
   <sys:String x:Key="FieldsTrailingPad">Trailing pad</sys:String>
   <sys:String x:Key="FieldsUndecoded">Undecoded</sys:String>
-  <sys:String x:Key="FieldsLoading">Loading…</sys:String>
-  <sys:String x:Key="FieldsError">Could not load block details.</sys:String>
-  <sys:String x:Key="FieldsFilterPlaceholder">Filter fields by name, type, or value…</sys:String>
-  <sys:String x:Key="FieldsFilterCount">{0:N0} of {1:N0}</sys:String>
+  <sys:String x:Key="FieldsLoading">読み込み中…</sys:String>
+  <sys:String x:Key="FieldsError">block の詳細を読み込めませんでした。</sys:String>
+  <sys:String x:Key="FieldsFilterPlaceholder">名前、型、値でフィールドを絞り込み…</sys:String>
+  <sys:String x:Key="FieldsFilterCount">{0:N0} / {1:N0}</sys:String>
 
   <!-- Drill-down + navigation -->
-  <sys:String x:Key="FieldsColDrill">Drill</sys:String>
+  <sys:String x:Key="FieldsColDrill">ドリル</sys:String>
   <sys:String x:Key="FieldsDrillButton">▸</sys:String>
 
   <!-- Edit panel -->
-  <sys:String x:Key="EditPanelHeader">Edit field</sys:String>
-  <sys:String x:Key="EditPanelNameLabel">Field</sys:String>
-  <sys:String x:Key="EditPanelTypeLabel">Type</sys:String>
-  <sys:String x:Key="EditPanelValueLabel">New value</sys:String>
-  <sys:String x:Key="EditPanelApply">Apply</sys:String>
-  <sys:String x:Key="EditPanelRevert">Revert</sys:String>
-  <sys:String x:Key="EditPanelFillMaxStack">Set to max</sys:String>
-  <sys:String x:Key="EditPanelFillMaxStackTip">Fill this field with the item's max_stack_count (from iteminfo). Pre-fills the textbox — review then click Apply.</sys:String>
-  <sys:String x:Key="EditPanelMakeAbsent">Make absent</sys:String>
-  <sys:String x:Key="EditPanelMakeAbsentTip">Flip this scalar's presence bit off — the field is removed from the block (mask bit cleared, payload bytes dropped). Reverse it by typing a value and clicking Apply.</sys:String>
-  <sys:String x:Key="MarkChallengeCompleteButton">✓ Mark Challenge Complete (Pattern B v1)</sys:String>
-  <sys:String x:Key="MarkChallengeCompleteTip">Engine-faithful single-challenge completion (Pattern B v1). Only enables when the engine has already done discovery for this challenge (you've picked up the reward artifact in-game). Writes the FAR tracker (_state=5 + _completedTime + visible tag) and creates the X_2 sub-mission entry — exactly what the engine writes for an unclaimed completion. Catalog + adjacent twin are NOT touched; the engine fills those in when you claim the reward in-game. NOT FULLY TESTED — back up your save first.</sys:String>
-  <sys:String x:Key="ConfirmDialogYes">Yes</sys:String>
-  <sys:String x:Key="ConfirmDialogNo">No</sys:String>
-  <sys:String x:Key="ElementsColBulkFill">Bulk</sys:String>
-  <sys:String x:Key="ElementsBulkFillButton">Fill stacks</sys:String>
-  <sys:String x:Key="ElementsBulkFillTip">Set every item in this container's _stackCount to its iteminfo max_stack_count.</sys:String>
-  <sys:String x:Key="ElementsBulkFillConfirmTitle">Fill stacks to max?</sys:String>
-  <sys:String x:Key="ElementsColRemove">Remove</sys:String>
-  <sys:String x:Key="ElementsRemoveButton">✕ Remove</sys:String>
-  <sys:String x:Key="ElementsRemoveTip">Drop this element from the list. The save body shrinks to match; reversible by reloading without writing.</sys:String>
-  <sys:String x:Key="ItemPickerAddToBagTip">Add this item to the inventory list the main window is currently showing. Open a bag (drill into _inventorylist[N]._itemList) first; otherwise the click reports the requirement in the status bar.</sys:String>
-  <sys:String x:Key="MenuRestoreFromBackup">Restore from Backup…</sys:String>
-  <sys:String x:Key="RestoreFromBackupTitle">Restore from Backup</sys:String>
-  <sys:String x:Key="RestoreFromBackupColumnHint">Click "Restore" on a row to overwrite the live save with that snapshot. The current contents are backed up first.</sys:String>
-  <sys:String x:Key="RestoreColSlot">Slot (user / name)</sys:String>
-  <sys:String x:Key="RestoreColTimestamp">Backup taken</sys:String>
-  <sys:String x:Key="RestoreColFiles">Files</sys:String>
-  <sys:String x:Key="RestoreColSize">Size</sys:String>
-  <sys:String x:Key="RestoreColAction">Action</sys:String>
-  <sys:String x:Key="RestoreButton">⤺ Restore</sys:String>
-  <sys:String x:Key="RestoreButtonTip">Overwrite the live save with this backup. The current state is backed up first, so this restore is itself undoable.</sys:String>
-  <sys:String x:Key="EditPanelNestedReadOnly">Editing nested fields is not yet supported. Use Back to return to the top-level block.</sys:String>
-  <sys:String x:Key="ElementsColIcon">Icon</sys:String>
+  <sys:String x:Key="EditPanelHeader">フィールドを編集</sys:String>
+  <sys:String x:Key="EditPanelNameLabel">フィールド</sys:String>
+  <sys:String x:Key="EditPanelTypeLabel">型</sys:String>
+  <sys:String x:Key="EditPanelValueLabel">新しい値</sys:String>
+  <sys:String x:Key="EditPanelApply">適用</sys:String>
+  <sys:String x:Key="EditPanelRevert">元に戻す</sys:String>
+  <sys:String x:Key="EditPanelFillMaxStack">最大値に設定</sys:String>
+  <sys:String x:Key="EditPanelFillMaxStackTip">このフィールドにアイテムの max_stack_count (iteminfo より) を入れます。テキストボックスにあらかじめ入力されます — 確認後 Apply をクリックしてください。</sys:String>
+  <sys:String x:Key="EditPanelMakeAbsent">absent にする</sys:String>
+  <sys:String x:Key="EditPanelMakeAbsentTip">このスカラーの存在ビットをオフに反転 — フィールドが block から削除されます (mask bit クリア、payload bytes 破棄)。値を入力して Apply をクリックすると元に戻せます。</sys:String>
+  <sys:String x:Key="MarkChallengeCompleteButton">✓ チャレンジ完了をマーク (Pattern B v1)</sys:String>
+  <sys:String x:Key="MarkChallengeCompleteTip">エンジン忠実な単一チャレンジ完了 (Pattern B v1)。エンジンが既にこのチャレンジを discovery 済み (ゲーム内で報酬遺物を入手済み) の場合のみ有効化されます。FAR tracker (_state=5 + _completedTime + visible タグ) を書き込み、X_2 サブミッションエントリを作成します — 未受領の完了状態でエンジン自身が書き込む内容と完全に同じです。Catalog と adjacent twin は触れません。ゲーム内で報酬を受領した際にエンジンが自然に埋めます。完全テスト未済 — まず必ずセーブをバックアップしてください。</sys:String>
+  <sys:String x:Key="ConfirmDialogYes">はい</sys:String>
+  <sys:String x:Key="ConfirmDialogNo">いいえ</sys:String>
+  <sys:String x:Key="ElementsColBulkFill">一括</sys:String>
+  <sys:String x:Key="ElementsBulkFillButton">スタックを満たす</sys:String>
+  <sys:String x:Key="ElementsBulkFillTip">このコンテナ内の全アイテムの _stackCount を iteminfo の max_stack_count に設定します。</sys:String>
+  <sys:String x:Key="ElementsBulkFillConfirmTitle">スタックを最大まで満たしますか？</sys:String>
+  <sys:String x:Key="ElementsColRemove">削除</sys:String>
+  <sys:String x:Key="ElementsRemoveButton">✕ 削除</sys:String>
+  <sys:String x:Key="ElementsRemoveTip">この要素を list から取り除きます。save body はそれに合わせて縮みます。書き込まずに再読み込みすれば元に戻せます。</sys:String>
+  <sys:String x:Key="ItemPickerAddToBagTip">このアイテムを、メインウィンドウが現在表示しているインベントリリストに追加します。先にバッグを開いて (_inventorylist[N]._itemList へドリルダウン) ください。さもないとクリック時に必要条件がステータスバーに表示されます。</sys:String>
+  <sys:String x:Key="MenuRestoreFromBackup">バックアップから復元…</sys:String>
+  <sys:String x:Key="RestoreFromBackupTitle">バックアップから復元</sys:String>
+  <sys:String x:Key="RestoreFromBackupColumnHint">行の「復元」をクリックすると、そのスナップショットで現セーブを上書きします。現在の内容は先にバックアップされます。</sys:String>
+  <sys:String x:Key="RestoreColSlot">Slot (ユーザー / 名前)</sys:String>
+  <sys:String x:Key="RestoreColTimestamp">バックアップ取得時刻</sys:String>
+  <sys:String x:Key="RestoreColFiles">ファイル</sys:String>
+  <sys:String x:Key="RestoreColSize">サイズ</sys:String>
+  <sys:String x:Key="RestoreColAction">操作</sys:String>
+  <sys:String x:Key="RestoreButton">⤺ 復元</sys:String>
+  <sys:String x:Key="RestoreButtonTip">このバックアップで現セーブを上書きします。現状態が先にバックアップされるので、本復元操作自体も取り消し可能です。</sys:String>
+  <sys:String x:Key="EditPanelNestedReadOnly">ネストされたフィールドの編集はまだサポートされていません。Back でトップレベル block に戻ってください。</sys:String>
+  <sys:String x:Key="ElementsColIcon">アイコン</sys:String>
   <sys:String x:Key="ElementsColIndex">#</sys:String>
   <sys:String x:Key="ElementsColClass">Class</sys:String>
   <sys:String x:Key="ElementsColOffset">Offset</sys:String>
   <sys:String x:Key="ElementsColSize">Size</sys:String>
-  <sys:String x:Key="ElementsColFields">Fields</sys:String>
-  <sys:String x:Key="ElementsColOpen">Open</sys:String>
+  <sys:String x:Key="ElementsColFields">フィールド数</sys:String>
+  <sys:String x:Key="ElementsColOpen">開く</sys:String>
   <sys:String x:Key="ElementsOpenButton">▸</sys:String>
   <sys:String x:Key="ElementsColItemKey">Key</sys:String>
-  <sys:String x:Key="ElementsColItemName">Name</sys:String>
-  <sys:String x:Key="ElementsFilterPlaceholder">Filter by key, name, or class…</sys:String>
-  <sys:String x:Key="NavigationBack">← Back</sys:String>
+  <sys:String x:Key="ElementsColItemName">名前</sys:String>
+  <sys:String x:Key="ElementsFilterPlaceholder">キー、名前、クラスで絞り込み…</sys:String>
+  <sys:String x:Key="NavigationBack">← 戻る</sys:String>
 
 </ResourceDictionary>

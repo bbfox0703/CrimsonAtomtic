@@ -3,362 +3,364 @@
                     xmlns:sys="clr-namespace:System;assembly=System.Runtime">
 
   <!--
-    TODO: Traditional Chinese translations. Currently a verbatim copy
-    of en.axaml so the i18n plumbing works end-to-end before
-    translation begins. Translate each <sys:String> value (NOT the
-    x:Key attribute) into 繁體中文; preserve the access-key underscore
-    convention on menu entries. Keep en.axaml as the source of truth —
-    re-sync new keys here whenever en.axaml gains entries.
+    Traditional Chinese (zh-TW) translations.
+    en.axaml is the source of truth — sync new keys here when en.axaml
+    gains entries. Technical identifiers (save-file field names with
+    leading underscores, schema class names, file paths, hex constants,
+    build-identifier terms like Pattern B v1 / FAR tracker / PALOC /
+    HMAC / iteminfo) are intentionally preserved verbatim — these are
+    debug/forensic surfaces that need to be greppable across English
+    docs and source code.
   -->
 
   <!-- Window / chrome -->
   <sys:String x:Key="WindowTitle">CrimsonAtomtic</sys:String>
 
   <!-- Menu -->
-  <sys:String x:Key="MenuFile">_File</sys:String>
-  <sys:String x:Key="MenuOpenSave">_Open Save…</sys:String>
-  <sys:String x:Key="MenuSave">_Save</sys:String>
-  <sys:String x:Key="MenuSaveAs">Save _As…</sys:String>
-  <sys:String x:Key="MenuExit">E_xit</sys:String>
-  <sys:String x:Key="MenuTools">_Tools</sys:String>
-  <sys:String x:Key="MenuBrowseLocalization">_Browse Localization…</sys:String>
-  <sys:String x:Key="MenuBrowseItems">Browse _Items…</sys:String>
-  <sys:String x:Key="MenuExtractIcons">_Extract Icons from Game Data…</sys:String>
-  <sys:String x:Key="MenuSetGameInstallFolder">Set _Game Install Folder…</sys:String>
-  <sys:String x:Key="SetGameInstallFolderInvalidTitle">Folder doesn't look like a Crimson Desert install</sys:String>
-  <sys:String x:Key="SetGameInstallFolderInvalidBody">The selected folder doesn't contain the required asset file (0020\0.pamt). Pick the directory that contains the game's 0000\, 0020\, … pack groups — typically &lt;Steam library&gt;\steamapps\common\Crimson Desert or the Epic / asset folder you copied out for Game Pass.</sys:String>
-  <sys:String x:Key="MenuRenameMercenary">Rename _Mercenary…</sys:String>
-  <sys:String x:Key="MenuEditItemSockets">Edit Item _Sockets…</sys:String>
-  <sys:String x:Key="SocketEditorHeader">Per-slot Fill / Change / Clear. Endurance is reset to 65535 (max) on Fill + Change so a fresh greater gem doesn't inherit the old slot's worn value. _validSocketCount auto-bumps when you fill a slot whose index is past the item's current cap (so the slot becomes visible in-game). You can fill any slot the underlying list pre-allocates (typically up to 5), regardless of the gamedata-defined limit. Saves to file on next File → Save.</sys:String>
-  <sys:String x:Key="SocketEditorColBag">Bag</sys:String>
-  <sys:String x:Key="SocketEditorColItem">Item</sys:String>
+  <sys:String x:Key="MenuFile">檔案(_F)</sys:String>
+  <sys:String x:Key="MenuOpenSave">開啟存檔(_O)…</sys:String>
+  <sys:String x:Key="MenuSave">儲存(_S)</sys:String>
+  <sys:String x:Key="MenuSaveAs">另存新檔(_A)…</sys:String>
+  <sys:String x:Key="MenuExit">離開(_X)</sys:String>
+  <sys:String x:Key="MenuTools">工具(_T)</sys:String>
+  <sys:String x:Key="MenuBrowseLocalization">瀏覽本地化字串(_B)…</sys:String>
+  <sys:String x:Key="MenuBrowseItems">瀏覽物品(_I)…</sys:String>
+  <sys:String x:Key="MenuExtractIcons">從遊戲資料抽出圖示(_E)…</sys:String>
+  <sys:String x:Key="MenuSetGameInstallFolder">設定遊戲安裝資料夾(_G)…</sys:String>
+  <sys:String x:Key="SetGameInstallFolderInvalidTitle">這個資料夾看起來不像 Crimson Desert 安裝目錄</sys:String>
+  <sys:String x:Key="SetGameInstallFolderInvalidBody">所選資料夾不包含必要的素材檔 (0020\0.pamt)。請選擇包含遊戲 0000\、0020\、… 各個 pack group 的目錄 — 通常是 &lt;Steam library&gt;\steamapps\common\Crimson Desert，或是 Epic / 為 Game Pass 拷貝出來的素材資料夾。</sys:String>
+  <sys:String x:Key="MenuRenameMercenary">傭兵改名(_M)…</sys:String>
+  <sys:String x:Key="MenuEditItemSockets">編輯物品鑲嵌孔(_S)…</sys:String>
+  <sys:String x:Key="SocketEditorHeader">逐孔填入 / 變更 / 清除。Fill 與 Change 操作會將耐久 (Endurance) 重設為 65535 (最大值)，避免新鑲入的高階寶石繼承舊孔的耗損值。當你填入一個索引超過物品目前上限的孔時，_validSocketCount 會自動上修 (讓該孔在遊戲中可見)。底層 list 預先配置的任何孔都可以填 (一般是 5 個)，不受遊戲資料定義的上限限制。改動會在下一次 File → Save 寫回存檔。</sys:String>
+  <sys:String x:Key="SocketEditorColBag">背包</sys:String>
+  <sys:String x:Key="SocketEditorColItem">物品</sys:String>
   <sys:String x:Key="SocketEditorColItemKey">ItemKey</sys:String>
-  <sys:String x:Key="SocketEditorColSocket">Slot</sys:String>
-  <sys:String x:Key="SocketEditorColCurrentGem">Current gem</sys:String>
+  <sys:String x:Key="SocketEditorColSocket">孔</sys:String>
+  <sys:String x:Key="SocketEditorColCurrentGem">目前寶石</sys:String>
   <sys:String x:Key="SocketEditorColCurrentGemKey">GemKey</sys:String>
-  <sys:String x:Key="SocketEditorColAction">Action</sys:String>
-  <sys:String x:Key="SocketEditorColApplied">Status</sys:String>
-  <sys:String x:Key="SocketEditorChangeGem">Change…</sys:String>
-  <sys:String x:Key="SocketEditorFillGem">Fill…</sys:String>
-  <sys:String x:Key="SocketEditorClearGem">Clear</sys:String>
-  <sys:String x:Key="SocketEditorChangeGemTip">Open the gem picker and overwrite this filled slot. Resets _currentEndurance to 65535 (max) so greater gems start fresh.</sys:String>
-  <sys:String x:Key="SocketEditorFillGemTip">Open the gem picker and fill this empty slot. Auto-bumps _validSocketCount on the parent item if needed so the slot becomes visible in-game.</sys:String>
-  <sys:String x:Key="SocketEditorClearGemTip">Demote this socket back to empty. Both _currentEndurance and _itemKey become absent; mask flips to [0x00].</sys:String>
-  <sys:String x:Key="SocketEditorColState">State</sys:String>
-  <sys:String x:Key="SocketEditorApplySetItemLabel">Apply set to:</sys:String>
-  <sys:String x:Key="SocketEditorApplySetSetLabel">Set:</sys:String>
-  <sys:String x:Key="SocketEditorApplySetApply">Apply</sys:String>
-  <sys:String x:Key="SocketEditorApplySetEditCustom">Edit custom sets…</sys:String>
-  <sys:String x:Key="SocketEditorApplySetEditCustomTip">Define / rename the three user-custom gem sets. Saved to settings.json.</sys:String>
-  <sys:String x:Key="SocketEditorFilterLabel">Filter:</sys:String>
-  <sys:String x:Key="SocketEditorFilterWatermark">Type to filter — item name / bag / item key shows all 5 slots; gem name / gem key narrows to matching slots only…</sys:String>
+  <sys:String x:Key="SocketEditorColAction">動作</sys:String>
+  <sys:String x:Key="SocketEditorColApplied">狀態</sys:String>
+  <sys:String x:Key="SocketEditorChangeGem">變更…</sys:String>
+  <sys:String x:Key="SocketEditorFillGem">填入…</sys:String>
+  <sys:String x:Key="SocketEditorClearGem">清除</sys:String>
+  <sys:String x:Key="SocketEditorChangeGemTip">開啟寶石選擇器，覆寫這個已填入的孔。會將 _currentEndurance 重設為 65535 (最大值)，讓高階寶石從滿耐久開始。</sys:String>
+  <sys:String x:Key="SocketEditorFillGemTip">開啟寶石選擇器，填入這個空孔。必要時會自動上修 _validSocketCount，讓該孔在遊戲中可見。</sys:String>
+  <sys:String x:Key="SocketEditorClearGemTip">把這個鑲嵌孔退回成空。_currentEndurance 和 _itemKey 都會變成 absent；mask 翻成 [0x00]。</sys:String>
+  <sys:String x:Key="SocketEditorColState">狀態</sys:String>
+  <sys:String x:Key="SocketEditorApplySetItemLabel">套用組合至：</sys:String>
+  <sys:String x:Key="SocketEditorApplySetSetLabel">組合：</sys:String>
+  <sys:String x:Key="SocketEditorApplySetApply">套用</sys:String>
+  <sys:String x:Key="SocketEditorApplySetEditCustom">編輯自訂組合…</sys:String>
+  <sys:String x:Key="SocketEditorApplySetEditCustomTip">定義 / 重新命名三組使用者自訂的寶石組合。儲存至 settings.json。</sys:String>
+  <sys:String x:Key="SocketEditorFilterLabel">篩選：</sys:String>
+  <sys:String x:Key="SocketEditorFilterWatermark">輸入文字以篩選 — 物品名稱 / 背包 / item key 會顯示全部 5 個孔；寶石名稱 / gem key 則只顯示符合的孔…</sys:String>
 
   <!-- Custom gem sets editor (launched from Sockets editor toolbar) -->
-  <sys:String x:Key="CustomGemSetsWindowTitle">Edit custom gem sets</sys:String>
-  <sys:String x:Key="CustomGemSetsHeader">Three user-definable gem sets surfaced alongside the built-in three in the Sockets editor's Apply-Set toolbar. Each set has a label + up to 5 ItemKey entries (blank cells are skipped). Applying a set with N entries overwrites slots 0..N-1 of the target item and leaves slots [N..max] alone. Saves to settings.json on click.</sys:String>
-  <sys:String x:Key="CustomGemSetsSave">Save</sys:String>
-  <sys:String x:Key="CustomGemSetsClose">Close</sys:String>
-  <sys:String x:Key="SocketEditorClose">Close</sys:String>
-  <sys:String x:Key="SocketEditorNotAvailableTitle">No filled sockets in this save</sys:String>
-  <sys:String x:Key="SocketEditorNotAvailableBody">The loaded save has no items with filled sockets (or no items with a _socketSaveDataList at all). Filled sockets appear here once you've embedded a gem in-game.</sys:String>
-  <sys:String x:Key="SocketEditorPickerTitle">Pick a gem</sys:String>
-  <sys:String x:Key="RenameMercenaryHeader">Rename mercenaries / pets. The Name column shows the character/template name resolved from CharacterKey (same source as the main window's mercenaryDataList Name column) — use it to recognise each row. Your custom rename (already stored as _mercenaryName) is NOT shown — read-side FFI pending. Type a new name and click Apply per row. Saves to the file on next File → Save.</sys:String>
-  <sys:String x:Key="RenameMercenaryColIdx">Index</sys:String>
+  <sys:String x:Key="CustomGemSetsWindowTitle">編輯自訂寶石組合</sys:String>
+  <sys:String x:Key="CustomGemSetsHeader">三組使用者可自訂的寶石組合，會與內建的三組一起出現在鑲嵌孔編輯器的 Apply-Set 工具列中。每組有一個標籤 + 最多 5 個 ItemKey 項目 (空白格會被略過)。套用含 N 個項目的組合會覆寫目標物品的 0..N-1 孔，[N..max] 範圍的孔保持不動。按下儲存後寫入 settings.json。</sys:String>
+  <sys:String x:Key="CustomGemSetsSave">儲存</sys:String>
+  <sys:String x:Key="CustomGemSetsClose">關閉</sys:String>
+  <sys:String x:Key="SocketEditorClose">關閉</sys:String>
+  <sys:String x:Key="SocketEditorNotAvailableTitle">此存檔沒有已鑲嵌寶石的孔</sys:String>
+  <sys:String x:Key="SocketEditorNotAvailableBody">載入的存檔沒有任何物品有已填入的鑲嵌孔 (或根本沒有任何物品帶有 _socketSaveDataList)。在遊戲中鑲入一顆寶石後，已填入的孔就會出現在這裡。</sys:String>
+  <sys:String x:Key="SocketEditorPickerTitle">選擇寶石</sys:String>
+  <sys:String x:Key="RenameMercenaryHeader">為傭兵 / 寵物改名。「名稱」欄顯示由 CharacterKey 解析出來的角色 / 樣板名稱 (與主視窗 mercenaryDataList 名稱欄同源) — 用來辨識每一列。你自訂的改名 (已存於 _mercenaryName) 不會顯示 — read-side FFI 尚未實作。輸入新名稱並逐列按下 Apply。改動會在下一次 File → Save 寫回存檔。</sys:String>
+  <sys:String x:Key="RenameMercenaryColIdx">索引</sys:String>
   <sys:String x:Key="RenameMercenaryColMercNo">MercNo</sys:String>
   <sys:String x:Key="RenameMercenaryColCharKey">CharKey</sys:String>
-  <sys:String x:Key="RenameMercenaryColPortrait">Portrait</sys:String>
-  <sys:String x:Key="RenameMercenaryColCharName">Name</sys:String>
-  <sys:String x:Key="RenameMercenaryColType">Type</sys:String>
-  <sys:String x:Key="RenameMercenaryColEquip">Equip</sys:String>
-  <sys:String x:Key="RenameMercenaryColNewName">New name (UTF-8)</sys:String>
-  <sys:String x:Key="RenameMercenaryColApply">Action</sys:String>
-  <sys:String x:Key="RenameMercenaryColApplied">Applied</sys:String>
-  <sys:String x:Key="RenameMercenaryApply">Apply</sys:String>
-  <sys:String x:Key="RenameMercenaryClose">Close</sys:String>
-  <sys:String x:Key="RenameMercenaryNewNameWatermark">enter new name…</sys:String>
-  <sys:String x:Key="RenameMercenaryNotAvailableTitle">No mercenaries to rename</sys:String>
-  <sys:String x:Key="RenameMercenaryNotAvailableBody">The loaded save doesn't have a MercenaryClanSaveData block, or its _mercenaryDataList is empty / unreadable. Mercenaries appear here once you've recruited at least one in-game.</sys:String>
-  <sys:String x:Key="MenuFillAllStacks">Fill _All Stacks Across Every Inventory…</sys:String>
-  <sys:String x:Key="MenuUnlockAllAbyssGates">_Unlock All Abyss Gates (Map Discovery)…</sys:String>
-  <sys:String x:Key="MenuBulkCompleteHeldSAChallenges">_Complete All Held Sealed Abyss Artifact Challenges…</sys:String>
-  <sys:String x:Key="MenuEditAbyssGates">_Edit Abyss Gates (Lock/Unlock per gate)…</sys:String>
-  <sys:String x:Key="MenuEditItemDyes">Edit Item _Dyes…</sys:String>
-  <sys:String x:Key="MenuVendorBuyback">_Vendor Buyback…</sys:String>
-  <sys:String x:Key="MenuReviewChanges">_Review Pending Changes…</sys:String>
+  <sys:String x:Key="RenameMercenaryColPortrait">頭像</sys:String>
+  <sys:String x:Key="RenameMercenaryColCharName">名稱</sys:String>
+  <sys:String x:Key="RenameMercenaryColType">類型</sys:String>
+  <sys:String x:Key="RenameMercenaryColEquip">裝備</sys:String>
+  <sys:String x:Key="RenameMercenaryColNewName">新名稱 (UTF-8)</sys:String>
+  <sys:String x:Key="RenameMercenaryColApply">動作</sys:String>
+  <sys:String x:Key="RenameMercenaryColApplied">已套用</sys:String>
+  <sys:String x:Key="RenameMercenaryApply">套用</sys:String>
+  <sys:String x:Key="RenameMercenaryClose">關閉</sys:String>
+  <sys:String x:Key="RenameMercenaryNewNameWatermark">輸入新名稱…</sys:String>
+  <sys:String x:Key="RenameMercenaryNotAvailableTitle">沒有可改名的傭兵</sys:String>
+  <sys:String x:Key="RenameMercenaryNotAvailableBody">載入的存檔沒有 MercenaryClanSaveData block，或其 _mercenaryDataList 為空 / 無法讀取。在遊戲中招募至少一名傭兵後，傭兵列表就會出現在這裡。</sys:String>
+  <sys:String x:Key="MenuFillAllStacks">把所有背包的堆疊都填到最大(_A)…</sys:String>
+  <sys:String x:Key="MenuUnlockAllAbyssGates">解鎖所有深淵之門 (地圖探索)(_U)…</sys:String>
+  <sys:String x:Key="MenuBulkCompleteHeldSAChallenges">完成所有持有的封印深淵神器挑戰(_C)…</sys:String>
+  <sys:String x:Key="MenuEditAbyssGates">編輯深淵之門 (每個門個別鎖/解鎖)(_E)…</sys:String>
+  <sys:String x:Key="MenuEditItemDyes">編輯物品染色(_D)…</sys:String>
+  <sys:String x:Key="MenuVendorBuyback">商人回購清單(_V)…</sys:String>
+  <sys:String x:Key="MenuReviewChanges">檢視待寫入的變更(_R)…</sys:String>
 
   <!-- Vendor Buyback dialog (Tools menu) -->
-  <sys:String x:Key="VendorBuybackWindowTitle">Vendor Buyback</sys:String>
-  <sys:String x:Key="VendorBuybackHeader">View + Remove items the player has sold to vendors. Each row maps to one StoreDataSaveData._storeSoldItemDataList element. The Remove button deletes the entry from that store's buyback queue (frees the slot); subsequent siblings in the same store shift down by 1 automatically. "Move back to inventory" is a planned follow-up. Saves to file on next File → Save.</sys:String>
-  <sys:String x:Key="VendorBuybackFilterLabel">Filter:</sys:String>
-  <sys:String x:Key="VendorBuybackFilterWatermark">Type to filter — store name / store key shows every sold item in that store; item name / item key narrows per-row…</sys:String>
-  <sys:String x:Key="VendorBuybackColStore">Store</sys:String>
+  <sys:String x:Key="VendorBuybackWindowTitle">商人回購</sys:String>
+  <sys:String x:Key="VendorBuybackHeader">檢視 + 移除玩家賣給商人的物品。每一列對應到一筆 StoreDataSaveData._storeSoldItemDataList 元素。Remove 按鈕會把該筆從該商人的回購佇列刪掉 (釋出該格)；同一商人後續的同階兄弟會自動下移 1 格。「移回背包」功能規劃中。改動會在下一次 File → Save 寫回存檔。</sys:String>
+  <sys:String x:Key="VendorBuybackFilterLabel">篩選：</sys:String>
+  <sys:String x:Key="VendorBuybackFilterWatermark">輸入文字以篩選 — 商人名稱 / store key 會顯示該商人所有售出物品；物品名稱 / item key 會逐列縮小範圍…</sys:String>
+  <sys:String x:Key="VendorBuybackColStore">商人</sys:String>
   <sys:String x:Key="VendorBuybackColStoreKey">StoreKey</sys:String>
-  <sys:String x:Key="VendorBuybackColItem">Item</sys:String>
+  <sys:String x:Key="VendorBuybackColItem">物品</sys:String>
   <sys:String x:Key="VendorBuybackColItemKey">ItemKey</sys:String>
-  <sys:String x:Key="VendorBuybackColStack">Stack</sys:String>
-  <sys:String x:Key="VendorBuybackColEndurance">Endurance</sys:String>
-  <sys:String x:Key="VendorBuybackColSoldAt">SoldAt (ticks)</sys:String>
-  <sys:String x:Key="VendorBuybackColAction">Action</sys:String>
-  <sys:String x:Key="VendorBuybackColStatus">Status</sys:String>
-  <sys:String x:Key="VendorBuybackRemove">Remove</sys:String>
-  <sys:String x:Key="VendorBuybackRemoveTip">Delete this entry from the store's buyback queue. The slot frees up so other items can age in. Cannot be undone within the session; reload the save without writing to revert.</sys:String>
-  <sys:String x:Key="VendorBuybackJump">Jump…</sys:String>
-  <sys:String x:Key="VendorBuybackJumpTip">Close this dialog and open the buyback item in the main editor's block tree. Use the generic per-field editor there to modify stack count, endurance, sockets, dye, etc. — same surface as inventory items.</sys:String>
-  <sys:String x:Key="VendorBuybackClose">Close</sys:String>
-  <sys:String x:Key="VendorBuybackNotAvailableTitle">No vendor buyback entries</sys:String>
-  <sys:String x:Key="VendorBuybackNotAvailableBody">The loaded save has no StoreDataSaveData entry with a non-empty _storeSoldItemDataList. Sell items to a vendor in-game to populate the buyback queue.</sys:String>
+  <sys:String x:Key="VendorBuybackColStack">堆疊</sys:String>
+  <sys:String x:Key="VendorBuybackColEndurance">耐久</sys:String>
+  <sys:String x:Key="VendorBuybackColSoldAt">售出時間 (ticks)</sys:String>
+  <sys:String x:Key="VendorBuybackColAction">動作</sys:String>
+  <sys:String x:Key="VendorBuybackColStatus">狀態</sys:String>
+  <sys:String x:Key="VendorBuybackRemove">移除</sys:String>
+  <sys:String x:Key="VendorBuybackRemoveTip">從該商人的回購佇列刪除此筆。該格空出後其他物品才能流轉進來。此操作在 session 內無法復原；要回復就重新載入存檔但不要寫入即可。</sys:String>
+  <sys:String x:Key="VendorBuybackJump">跳轉…</sys:String>
+  <sys:String x:Key="VendorBuybackJumpTip">關閉此對話框，並在主編輯器的 block 樹中開啟該回購物品。從那裡可以用通用欄位編輯器修改堆疊數量、耐久、鑲嵌孔、染色等 — 介面與背包物品相同。</sys:String>
+  <sys:String x:Key="VendorBuybackClose">關閉</sys:String>
+  <sys:String x:Key="VendorBuybackNotAvailableTitle">沒有商人回購紀錄</sys:String>
+  <sys:String x:Key="VendorBuybackNotAvailableBody">載入的存檔沒有任何 StoreDataSaveData 帶有非空的 _storeSoldItemDataList。請先在遊戲中賣物給商人以建立回購佇列。</sys:String>
 
   <!-- Change summary dialog (review pending edits + close-on-dirty confirm) -->
-  <sys:String x:Key="ChangeSummaryWindowTitle">Pending changes</sys:String>
-  <sys:String x:Key="ChangeSummaryHeaderClose">Unsaved changes — save before exiting?</sys:String>
-  <sys:String x:Key="ChangeSummarySubHeaderClose">The edits listed below haven't been written to disk yet. Save to commit them, Discard to exit without saving (the previous on-disk state is preserved), or Cancel to keep editing.</sys:String>
-  <sys:String x:Key="ChangeSummaryHeaderReview">Pending changes since last save</sys:String>
-  <sys:String x:Key="ChangeSummarySubHeaderReview">Read-only list of edits applied via the UI since the save was loaded (or since the last File → Save). Reload the save to drop all of them; File → Save to commit.</sys:String>
-  <sys:String x:Key="ChangeSummaryColTime">Time</sys:String>
-  <sys:String x:Key="ChangeSummaryColCategory">Area</sys:String>
-  <sys:String x:Key="ChangeSummaryColSummary">Change</sys:String>
-  <sys:String x:Key="ChangeSummarySave">Save</sys:String>
-  <sys:String x:Key="ChangeSummaryDiscard">Discard</sys:String>
-  <sys:String x:Key="ChangeSummaryDiscardExit">Discard &amp; exit</sys:String>
-  <sys:String x:Key="ChangeSummaryCancel">Cancel</sys:String>
-  <sys:String x:Key="ChangeSummaryNoChangesTitle">No pending changes</sys:String>
-  <sys:String x:Key="ChangeSummaryNoChangesBody">Nothing has been edited since the save was loaded (or since the last File → Save).</sys:String>
+  <sys:String x:Key="ChangeSummaryWindowTitle">待寫入的變更</sys:String>
+  <sys:String x:Key="ChangeSummaryHeaderClose">有未儲存的變更 — 退出前先儲存？</sys:String>
+  <sys:String x:Key="ChangeSummarySubHeaderClose">下列編輯尚未寫入磁碟。按「儲存」會寫入並關閉；按「捨棄並退出」會直接關閉 (磁碟上的舊狀態維持不變)；按「取消」會回到編輯器繼續編輯。</sys:String>
+  <sys:String x:Key="ChangeSummaryHeaderReview">自上次儲存以來的變更</sys:String>
+  <sys:String x:Key="ChangeSummarySubHeaderReview">從載入存檔 (或上次 File → Save) 開始，透過 UI 套用過的編輯之唯讀清單。重新載入存檔可丟棄所有變更；File → Save 可寫入磁碟。</sys:String>
+  <sys:String x:Key="ChangeSummaryColTime">時間</sys:String>
+  <sys:String x:Key="ChangeSummaryColCategory">區塊</sys:String>
+  <sys:String x:Key="ChangeSummaryColSummary">變更</sys:String>
+  <sys:String x:Key="ChangeSummarySave">儲存</sys:String>
+  <sys:String x:Key="ChangeSummaryDiscard">捨棄</sys:String>
+  <sys:String x:Key="ChangeSummaryDiscardExit">捨棄並退出</sys:String>
+  <sys:String x:Key="ChangeSummaryCancel">取消</sys:String>
+  <sys:String x:Key="ChangeSummaryNoChangesTitle">沒有待寫入的變更</sys:String>
+  <sys:String x:Key="ChangeSummaryNoChangesBody">自載入存檔 (或上次 File → Save) 起，沒有任何編輯紀錄。</sys:String>
 
   <!-- Dye editor master dialog -->
-  <sys:String x:Key="DyeEditorWindowTitle">Edit item dyes</sys:String>
-  <sys:String x:Key="DyeEditorHeader">Per-item dye editing. Lists every item whose _itemDyeDataList is present + non-empty. Click Edit to mutate R/G/B/A + grime + material + color group on individual slots. v1 scope: edit-existing-dye only — adding dye to an undyed item is deferred until the upstream set_object_list_present ABI lands.</sys:String>
-  <sys:String x:Key="DyeEditorSearchPlaceholder">Filter by item name, bag, or ItemKey…</sys:String>
-  <sys:String x:Key="DyeEditorColIcon">Icon</sys:String>
-  <sys:String x:Key="DyeEditorColBag">Bag</sys:String>
-  <sys:String x:Key="DyeEditorColItem">Item</sys:String>
+  <sys:String x:Key="DyeEditorWindowTitle">編輯物品染色</sys:String>
+  <sys:String x:Key="DyeEditorHeader">逐物品編輯染色。列出所有 _itemDyeDataList 存在且非空的物品。點 Edit 可修改各孔位的 R/G/B/A + 髒污 + 材質 + 色彩群組。v1 範圍：僅編輯既有染色 — 為未染色物品新增染色需等上游 set_object_list_present ABI 完成。</sys:String>
+  <sys:String x:Key="DyeEditorSearchPlaceholder">依物品名稱、背包或 ItemKey 篩選…</sys:String>
+  <sys:String x:Key="DyeEditorColIcon">圖示</sys:String>
+  <sys:String x:Key="DyeEditorColBag">背包</sys:String>
+  <sys:String x:Key="DyeEditorColItem">物品</sys:String>
   <sys:String x:Key="DyeEditorColItemKey">ItemKey</sys:String>
-  <sys:String x:Key="DyeEditorColSlotCount">Slots</sys:String>
-  <sys:String x:Key="DyeEditorColAction">Action</sys:String>
-  <sys:String x:Key="DyeEditorEdit">Edit…</sys:String>
-  <sys:String x:Key="DyeEditorEditTip">Open the per-slot editor for this item's dye list. The dialog stays open after applying so you can edit several slots in sequence.</sys:String>
-  <sys:String x:Key="DyeEditorClose">Close</sys:String>
-  <sys:String x:Key="DyeEditorNotAvailableTitle">No dyed items in this save</sys:String>
-  <sys:String x:Key="DyeEditorNotAvailableBody">No item carried _itemDyeDataList with at least one slot. Either the player hasn't dyed anything yet, or this save schema has _itemDyeDataList under a different field name (re-run vendor/crimson-rs/_probe_item_dye_data to verify).</sys:String>
+  <sys:String x:Key="DyeEditorColSlotCount">孔數</sys:String>
+  <sys:String x:Key="DyeEditorColAction">動作</sys:String>
+  <sys:String x:Key="DyeEditorEdit">編輯…</sys:String>
+  <sys:String x:Key="DyeEditorEditTip">為此物品的染色清單開啟逐孔編輯器。對話框在套用後不會關閉，方便連續編輯多個孔位。</sys:String>
+  <sys:String x:Key="DyeEditorClose">關閉</sys:String>
+  <sys:String x:Key="DyeEditorNotAvailableTitle">此存檔沒有已染色物品</sys:String>
+  <sys:String x:Key="DyeEditorNotAvailableBody">沒有任何物品攜帶至少一格的 _itemDyeDataList。可能是玩家還沒染色過任何東西，或是此存檔 schema 把 _itemDyeDataList 放在不同的欄位名底下 (請重跑 vendor/crimson-rs/_probe_item_dye_data 確認)。</sys:String>
 
   <!-- Dye slot editor child dialog -->
-  <sys:String x:Key="DyeSlotEditorWindowTitle">Edit dye slots</sys:String>
-  <sys:String x:Key="DyeSlotColSlot">Slot</sys:String>
-  <sys:String x:Key="DyeSlotColGrime">Grime</sys:String>
-  <sys:String x:Key="DyeSlotColMaterial">Material</sys:String>
-  <sys:String x:Key="DyeSlotColColorGroup">Color group</sys:String>
-  <sys:String x:Key="DyeSlotColAction">Action</sys:String>
-  <sys:String x:Key="DyeSlotColStatus">Status</sys:String>
-  <sys:String x:Key="DyeSlotApply">Apply</sys:String>
-  <sys:String x:Key="DyeSlotEditorClose">Close</sys:String>
-  <sys:String x:Key="AbyssGatesWindowTitle">Edit Abyss Gates</sys:String>
-  <sys:String x:Key="AbyssGatesHeader">Per-gate Lock/Unlock toggle. Writes _initStateNameHash on every nested FieldGimmickSaveData element inside FieldSaveData._fieldGimmickSaveDataList (Default 0x866c7489 ↔ Activated 0xe300acfe). Idle (scenery) and Unknown rows are read-only to avoid destabilising non-gate gimmicks. Saves to the file on next File → Save.</sys:String>
-  <sys:String x:Key="AbyssGatesColOwnerLevel">Owner level</sys:String>
+  <sys:String x:Key="DyeSlotEditorWindowTitle">編輯染色孔</sys:String>
+  <sys:String x:Key="DyeSlotColSlot">孔</sys:String>
+  <sys:String x:Key="DyeSlotColGrime">髒污</sys:String>
+  <sys:String x:Key="DyeSlotColMaterial">材質</sys:String>
+  <sys:String x:Key="DyeSlotColColorGroup">色彩群組</sys:String>
+  <sys:String x:Key="DyeSlotColAction">動作</sys:String>
+  <sys:String x:Key="DyeSlotColStatus">狀態</sys:String>
+  <sys:String x:Key="DyeSlotApply">套用</sys:String>
+  <sys:String x:Key="DyeSlotEditorClose">關閉</sys:String>
+  <sys:String x:Key="AbyssGatesWindowTitle">編輯深淵之門</sys:String>
+  <sys:String x:Key="AbyssGatesHeader">逐門切換鎖定/解鎖。針對 FieldSaveData._fieldGimmickSaveDataList 內每個 FieldGimmickSaveData 元素寫入 _initStateNameHash (Default 0x866c7489 ↔ Activated 0xe300acfe)。Idle (場景) 與 Unknown 列為唯讀，避免破壞非門類 gimmick 的穩定性。改動會在下一次 File → Save 寫回存檔。</sys:String>
+  <sys:String x:Key="AbyssGatesColOwnerLevel">擁有者關卡</sys:String>
   <sys:String x:Key="AbyssGatesColGimmick">Gimmick</sys:String>
   <sys:String x:Key="AbyssGatesColSaveKey">SaveKey</sys:String>
-  <sys:String x:Key="AbyssGatesColState">State</sys:String>
+  <sys:String x:Key="AbyssGatesColState">狀態</sys:String>
   <sys:String x:Key="AbyssGatesColStateHash">Hash</sys:String>
-  <sys:String x:Key="AbyssGatesColAction">Action</sys:String>
-  <sys:String x:Key="AbyssGatesUnlock">Unlock</sys:String>
-  <sys:String x:Key="AbyssGatesLock">Lock</sys:String>
-  <sys:String x:Key="AbyssGatesUnlockTip">Default (untouched) → Activated (crossed). Sets _initStateNameHash to 0xe300acfe.</sys:String>
-  <sys:String x:Key="AbyssGatesLockTip">Activated (crossed) → Default (untouched). Sets _initStateNameHash back to 0x866c7489.</sys:String>
-  <sys:String x:Key="AbyssGatesClose">Close</sys:String>
-  <sys:String x:Key="AbyssGatesNotAvailableTitle">No abyss gates in this save</sys:String>
-  <sys:String x:Key="AbyssGatesNotAvailableBody">No nested FieldGimmickSaveData elements inside FieldSaveData._fieldGimmickSaveDataList matched the abyss / hyperspace allowlist from gimmickinfo.pabgb. Either the save has no FieldSaveData root yet (very early-game), or the game install is unconfigured so gimmickinfo isn't available.</sys:String>
-  <sys:String x:Key="MenuFontSize">_Font Size</sys:String>
-  <sys:String x:Key="SummaryToggleTip">Show / hide the Save Summary panel — claim more room for the main grids.</sys:String>
-  <sys:String x:Key="MenuLanguage">_Secondary Language</sys:String>
-  <sys:String x:Key="MenuLanguageOff">English only (no secondary)</sys:String>
+  <sys:String x:Key="AbyssGatesColAction">動作</sys:String>
+  <sys:String x:Key="AbyssGatesUnlock">解鎖</sys:String>
+  <sys:String x:Key="AbyssGatesLock">鎖定</sys:String>
+  <sys:String x:Key="AbyssGatesUnlockTip">Default (未觸發) → Activated (已穿越)。將 _initStateNameHash 設為 0xe300acfe。</sys:String>
+  <sys:String x:Key="AbyssGatesLockTip">Activated (已穿越) → Default (未觸發)。將 _initStateNameHash 復原為 0x866c7489。</sys:String>
+  <sys:String x:Key="AbyssGatesClose">關閉</sys:String>
+  <sys:String x:Key="AbyssGatesNotAvailableTitle">此存檔沒有深淵之門</sys:String>
+  <sys:String x:Key="AbyssGatesNotAvailableBody">FieldSaveData._fieldGimmickSaveDataList 內沒有任何 FieldGimmickSaveData 元素符合 gimmickinfo.pabgb 中的 abyss / hyperspace 白名單。可能是存檔還沒有 FieldSaveData root (遊戲非常早期)，或遊戲安裝路徑未設定使得 gimmickinfo 無法讀取。</sys:String>
+  <sys:String x:Key="MenuFontSize">字型大小(_F)</sys:String>
+  <sys:String x:Key="SummaryToggleTip">顯示 / 隱藏存檔摘要面板 — 把空間讓給主資料表格。</sys:String>
+  <sys:String x:Key="MenuLanguage">次要語言(_S)</sys:String>
+  <sys:String x:Key="MenuLanguageOff">僅英文 (不顯示次要語言)</sys:String>
 
   <!-- UI language submenu (Tools → UI Language). Distinct from
        MenuLanguage above, which picks the in-game-data SECONDARY
        language; this picks the editor's own UI language. -->
-  <sys:String x:Key="MenuUiLanguage">_UI Language</sys:String>
-  <sys:String x:Key="MenuUiLanguageAuto">Auto (detect from OS)</sys:String>
+  <sys:String x:Key="MenuUiLanguage">介面語言(_U)</sys:String>
+  <sys:String x:Key="MenuUiLanguageAuto">自動 (依作業系統偵測)</sys:String>
   <sys:String x:Key="MenuUiLanguageEn">English</sys:String>
   <sys:String x:Key="MenuUiLanguageJa">日本語</sys:String>
   <sys:String x:Key="MenuUiLanguageZhTw">繁體中文</sys:String>
 
   <!-- Item-picker dialog -->
-  <sys:String x:Key="ItemPickerWindowTitle">Browse items</sys:String>
-  <sys:String x:Key="ItemPickerSearchPlaceholder">Filter by ItemKey, string id, or localized name…</sys:String>
-  <sys:String x:Key="ItemPickerColIcon">Icon</sys:String>
+  <sys:String x:Key="ItemPickerWindowTitle">瀏覽物品</sys:String>
+  <sys:String x:Key="ItemPickerSearchPlaceholder">依 ItemKey、string id 或本地化名稱篩選…</sys:String>
+  <sys:String x:Key="ItemPickerColIcon">圖示</sys:String>
   <sys:String x:Key="ItemPickerColKey">ItemKey</sys:String>
   <sys:String x:Key="ItemPickerColStringKey">String ID</sys:String>
-  <sys:String x:Key="ItemPickerColNameEnglish">Name (eng)</sys:String>
-  <sys:String x:Key="ItemPickerColCopy">Copy</sys:String>
-  <sys:String x:Key="ItemPickerCopyKeyTip">Copy the numeric ItemKey to the clipboard</sys:String>
-  <sys:String x:Key="ItemPickerCopyStringKeyTip">Copy iteminfo's internal string id to the clipboard</sys:String>
-  <sys:String x:Key="ItemPickerCopyNameTip">Copy the English name to the clipboard</sys:String>
-  <sys:String x:Key="ItemPickerCopyNameSecondaryTip">Copy the secondary-language name to the clipboard</sys:String>
+  <sys:String x:Key="ItemPickerColNameEnglish">名稱 (eng)</sys:String>
+  <sys:String x:Key="ItemPickerColCopy">複製</sys:String>
+  <sys:String x:Key="ItemPickerCopyKeyTip">將數值 ItemKey 複製到剪貼簿</sys:String>
+  <sys:String x:Key="ItemPickerCopyStringKeyTip">將 iteminfo 的內部 string id 複製到剪貼簿</sys:String>
+  <sys:String x:Key="ItemPickerCopyNameTip">將英文名稱複製到剪貼簿</sys:String>
+  <sys:String x:Key="ItemPickerCopyNameSecondaryTip">將次要語言名稱複製到剪貼簿</sys:String>
 
   <!-- Find-items dialog -->
-  <sys:String x:Key="MenuFindItems">_Find Items…</sys:String>
-  <sys:String x:Key="FindItemsWindowTitle">Find items (cross-bag)</sys:String>
-  <sys:String x:Key="FindItemsSearchPlaceholder">Filter by ItemKey, item name, bag name, or ItemNo…</sys:String>
-  <sys:String x:Key="FindItemsColIcon">Icon</sys:String>
-  <sys:String x:Key="FindItemsColBag">Bag</sys:String>
-  <sys:String x:Key="FindItemsColSlot">Slot</sys:String>
+  <sys:String x:Key="MenuFindItems">尋找物品(_F)…</sys:String>
+  <sys:String x:Key="FindItemsWindowTitle">尋找物品 (跨背包)</sys:String>
+  <sys:String x:Key="FindItemsSearchPlaceholder">依 ItemKey、物品名稱、背包名稱或 ItemNo 篩選…</sys:String>
+  <sys:String x:Key="FindItemsColIcon">圖示</sys:String>
+  <sys:String x:Key="FindItemsColBag">背包</sys:String>
+  <sys:String x:Key="FindItemsColSlot">格位</sys:String>
   <sys:String x:Key="FindItemsColItemKey">ItemKey</sys:String>
-  <sys:String x:Key="FindItemsColItemName">Name (eng)</sys:String>
-  <sys:String x:Key="FindItemsColStack">Stack</sys:String>
-  <sys:String x:Key="FindItemsColFlags">Flags</sys:String>
+  <sys:String x:Key="FindItemsColItemName">名稱 (eng)</sys:String>
+  <sys:String x:Key="FindItemsColStack">堆疊</sys:String>
+  <sys:String x:Key="FindItemsColFlags">旗標</sys:String>
   <sys:String x:Key="FindItemsColItemNo">ItemNo</sys:String>
-  <sys:String x:Key="FindItemsColAction">Action</sys:String>
-  <sys:String x:Key="FindItemsGotoButton">Go</sys:String>
-  <sys:String x:Key="FindItemsGotoTip">Jump the main window to this exact item slot — drills InventorySaveData → _inventorylist[N] → _itemList[M]. This dialog stays open.</sys:String>
-  <sys:String x:Key="FindItemsCopyKeyTip">Copy the numeric ItemKey to the clipboard</sys:String>
-  <sys:String x:Key="FindItemsCopyNameTip">Copy the English item name to the clipboard</sys:String>
+  <sys:String x:Key="FindItemsColAction">動作</sys:String>
+  <sys:String x:Key="FindItemsGotoButton">前往</sys:String>
+  <sys:String x:Key="FindItemsGotoTip">把主視窗跳轉到這個物品的精確位置 — 鑽進 InventorySaveData → _inventorylist[N] → _itemList[M]。此對話框會保持開啟。</sys:String>
+  <sys:String x:Key="FindItemsCopyKeyTip">將數值 ItemKey 複製到剪貼簿</sys:String>
+  <sys:String x:Key="FindItemsCopyNameTip">將英文物品名稱複製到剪貼簿</sys:String>
   <sys:String x:Key="FindItemsFlagLockedTip">_isLocked = true</sys:String>
-  <sys:String x:Key="FindItemsFlagNewMarkTip">_isNewMark = true (item has the in-game "new" badge)</sys:String>
-  <sys:String x:Key="FindItemsRefresh">Refresh</sys:String>
+  <sys:String x:Key="FindItemsFlagNewMarkTip">_isNewMark = true (物品帶有遊戲中的「新」標記)</sys:String>
+  <sys:String x:Key="FindItemsRefresh">重新整理</sys:String>
 
   <!-- Browse-characters dialog -->
-  <sys:String x:Key="MenuBrowseCharacters">Browse _Characters / NPCs…</sys:String>
-  <sys:String x:Key="CharacterPickerWindowTitle">Browse characters / NPCs</sys:String>
-  <sys:String x:Key="CharacterPickerSearchPlaceholder">Filter by CharacterKey, internal id, or localized name…</sys:String>
-  <sys:String x:Key="CharacterPickerColPortrait">Portrait</sys:String>
+  <sys:String x:Key="MenuBrowseCharacters">瀏覽角色 / NPC(_C)…</sys:String>
+  <sys:String x:Key="CharacterPickerWindowTitle">瀏覽角色 / NPC</sys:String>
+  <sys:String x:Key="CharacterPickerSearchPlaceholder">依 CharacterKey、內部 id 或本地化名稱篩選…</sys:String>
+  <sys:String x:Key="CharacterPickerColPortrait">頭像</sys:String>
   <sys:String x:Key="CharacterPickerColKey">CharKey</sys:String>
-  <sys:String x:Key="CharacterPickerColInternal">Internal id</sys:String>
-  <sys:String x:Key="CharacterPickerColNameEnglish">Name (eng)</sys:String>
-  <sys:String x:Key="CharacterPickerColCopy">Copy</sys:String>
-  <sys:String x:Key="CharacterPickerCopyKeyTip">Copy the numeric CharacterKey to the clipboard</sys:String>
-  <sys:String x:Key="CharacterPickerCopyInternalTip">Copy characterinfo's internal id (e.g. "Yann_Friendly") to the clipboard</sys:String>
-  <sys:String x:Key="CharacterPickerCopyNameTip">Copy the English display name to the clipboard</sys:String>
-  <sys:String x:Key="CharacterPickerCopyNameSecondaryTip">Copy the secondary-language display name to the clipboard</sys:String>
+  <sys:String x:Key="CharacterPickerColInternal">內部 id</sys:String>
+  <sys:String x:Key="CharacterPickerColNameEnglish">名稱 (eng)</sys:String>
+  <sys:String x:Key="CharacterPickerColCopy">複製</sys:String>
+  <sys:String x:Key="CharacterPickerCopyKeyTip">將數值 CharacterKey 複製到剪貼簿</sys:String>
+  <sys:String x:Key="CharacterPickerCopyInternalTip">將 characterinfo 的內部 id (如 "Yann_Friendly") 複製到剪貼簿</sys:String>
+  <sys:String x:Key="CharacterPickerCopyNameTip">將英文顯示名稱複製到剪貼簿</sys:String>
+  <sys:String x:Key="CharacterPickerCopyNameSecondaryTip">將次要語言顯示名稱複製到剪貼簿</sys:String>
 
   <!-- Character refs browser (Tools menu) + per-field CharacterKey picker share
        the warning banner + Pick button strings below. -->
-  <sys:String x:Key="MenuBrowseCharacterRefs">Browse Character _References…</sys:String>
-  <sys:String x:Key="CharacterRefsBrowserWarning">⚠ Reference linkage is best-effort. The same CharacterKey can mean different things across different blocks/fields. This list enumerates every save field whose schema TypeName is "CharacterKey" — cross-verify in the raw editor.</sys:String>
-  <sys:String x:Key="CharacterRefsBrowserJump">Jump…</sys:String>
-  <sys:String x:Key="CharacterRefsBrowserJumpTip">Close this dialog and navigate the main editor's block tree to the top-level block containing this CharacterKey reference. From there drill manually to the specific field.</sys:String>
-  <sys:String x:Key="CharacterRefsBrowserFilterLabel">Filter:</sys:String>
-  <sys:String x:Key="CharacterRefsBrowserClose">Close</sys:String>
-  <sys:String x:Key="CharacterRefsBrowserCol_Portrait">Portrait</sys:String>
+  <sys:String x:Key="MenuBrowseCharacterRefs">瀏覽角色參照(_R)…</sys:String>
+  <sys:String x:Key="CharacterRefsBrowserWarning">⚠ 參照串接僅為盡力而為。同一個 CharacterKey 在不同 block / 不同欄位脈絡下可能代表不同實體。本列表僅列舉所有 schema TypeName 為 "CharacterKey" 的欄位 — 請以原始編輯器交叉驗證。</sys:String>
+  <sys:String x:Key="CharacterRefsBrowserJump">跳轉…</sys:String>
+  <sys:String x:Key="CharacterRefsBrowserJumpTip">關閉此對話框，並在主編輯器的 block 樹中跳轉到含有該 CharacterKey 參照的頂層 block。再從那裡手動鑽到特定欄位。</sys:String>
+  <sys:String x:Key="CharacterRefsBrowserFilterLabel">篩選：</sys:String>
+  <sys:String x:Key="CharacterRefsBrowserClose">關閉</sys:String>
+  <sys:String x:Key="CharacterRefsBrowserCol_Portrait">頭像</sys:String>
   <sys:String x:Key="CharacterRefsBrowserCol_Block">Block</sys:String>
   <sys:String x:Key="CharacterRefsBrowserCol_BlockNum">Block #</sys:String>
-  <sys:String x:Key="CharacterRefsBrowserCol_Name">Character</sys:String>
+  <sys:String x:Key="CharacterRefsBrowserCol_Name">角色</sys:String>
   <sys:String x:Key="CharacterRefsBrowserCol_Key">CharacterKey</sys:String>
-  <sys:String x:Key="CharacterRefsBrowserCol_Action">Action</sys:String>
+  <sys:String x:Key="CharacterRefsBrowserCol_Action">動作</sys:String>
 
   <!-- Picker shared with CharacterPickerWindow (Pick mode + warning banner)
        + edit panel button strings for the CharacterKey scalar field picker. -->
-  <sys:String x:Key="CharacterPickerWarning">⚠ Linkage is best-effort. A characterinfo.pabgb key may not refer to the same entity across different fields. Cross-verify in-game or against the main editor before relying on the resolved name.</sys:String>
-  <sys:String x:Key="CharacterPickerPick">Pick</sys:String>
-  <sys:String x:Key="CharacterPickerColPick">Pick</sys:String>
-  <sys:String x:Key="EditPanelPickCharacter">Pick character…</sys:String>
-  <sys:String x:Key="EditPanelPickCharacterTip">Open the character picker dialog. Select a row to fill the textbox with that CharacterKey value; click Apply to commit.</sys:String>
+  <sys:String x:Key="CharacterPickerWarning">⚠ 串接僅為盡力而為。characterinfo.pabgb 中的 key 在不同欄位脈絡下不一定對應同一實體。請以遊戲畫面或主編輯器交叉驗證後再依賴解析後的名稱。</sys:String>
+  <sys:String x:Key="CharacterPickerPick">選擇</sys:String>
+  <sys:String x:Key="CharacterPickerColPick">選擇</sys:String>
+  <sys:String x:Key="EditPanelPickCharacter">選擇角色…</sys:String>
+  <sys:String x:Key="EditPanelPickCharacterTip">開啟角色選擇對話框。選一列以填入該 CharacterKey 值到文字框；按 Apply 寫入。</sys:String>
 
   <!-- Browse-localization dialog -->
-  <sys:String x:Key="LocalizationWindowTitle">Browse localization</sys:String>
-  <sys:String x:Key="LocalizationSearchPlaceholder">Filter by key or value…</sys:String>
+  <sys:String x:Key="LocalizationWindowTitle">瀏覽本地化字串</sys:String>
+  <sys:String x:Key="LocalizationSearchPlaceholder">依 key 或 value 篩選…</sys:String>
   <sys:String x:Key="LocalizationColKey">Key</sys:String>
-  <sys:String x:Key="LocalizationColValue">Value</sys:String>
-  <sys:String x:Key="LocalizationColCopy">Copy</sys:String>
-  <sys:String x:Key="LocalizationCopyKeyTip">Copy the raw key to the clipboard</sys:String>
-  <sys:String x:Key="LocalizationCopyValueTip">Copy the English value to the clipboard</sys:String>
-  <sys:String x:Key="LocalizationCopyValue2Tip">Copy the secondary-language value to the clipboard</sys:String>
+  <sys:String x:Key="LocalizationColValue">值</sys:String>
+  <sys:String x:Key="LocalizationColCopy">複製</sys:String>
+  <sys:String x:Key="LocalizationCopyKeyTip">將原始 key 複製到剪貼簿</sys:String>
+  <sys:String x:Key="LocalizationCopyValueTip">將英文 value 複製到剪貼簿</sys:String>
+  <sys:String x:Key="LocalizationCopyValue2Tip">將次要語言 value 複製到剪貼簿</sys:String>
 
   <!-- First-launch legal disclaimer -->
-  <sys:String x:Key="DisclaimerTitle">CrimsonAtomtic — Disclaimer</sys:String>
-  <sys:String x:Key="DisclaimerAccept">I Accept</sys:String>
-  <sys:String x:Key="DisclaimerDecline">Quit</sys:String>
-  <sys:String x:Key="DisclaimerBody">This editor is provided as-is with no warranty of correct operation and no exhaustive validation of save structures. The author accepts no responsibility for any data corruption, save damage, or account-related issues that may result from its use.&#x0a;&#x0a;Clicking "I Accept" confirms you have read and agreed to the above and accept all risks of using this tool.</sys:String>
+  <sys:String x:Key="DisclaimerTitle">CrimsonAtomtic — 免責聲明</sys:String>
+  <sys:String x:Key="DisclaimerAccept">我同意</sys:String>
+  <sys:String x:Key="DisclaimerDecline">離開</sys:String>
+  <sys:String x:Key="DisclaimerBody">本編輯器以「現狀」方式提供，不保證能正常運作，也沒有針對所有 save 結構做詳盡驗證。對於使用本工具可能造成的資料錯誤、存檔毀損或任何遊戲帳號相關問題，作者不負任何責任。&#x0a;&#x0a;按下「我同意」即表示您已閱讀並同意上述條款，並接受使用本工具的全部風險。</sys:String>
 
   <!-- Empty workspace -->
-  <sys:String x:Key="EmptyTitle">No save loaded</sys:String>
-  <sys:String x:Key="EmptyHint">Use File → Open Save to read a .save file.</sys:String>
+  <sys:String x:Key="EmptyTitle">尚未載入存檔</sys:String>
+  <sys:String x:Key="EmptyHint">請從 File → Open Save 讀取 .save 檔。</sys:String>
 
   <!-- Summary pane -->
-  <sys:String x:Key="SummaryHeader">Save summary</sys:String>
+  <sys:String x:Key="SummaryHeader">存檔摘要</sys:String>
   <sys:String x:Key="SummarySlot">Slot</sys:String>
-  <sys:String x:Key="SummaryVersion">Version</sys:String>
+  <sys:String x:Key="SummaryVersion">版本</sys:String>
   <sys:String x:Key="SummaryHmac">HMAC</sys:String>
-  <sys:String x:Key="SummaryHmacOk">verified</sys:String>
-  <sys:String x:Key="SummaryHmacFail">FAILED</sys:String>
+  <sys:String x:Key="SummaryHmacOk">已驗證</sys:String>
+  <sys:String x:Key="SummaryHmacFail">失敗</sys:String>
   <sys:String x:Key="SummaryPayload">Payload</sys:String>
   <sys:String x:Key="SummaryBody">Body</sys:String>
   <sys:String x:Key="SummaryTypes">Schema types</sys:String>
   <sys:String x:Key="SummaryEntries">TOC entries</sys:String>
 
   <!-- Blocks pane -->
-  <sys:String x:Key="BlocksHeader">Top-level blocks</sys:String>
-  <sys:String x:Key="BlocksFilterPlaceholder">Filter blocks by class or index…</sys:String>
+  <sys:String x:Key="BlocksHeader">頂層 blocks</sys:String>
+  <sys:String x:Key="BlocksFilterPlaceholder">依 class 或索引篩選 blocks…</sys:String>
   <sys:String x:Key="BlocksColIndex">#</sys:String>
   <sys:String x:Key="BlocksColClass">Class</sys:String>
   <sys:String x:Key="BlocksColOffset">Offset</sys:String>
   <sys:String x:Key="BlocksColSize">Size</sys:String>
-  <sys:String x:Key="BlocksColFields">Fields</sys:String>
+  <sys:String x:Key="BlocksColFields">欄位數</sys:String>
 
   <!-- Field detail pane -->
-  <sys:String x:Key="FieldsHeader">Block fields</sys:String>
-  <sys:String x:Key="FieldsHint">Select a block above to inspect its fields.</sys:String>
+  <sys:String x:Key="FieldsHeader">Block 欄位</sys:String>
+  <sys:String x:Key="FieldsHint">在上方選一個 block 以檢視其欄位。</sys:String>
   <sys:String x:Key="FieldsColIndex">#</sys:String>
-  <sys:String x:Key="FieldsColName">Field</sys:String>
-  <sys:String x:Key="FieldsColType">Type</sys:String>
+  <sys:String x:Key="FieldsColName">欄位</sys:String>
+  <sys:String x:Key="FieldsColType">類型</sys:String>
   <sys:String x:Key="FieldsColKind">Kind</sys:String>
   <sys:String x:Key="FieldsColPresent">Present</sys:String>
-  <sys:String x:Key="FieldsColValue">Value</sys:String>
-  <sys:String x:Key="FieldsColResolvedName">Name</sys:String>
+  <sys:String x:Key="FieldsColValue">值</sys:String>
+  <sys:String x:Key="FieldsColResolvedName">名稱</sys:String>
   <sys:String x:Key="FieldsColRange">Bytes</sys:String>
   <sys:String x:Key="FieldsMask">Mask</sys:String>
   <sys:String x:Key="FieldsTrailingPad">Trailing pad</sys:String>
   <sys:String x:Key="FieldsUndecoded">Undecoded</sys:String>
-  <sys:String x:Key="FieldsLoading">Loading…</sys:String>
-  <sys:String x:Key="FieldsError">Could not load block details.</sys:String>
-  <sys:String x:Key="FieldsFilterPlaceholder">Filter fields by name, type, or value…</sys:String>
-  <sys:String x:Key="FieldsFilterCount">{0:N0} of {1:N0}</sys:String>
+  <sys:String x:Key="FieldsLoading">載入中…</sys:String>
+  <sys:String x:Key="FieldsError">無法載入 block 詳細資訊。</sys:String>
+  <sys:String x:Key="FieldsFilterPlaceholder">依名稱、類型或值篩選欄位…</sys:String>
+  <sys:String x:Key="FieldsFilterCount">{0:N0} / {1:N0}</sys:String>
 
   <!-- Drill-down + navigation -->
-  <sys:String x:Key="FieldsColDrill">Drill</sys:String>
+  <sys:String x:Key="FieldsColDrill">深入</sys:String>
   <sys:String x:Key="FieldsDrillButton">▸</sys:String>
 
   <!-- Edit panel -->
-  <sys:String x:Key="EditPanelHeader">Edit field</sys:String>
-  <sys:String x:Key="EditPanelNameLabel">Field</sys:String>
-  <sys:String x:Key="EditPanelTypeLabel">Type</sys:String>
-  <sys:String x:Key="EditPanelValueLabel">New value</sys:String>
-  <sys:String x:Key="EditPanelApply">Apply</sys:String>
-  <sys:String x:Key="EditPanelRevert">Revert</sys:String>
-  <sys:String x:Key="EditPanelFillMaxStack">Set to max</sys:String>
-  <sys:String x:Key="EditPanelFillMaxStackTip">Fill this field with the item's max_stack_count (from iteminfo). Pre-fills the textbox — review then click Apply.</sys:String>
-  <sys:String x:Key="EditPanelMakeAbsent">Make absent</sys:String>
-  <sys:String x:Key="EditPanelMakeAbsentTip">Flip this scalar's presence bit off — the field is removed from the block (mask bit cleared, payload bytes dropped). Reverse it by typing a value and clicking Apply.</sys:String>
-  <sys:String x:Key="MarkChallengeCompleteButton">✓ Mark Challenge Complete (Pattern B v1)</sys:String>
-  <sys:String x:Key="MarkChallengeCompleteTip">Engine-faithful single-challenge completion (Pattern B v1). Only enables when the engine has already done discovery for this challenge (you've picked up the reward artifact in-game). Writes the FAR tracker (_state=5 + _completedTime + visible tag) and creates the X_2 sub-mission entry — exactly what the engine writes for an unclaimed completion. Catalog + adjacent twin are NOT touched; the engine fills those in when you claim the reward in-game. NOT FULLY TESTED — back up your save first.</sys:String>
-  <sys:String x:Key="ConfirmDialogYes">Yes</sys:String>
-  <sys:String x:Key="ConfirmDialogNo">No</sys:String>
-  <sys:String x:Key="ElementsColBulkFill">Bulk</sys:String>
-  <sys:String x:Key="ElementsBulkFillButton">Fill stacks</sys:String>
-  <sys:String x:Key="ElementsBulkFillTip">Set every item in this container's _stackCount to its iteminfo max_stack_count.</sys:String>
-  <sys:String x:Key="ElementsBulkFillConfirmTitle">Fill stacks to max?</sys:String>
-  <sys:String x:Key="ElementsColRemove">Remove</sys:String>
-  <sys:String x:Key="ElementsRemoveButton">✕ Remove</sys:String>
-  <sys:String x:Key="ElementsRemoveTip">Drop this element from the list. The save body shrinks to match; reversible by reloading without writing.</sys:String>
-  <sys:String x:Key="ItemPickerAddToBagTip">Add this item to the inventory list the main window is currently showing. Open a bag (drill into _inventorylist[N]._itemList) first; otherwise the click reports the requirement in the status bar.</sys:String>
-  <sys:String x:Key="MenuRestoreFromBackup">Restore from Backup…</sys:String>
-  <sys:String x:Key="RestoreFromBackupTitle">Restore from Backup</sys:String>
-  <sys:String x:Key="RestoreFromBackupColumnHint">Click "Restore" on a row to overwrite the live save with that snapshot. The current contents are backed up first.</sys:String>
-  <sys:String x:Key="RestoreColSlot">Slot (user / name)</sys:String>
-  <sys:String x:Key="RestoreColTimestamp">Backup taken</sys:String>
-  <sys:String x:Key="RestoreColFiles">Files</sys:String>
-  <sys:String x:Key="RestoreColSize">Size</sys:String>
-  <sys:String x:Key="RestoreColAction">Action</sys:String>
-  <sys:String x:Key="RestoreButton">⤺ Restore</sys:String>
-  <sys:String x:Key="RestoreButtonTip">Overwrite the live save with this backup. The current state is backed up first, so this restore is itself undoable.</sys:String>
-  <sys:String x:Key="EditPanelNestedReadOnly">Editing nested fields is not yet supported. Use Back to return to the top-level block.</sys:String>
-  <sys:String x:Key="ElementsColIcon">Icon</sys:String>
+  <sys:String x:Key="EditPanelHeader">編輯欄位</sys:String>
+  <sys:String x:Key="EditPanelNameLabel">欄位</sys:String>
+  <sys:String x:Key="EditPanelTypeLabel">類型</sys:String>
+  <sys:String x:Key="EditPanelValueLabel">新值</sys:String>
+  <sys:String x:Key="EditPanelApply">套用</sys:String>
+  <sys:String x:Key="EditPanelRevert">復原</sys:String>
+  <sys:String x:Key="EditPanelFillMaxStack">填到最大值</sys:String>
+  <sys:String x:Key="EditPanelFillMaxStackTip">把這個欄位填上該物品的 max_stack_count (來自 iteminfo)。會預填到文字框 — 確認後再按 Apply。</sys:String>
+  <sys:String x:Key="EditPanelMakeAbsent">標為缺席 (absent)</sys:String>
+  <sys:String x:Key="EditPanelMakeAbsentTip">將此 scalar 的存在位元關掉 — 該欄位從 block 移除 (mask bit 清掉，payload bytes 丟棄)。要復原就輸入一個值再按 Apply。</sys:String>
+  <sys:String x:Key="MarkChallengeCompleteButton">✓ 標記挑戰完成 (Pattern B v1)</sys:String>
+  <sys:String x:Key="MarkChallengeCompleteTip">引擎自然單一挑戰完成 (Pattern B v1)。只有當引擎已對此挑戰做過 discovery (你已在遊戲中撿起獎勵神器) 時才會啟用。寫入 FAR tracker (_state=5 + _completedTime + visible tag) 並建立 X_2 子任務項目 — 與引擎在未領取的已完成狀態下會寫入的內容完全相同。Catalog 與 adjacent twin 不會被動到；那部份引擎會在你於遊戲中領取獎勵時自然填上。尚未完整測試 — 請先備份你的存檔。</sys:String>
+  <sys:String x:Key="ConfirmDialogYes">是</sys:String>
+  <sys:String x:Key="ConfirmDialogNo">否</sys:String>
+  <sys:String x:Key="ElementsColBulkFill">批次</sys:String>
+  <sys:String x:Key="ElementsBulkFillButton">填滿堆疊</sys:String>
+  <sys:String x:Key="ElementsBulkFillTip">把這個容器內每個物品的 _stackCount 設為其 iteminfo max_stack_count。</sys:String>
+  <sys:String x:Key="ElementsBulkFillConfirmTitle">填滿堆疊至最大值？</sys:String>
+  <sys:String x:Key="ElementsColRemove">移除</sys:String>
+  <sys:String x:Key="ElementsRemoveButton">✕ 移除</sys:String>
+  <sys:String x:Key="ElementsRemoveTip">把此元素從 list 移除。save body 會跟著縮短；不寫入存檔時重新載入即可復原。</sys:String>
+  <sys:String x:Key="ItemPickerAddToBagTip">把這個物品加入主視窗目前顯示的背包清單。請先打開一個背包 (鑽進 _inventorylist[N]._itemList)；否則點擊會在狀態列回報前置需求。</sys:String>
+  <sys:String x:Key="MenuRestoreFromBackup">從備份還原…</sys:String>
+  <sys:String x:Key="RestoreFromBackupTitle">從備份還原</sys:String>
+  <sys:String x:Key="RestoreFromBackupColumnHint">在某一列按下「還原」可以將該快照覆寫到目前的存檔。覆寫前會先備份當前內容。</sys:String>
+  <sys:String x:Key="RestoreColSlot">Slot (使用者 / 名稱)</sys:String>
+  <sys:String x:Key="RestoreColTimestamp">備份時間</sys:String>
+  <sys:String x:Key="RestoreColFiles">檔案</sys:String>
+  <sys:String x:Key="RestoreColSize">大小</sys:String>
+  <sys:String x:Key="RestoreColAction">動作</sys:String>
+  <sys:String x:Key="RestoreButton">⤺ 還原</sys:String>
+  <sys:String x:Key="RestoreButtonTip">用此備份覆寫目前的存檔。當前狀態會先備份起來，因此此次還原本身也是可復原的。</sys:String>
+  <sys:String x:Key="EditPanelNestedReadOnly">尚不支援編輯巢狀欄位。請按 Back 回到頂層 block。</sys:String>
+  <sys:String x:Key="ElementsColIcon">圖示</sys:String>
   <sys:String x:Key="ElementsColIndex">#</sys:String>
   <sys:String x:Key="ElementsColClass">Class</sys:String>
   <sys:String x:Key="ElementsColOffset">Offset</sys:String>
   <sys:String x:Key="ElementsColSize">Size</sys:String>
-  <sys:String x:Key="ElementsColFields">Fields</sys:String>
-  <sys:String x:Key="ElementsColOpen">Open</sys:String>
+  <sys:String x:Key="ElementsColFields">欄位數</sys:String>
+  <sys:String x:Key="ElementsColOpen">開啟</sys:String>
   <sys:String x:Key="ElementsOpenButton">▸</sys:String>
   <sys:String x:Key="ElementsColItemKey">Key</sys:String>
-  <sys:String x:Key="ElementsColItemName">Name</sys:String>
-  <sys:String x:Key="ElementsFilterPlaceholder">Filter by key, name, or class…</sys:String>
-  <sys:String x:Key="NavigationBack">← Back</sys:String>
+  <sys:String x:Key="ElementsColItemName">名稱</sys:String>
+  <sys:String x:Key="ElementsFilterPlaceholder">依 key、名稱或 class 篩選…</sys:String>
+  <sys:String x:Key="NavigationBack">← 返回</sys:String>
 
 </ResourceDictionary>
