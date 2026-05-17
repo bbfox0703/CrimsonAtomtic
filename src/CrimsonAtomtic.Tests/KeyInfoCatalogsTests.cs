@@ -338,6 +338,52 @@ public sealed class KeyInfoCatalogsTests
     }
 
     [Fact]
+    public void DyeColorGroupInfo_PaletteAccessors_RoundtripRgbToPositionAndBack()
+    {
+        var live = LiveOrSkip();
+        if (live is null) return;
+        var (paz, p0008, _) = live.Value;
+
+        var pabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "dyecolorgroupinfo.pabgb");
+        var pabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "dyecolorgroupinfo.pabgh");
+        using var cat = NativeDyeColorGroupInfoCatalog.LoadFromBytes(pabgb, pabgh);
+
+        // Pick the first row's key as the test theme.
+        var first = cat.GetEntry(0);
+        Assert.NotNull(first);
+        var themeKey = first!.Value.Key;
+
+        // Palette size — vendor says 109 in 1.07; defensive lower bound
+        // tolerates a future patch that adjusts the count.
+        var size = cat.PaletteSize(themeKey);
+        Assert.NotNull(size);
+        Assert.InRange(size!.Value, 50, 200);
+
+        // Read position 0 (start of the grayscale ramp).
+        var rgba0 = cat.PaletteAt(themeKey, 0);
+        Assert.NotNull(rgba0);
+        // Alpha is 0xFF on every observed position per vendor docs.
+        Assert.Equal((byte)0xFF, rgba0!.Value.A);
+
+        // Forward+reverse roundtrip: the position we just read must
+        // reverse-lookup back to itself.
+        var foundPos = cat.PositionForRgb(themeKey, rgba0.Value.R, rgba0.Value.G, rgba0.Value.B);
+        Assert.NotNull(foundPos);
+        Assert.Equal(0, foundPos!.Value);
+
+        // Off-grid RGB returns null (no exact match).
+        Assert.Null(cat.PositionForRgb(themeKey, 0x01, 0x02, 0x03));
+
+        // Unknown theme returns null on all three accessors.
+        Assert.Null(cat.PaletteSize(uint.MaxValue));
+        Assert.Null(cat.PaletteAt(uint.MaxValue, 0));
+        Assert.Null(cat.PositionForRgb(uint.MaxValue, 0, 0, 0));
+
+        // Out-of-range position on a known theme returns null.
+        Assert.Null(cat.PaletteAt(themeKey, size.Value + 100));
+    }
+
+    [Fact]
     public void PartPrefabDyeTexturePallete_LiveInstall_LoadsAndLooksUpSubRecords()
     {
         var live = LiveOrSkip();

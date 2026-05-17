@@ -111,6 +111,78 @@ public sealed class NativeDyeColorGroupInfoCatalog : IDisposable
         }
     }
 
+    /// <summary>
+    /// Number of palette positions for <paramref name="colorGroupKey"/>'s
+    /// theme. 109 in 1.07 (9 grayscale + 10×10 chromatic). Returns null
+    /// when the key isn't in the table.
+    /// </summary>
+    /// <remarks>
+    /// The dye picker is a fixed grid per theme, NOT freeform RGB.
+    /// See <c>vendor/crimson-rs/docs/dye-editor-scope.md</c>
+    /// §"Recommended C# editor UX".
+    /// </remarks>
+    public int? PaletteSize(uint colorGroupKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var rc = NativeMethods.DyeColorGroupInfoPaletteSize(_handle, colorGroupKey, out var count);
+        if (rc == NativeMethods.NOT_FOUND) return null;
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_dye_color_group_info_palette_size({colorGroupKey}) failed: "
+                + NameBuffer.ErrorName(rc));
+        }
+        return (int)count;
+    }
+
+    /// <summary>
+    /// Logical RGBA at the given palette position. The four bytes are
+    /// in <c>(R, G, B, A)</c> order — ready to write straight into the
+    /// save's <c>_dyeColorR/G/B/A</c> u8 scalars. Returns null when the
+    /// key or position is out of range.
+    /// </summary>
+    public (byte R, byte G, byte B, byte A)? PaletteAt(uint colorGroupKey, int positionIdx)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentOutOfRangeException.ThrowIfNegative(positionIdx);
+        var rc = NativeMethods.DyeColorGroupInfoPaletteAt(
+            _handle, colorGroupKey, (uint)positionIdx,
+            out var r, out var g, out var b, out var a);
+        if (rc == NativeMethods.NOT_FOUND || rc == NativeMethods.OUT_OF_RANGE) return null;
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_dye_color_group_info_palette_at({colorGroupKey}, {positionIdx}) failed: "
+                + NameBuffer.ErrorName(rc));
+        }
+        return (r, g, b, a);
+    }
+
+    /// <summary>
+    /// Reverse lookup — palette position whose RGB matches
+    /// <paramref name="r"/>, <paramref name="g"/>, <paramref name="b"/>
+    /// for <paramref name="colorGroupKey"/>'s theme. Alpha is not part
+    /// of the match (every observed position uses 0xFF). Returns null
+    /// when the key is unknown or no position is an exact match (i.e.
+    /// the save's RGB was set off-grid by a tool like Cheat Engine).
+    /// Useful for highlighting which cell a currently-applied dye came
+    /// from in the editor's picker grid.
+    /// </summary>
+    public int? PositionForRgb(uint colorGroupKey, byte r, byte g, byte b)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var rc = NativeMethods.DyeColorGroupInfoPositionForRgb(
+            _handle, colorGroupKey, r, g, b, out var pos);
+        if (rc == NativeMethods.NOT_FOUND) return null;
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_dye_color_group_info_position_for_rgb({colorGroupKey}, " +
+                $"{r}, {g}, {b}) failed: " + NameBuffer.ErrorName(rc));
+        }
+        return (int)pos;
+    }
+
     public void Dispose()
     {
         if (_disposed) return;

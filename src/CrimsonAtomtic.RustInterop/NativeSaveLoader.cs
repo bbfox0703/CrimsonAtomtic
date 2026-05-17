@@ -2761,6 +2761,27 @@ internal static partial class NativeMethods
         CrimsonDyeColorGroupInfoHandle handle, uint idx, out uint outKey,
         byte* buf, nuint bufLen, out nuint required);
 
+    // Palette accessors — the dye picker is a 109-position grid per
+    // theme (9 grayscale + 10×10 chromatic), NOT freeform RGB. The
+    // PyQt5 reference editor's free-form RGB sliders were wrong; the
+    // engine constrains visible colors to the palette positions. Per
+    // vendor/crimson-rs/docs/dye-editor-scope.md §"Recommended C#
+    // editor UX".
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_dye_color_group_info_palette_size")]
+    public static partial int DyeColorGroupInfoPaletteSize(
+        CrimsonDyeColorGroupInfoHandle handle, uint colorGroupKey, out uint outCount);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_dye_color_group_info_palette_at")]
+    public static partial int DyeColorGroupInfoPaletteAt(
+        CrimsonDyeColorGroupInfoHandle handle, uint colorGroupKey, uint positionIdx,
+        out byte outR, out byte outG, out byte outB, out byte outA);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_dye_color_group_info_position_for_rgb")]
+    public static partial int DyeColorGroupInfoPositionForRgb(
+        CrimsonDyeColorGroupInfoHandle handle, uint colorGroupKey,
+        byte r, byte g, byte b, out uint outPosition);
+
     // ── PartPrefabDyeTexturePalleteInfo bridge ──────────────────────────────
     //
     // Resolves PartPrefabDyeTexturePalleteKey (u16, widened to u32 in

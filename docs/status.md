@@ -3,7 +3,39 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-17 part 2 (cross-container item enumerator + Dye/Sockets walk-once refactor; "+ Add Dye" via ObjectList presence toggle; Mark-Challenge skip-reason tooltip; main + side quest rollup bridges).
+> Last updated: 2026-05-17 part 3 (dye palette accessor bindings — finding: dye is a 109-position grid, not freeform RGB).
+>
+> ## ✅ This session — what shipped (2026-05-17 part 3)
+>
+> One commit consuming a single upstream finding that re-frames the
+> entire dye-editing UX. Vendor `crimson-rs` refreshed `4ee430b` →
+> `d8c15cd` (1 upstream commit).
+>
+> | Area | Scope |
+> |---|---|
+> | **Dye color group palette accessors** | Upstream investigation (vendor `d8c15cd`) pinned a critical model correction: the save's `_dyeColorR/G/B/A` scalars are **NOT freeform** — they index into a 109-position palette per Color_Group theme (9 grayscale + 10×10 chromatic). All 11 RGBs observed in slot103 (6 Hernand + 5 Pororin) hit exact gradient positions; **zero off-grid values**. The PyQt5 reference editor's freeform R/G/B sliders are technically valid bytes but reach colors the engine can't display. Critical byte-order finding: the on-disk palette is BGRA but the save uses logical RGBA — the parser now swaps automatically so palette values compare directly. 3 new C ABI exports bound on `NativeDyeColorGroupInfoCatalog`: `PaletteSize(themeKey)` → 109 in 1.07, `PaletteAt(themeKey, idx)` → logical `(R, G, B, A)` ready to write into the save, `PositionForRgb(themeKey, r, g, b)` → reverse lookup (NOT_FOUND for off-grid). New live-install roundtrip test pins forward + reverse symmetry on the first theme. **DyeSlot editor UX rewrite deferred** — vendor docs spec a visual 11-row palette picker grid replacing the freeform sliders; tracked as a follow-on so the ABI binding ships independently of the bigger UX change. |
+>
+> Tests: **268 → 269** (+1 palette roundtrip). Debug build clean.
+>
+> ### Open follow-ons noted during this session
+>
+> - **DyeSlot editor palette picker UX**: replace `DyeSlotEditorWindow`'s
+>   freeform R/G/B/A inputs with a visual palette grid (11 rows × ~10 cols
+>   per theme). Click a cell → write the cell's RGB back via existing
+>   `SetScalarField`. Reverse lookup highlights the currently-applied
+>   dye's cell. The "dye consumable item" is bookkeeping only — visual
+>   = palette position, so the v2 editor ships **without** needing a
+>   `(consumable_ItemKey, theme) → position` mapping. ASCII mockup +
+>   recommended layout in
+>   [`vendor/crimson-rs/docs/dye-editor-scope.md`](../vendor/crimson-rs/docs/dye-editor-scope.md)
+>   §"Recommended C# editor UX". Multi-hour rewrite; not started.
+>
+> ### Open follow-ons carried over (no change)
+>
+> - **Pattern B v2 for multi-objective SA challenges** (from part 1).
+> - **OCT forum post URL placeholder** (from part 1).
+>
+> ---
 >
 > ## ✅ This session — what shipped (2026-05-17 part 2)
 >
