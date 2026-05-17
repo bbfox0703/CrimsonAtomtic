@@ -1332,6 +1332,49 @@ public sealed class NativeSaveLoaderTests
     }
 
     [Fact]
+    public void ListCharacterRefs_LiveSave_ReturnsRecords()
+    {
+        var path = FindLiveSave();
+        if (path is null) return;
+        var loader = new NativeSaveLoader();
+        loader.Load(path);
+
+        var refs = loader.ListCharacterRefs(out var snapshotVersion);
+        Assert.Equal(0u, snapshotVersion); // fresh load
+
+        // Every 1.07-era save observed so far carries at least a few
+        // dozen CharacterKey occurrences across mercenary slots / field
+        // spawns / quest NPC pins. Defensive lower bound: assert at
+        // least one record + a non-zero CharacterKey somewhere. Sparse
+        // saves (brand-new character pre-tutorial-end) are not a
+        // realistic test target — those produce a clean
+        // `loader.Load + skip` path long before reaching this assert.
+        Assert.NotEmpty(refs);
+
+        var sawNonZeroKey = false;
+        foreach (var rec in refs)
+        {
+            // Top-block index has to address into the loaded save's
+            // block array (no upper bound without a fresh
+            // summary read, so this is a smoke check).
+            Assert.True(rec.BlockIndex < 100_000);
+            // Reserved padding round-trips as zero — the C# struct's
+            // 16-byte layout has to match Rust's repr(C) exactly.
+            Assert.Equal(0u, rec.Reserved0);
+            if (rec.CharacterKey != 0)
+            {
+                sawNonZeroKey = true;
+            }
+        }
+        Assert.True(sawNonZeroKey,
+            "Expected at least one non-zero CharacterKey across the flat list.");
+
+        // Version stamp is stable across a pure read.
+        var stillFresh = loader.GetMutationVersion();
+        Assert.Equal(snapshotVersion, stillFresh);
+    }
+
+    [Fact]
     public void GetMutationVersion_BumpsAfterMutation()
     {
         var path = FindLiveSave();

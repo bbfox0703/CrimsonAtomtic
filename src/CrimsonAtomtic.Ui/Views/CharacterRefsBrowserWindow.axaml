@@ -1,0 +1,119 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        mc:Ignorable="d"
+        d:DesignWidth="1100"
+        d:DesignHeight="600"
+        x:Class="CrimsonAtomtic.Ui.Views.CharacterRefsBrowserWindow"
+        x:DataType="vm:CharacterRefsBrowserViewModel"
+        Title="{StaticResource MenuBrowseCharacterRefs}"
+        Icon="/Assets/MainIcon.ico"
+        Width="1100" Height="600"
+        MinWidth="800" MinHeight="380"
+        FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
+
+  <DockPanel LastChildFill="True" Margin="12">
+
+    <!-- Persistent warning banner. Linkage between schema-tagged
+         CharacterKey occurrences and concrete in-game entities is
+         best-effort — the same key can mean different things under
+         different field roles. The amber palette flags this as
+         "advisory, not actionable" to the user. -->
+    <Border DockPanel.Dock="Top"
+            Background="#3D2418"
+            BorderBrush="#FFD088"
+            BorderThickness="0,0,0,1"
+            Padding="10,8"
+            Margin="0,0,0,8">
+      <TextBlock Text="{StaticResource CharacterRefsBrowserWarning}"
+                 Foreground="#FFD088"
+                 TextWrapping="Wrap" />
+    </Border>
+
+    <!-- Filter row: free-text needle against block class / name /
+         numeric key. Live update (PropertyChanged) keeps it snappy. -->
+    <Grid DockPanel.Dock="Top"
+          ColumnDefinitions="Auto,*,Auto"
+          ColumnSpacing="8"
+          Margin="0,0,0,10">
+      <TextBlock Grid.Column="0"
+                 Text="{StaticResource CharacterRefsBrowserFilterLabel}"
+                 VerticalAlignment="Center"
+                 Opacity="0.8" />
+      <TextBox Grid.Column="1"
+               Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+               HorizontalAlignment="Stretch" />
+      <TextBlock Grid.Column="2"
+                 Text="{Binding ResultsCountText}"
+                 VerticalAlignment="Center"
+                 Opacity="0.6"
+                 MinWidth="220" />
+    </Grid>
+
+    <Grid DockPanel.Dock="Bottom"
+          ColumnDefinitions="*,Auto"
+          ColumnSpacing="12"
+          Margin="0,8,0,0">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding StatusMessage}"
+                 Opacity="0.7"
+                 VerticalAlignment="Center"
+                 TextTrimming="CharacterEllipsis" />
+      <Button Grid.Column="1"
+              Content="{StaticResource CharacterRefsBrowserClose}"
+              Click="OnCloseClick"
+              MinWidth="80" />
+    </Grid>
+
+    <DataGrid ItemsSource="{Binding Rows}"
+              AutoGenerateColumns="False"
+              CanUserResizeColumns="True"
+              CanUserSortColumns="True"
+              GridLinesVisibility="Horizontal"
+              IsReadOnly="True"
+              HeadersVisibility="Column">
+      <DataGrid.Columns>
+        <!-- Portrait column. Same lazy-load pattern as the Character
+             Picker — bound straight to the row's Portrait property
+             which is filled in on the UI thread by StartPortraitLoad. -->
+        <DataGridTemplateColumn Header="{StaticResource CharacterRefsBrowserCol_Portrait}" Width="56">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate DataType="vm:CharacterRefRow">
+              <Image Source="{Binding Portrait}"
+                     Width="44" Height="44"
+                     Stretch="Uniform"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTextColumn Header="{StaticResource CharacterRefsBrowserCol_Block}"
+                            Binding="{Binding BlockClassName}"
+                            Width="220" />
+        <DataGridTextColumn Header="{StaticResource CharacterRefsBrowserCol_BlockNum}"
+                            Binding="{Binding BlockIndex}"
+                            Width="70" />
+        <DataGridTextColumn Header="{StaticResource CharacterRefsBrowserCol_Name}"
+                            Binding="{Binding Name}"
+                            Width="*"
+                            MinWidth="200" />
+        <DataGridTextColumn Header="{StaticResource CharacterRefsBrowserCol_Key}"
+                            Binding="{Binding CharacterKey}"
+                            Width="110" />
+        <DataGridTemplateColumn Header="{StaticResource CharacterRefsBrowserCol_Action}"
+                                Width="90">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate DataType="vm:CharacterRefRow">
+              <Button Content="{StaticResource CharacterRefsBrowserJump}"
+                      ToolTip.Tip="{StaticResource CharacterRefsBrowserJumpTip}"
+                      Command="{Binding JumpCommand}"
+                      Padding="6,2" MinHeight="0" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+      </DataGrid.Columns>
+    </DataGrid>
+  </DockPanel>
+</Window>

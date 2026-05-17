@@ -3,6 +3,7 @@ using Avalonia.Controls;
 // ClipboardExtensions, not directly on IClipboard.
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using CrimsonAtomtic.Ui.ViewModels;
 
 namespace CrimsonAtomtic.Ui.Views;
 
@@ -11,6 +12,19 @@ public sealed partial class CharacterPickerWindow : Window
     public CharacterPickerWindow()
     {
         InitializeComponent();
+        // Pick-mode wiring: when the VM is set and reports
+        // IsPickMode=true, subscribe to PickConfirmed and close the
+        // window with the chosen CharacterKey as the dialog result.
+        // Browse-only callers (DataContext.IsPickMode == false) get
+        // no subscription so the window stays open until the user
+        // closes it manually.
+        DataContextChanged += (_, _) =>
+        {
+            if (DataContext is CharacterPickerViewModel vm && vm.IsPickMode)
+            {
+                vm.PickConfirmed += key => Close((uint?)key);
+            }
+        };
     }
 
     /// <summary>

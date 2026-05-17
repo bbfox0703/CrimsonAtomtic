@@ -13,19 +13,34 @@
         Width="1080" Height="600"
         MinWidth="600" MinHeight="320">
 
-  <Grid RowDefinitions="Auto,Auto,*"
+  <Grid RowDefinitions="Auto,Auto,Auto,*"
         Margin="12">
 
-    <TextBox Grid.Row="0"
+    <!-- Linkage caveat banner. Shown for both browse-only and pick
+         mode — the same characterinfo.pabgb key can map to different
+         concrete entities under different schema field roles, so the
+         user should cross-verify before trusting the resolved name. -->
+    <Border Grid.Row="0"
+            Background="#3D2418"
+            BorderBrush="#FFD088"
+            BorderThickness="0,0,0,1"
+            Padding="10,8"
+            Margin="0,0,0,8">
+      <TextBlock Text="{StaticResource CharacterPickerWarning}"
+                 Foreground="#FFD088"
+                 TextWrapping="Wrap" />
+    </Border>
+
+    <TextBox Grid.Row="1"
              Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
              PlaceholderText="{StaticResource CharacterPickerSearchPlaceholder}" />
 
-    <TextBlock Grid.Row="1"
+    <TextBlock Grid.Row="2"
                Text="{Binding ResultsCountText}"
                Opacity="0.6"
                Margin="2,6,0,8" />
 
-    <DataGrid Grid.Row="2"
+    <DataGrid Grid.Row="3"
               ItemsSource="{Binding Results}"
               IsReadOnly="True"
               CanUserResizeColumns="True"
@@ -104,6 +119,24 @@
                         Click="OnCopyButtonClick"
                         IsVisible="{Binding $parent[Window].((vm:CharacterPickerViewModel)DataContext).HasSecondary}" />
               </StackPanel>
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <!-- Pick column. Visible only when the VM was constructed in
+             pick mode (IsPickMode=true), i.e. invoked from the edit
+             panel's "Pick character…" button. Clicking the per-row
+             Pick raises CharacterPickerViewModel.PickConfirmed and the
+             hosting window closes with the chosen CharacterKey. The
+             standalone Browse Characters dialog hides this column. -->
+        <DataGridTemplateColumn Header="{StaticResource CharacterPickerColPick}"
+                                Width="80"
+                                IsVisible="{Binding $parent[Window].((vm:CharacterPickerViewModel)DataContext).IsPickMode}">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate DataType="vm:CharacterPickerRow">
+              <Button Content="{StaticResource CharacterPickerPick}"
+                      Command="{Binding PickCommand}"
+                      Padding="6,2"
+                      MinHeight="0" />
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>

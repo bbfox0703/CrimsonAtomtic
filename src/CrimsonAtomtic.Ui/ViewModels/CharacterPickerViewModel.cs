@@ -33,9 +33,31 @@ public sealed partial class CharacterPickerViewModel : ObservableObject
     private readonly List<CharacterPickerRow> _allRows;
     private readonly PortraitProvider _portraits;
 
+    /// <summary>
+    /// Raised when the user clicks a per-row "Pick" button in
+    /// <see cref="IsPickMode"/> dialogs. The payload is the chosen
+    /// <see cref="CharacterPickerRow.CharacterKey"/>. The hosting
+    /// window subscribes once and closes itself with the key value
+    /// — see <c>CharacterPickerWindow</c>'s DataContextChanged hook.
+    /// </summary>
+    public event Action<uint>? PickConfirmed;
+
     public CharacterPickerViewModel(LocalizationProvider localization)
+        : this(localization, isPickMode: false)
+    {
+    }
+
+    /// <summary>
+    /// Construct the VM with explicit pick-mode opt-in. Pick mode
+    /// surfaces a per-row "Pick" button and raises
+    /// <see cref="PickConfirmed"/> when clicked; the hosting window
+    /// closes with the chosen key. Browse-only mode (default) hides
+    /// the column.
+    /// </summary>
+    public CharacterPickerViewModel(LocalizationProvider localization, bool isPickMode)
     {
         ArgumentNullException.ThrowIfNull(localization);
+        IsPickMode = isPickMode;
         SecondaryLanguage = localization.SecondaryLanguage;
         _portraits = localization.Portraits;
 
@@ -57,11 +79,12 @@ public sealed partial class CharacterPickerViewModel : ObservableObject
                 ? null
                 : localization.LookupCharacterDisplayName(e.CharacterKey, SecondaryLanguage);
             _allRows.Add(new CharacterPickerRow(
-                e.CharacterKey,
-                e.CharacterKey.ToString(CultureInfo.InvariantCulture),
-                e.InternalName,
-                nameEn,
-                nameSecondary));
+                parent: this,
+                characterKey: e.CharacterKey,
+                characterKeyText: e.CharacterKey.ToString(CultureInfo.InvariantCulture),
+                internalName: e.InternalName,
+                nameEnglish: nameEn,
+                nameSecondary: nameSecondary));
         }
         // Sort by CharacterKey ascending — predictable order, lowest
         // keys (main-story NPCs) first. DataGrid still lets the user
@@ -78,6 +101,36 @@ public sealed partial class CharacterPickerViewModel : ObservableObject
     /// and reopen.
     /// </summary>
     public string? SecondaryLanguage { get; }
+
+    /// <summary>
+    /// True when the dialog is hosting the per-field CharacterKey
+    /// scalar picker (Pick button visible per row; Pick click raises
+    /// <see cref="PickConfirmed"/> and the host window closes with
+    /// the chosen key). False for the standalone "Browse Characters"
+    /// dialog (read-only browse).
+    /// </summary>
+    public bool IsPickMode { get; }
+
+    /// <summary>
+    /// Last key the user picked via the per-row Pick button, or
+    /// <c>null</c> when nothing has been picked yet. Mostly here for
+    /// tests / inspection — production callers consume
+    /// <see cref="PickConfirmed"/> directly.
+    /// </summary>
+    [ObservableProperty]
+    private uint? _pickedKey;
+
+    /// <summary>
+    /// Invoked by <see cref="CharacterPickerRow.Pick"/>. Updates
+    /// <see cref="PickedKey"/> and raises <see cref="PickConfirmed"/>
+    /// so the hosting window can close with the chosen value.
+    /// </summary>
+    internal void ConfirmPick(CharacterPickerRow row)
+    {
+        if (!IsPickMode) return;
+        PickedKey = row.CharacterKey;
+        PickConfirmed?.Invoke(row.CharacterKey);
+    }
 
     public bool HasSecondary => !string.IsNullOrEmpty(SecondaryLanguage);
 
@@ -152,13 +205,38 @@ public sealed partial class CharacterPickerViewModel : ObservableObject
 /// </summary>
 public sealed partial class CharacterPickerRow : ObservableObject
 {
+    private readonly CharacterPickerViewModel? _parent;
+
+    /// <summary>
+    /// Browse-only constructor retained for back-compat with callers
+    /// that don't need a Pick command (none in the current tree, but
+    /// new tests / dialogs can keep using this overload).
+    /// </summary>
     public CharacterPickerRow(
         uint characterKey,
         string characterKeyText,
         string internalName,
         string nameEnglish,
         string? nameSecondary)
+        : this(parent: null, characterKey, characterKeyText, internalName,
+               nameEnglish, nameSecondary)
     {
+    }
+
+    /// <summary>
+    /// Construct a row with a back-reference to the parent VM so the
+    /// per-row <c>Pick</c> command can call back into
+    /// <see cref="CharacterPickerViewModel.ConfirmPick"/>.
+    /// </summary>
+    internal CharacterPickerRow(
+        CharacterPickerViewModel? parent,
+        uint characterKey,
+        string characterKeyText,
+        string internalName,
+        string nameEnglish,
+        string? nameSecondary)
+    {
+        _parent = parent;
         CharacterKey = characterKey;
         CharacterKeyText = characterKeyText;
         InternalName = internalName;
@@ -171,6 +249,18 @@ public sealed partial class CharacterPickerRow : ObservableObject
     public string InternalName { get; }
     public string NameEnglish { get; }
     public string? NameSecondary { get; }
+
+    /// <summary>True when the parent VM is in pick mode — controls per-row Pick button visibility.</summary>
+    public bool IsPickMode => _parent?.IsPickMode ?? false;
+
+    /// <summary>
+    /// Per-row Pick command — visible only in pick mode. Confirms the
+    /// row's <see cref="CharacterKey"/> back to the parent VM, which
+    /// raises <see cref="CharacterPickerViewModel.PickConfirmed"/> so
+    /// the hosting window can close with the chosen value.
+    /// </summary>
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void Pick() => _parent?.ConfirmPick(this);
 
     [ObservableProperty]
     private Bitmap? _portrait;

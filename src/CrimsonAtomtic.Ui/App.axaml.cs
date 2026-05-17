@@ -83,10 +83,30 @@ public sealed class App : Application
             // %LOCALAPPDATA%\CrimsonAtomtic\Backups\ tree is the single
             // source of truth for the Restore dialog.
             var backupService = new CrimsonAtomtic.Ui.Services.SaveBackupService(paths);
-            desktop.MainWindow = new MainWindow
+            var mainWindow = new MainWindow
             {
                 DataContext = new MainWindowViewModel(loader, paths, localization, backupService),
             };
+
+            // First-launch legal disclaimer. Show AFTER the main window
+            // has rendered once so the user sees the editor's frame
+            // behind the modal — clearer that "Quit" exits the whole
+            // app, not just dismisses a splash. The Opened event is
+            // the Avalonia-idiomatic post-paint hook; we capture the
+            // already-loaded `settings` (above) so the dialog reuses
+            // the same snapshot the secondary-language wiring used.
+            var startupSettings = settings;
+            mainWindow.Opened += async (_, _) =>
+            {
+                var accepted = await DisclaimerDialog.ShowIfNotAcceptedAsync(
+                    mainWindow, startupSettings, paths.LocalAppDataDirectory);
+                if (!accepted)
+                {
+                    desktop.Shutdown();
+                }
+            };
+
+            desktop.MainWindow = mainWindow;
         }
 
         base.OnFrameworkInitializationCompleted();

@@ -66,6 +66,9 @@
                   Click="OnBrowseItemsClick" />
         <MenuItem Header="{StaticResource MenuBrowseCharacters}"
                   Click="OnBrowseCharactersClick" />
+        <MenuItem Header="{StaticResource MenuBrowseCharacterRefs}"
+                  Click="OnBrowseCharacterRefsClick"
+                  IsEnabled="{Binding HasSave}" />
         <MenuItem Header="{StaticResource MenuBrowseLocalization}"
                   Click="OnBrowseLocalizationClick" />
         <MenuItem Header="{StaticResource MenuFindItems}"
@@ -454,7 +457,7 @@
                   BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
                   Padding="0,8,0,0"
                   Margin="0,8,0,0">
-            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto"
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto"
                   RowDefinitions="Auto,Auto,Auto"
                   ColumnSpacing="8"
                   RowSpacing="4">
@@ -506,17 +509,27 @@
                       Content="{StaticResource EditPanelFillMaxStack}"
                       ToolTip.Tip="{StaticResource EditPanelFillMaxStackTip}"
                       Command="{Binding FillSelectedFieldToMaxStackCommand}" />
+              <!-- Pick character… : visible only when the selected
+                   scalar is a CharacterKey (TypeName check on the VM).
+                   Opens the shared CharacterPickerWindow in pick mode;
+                   the chosen key is written back to SelectedField.RawText
+                   so the user can review + click Apply. -->
               <Button Grid.Row="1" Grid.Column="4"
+                      Content="{StaticResource EditPanelPickCharacter}"
+                      ToolTip.Tip="{StaticResource EditPanelPickCharacterTip}"
+                      Click="OnPickCharacterClick"
+                      IsVisible="{Binding IsSelectedFieldCharacterKey}" />
+              <Button Grid.Row="1" Grid.Column="5"
                       Content="{StaticResource EditPanelApply}"
                       Command="{Binding CommitFieldEditCommand}"
                       CommandParameter="{Binding SelectedField}"
                       IsDefault="True" />
-              <Button Grid.Row="1" Grid.Column="5"
+              <Button Grid.Row="1" Grid.Column="6"
                       Content="{StaticResource EditPanelRevert}"
                       Command="{Binding RevertFieldEditCommand}"
                       CommandParameter="{Binding SelectedField}" />
 
-              <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="6"
+              <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="7"
                          Text="{Binding SelectedField.EditError}"
                          Foreground="IndianRed"
                          TextWrapping="Wrap"

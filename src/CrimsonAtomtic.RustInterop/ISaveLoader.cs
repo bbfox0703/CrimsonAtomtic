@@ -142,6 +142,43 @@ public interface ISaveLoader
     IReadOnlyList<InventoryItemRecord> ListInventoryItems(out ulong version);
 
     /// <summary>
+    /// Flat-list every <c>CharacterKey</c>-typed reference across every
+    /// top-level block + every ObjectList / Locator descendant in the
+    /// currently-loaded save. One FFI call replaces the recursive
+    /// schema-tagged walk callers would otherwise hand-roll on the
+    /// C# side.
+    /// </summary>
+    /// <param name="version">
+    /// Out parameter — receives the handle's mutation counter at the
+    /// moment the list was read. Pair with
+    /// <see cref="GetMutationVersion"/> later to detect whether the
+    /// snapshot's <see cref="CharacterRefRecord.BlockIndex"/> values
+    /// are still valid — they go stale on any block-list mutation.
+    /// </param>
+    /// <returns>
+    /// Flat list of every <c>CharacterKey</c> occurrence — one row per
+    /// present scalar field; one row per element of a
+    /// <c>DynamicArray&lt;CharacterKey&gt;</c>. Empty when no save
+    /// field has the <c>CharacterKey</c> schema type. Caveat: rows are
+    /// best-effort linkage — the same key can mean different
+    /// concrete entities under different schema field roles. Records
+    /// are pure data — safe to retain across non-mutating calls, but
+    /// the <see cref="CharacterRefRecord.BlockIndex"/> goes stale
+    /// after any block-list edit.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// Performance: O(total fields). Sub-millisecond on a 1.07-era
+    /// save with several thousand blocks.
+    /// </para>
+    /// <para>
+    /// Requires a prior <see cref="Load"/> call. Throws
+    /// <see cref="InvalidOperationException"/> when no save is loaded.
+    /// </para>
+    /// </remarks>
+    IReadOnlyList<CharacterRefRecord> ListCharacterRefs(out ulong version);
+
+    /// <summary>
     /// Overwrite the bytes of a fixed-size scalar field in the
     /// currently-loaded save with <paramref name="bytes"/>. The set is
     /// validated against the field's recorded byte range; mismatched

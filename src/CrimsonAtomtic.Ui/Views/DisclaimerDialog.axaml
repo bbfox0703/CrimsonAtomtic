@@ -1,0 +1,44 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        d:DesignWidth="560"
+        d:DesignHeight="400"
+        x:Class="CrimsonAtomtic.Ui.Views.DisclaimerDialog"
+        Title="{StaticResource DisclaimerTitle}"
+        Icon="/Assets/MainIcon.ico"
+        Width="560" Height="400"
+        MinWidth="480" MinHeight="320"
+        CanResize="False"
+        ShowInTaskbar="True"
+        WindowStartupLocation="CenterScreen">
+
+  <!-- First-launch legal disclaimer. Acceptance is persisted by
+       version number to AppSettings.DisclaimerAcceptedVersion so the
+       dialog only shows once per machine until the legal text
+       materially changes (bump DisclaimerDialog.CurrentVersion). -->
+  <Grid Margin="16" RowDefinitions="*,Auto">
+    <ScrollViewer Grid.Row="0"
+                  HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto">
+      <TextBlock Text="{StaticResource DisclaimerBody}"
+                 TextWrapping="Wrap"
+                 LineHeight="20" />
+    </ScrollViewer>
+
+    <StackPanel Grid.Row="1"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="8"
+                Margin="0,16,0,0">
+      <Button Content="{StaticResource DisclaimerDecline}"
+              Click="OnDecline"
+              MinWidth="120" />
+      <Button Content="{StaticResource DisclaimerAccept}"
+              Click="OnAccept"
+              MinWidth="120"
+              IsDefault="True" />
+    </StackPanel>
+  </Grid>
+</Window>

@@ -839,6 +839,81 @@ public sealed partial class MainWindow : Window
         child.Show(this);
     }
 
+    /// <summary>
+    /// Tools → Browse Character References… handler. Opens a flat list
+    /// of every schema-tagged <c>CharacterKey</c> occurrence in the
+    /// loaded save (one row per scalar field; one row per element of a
+    /// <c>DynamicArray&lt;CharacterKey&gt;</c>). Per-row Jump button
+    /// closes the dialog and navigates the main window's block tree
+    /// down to the owning top-level block. Gated on <c>HasSave</c>.
+    /// </summary>
+    private void OnBrowseCharacterRefsClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm
+            || vm.Summary is not { Blocks: { } blocks })
+        {
+            return;
+        }
+        ViewModels.CharacterRefsBrowserViewModel browserVm;
+        try
+        {
+            browserVm = new ViewModels.CharacterRefsBrowserViewModel(
+                vm.GetSaveLoader(), vm.Localization, blocks);
+        }
+        catch (InvalidOperationException)
+        {
+            // HasSave gate is the primary defense; race on save unload
+            // between menu open and click — silent bail.
+            return;
+        }
+        var child = new CharacterRefsBrowserWindow { DataContext = browserVm };
+        // Per-row Jump → close the browser dialog + navigate the main
+        // window's block tree to the owning top-level block. From
+        // there the user drills manually down to the specific field;
+        // the flat-list ABI doesn't carry field-level descent paths
+        // (a CharacterKey can sit at arbitrary nesting depths and
+        // refs-of-refs would explode the row count).
+        browserVm.JumpToBlockRequested += blockIdx =>
+        {
+            child.Close();
+            _ = vm.NavigateToTopLevelBlockAsync(blockIdx);
+        };
+        child.Show(this);
+    }
+
+    /// <summary>
+    /// Edit-panel "Pick character…" button: opens the shared
+    /// <see cref="CharacterPickerWindow"/> in pick mode. The chosen
+    /// CharacterKey is written into the selected field's
+    /// <c>RawText</c> so the user can review + click Apply as usual.
+    /// Button visibility is bound to
+    /// <see cref="MainWindowViewModel.IsSelectedFieldCharacterKey"/>,
+    /// so this handler only fires when there's a CharacterKey-typed
+    /// scalar selected — the null check is defensive.
+    /// </summary>
+    private async void OnPickCharacterClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm
+            || vm.SelectedField is not { } selectedField)
+        {
+            return;
+        }
+        if (vm.Localization.CharacterCount == 0)
+        {
+            return;
+        }
+        var pickerVm = new CharacterPickerViewModel(vm.Localization, isPickMode: true);
+        var dlg = new CharacterPickerWindow { DataContext = pickerVm };
+        var picked = await dlg.ShowDialog<uint?>(this);
+        if (picked is { } key)
+        {
+            // Fill the textbox; the user clicks Apply as the explicit
+            // commit step. Use invariant culture so the integer-format
+            // round-trips identically across locales.
+            selectedField.RawText = key.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+    }
+
     private void OnBrowseItemsClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel vm)

@@ -304,6 +304,61 @@ public sealed partial class MainWindowViewModel(
             $"{item.ClassName}[{buybackElementIdx}]", item, path2));
     }
 
+    /// <summary>
+    /// Navigate the main window's block tree to a single top-level
+    /// block — no descent into specific elements or fields. Used by
+    /// the Character Refs Browser's per-row Jump button: the user
+    /// drills manually from the landed-on top frame to the specific
+    /// CharacterKey field, since the flat-list ABI doesn't carry
+    /// field-level descent paths.
+    /// </summary>
+    /// <remarks>
+    /// Mirrors the BEGINNING of <see cref="NavigateToInventoryItemAsync"/>
+    /// (race control + nav-stack clear + one BlockFrame push). Best-
+    /// effort silent on failure — block index not found / FFI throws
+    /// surfaces through <see cref="DetailsError"/> and bails.
+    /// </remarks>
+    public async Task NavigateToTopLevelBlockAsync(int blockIndex)
+    {
+        if (_loadedPath is null)
+        {
+            return;
+        }
+        BlockSummary? blockSummary = null;
+        foreach (var b in _allBlocks)
+        {
+            if (b.Index == blockIndex)
+            {
+                blockSummary = b;
+                break;
+            }
+        }
+        if (blockSummary is null)
+        {
+            DetailsError = $"Block #{blockIndex} not found in current save.";
+            return;
+        }
+
+        BlockDetails topDetails;
+        try
+        {
+            topDetails = await Task.Run(() =>
+                loader.LoadBlockDetails(_loadedPath, blockIndex)).ConfigureAwait(true);
+        }
+        catch (CrimsonSaveException ex)
+        {
+            DetailsError = $"{ex.Message} (code {ex.ErrorCode})";
+            return;
+        }
+
+        _suppressBlockSelectionLoad = true;
+        try { SelectedBlock = blockSummary; }
+        finally { _suppressBlockSelectionLoad = false; }
+
+        ClearNavigation();
+        PushFrame(new BlockFrame(topDetails.ClassName, topDetails, Array.Empty<PathStep>()));
+    }
+
     private static DecodedFieldRow? FindFieldByName(BlockDetails block, string name)
     {
         foreach (var f in block.Fields)
@@ -694,8 +749,18 @@ public sealed partial class MainWindowViewModel(
     [NotifyPropertyChangedFor(nameof(SelectedFieldTypeHint))]
     [NotifyPropertyChangedFor(nameof(CanFillSelectedFieldToMaxStack))]
     [NotifyPropertyChangedFor(nameof(SelectedFieldMaxStackHintText))]
+    [NotifyPropertyChangedFor(nameof(IsSelectedFieldCharacterKey))]
     [NotifyCanExecuteChangedFor(nameof(FillSelectedFieldToMaxStackCommand))]
     private FieldRowViewModel? _selectedField;
+
+    /// <summary>
+    /// True when the currently-selected field is a scalar typed as
+    /// <c>CharacterKey</c>. The edit panel binds the "Pick
+    /// character…" button's visibility here — it surfaces only for
+    /// fields the picker dialog can meaningfully fill.
+    /// </summary>
+    public bool IsSelectedFieldCharacterKey =>
+        SelectedField is { IsEditable: true, TypeName: "CharacterKey" };
 
     /// <summary>
     /// Element selected in the element-picker DataGrid. Two-way binding

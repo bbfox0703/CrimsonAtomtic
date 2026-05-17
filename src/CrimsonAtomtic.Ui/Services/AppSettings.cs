@@ -76,6 +76,18 @@ public sealed record AppSettings
     [JsonPropertyName("custom_gem_sets")]
     public CustomGemSet[]? CustomGemSets { get; init; }
 
+    /// <summary>
+    /// Version of the first-launch legal-disclaimer text the user has
+    /// already accepted. The dialog re-prompts whenever this is
+    /// <c>null</c> or strictly less than
+    /// <see cref="CrimsonAtomtic.Ui.Views.DisclaimerDialog.CurrentVersion"/>.
+    /// Bumping <c>CurrentVersion</c> in code is the supported channel
+    /// for re-prompting every existing user after the legal text
+    /// materially changes.
+    /// </summary>
+    [JsonPropertyName("disclaimer_accepted_version")]
+    public int? DisclaimerAcceptedVersion { get; init; }
+
     /// <summary>Default font size when the settings field is unset.</summary>
     public const double DefaultFontSize = 14.0;
 
