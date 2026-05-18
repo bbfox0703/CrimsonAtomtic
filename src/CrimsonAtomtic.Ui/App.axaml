@@ -10,16 +10,18 @@
 
   <Application.Resources>
     <ResourceDictionary>
-      <!-- FluentTheme defaults MenuFlyoutThemeMaxWidth to 456 dip, which
-           clips the longest Tools-menu items ("Complete Eligible Held
-           Sealed Abyss Artifact Challenges…") at any FontSize above the
-           default 14. The same resource is consumed by both
-           MenuFlyoutPresenter AND the regular Menu's MenuItem submenu
-           Popup (they share the template path in v12 Fluent), so this
-           one override widens the cap for every menu popup at once.
-           Value chosen to cover every shipped UI string at FontSize 22
-           (the supported maximum). -->
-      <x:Double x:Key="MenuFlyoutThemeMaxWidth">1000</x:Double>
+      <!-- FluentTheme defaults FlyoutThemeMaxWidth (in
+           Accents/BaseResources.xaml) to 456 dip — that one resource key
+           caps BOTH the top-level Menu's MenuItem submenu Popup Border
+           AND every MenuFlyoutPresenter / Flyout via a single
+           DynamicResource lookup. At any FontSize above the default 14
+           the longest Tools-menu items
+           ("Complete Eligible Held Sealed Abyss Artifact Challenges…")
+           clip mid-word. Override widens the cap to comfortably fit
+           every shipped UI string at FontSize 22 (the supported
+           maximum). Earlier attempt at `MenuFlyoutThemeMaxWidth` was a
+           no-op — that key doesn't exist in v12 Fluent. -->
+      <x:Double x:Key="FlyoutThemeMaxWidth">1000</x:Double>
 
       <!-- Every shipped UI language is pre-merged here so the
            avares:// Source is resolved at XAML-compile time (AOT-safe;
