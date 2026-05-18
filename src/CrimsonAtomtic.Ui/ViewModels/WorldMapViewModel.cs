@@ -3,443 +3,274 @@ using System.Globalization;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CrimsonAtomtic.Core;
 using CrimsonAtomtic.RustInterop;
 using CrimsonAtomtic.Ui.Services;
 
 namespace CrimsonAtomtic.Ui.ViewModels;
 
 /// <summary>
-/// Marker kind for the world-map overlay. Mirrors
-/// <see cref="PositionKind"/> but exposes the enum to XAML bindings.
+/// One pickable entity in the World Map dialog's "ping object" dropdown.
+/// Flattens an <see cref="PositionedEntityRecord"/> into the minimal
+/// shape the UI needs (a display label + the world coords).
 /// </summary>
-public enum WorldMapMarkerKind
+public sealed record EntityChoice(
+    PositionKind Kind,
+    string DisplayLabel,
+    double WorldX,
+    double WorldZ,
+    uint FieldInfoKey)
 {
-    ActiveChar,
-    Mercenary,
-    Gimmick,
+    /// <summary>
+    /// Returns <c>true</c> when <paramref name="filter"/> is contained
+    /// in <see cref="DisplayLabel"/> (case-insensitive). Used by the
+    /// toolbar filter textbox.
+    /// </summary>
+    public bool MatchesFilter(string filter)
+        => string.IsNullOrEmpty(filter)
+           || DisplayLabel.Contains(filter, StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>
-/// One marker on the world map. Combines a positioned-entity record
-/// (the data source) with its precomputed basemap-pixel position (so
-/// the rendering layer can place + rotate it without re-running the
-/// affine on every layout pass).
-/// </summary>
-public sealed class WorldMapMarker
-{
-    public WorldMapMarkerKind Kind { get; init; }
-
-    /// <summary>World X (east-west, global frame). Display only.</summary>
-    public double WorldX { get; init; }
-
-    /// <summary>World Z (north-south, global frame). Display only.</summary>
-    public double WorldZ { get; init; }
-
-    /// <summary>
-    /// Pixel X on the basemap, after the affine. Drives
-    /// <c>Canvas.Left</c> in the AXAML.
-    /// </summary>
-    public double PixelX { get; init; }
-
-    /// <summary>
-    /// Pixel Y on the basemap, after the affine. Drives
-    /// <c>Canvas.Top</c> in the AXAML.
-    /// </summary>
-    public double PixelY { get; init; }
-
-    /// <summary>
-    /// Rotation around Y axis in <b>degrees</b> (converted from the
-    /// underlying radians for AXAML's <c>RotateTransform.Angle</c>).
-    /// Already biased so 0° = north (the yaw arrow points up); see
-    /// <see cref="WorldMapViewModel.YawRadiansToDegrees"/>.
-    /// </summary>
-    public double YawDegrees { get; init; }
-
-    /// <summary>
-    /// <c>_fieldInfoKey</c> from the underlying record. Drives the
-    /// region-coloring overlay (one hue per region).
-    /// </summary>
-    public uint FieldInfoKey { get; init; }
-
-    /// <summary>
-    /// Short owner label for tooltips. Resolved via
-    /// <see cref="LocalizationProvider"/>; falls back to a key-based
-    /// description when the bridge can't name the entity.
-    /// </summary>
-    public string OwnerLabel { get; init; } = string.Empty;
-}
-
-/// <summary>
-/// VM for the Tools → World Map window. Holds the basemap image path,
-/// the marker list precomputed from <see cref="ISaveLoader.ListFieldPositions"/>,
-/// and the small bits of UI state the window needs (visible-kind
-/// filters, distance-tool mode, mouse-coord readout text).
+/// VM for the Tools → World Map dialog (post-refactor: user-picked
+/// basemap + single-object ping). Holds the loaded bitmap, the flat
+/// entity list pulled from <see cref="ISaveLoader.ListFieldPositions"/>,
+/// and the currently-pinged marker's display-canvas coordinates.
 ///
 /// <para>
-/// Phase 1 scope: read-only display. Marker drag-to-edit + pixel-
-/// perfect affine calibration are roadmap follow-ons.
+/// Coordinate flow: world (X, Z) — pulled from the save —
+/// <see cref="WorldMapAffine.Canonical"/> → reference-pixel space
+/// (5178×5240) → stretched to the <see cref="DisplaySide"/>² canvas.
+/// The user's basemap image can be any size or aspect; we force-stretch
+/// it to fill the same square canvas, so markers land on the right
+/// in-world location regardless of the file's pixel dimensions.
 /// </para>
 /// </summary>
 public sealed partial class WorldMapViewModel : ObservableObject
 {
-    private readonly LocalizationProvider _localization;
-    private readonly WorldMapAffine _affine;
+    private readonly IPlatformPaths _paths;
+    private readonly WorldMapAffine _affine = WorldMapAffine.Canonical;
+    private readonly List<EntityChoice> _allObjects;
 
-    public WorldMapAffine Affine => _affine;
-
-    public string BasemapPath { get; }
+    /// <summary>Loaded basemap bitmap. <c>null</c> when no map has been picked yet.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMap), nameof(BasemapPathLabel))]
+    private Bitmap? _basemap;
 
     /// <summary>
-    /// Pre-loaded basemap bitmap. AXAML binds <c>Image.Source</c>
-    /// directly to this so we don't need a path → Bitmap converter
-    /// (Avalonia 11's <c>Image.Source</c> requires an IImage, not a
-    /// file-path string).
-    /// </summary>
-    public Bitmap Basemap { get; }
-
-    /// <summary>
-    /// Width of the basemap image in pixels. Drives the
-    /// <c>Image.Width</c> + the <c>Canvas.Width</c> on the marker
-    /// overlay so the two stay aligned under the scroll viewer's
-    /// scale transform.
-    /// </summary>
-    public double BasemapWidth => _affine.PixelWidth;
-
-    /// <summary>Height of the basemap image in pixels.</summary>
-    public double BasemapHeight => _affine.PixelHeight;
-
-    /// <summary>
-    /// Every positioned-entity marker, after the affine + yaw
-    /// conversion. Used for export + bulk operations; rendering layers
-    /// bind to one of the three per-kind collections below so the
-    /// per-kind visibility checkboxes can drop entire layers at once
-    /// without per-item visibility bindings.
-    /// </summary>
-    public List<WorldMapMarker> Markers { get; } = new();
-
-    /// <summary>Active-character markers (one per save). Bound by the AXAML.</summary>
-    public ObservableCollection<WorldMapMarker> ActiveCharMarkers { get; } = new();
-
-    /// <summary>Mercenary / mount markers. Bound by the AXAML.</summary>
-    public ObservableCollection<WorldMapMarker> MercenaryMarkers { get; } = new();
-
-    /// <summary>Field gimmick markers. Bound by the AXAML.</summary>
-    public ObservableCollection<WorldMapMarker> GimmickMarkers { get; } = new();
-
-    [ObservableProperty]
-    private bool _showActiveChar = true;
-
-    [ObservableProperty]
-    private bool _showMercenaries = true;
-
-    [ObservableProperty]
-    private bool _showGimmicks = true;
-
-    [ObservableProperty]
-    private bool _showYawArrows = true;
-
-    [ObservableProperty]
-    private bool _useRegionColoring;
-
-    /// <summary>
-    /// Map zoom level. The window's <c>ScaleTransform.ScaleX/ScaleY</c>
-    /// bind to this. Code-behind reads + writes it via the property
-    /// (mouse wheel + export path) since the XAML compiler doesn't
-    /// auto-generate fields for non-Control elements like
-    /// <c>ScaleTransform</c>.
+    /// Absolute filesystem path of the loaded basemap. Mirrored into
+    /// <see cref="AppSettings.WorldMapPath"/> so the same file is
+    /// auto-loaded on the next launch.
     /// </summary>
     [ObservableProperty]
-    private double _zoomScale = 1.0;
+    [NotifyPropertyChangedFor(nameof(BasemapPathLabel))]
+    private string? _basemapPath;
 
     /// <summary>
-    /// World-coordinate readout under the cursor, formatted as
-    /// <c>"X=… Z=… (px=…,py=…)"</c>. Updated from the view's pointer-
-    /// moved handler via <see cref="UpdateCursorWorldCoords"/>.
+    /// Edge length of the square display canvas. Set by the view from
+    /// the host monitor's working-area short side (auto-fit). Drives
+    /// every world-to-pixel projection plus the <c>Width</c>/<c>Height</c>
+    /// of the <see cref="Basemap"/> Image element (force-stretched).
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayWidth), nameof(DisplayHeight))]
+    private double _displaySide = 800;
+
+    public double DisplayWidth => DisplaySide;
+    public double DisplayHeight => DisplaySide;
+
+    public bool HasMap => Basemap is not null;
+
+    public string BasemapPathLabel => string.IsNullOrEmpty(BasemapPath)
+        ? "(no map selected)"
+        : BasemapPath!;
+
+    /// <summary>
+    /// Filter text from the toolbar searchbox. Live-rebuilds
+    /// <see cref="FilteredObjects"/> on change.
+    /// </summary>
+    [ObservableProperty]
+    private string _objectFilter = string.Empty;
+
+    /// <summary>
+    /// Items visible in the object picker dropdown. Always a subset of
+    /// the flat list built at construction time.
+    /// </summary>
+    public ObservableCollection<EntityChoice> FilteredObjects { get; } = new();
+
+    /// <summary>
+    /// Currently-pinged entity. <c>null</c> = no marker visible.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPingedMarker), nameof(PingedMarkerLabel))]
+    private EntityChoice? _selectedObject;
+
+    /// <summary>Pinged marker's display-canvas X (Canvas.Left target).</summary>
+    [ObservableProperty]
+    private double _pingedMarkerX;
+
+    /// <summary>Pinged marker's display-canvas Y (Canvas.Top target).</summary>
+    [ObservableProperty]
+    private double _pingedMarkerY;
+
+    public bool HasPingedMarker => SelectedObject is not null;
+
+    public string PingedMarkerLabel => SelectedObject is null
+        ? string.Empty
+        : string.Format(
+            CultureInfo.InvariantCulture,
+            "{0}  (X={1:F1}, Z={2:F1})",
+            SelectedObject.DisplayLabel,
+            SelectedObject.WorldX,
+            SelectedObject.WorldZ);
+
+    /// <summary>
+    /// Cursor world-coordinate readout (under the status bar). Updated
+    /// from the view's pointer-moved handler.
     /// </summary>
     [ObservableProperty]
     private string _cursorCoordsText = string.Empty;
 
-    /// <summary>
-    /// Distance-measurement state. <c>Idle</c> = picker disabled,
-    /// <c>WaitingForFirst</c> = next click sets <see cref="DistancePoint1"/>,
-    /// <c>WaitingForSecond</c> = next click sets <see cref="DistancePoint2"/>.
-    /// </summary>
-    public enum DistanceToolState { Idle, WaitingForFirst, WaitingForSecond }
-
-    [ObservableProperty]
-    private DistanceToolState _distanceMode = DistanceToolState.Idle;
-
-    /// <summary>
-    /// (PixelX, PixelY) of the first picked anchor. Use
-    /// <see cref="HasDistancePoint1"/> to gate visibility — AXAML
-    /// can't deref a nullable tuple cleanly across all binding paths.
-    /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(DistancePoint1AsAvaloniaPoint))]
-    private double _distancePoint1X;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(DistancePoint1AsAvaloniaPoint))]
-    private double _distancePoint1Y;
-
-    [ObservableProperty]
-    private bool _hasDistancePoint1;
-
-    /// <summary>(PixelX, PixelY) of the second picked anchor.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(DistancePoint2AsAvaloniaPoint))]
-    private double _distancePoint2X;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(DistancePoint2AsAvaloniaPoint))]
-    private double _distancePoint2Y;
-
-    [ObservableProperty]
-    private bool _hasDistancePoint2;
-
-    /// <summary>
-    /// Convenience accessor used by the line overlay: returns a
-    /// <c>Point</c> shaped for <c>Line.StartPoint</c> / <c>EndPoint</c>.
-    /// </summary>
-    public Avalonia.Point DistancePoint1AsAvaloniaPoint =>
-        new(DistancePoint1X, DistancePoint1Y);
-
-    public Avalonia.Point DistancePoint2AsAvaloniaPoint =>
-        new(DistancePoint2X, DistancePoint2Y);
-
-    /// <summary>
-    /// Human-readable distance label. Empty when no measurement is
-    /// in progress; "First point picked…" after the first click; the
-    /// final "Δ=… world units" after the second click.
-    /// </summary>
-    [ObservableProperty]
-    private string _distanceText = string.Empty;
-
-    /// <summary>
-    /// Total marker count across all kinds. Drives the footer
-    /// "N markers" readout — value is static post-construction since
-    /// the underlying record set comes from a single
-    /// <c>ListFieldPositions</c> snapshot.
-    /// </summary>
-    public int TotalMarkerCount => Markers.Count;
-
-    /// <summary>
-    /// Region color for a given <see cref="WorldMapMarker.FieldInfoKey"/>.
-    /// Hashes the field-info key into the HSL hue space so different
-    /// regions get visually distinct colors without us needing a curated
-    /// region → color table. Used when <see cref="UseRegionColoring"/>
-    /// is on; otherwise the kind's stock color is used.
-    /// </summary>
-    public static (byte R, byte G, byte B) RegionColor(uint fieldInfoKey)
-    {
-        // Map field_info_key → hue ∈ [0, 360). Use a 32→32 mix to avoid
-        // adjacent keys landing on adjacent hues.
-        var mixed = fieldInfoKey * 2654435761u;
-        var hue = (mixed % 360u) / 360.0;
-        // Saturation + lightness fixed at a comfortable contrast range.
-        return HslToRgb(hue, 0.55, 0.55);
-    }
-
-    private static (byte R, byte G, byte B) HslToRgb(double h, double s, double l)
-    {
-        var c = (1 - Math.Abs((2 * l) - 1)) * s;
-        var hp = h * 6.0;
-        var x = c * (1 - Math.Abs((hp % 2) - 1));
-        double r1 = 0, g1 = 0, b1 = 0;
-        switch ((int)Math.Floor(hp))
-        {
-            case 0: r1 = c; g1 = x; break;
-            case 1: r1 = x; g1 = c; break;
-            case 2: g1 = c; b1 = x; break;
-            case 3: g1 = x; b1 = c; break;
-            case 4: r1 = x; b1 = c; break;
-            default: r1 = c; b1 = x; break;
-        }
-        var m = l - (c / 2);
-        return (
-            (byte)Math.Round((r1 + m) * 255),
-            (byte)Math.Round((g1 + m) * 255),
-            (byte)Math.Round((b1 + m) * 255));
-    }
-
-    /// <summary>
-    /// Per-kind counts surfaced in the filter checkboxes' labels.
-    /// </summary>
-    public int ActiveCharCount { get; private set; }
-    public int MercenaryCount { get; private set; }
-    public int GimmickCount { get; private set; }
-
     public WorldMapViewModel(
         ISaveLoader loader,
-        LocalizationProvider localization,
-        string basemapPath,
-        WorldMapAffine affine)
+        IPlatformPaths paths,
+        Bitmap? initialBitmap,
+        string? initialPath)
     {
         ArgumentNullException.ThrowIfNull(loader);
-        ArgumentNullException.ThrowIfNull(localization);
-        ArgumentException.ThrowIfNullOrEmpty(basemapPath);
+        ArgumentNullException.ThrowIfNull(paths);
 
-        _localization = localization;
-        _affine = affine;
-        BasemapPath = basemapPath;
-        Basemap = new Bitmap(basemapPath);
+        _paths = paths;
+        _basemap = initialBitmap;
+        _basemapPath = initialPath;
+        _allObjects = BuildEntityList(loader);
 
-        PopulateMarkers(loader);
+        RebuildFilteredObjects();
     }
 
-    private void PopulateMarkers(ISaveLoader loader)
+    /// <summary>
+    /// Flatten <see cref="ISaveLoader.ListFieldPositions"/> into a
+    /// dropdown-ready <see cref="EntityChoice"/> list. Labels are
+    /// stable per-kind so the user can scan the list by region /
+    /// instance ID.
+    /// </summary>
+    private static List<EntityChoice> BuildEntityList(ISaveLoader loader)
     {
         var positions = loader.ListFieldPositions(out _);
-        Markers.Clear();
-        ActiveCharMarkers.Clear();
-        MercenaryMarkers.Clear();
-        GimmickMarkers.Clear();
-
+        var list = new List<EntityChoice>(positions.Count);
         foreach (var rec in positions)
         {
-            var (px, py) = _affine.WorldToPixel(rec.PosX, rec.PosZ);
-            var kind = rec.Kind switch
+            var label = rec.Kind switch
             {
-                PositionKind.ActiveChar => WorldMapMarkerKind.ActiveChar,
-                PositionKind.Mercenary => WorldMapMarkerKind.Mercenary,
-                PositionKind.Gimmick => WorldMapMarkerKind.Gimmick,
-                _ => WorldMapMarkerKind.Gimmick,
+                PositionKind.ActiveChar => "Active char",
+                PositionKind.Mercenary => string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Mercenary #{0}",
+                    rec.MercenaryNo),
+                PositionKind.Gimmick => string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Gimmick {0}  (region {1})",
+                    rec.GimmickInfoKey,
+                    rec.FieldInfoKey),
+                _ => "Unknown",
             };
-            var marker = new WorldMapMarker
-            {
-                Kind = kind,
-                WorldX = rec.PosX,
-                WorldZ = rec.PosZ,
-                PixelX = px,
-                PixelY = py,
-                YawDegrees = YawRadiansToDegrees(rec.Yaw),
-                FieldInfoKey = rec.FieldInfoKey,
-                OwnerLabel = ResolveOwnerLabel(rec),
-            };
-            Markers.Add(marker);
-            switch (kind)
-            {
-                case WorldMapMarkerKind.ActiveChar: ActiveCharMarkers.Add(marker); break;
-                case WorldMapMarkerKind.Mercenary: MercenaryMarkers.Add(marker); break;
-                case WorldMapMarkerKind.Gimmick: GimmickMarkers.Add(marker); break;
-            }
+            list.Add(new EntityChoice(
+                rec.Kind, label, rec.PosX, rec.PosZ, rec.FieldInfoKey));
         }
-
-        ActiveCharCount = ActiveCharMarkers.Count;
-        MercenaryCount = MercenaryMarkers.Count;
-        GimmickCount = GimmickMarkers.Count;
-        OnPropertyChanged(nameof(TotalMarkerCount));
-        OnPropertyChanged(nameof(ActiveCharCount));
-        OnPropertyChanged(nameof(MercenaryCount));
-        OnPropertyChanged(nameof(GimmickCount));
+        return list;
     }
 
     /// <summary>
-    /// Convert the underlying record's yaw (radians, Y-up) to AXAML's
-    /// degree-based <c>RotateTransform.Angle</c>. We rotate around the
-    /// marker's pixel position; 0° points north (image −Y), which means
-    /// we subtract the in-game yaw from 0 then convert to degrees.
+    /// Update <see cref="Basemap"/> + <see cref="BasemapPath"/> with the
+    /// newly-picked file. Persists the path into <see cref="AppSettings"/>
+    /// so the dialog auto-loads it on next launch. Called by the view's
+    /// "Pick Map…" handler after the file picker resolves.
     /// </summary>
-    private static double YawRadiansToDegrees(float yaw)
+    public void SetBasemap(string path)
     {
-        // In-game Y-up yaw: 0 rad = facing world +Z (north on the basemap,
-        // which is the −Y direction in image coords). Z axis is flipped
-        // by the affine, so the image-space arrow heading is the same
-        // sign as the world-space yaw — just convert radians → degrees.
-        return -yaw * (180.0 / Math.PI);
-    }
-
-    private static string ResolveOwnerLabel(PositionedEntityRecord rec)
-    {
-        return rec.Kind switch
+        var bitmap = WorldMapBasemapService.TryLoad(path);
+        if (bitmap is null)
         {
-            PositionKind.ActiveChar => "Active character",
-            PositionKind.Mercenary => $"Mercenary #{rec.MercenaryNo}",
-            PositionKind.Gimmick => $"Gimmick {rec.GimmickInfoKey}",
-            _ => "Unknown",
-        };
-    }
-
-    /// <summary>
-    /// Called from the view's pointer-moved handler. Converts the
-    /// pointer-pixel coord on the basemap image back into world coords
-    /// and updates the readout text.
-    /// </summary>
-    public void UpdateCursorWorldCoords(double px, double py)
-    {
-        var (wx, wz) = _affine.PixelToWorld(px, py);
-        CursorCoordsText = string.Format(
-            CultureInfo.InvariantCulture,
-            "X={0:F1}  Z={1:F1}  (px={2:F0}, py={3:F0})",
-            wx, wz, px, py);
-    }
-
-    /// <summary>
-    /// Called from the view's pointer-pressed handler when the user is
-    /// in distance-tool mode. Advances the state machine.
-    /// </summary>
-    public void HandleDistanceClick(double px, double py)
-    {
-        switch (DistanceMode)
-        {
-            case DistanceToolState.WaitingForFirst:
-                DistancePoint1X = px;
-                DistancePoint1Y = py;
-                HasDistancePoint1 = true;
-                HasDistancePoint2 = false;
-                DistanceMode = DistanceToolState.WaitingForSecond;
-                DistanceText = "First point picked — click the second point.";
-                break;
-            case DistanceToolState.WaitingForSecond:
-                DistancePoint2X = px;
-                DistancePoint2Y = py;
-                HasDistancePoint2 = true;
-                DistanceMode = DistanceToolState.Idle;
-                UpdateDistanceLabel();
-                break;
-            default:
-                break;
-        }
-    }
-
-    private void UpdateDistanceLabel()
-    {
-        if (!HasDistancePoint1 || !HasDistancePoint2)
-        {
-            DistanceText = string.Empty;
             return;
         }
-        var (w1x, w1z) = _affine.PixelToWorld(DistancePoint1X, DistancePoint1Y);
-        var (w2x, w2z) = _affine.PixelToWorld(DistancePoint2X, DistancePoint2Y);
-        var dx = w2x - w1x;
-        var dz = w2z - w1z;
-        var dist = Math.Sqrt((dx * dx) + (dz * dz));
-        DistanceText = string.Format(
-            CultureInfo.InvariantCulture,
-            "Distance: {0:F1} world units (ΔX={1:F1}, ΔZ={2:F1})",
-            dist, dx, dz);
+        // Dispose the previous bitmap before swapping, otherwise the
+        // file lock + native handle linger until GC. The PropertyChanged
+        // for Basemap below pushes the new bitmap into the binding.
+        Basemap?.Dispose();
+        Basemap = bitmap;
+        BasemapPath = path;
+        RecomputeMarkerPosition();
+        PersistPathToSettings(path);
+    }
+
+    private void PersistPathToSettings(string path)
+    {
+        var existing = AppSettingsStore.Load(_paths.LocalAppDataDirectory);
+        AppSettingsStore.TrySave(
+            _paths.LocalAppDataDirectory,
+            existing with { WorldMapPath = path });
     }
 
     /// <summary>
-    /// Command bound to the toolbar's "Measure distance" button. Cycles
-    /// the tool through Idle → WaitingForFirst → Idle (cancel mid-pick).
+    /// Clear the pinged marker. Bound to the toolbar's clear button +
+    /// invoked when the user picks the empty filter result.
     /// </summary>
     [RelayCommand]
-    private void ToggleDistanceTool()
+    private void ClearSelection()
     {
-        if (DistanceMode == DistanceToolState.Idle)
+        SelectedObject = null;
+    }
+
+    // ── Filter wiring ────────────────────────────────────────────────
+
+    partial void OnObjectFilterChanged(string value) => RebuildFilteredObjects();
+
+    private void RebuildFilteredObjects()
+    {
+        FilteredObjects.Clear();
+        foreach (var choice in _allObjects)
         {
-            DistanceMode = DistanceToolState.WaitingForFirst;
-            HasDistancePoint1 = false;
-            HasDistancePoint2 = false;
-            DistanceText = "Click the first point on the map.";
+            if (choice.MatchesFilter(ObjectFilter))
+            {
+                FilteredObjects.Add(choice);
+            }
         }
-        else
+    }
+
+    // ── Marker projection ────────────────────────────────────────────
+
+    partial void OnSelectedObjectChanged(EntityChoice? value) => RecomputeMarkerPosition();
+
+    partial void OnDisplaySideChanged(double value) => RecomputeMarkerPosition();
+
+    private void RecomputeMarkerPosition()
+    {
+        if (SelectedObject is null)
         {
-            DistanceMode = DistanceToolState.Idle;
-            DistanceText = string.Empty;
-            HasDistancePoint1 = false;
-            HasDistancePoint2 = false;
+            return;
         }
+        var (px, py) = _affine.WorldToDisplayPixel(
+            SelectedObject.WorldX, SelectedObject.WorldZ,
+            DisplaySide, DisplaySide);
+        PingedMarkerX = px;
+        PingedMarkerY = py;
+    }
+
+    // ── Cursor readout ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Convert a display-canvas pointer position back into world coords
+    /// and update the status-bar readout. Reverses the display-stretch
+    /// then applies <see cref="WorldMapAffine.PixelToWorld"/>.
+    /// </summary>
+    public void UpdateCursorCoords(double displayPx, double displayPy)
+    {
+        var refPx = displayPx * _affine.ReferenceWidth / DisplaySide;
+        var refPy = displayPy * _affine.ReferenceHeight / DisplaySide;
+        var (wx, wz) = _affine.PixelToWorld(refPx, refPy);
+        CursorCoordsText = string.Format(
+            CultureInfo.InvariantCulture,
+            "X={0:F1}  Z={1:F1}",
+            wx, wz);
     }
 }

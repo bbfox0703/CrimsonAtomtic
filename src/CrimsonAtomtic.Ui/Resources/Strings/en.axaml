@@ -370,25 +370,14 @@
   <!-- World Map dialog (Tools menu) -->
   <sys:String x:Key="MenuWorldMap">_World Map…</sys:String>
   <sys:String x:Key="WorldMapWindowTitle">World Map</sys:String>
-  <sys:String x:Key="WorldMapToggleActiveCharTip">Show the active character marker.</sys:String>
-  <sys:String x:Key="WorldMapToggleMercTip">Show mercenary / mount markers (only those with a present _spawnPosition).</sys:String>
-  <sys:String x:Key="WorldMapToggleGimmicksTip">Show field gimmick markers (the bulk of the dataset — ~3,240 per slot103 save).</sys:String>
-  <sys:String x:Key="WorldMapToggleYawArrows">Yaw arrows</sys:String>
-  <sys:String x:Key="WorldMapToggleYawArrowsTip">Show a small line on top of each marker pointing in the direction the entity is facing.</sys:String>
-  <sys:String x:Key="WorldMapToggleRegionColoring">Region tint</sys:String>
-  <sys:String x:Key="WorldMapToggleRegionColoringTip">Replace per-kind marker colors with a per-region hue derived from _fieldInfoKey.</sys:String>
-  <sys:String x:Key="WorldMapToggleDistanceTool">Measure distance</sys:String>
-  <sys:String x:Key="WorldMapToggleDistanceToolTip">Click two points on the map after pressing this button to read the world-unit distance between them.</sys:String>
-  <sys:String x:Key="WorldMapExportPng">Export PNG…</sys:String>
-  <sys:String x:Key="WorldMapExportPngTip">Save the current basemap + marker overlay as a PNG at the basemap's native resolution.</sys:String>
-  <sys:String x:Key="WorldMapExportPickerTitle">Export world map PNG</sys:String>
+  <sys:String x:Key="WorldMapPickMap">Pick Map…</sys:String>
+  <sys:String x:Key="WorldMapPickMapTip">Choose an image file to use as the world-map backdrop. The image is force-stretched to a square canvas; marker positions are computed against the canonical Crimson Desert world map regardless of the file's pixel dimensions.</sys:String>
+  <sys:String x:Key="WorldMapPickMapTitle">Pick world map image</sys:String>
+  <sys:String x:Key="WorldMapFilterLabel">Filter:</sys:String>
+  <sys:String x:Key="WorldMapFilterTip">Substring match against the object label. Empty = show every object with a position.</sys:String>
+  <sys:String x:Key="WorldMapObjectPickerTip">Pick an object (active char, mercenary, or gimmick) to ping on the map.</sys:String>
   <sys:String x:Key="WorldMapClose">Close</sys:String>
   <sys:String x:Key="WorldMapNoSaveTitle">No save loaded</sys:String>
   <sys:String x:Key="WorldMapNoSaveBody">Open a save file (File → Open Save) before opening the World Map.</sys:String>
-  <sys:String x:Key="WorldMapNoGameTitle">Game install required</sys:String>
-  <sys:String x:Key="WorldMapNoGameBody">The World Map needs to extract the basemap texture from the Crimson Desert install. Set the install folder via Tools → Set Game Install Folder, then try again.</sys:String>
-  <sys:String x:Key="WorldMapExtractingTitle">Extracting basemap</sys:String>
-  <sys:String x:Key="WorldMapExtractingBody">Compositing the parchment basemap from blur_height + paper pattern + road SDF layers in 0012 — first launch takes ~10 seconds, cached after that.</sys:String>
-  <sys:String x:Key="WorldMapExtractFailedTitle">Could not extract basemap</sys:String>
 
 </ResourceDictionary>

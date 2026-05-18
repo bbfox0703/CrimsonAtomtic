@@ -89,6 +89,17 @@ public sealed record AppSettings
     public int? DisclaimerAcceptedVersion { get; init; }
 
     /// <summary>
+    /// Last user-picked basemap image path for the Tools → World Map
+    /// dialog. The dialog re-uses this on next launch if the file still
+    /// exists; missing / unreadable file falls back to "no map — click
+    /// Pick Map…". Any image type Avalonia's <c>Bitmap</c> ctor accepts
+    /// works (PNG / JPEG / WEBP / …); the dialog force-stretches it to
+    /// a square display canvas, so source aspect ratio doesn't matter.
+    /// </summary>
+    [JsonPropertyName("world_map_path")]
+    public string? WorldMapPath { get; init; }
+
+    /// <summary>
     /// User-picked UI language code. <c>null</c> / missing means
     /// "auto-detect from <see cref="System.Globalization.CultureInfo.CurrentUICulture"/>"
     /// (the default — picks zh-TW for Traditional Chinese OS, ja for

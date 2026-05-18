@@ -377,25 +377,14 @@
   <!-- World Map 對話框（Tools 選單） -->
   <sys:String x:Key="MenuWorldMap">世界地圖(_W)…</sys:String>
   <sys:String x:Key="WorldMapWindowTitle">世界地圖</sys:String>
-  <sys:String x:Key="WorldMapToggleActiveCharTip">顯示主控角色標記。</sys:String>
-  <sys:String x:Key="WorldMapToggleMercTip">顯示傭兵 / 坐騎標記（僅顯示具備 _spawnPosition 的）。</sys:String>
-  <sys:String x:Key="WorldMapToggleGimmicksTip">顯示場景物件標記（資料量最大 — slot103 約 3,240 個）。</sys:String>
-  <sys:String x:Key="WorldMapToggleYawArrows">朝向箭頭</sys:String>
-  <sys:String x:Key="WorldMapToggleYawArrowsTip">在每個標記上方畫小線段表示該實體面朝方向。</sys:String>
-  <sys:String x:Key="WorldMapToggleRegionColoring">區域上色</sys:String>
-  <sys:String x:Key="WorldMapToggleRegionColoringTip">將每種類型固定顏色改為依 _fieldInfoKey 衍生的區域色相。</sys:String>
-  <sys:String x:Key="WorldMapToggleDistanceTool">量測距離</sys:String>
-  <sys:String x:Key="WorldMapToggleDistanceToolTip">按下後在地圖上點兩個點，狀態列會顯示世界單位距離。</sys:String>
-  <sys:String x:Key="WorldMapExportPng">匯出 PNG…</sys:String>
-  <sys:String x:Key="WorldMapExportPngTip">將目前地圖 + 標記匯出為原始解析度 PNG。</sys:String>
-  <sys:String x:Key="WorldMapExportPickerTitle">匯出世界地圖 PNG</sys:String>
+  <sys:String x:Key="WorldMapPickMap">選擇地圖…</sys:String>
+  <sys:String x:Key="WorldMapPickMapTip">挑一張圖片當世界地圖底圖。圖片會被強制拉伸成正方形畫布；ping 的位置以 Crimson Desert 標準世界地圖為基準計算，與圖片本身的解析度、比例無關。</sys:String>
+  <sys:String x:Key="WorldMapPickMapTitle">選擇世界地圖圖片</sys:String>
+  <sys:String x:Key="WorldMapFilterLabel">篩選：</sys:String>
+  <sys:String x:Key="WorldMapFilterTip">用標籤子字串篩選物件清單。空白＝顯示所有有座標的物件。</sys:String>
+  <sys:String x:Key="WorldMapObjectPickerTip">挑一個物件（主控角色 / 傭兵 / 場景物件）在地圖上 ping 其位置。</sys:String>
   <sys:String x:Key="WorldMapClose">關閉</sys:String>
   <sys:String x:Key="WorldMapNoSaveTitle">尚未載入存檔</sys:String>
   <sys:String x:Key="WorldMapNoSaveBody">請先 File → Open Save 載入存檔，再開啟世界地圖。</sys:String>
-  <sys:String x:Key="WorldMapNoGameTitle">需要遊戲安裝資料夾</sys:String>
-  <sys:String x:Key="WorldMapNoGameBody">世界地圖需要從 Crimson Desert 安裝目錄抽取地圖材質。請先用 Tools → Set Game Install Folder 設定，然後再開啟。</sys:String>
-  <sys:String x:Key="WorldMapExtractingTitle">正在抽取地圖</sys:String>
-  <sys:String x:Key="WorldMapExtractingBody">合成 parchment 樣式地圖（用 0012 的 blur_height + paper pattern + 道路 SDF 三層）— 第一次約 10 秒，之後會快取重用。</sys:String>
-  <sys:String x:Key="WorldMapExtractFailedTitle">無法抽取地圖</sys:String>
 
 </ResourceDictionary>
