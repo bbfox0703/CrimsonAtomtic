@@ -79,16 +79,27 @@
                             Binding="{Binding ItemKey}"
                             Width="90" />
         <DataGridTextColumn Header="{DynamicResource DyeEditorColSlotCount}"
-                            Binding="{Binding DyeSlotCount}"
-                            Width="80" />
-        <DataGridTemplateColumn Header="{DynamicResource DyeEditorColAction}" Width="90">
+                            Binding="{Binding SlotCountText}"
+                            Width="100" />
+        <DataGridTemplateColumn Header="{DynamicResource DyeEditorColAction}" Width="100">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:DyeEditorItemRow">
-              <Button Content="{DynamicResource DyeEditorEdit}"
-                      ToolTip.Tip="{DynamicResource DyeEditorEditTip}"
-                      Padding="6,2"
-                      MinHeight="0"
-                      Click="OnEditButtonClick" />
+              <!-- Two mutually exclusive buttons; row's CanEditDye /
+                   CanAddDye gates which one is visible. -->
+              <Panel>
+                <Button Content="{DynamicResource DyeEditorEdit}"
+                        ToolTip.Tip="{DynamicResource DyeEditorEditTip}"
+                        Padding="6,2"
+                        MinHeight="0"
+                        IsVisible="{Binding CanEditDye}"
+                        Click="OnEditButtonClick" />
+                <Button Content="{DynamicResource DyeEditorAdd}"
+                        ToolTip.Tip="{DynamicResource DyeEditorAddTip}"
+                        Padding="6,2"
+                        MinHeight="0"
+                        IsVisible="{Binding CanAddDye}"
+                        Click="OnAddButtonClick" />
+              </Panel>
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>

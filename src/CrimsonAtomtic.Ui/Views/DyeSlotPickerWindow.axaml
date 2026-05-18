@@ -1,0 +1,57 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        mc:Ignorable="d"
+        d:DesignWidth="460"
+        d:DesignHeight="320"
+        x:Class="CrimsonAtomtic.Ui.Views.DyeSlotPickerWindow"
+        x:DataType="vm:DyeSlotPickerViewModel"
+        Title="{DynamicResource DyeEditorAddPickSlotTitle}"
+        Width="460" Height="320"
+        MinWidth="360" MinHeight="220"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Icon="/Assets/MainIcon.ico"
+        FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
+
+  <Grid Margin="16" RowDefinitions="Auto,Auto,*,Auto">
+    <TextBlock Grid.Row="0"
+               Text="{DynamicResource DyeEditorAddPickSlotHeader}"
+               TextWrapping="Wrap"
+               Margin="0,0,0,8" />
+    <TextBlock Grid.Row="1"
+               Text="{Binding ItemDisplayLabel}"
+               FontWeight="SemiBold"
+               TextWrapping="Wrap"
+               Margin="0,0,0,12" />
+
+    <ListBox Grid.Row="2"
+             ItemsSource="{Binding Options}"
+             SelectedItem="{Binding SelectedOption, Mode=TwoWay}"
+             ScrollViewer.VerticalScrollBarVisibility="Auto">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="vm:DyeSlotPickerOption">
+          <TextBlock Text="{Binding DisplayLabel}" />
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+
+    <StackPanel Grid.Row="3"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="8"
+                Margin="0,12,0,0">
+      <Button Content="{DynamicResource ConfirmDialogNo}"
+              Click="OnCancelClick"
+              MinWidth="80" />
+      <Button Content="{DynamicResource ConfirmDialogYes}"
+              Click="OnOkClick"
+              MinWidth="80"
+              IsDefault="True"
+              IsEnabled="{Binding HasOptions}" />
+    </StackPanel>
+  </Grid>
+</Window>

@@ -28,4 +28,21 @@ public sealed partial class DyeEditorWindow : Window
             vm.RequestEdit(row);
         }
     }
+
+    /// <summary>
+    /// Per-row "+ Add" button: forwards the row to the VM's
+    /// <see cref="DyeEditorViewModel.RequestAddDye"/>. The MainWindow
+    /// code-behind subscribes to <see cref="DyeEditorViewModel.AddDyeRequested"/>
+    /// and runs the slot picker → SetObjectListPresent → patch
+    /// <c>_dyeSlotNo</c> flow.
+    /// </summary>
+    private void OnAddButtonClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control source) return;
+        if (source.DataContext is not DyeEditorItemRow row) return;
+        if (DataContext is DyeEditorViewModel vm)
+        {
+            vm.RequestAddDye(row);
+        }
+    }
 }

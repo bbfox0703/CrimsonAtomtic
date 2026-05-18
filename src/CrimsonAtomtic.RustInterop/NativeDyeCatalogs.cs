@@ -436,6 +436,16 @@ public sealed class NativePartPrefabDyeSlotInfoCatalog : IDisposable
         get { ObjectDisposedException.ThrowIf(_disposed, this); return _entryCount; }
     }
 
+    /// <summary>
+    /// Internal accessor used by <see cref="NativeItemPartPrefabCatalog"/>
+    /// to pass the underlying handle into the cross-catalog
+    /// <c>crimson_item_part_prefab_resolve_dye_slot_count</c> ABI.
+    /// </summary>
+    internal CrimsonPartPrefabDyeSlotInfoHandle InternalSlotInfoHandle
+    {
+        get { ObjectDisposedException.ThrowIf(_disposed, this); return _handle; }
+    }
+
     public static NativePartPrefabDyeSlotInfoCatalog LoadFromBytes(
         ReadOnlySpan<byte> pabgb, ReadOnlySpan<byte> pabgh)
     {
@@ -614,6 +624,183 @@ internal sealed class CrimsonPartPrefabDyeSlotInfoHandle : SafeHandle
     protected override bool ReleaseHandle()
     {
         NativeMethods.PartPrefabDyeSlotInfoFree(handle);
+        return true;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ItemPartPrefab — ItemKey → list of PartPrefabKey via the 3-table join
+//      (iteminfo + stringinfo + partprefabdyeslotinfo), plus the
+//      ResolveDyeSlotCount convenience wrapper.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Outcome of <see cref="NativeItemPartPrefabCatalog.ResolveDyeSlotCount"/>.
+/// Numeric values pin to the C ABI constants in
+/// <c>vendor/crimson-rs/src/c_abi/item_part_prefab.rs::resolve_dye_slot_count_source</c>
+/// — never reassign.
+/// </summary>
+public enum DyeSlotCountSource : uint
+{
+    /// <summary>Authoritative count from the iteminfo→partprefab chain.</summary>
+    Direct = 0,
+
+    /// <summary>
+    /// Item has no entry in the iteminfo/partprefab join — usually a body-
+    /// type variant that shares the human-male slot layout but isn't itself
+    /// listed. ~76% of dyeable items in 1.07 land here. Slot count is 0;
+    /// caller should fall back to a curated default or display "unknown".
+    /// </summary>
+    NotResolvedNoPartPrefab = 1,
+
+    /// <summary>
+    /// Item mapped to a partprefab, but the partprefab isn't in the slot-
+    /// info table. Defensive — shouldn't happen given how the join is built.
+    /// </summary>
+    NotResolvedNoSlotInfo = 2,
+}
+
+/// <summary>
+/// <c>ItemKey → list&lt;PartPrefabKey&gt;</c> via the 3-table join
+/// (<c>iteminfo</c> + <c>stringinfo</c> + <c>partprefabdyeslotinfo</c>) plus
+/// the <c>ResolveDyeSlotCount</c> one-shot wrapper that chains the
+/// partprefabdyeslotinfo lookup. Replaces the PyQt5 editor's
+/// hand-maintained <c>dye_slot_counts.json</c> end-to-end — the C# Dye
+/// editor uses this to surface per-item slot counts at scan time and
+/// drive the "Add Dye" slot-picker.
+/// </summary>
+public sealed class NativeItemPartPrefabCatalog : IDisposable
+{
+    private readonly CrimsonItemPartPrefabHandle _handle;
+    private bool _disposed;
+
+    private NativeItemPartPrefabCatalog(CrimsonItemPartPrefabHandle handle)
+    {
+        _handle = handle;
+    }
+
+    internal CrimsonItemPartPrefabHandle Handle
+    {
+        get { ObjectDisposedException.ThrowIf(_disposed, this); return _handle; }
+    }
+
+    public static NativeItemPartPrefabCatalog LoadFromBytes(
+        ReadOnlySpan<byte> iteminfoPabgb,
+        ReadOnlySpan<byte> stringinfoPabgb,
+        ReadOnlySpan<byte> partprefabPabgb,
+        ReadOnlySpan<byte> partprefabPabgh)
+    {
+        unsafe
+        {
+            fixed (byte* pi = iteminfoPabgb)
+            fixed (byte* ps = stringinfoPabgb)
+            fixed (byte* pb = partprefabPabgb)
+            fixed (byte* ph = partprefabPabgh)
+            {
+                var rc = NativeMethods.ItemPartPrefabLoadFromBytes(
+                    pi, (nuint)iteminfoPabgb.Length,
+                    ps, (nuint)stringinfoPabgb.Length,
+                    pb, (nuint)partprefabPabgb.Length,
+                    ph, (nuint)partprefabPabgh.Length,
+                    out var raw);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        "crimson_item_part_prefab_load_from_bytes failed: "
+                        + NameBuffer.ErrorName(rc));
+                }
+                return new NativeItemPartPrefabCatalog(
+                    CrimsonItemPartPrefabHandle.FromOwnedPointer(raw));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Number of items with at least one resolvable partprefab key.
+    /// Useful for diagnostics — divide by iteminfo's total item count
+    /// to get a coverage estimate.
+    /// </summary>
+    public int ResolvedItemCount
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            var rc = NativeMethods.ItemPartPrefabResolvedItemCount(_handle, out var count);
+            if (rc != NativeMethods.OK)
+            {
+                throw new CrimsonSaveException(rc,
+                    "crimson_item_part_prefab_resolved_item_count failed: "
+                    + NameBuffer.ErrorName(rc));
+            }
+            return (int)count;
+        }
+    }
+
+    /// <summary>
+    /// First partprefab key for <paramref name="itemKey"/>, or
+    /// <c>null</c> when the item has no resolvable partprefab. The
+    /// returned key feeds <see cref="NativePartPrefabDyeSlotInfoCatalog"/>
+    /// lookups (per-slot default material names, mat-indices, mask).
+    /// </summary>
+    public uint? LookupFirstPrefabKey(uint itemKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var rc = NativeMethods.ItemPartPrefabLookupCount(_handle, itemKey, out var count);
+        if (rc == NativeMethods.NOT_FOUND || count == 0) return null;
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_item_part_prefab_lookup_count(item_key={itemKey}) failed: "
+                + NameBuffer.ErrorName(rc));
+        }
+        rc = NativeMethods.ItemPartPrefabLookupKeyAt(_handle, itemKey, 0, out var key);
+        if (rc != NativeMethods.OK) return null;
+        return key;
+    }
+
+    /// <summary>
+    /// One-shot "how many dye slots does this item have?". Returns the
+    /// resolved count (or 0) plus the source enum that tells the caller
+    /// whether to trust the result.
+    /// </summary>
+    public (int SlotCount, DyeSlotCountSource Source) ResolveDyeSlotCount(
+        uint itemKey, NativePartPrefabDyeSlotInfoCatalog slotInfo)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(slotInfo);
+        var rc = NativeMethods.ItemPartPrefabResolveDyeSlotCount(
+            _handle, slotInfo.InternalSlotInfoHandle, itemKey,
+            out var slotCount, out var source);
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_item_part_prefab_resolve_dye_slot_count(item_key={itemKey}) failed: "
+                + NameBuffer.ErrorName(rc));
+        }
+        return ((int)slotCount, (DyeSlotCountSource)source);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _handle.Dispose();
+    }
+}
+
+internal sealed class CrimsonItemPartPrefabHandle : SafeHandle
+{
+    public CrimsonItemPartPrefabHandle() : base(IntPtr.Zero, ownsHandle: true) { }
+    public static CrimsonItemPartPrefabHandle FromOwnedPointer(IntPtr ptr)
+    {
+        var h = new CrimsonItemPartPrefabHandle();
+        h.SetHandle(ptr);
+        return h;
+    }
+    public override bool IsInvalid => handle == IntPtr.Zero;
+    protected override bool ReleaseHandle()
+    {
+        NativeMethods.ItemPartPrefabFree(handle);
         return true;
     }
 }

@@ -333,6 +333,7 @@ public sealed class LocalizationProvider : IDisposable
     private NativeDyeColorGroupInfoCatalog? _dyeColorGroupInfo;
     private NativePartPrefabDyeTexturePalleteCatalog? _dyeTexturePalleteInfo;
     private NativePartPrefabDyeSlotInfoCatalog? _dyeSlotInfo;
+    private NativeItemPartPrefabCatalog? _itemPartPrefab;
     private NativeStoreInfoCatalog? _storeInfo;
     // 13 niche name-only bridges, group 0008 (impl_name_only_bridge!).
     private NativeHouseInfoCatalog? _houseInfo;
@@ -667,6 +668,33 @@ public sealed class LocalizationProvider : IDisposable
             ref _dyeTexturePalleteInfo);
         TryLoadDyeBridge(pamt, DyeSlotInfoPabgbFileName, DyeSlotInfoPabghFileName,
             NativePartPrefabDyeSlotInfoCatalog.LoadFromBytes, ref _dyeSlotInfo);
+        TryLoadItemPartPrefabBridge(pamt);
+    }
+
+    /// <summary>
+    /// Bootstrap the <c>ItemKey → PartPrefabKey[]</c> join (iteminfo +
+    /// stringinfo + partprefabdyeslotinfo). The 4 bytes buffers needed
+    /// for the join are re-extracted from the same PAMT — they aren't
+    /// kept alive after the individual bridge constructors already
+    /// consumed them, so this is a one-time-per-bootstrap re-read.
+    /// Failure degrades silently: <see cref="ItemPartPrefab"/> stays
+    /// <c>null</c> and the Dye editor's slot-count column shows
+    /// "unknown".
+    /// </summary>
+    private void TryLoadItemPartPrefabBridge(string pamt)
+    {
+        try
+        {
+            var iteminfo = _paz.ExtractFile(pamt, ItemInfoDirectory, ItemInfoFileName);
+            var stringinfo = _paz.ExtractFile(pamt, ItemInfoDirectory, StringInfoFileName);
+            var pabgb = _paz.ExtractFile(pamt, ItemInfoDirectory, DyeSlotInfoPabgbFileName);
+            var pabgh = _paz.ExtractFile(pamt, ItemInfoDirectory, DyeSlotInfoPabghFileName);
+            _itemPartPrefab?.Dispose();
+            _itemPartPrefab = NativeItemPartPrefabCatalog.LoadFromBytes(
+                iteminfo, stringinfo, pabgb, pabgh);
+        }
+        catch (CrimsonSaveException) { }
+        catch (IOException) { }
     }
 
     /// <summary>
@@ -1049,11 +1077,34 @@ public sealed class LocalizationProvider : IDisposable
 
     /// <summary>
     /// Direct access to <c>partprefabdyeslotinfo</c>. <c>null</c> when
-    /// the bridge isn't loaded. Not consumed by the Dye editor v1
-    /// (requires <c>_itemKey → _partPrefabKey</c> cross-reference,
-    /// still open upstream).
+    /// the bridge isn't loaded. Consumed transitively through
+    /// <see cref="LookupDyeSlotCount"/>; the catalog accessor stays
+    /// public for diagnostics + per-prefab default-material reads.
     /// </summary>
     public NativePartPrefabDyeSlotInfoCatalog? DyeSlotInfo => _dyeSlotInfo;
+
+    /// <summary>
+    /// Direct access to the <c>ItemKey → PartPrefabKey[]</c> join.
+    /// <c>null</c> when any of the four backing tables (iteminfo,
+    /// stringinfo, partprefabdyeslotinfo .pabgb/.pabgh) failed to load.
+    /// </summary>
+    public NativeItemPartPrefabCatalog? ItemPartPrefab => _itemPartPrefab;
+
+    /// <summary>
+    /// One-shot "how many dye slots does this item have?". Returns
+    /// <c>null</c> when either backing catalog is unavailable or the
+    /// resolver can't pin a slot count (mesh-variant items without a
+    /// partprefab entry — see
+    /// <see cref="DyeSlotCountSource.NotResolvedNoPartPrefab"/>).
+    /// Drives the Dye editor's per-row slot-count column + the Add Dye
+    /// slot-picker.
+    /// </summary>
+    public int? LookupDyeSlotCount(uint itemKey)
+    {
+        if (_itemPartPrefab is null || _dyeSlotInfo is null) return null;
+        var (count, source) = _itemPartPrefab.ResolveDyeSlotCount(itemKey, _dyeSlotInfo);
+        return source == DyeSlotCountSource.Direct ? count : null;
+    }
 
     /// <summary>
     /// Get the <c>(GimmickInfoKey, InternalName)</c> pair at insertion
@@ -1739,6 +1790,8 @@ public sealed class LocalizationProvider : IDisposable
         _dyeTexturePalleteInfo = null;
         _dyeSlotInfo?.Dispose();
         _dyeSlotInfo = null;
+        _itemPartPrefab?.Dispose();
+        _itemPartPrefab = null;
         _storeInfo?.Dispose();
         _storeInfo = null;
         // 13 niche bridges.

@@ -4,6 +4,8 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using CrimsonAtomtic.RustInterop;
+using CrimsonAtomtic.SaveModel;
 using CrimsonAtomtic.Ui.ViewModels;
 
 namespace CrimsonAtomtic.Ui.Views;
@@ -690,14 +692,83 @@ public sealed partial class MainWindow : Window
                 if (childVm.IsDirty)
                 {
                     masterVm.NotifyChildApplied();
-                    // Re-scan so the master row count + per-row state
-                    // refresh against the new save body. Fire-and-forget
-                    // — the VM marks itself IsLoading so the footer
-                    // shows progress; we don't gate further UI on it.
                     _ = masterVm.RefreshAsync();
                 }
             };
             child.Show(this);
+        };
+
+        // Per-row "+ Add" → run slot picker → materialize dye element
+        // → patch its _dyeSlotNo to the user-picked value. The slot
+        // picker requires LookupDyeSlotCount to have returned non-null
+        // at scan time (which is the gate for surfacing the + Add
+        // button), so we can re-derive the count here without another
+        // null check.
+        masterVm.AddDyeRequested += async row =>
+        {
+            if (row.GamedataSlotCount is not int slotCount || slotCount <= 0)
+            {
+                return;
+            }
+            var pickerVm = new DyeSlotPickerViewModel(
+                row.ItemKey, row.ItemName, slotCount, vm.Localization);
+            int? pickedSlot = await DyeSlotPickerWindow.ShowAsync(this, pickerVm);
+            if (pickedSlot is not int slotIdx)
+            {
+                return;
+            }
+            try
+            {
+                var loader = vm.GetSaveLoader();
+                // Step 1: materialize the _itemDyeDataList with one
+                // default-empty element (count=1, all fields absent).
+                loader.SetObjectListPresent(
+                    row.BlockIndex,
+                    row.BuildPathToItem(),
+                    (int)row.DyeListFieldIndex,
+                    makePresent: true);
+                // Step 2: patch _dyeSlotNo on the new element to the
+                // picked slot. _dyeSlotNo is an i8 (signed), but slot
+                // values 0..N-1 always fit in a u8 representation; the
+                // wire encoding is identical for non-negative values.
+                var newElementPath = new[]
+                {
+                    new PathStep(row.FirstStepFieldIndex, row.FirstStepElementIndex),
+                    new PathStep(row.SecondStepFieldIndex, row.SecondStepElementIndex),
+                    new PathStep(row.DyeListFieldIndex, 0u),
+                };
+                var dyeSlotNoFieldIdx = ResolveDyeSlotNoFieldIndex(
+                    loader, loadedPath, row, newElementPath);
+                if (dyeSlotNoFieldIdx is int fieldIdx)
+                {
+                    loader.SetScalarFieldPresent(
+                        row.BlockIndex, newElementPath, fieldIdx,
+                        makePresent: true,
+                        initialBytes: [(byte)slotIdx]);
+                }
+            }
+            catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex) when (ex.ErrorCode == -16)
+            {
+                // NOT_FOUND from SetObjectListPresent: no sibling block
+                // provides a template element. Tell the user how to
+                // unblock it (dye one item in-game first).
+                var noTplTitle = (string?)this.FindResource("DyeEditorAddNoTemplateTitle")
+                                 ?? "No dye template in this save";
+                var noTplBody = (string?)this.FindResource("DyeEditorAddNoTemplateBody")
+                                ?? "Dye one item in-game first to establish a template.";
+                await ConfirmDialog.ShowAlertAsync(this, noTplTitle, noTplBody);
+                return;
+            }
+            catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex)
+            {
+                var failTitle = (string?)this.FindResource("DyeEditorAddFailedTitle")
+                                ?? "Could not add dye";
+                await ConfirmDialog.ShowAlertAsync(this, failTitle,
+                    $"{ex.Message} (code {ex.ErrorCode})");
+                return;
+            }
+            masterVm.NotifyChildApplied();
+            await masterVm.RefreshAsync();
         };
 
         var master = new DyeEditorWindow { DataContext = masterVm };
@@ -714,6 +785,47 @@ public sealed partial class MainWindow : Window
         // so the dialog renders immediately with "Loading dyed items…"
         // in the footer; the actual block walk runs on the thread pool.
         _ = masterVm.RefreshAsync();
+    }
+
+    /// <summary>
+    /// After <see cref="ISaveLoader.SetObjectListPresent"/> materializes
+    /// the dye list with one default-empty element, look up the field
+    /// index of <c>_dyeSlotNo</c> within that element so the caller can
+    /// <see cref="ISaveLoader.SetScalarFieldPresent"/> the user's
+    /// picked slot value. Returns <c>null</c> when the element can't
+    /// be navigated (defensive — shouldn't happen if the SetObjectListPresent
+    /// call just succeeded).
+    /// </summary>
+    private static int? ResolveDyeSlotNoFieldIndex(
+        ISaveLoader loader,
+        string savePath,
+        DyeEditorItemRow row,
+        ReadOnlySpan<PathStep> pathToNewElement)
+    {
+        var top = loader.LoadBlockDetails(savePath, row.BlockIndex);
+        BlockDetails? cursor = top;
+        foreach (var step in pathToNewElement)
+        {
+            if (cursor is null) return null;
+            var field = cursor.Fields.FirstOrDefault(f => f.FieldIndex == step.FieldIndex);
+            if (field is null) return null;
+            if (field.Child is { } locatorChild
+                && field.Elements is not { Count: > 0 })
+            {
+                cursor = locatorChild;
+                continue;
+            }
+            if (field.Elements is { } elements && step.ElementIndex < elements.Count)
+            {
+                cursor = elements[(int)step.ElementIndex];
+                continue;
+            }
+            return null;
+        }
+        if (cursor is null) return null;
+        var slotNo = cursor.Fields.FirstOrDefault(
+            f => string.Equals(f.Name, "_dyeSlotNo", StringComparison.Ordinal));
+        return slotNo?.FieldIndex;
     }
 
     /// <summary>

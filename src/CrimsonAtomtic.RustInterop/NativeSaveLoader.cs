@@ -2967,4 +2967,43 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "crimson_part_prefab_dye_slot_info_get_entry_key")]
     public static partial int PartPrefabDyeSlotInfoGetEntryKey(
         CrimsonPartPrefabDyeSlotInfoHandle handle, uint idx, out uint outKey);
+
+    // ── item_part_prefab join (iteminfo + stringinfo + partprefabdyeslotinfo) ─
+    //
+    // Replaces the PyQt5 editor's hand-maintained dye_slot_counts.json end-to-
+    // end. ItemKey → PartPrefabKey traversal is precomputed at load time;
+    // ResolveDyeSlotCount is the one-shot "how many dye slots?" wrapper that
+    // chains the partprefabdyeslotinfo lookup. See
+    // vendor/crimson-rs/src/c_abi/item_part_prefab.rs.
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_item_part_prefab_load_from_bytes")]
+    public static unsafe partial int ItemPartPrefabLoadFromBytes(
+        byte* iteminfoPabgb, nuint iteminfoLen,
+        byte* stringinfoPabgb, nuint stringinfoLen,
+        byte* partprefabPabgb, nuint partprefabPabgbLen,
+        byte* partprefabPabgh, nuint partprefabPabghLen,
+        out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_item_part_prefab_free")]
+    public static partial void ItemPartPrefabFree(IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_item_part_prefab_resolved_item_count")]
+    public static partial int ItemPartPrefabResolvedItemCount(
+        CrimsonItemPartPrefabHandle handle, out uint count);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_item_part_prefab_lookup_count")]
+    public static partial int ItemPartPrefabLookupCount(
+        CrimsonItemPartPrefabHandle handle, uint itemKey, out uint count);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_item_part_prefab_lookup_key_at")]
+    public static partial int ItemPartPrefabLookupKeyAt(
+        CrimsonItemPartPrefabHandle handle, uint itemKey, uint idx, out uint outKey);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_item_part_prefab_resolve_dye_slot_count")]
+    public static partial int ItemPartPrefabResolveDyeSlotCount(
+        CrimsonItemPartPrefabHandle ipp,
+        CrimsonPartPrefabDyeSlotInfoHandle slotInfo,
+        uint itemKey,
+        out uint outSlotCount,
+        out uint outResolveSource);
 }
