@@ -913,6 +913,7 @@ public sealed partial class MainWindow : Window
         var mapVm = new ViewModels.WorldMapViewModel(
             vm.GetSaveLoader(),
             paths,
+            vm.Localization,
             bitmap,
             pathForVm);
 

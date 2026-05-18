@@ -12,23 +12,46 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 /// <summary>
 /// One pickable entity in the World Map dialog's "ping object" dropdown.
 /// Flattens an <see cref="PositionedEntityRecord"/> into the minimal
-/// shape the UI needs (a display label + the world coords).
+/// shape the UI needs (a display label + the world coords). Carries the
+/// per-language resolved names + raw key separately so the filter can
+/// substring-match against any of them (English name, secondary name,
+/// region name, raw numeric ID) — typing "Howling" hits Howling Hills
+/// gimmicks, typing "1000583" hits that exact key, typing the Chinese
+/// region name hits everything in that region.
 /// </summary>
 public sealed record EntityChoice(
     PositionKind Kind,
     string DisplayLabel,
+    string? EnglishName,
+    string? SecondaryName,
+    string? RegionName,
+    uint RawKey,
     double WorldX,
     double WorldZ,
     uint FieldInfoKey)
 {
     /// <summary>
-    /// Returns <c>true</c> when <paramref name="filter"/> is contained
-    /// in <see cref="DisplayLabel"/> (case-insensitive). Used by the
-    /// toolbar filter textbox.
+    /// Case-insensitive substring match against every field the user
+    /// might reasonably type: the formatted label, each per-language
+    /// name, the region name, the raw key as decimal. Empty filter =
+    /// pass-through.
     /// </summary>
     public bool MatchesFilter(string filter)
-        => string.IsNullOrEmpty(filter)
-           || DisplayLabel.Contains(filter, StringComparison.OrdinalIgnoreCase);
+    {
+        if (string.IsNullOrEmpty(filter)) return true;
+        if (DisplayLabel.Contains(filter, StringComparison.OrdinalIgnoreCase)) return true;
+        if (EnglishName?.Contains(filter, StringComparison.OrdinalIgnoreCase) == true) return true;
+        if (SecondaryName?.Contains(filter, StringComparison.OrdinalIgnoreCase) == true) return true;
+        if (RegionName?.Contains(filter, StringComparison.OrdinalIgnoreCase) == true) return true;
+        // Numeric key — users often paste the raw ID from CE / save dumps.
+        if (RawKey != 0
+            && RawKey.ToString(CultureInfo.InvariantCulture)
+                     .Contains(filter, StringComparison.Ordinal))
+        {
+            return true;
+        }
+        return false;
+    }
 }
 
 /// <summary>
@@ -134,50 +157,157 @@ public sealed partial class WorldMapViewModel : ObservableObject
     public WorldMapViewModel(
         ISaveLoader loader,
         IPlatformPaths paths,
+        LocalizationProvider localization,
         Bitmap? initialBitmap,
         string? initialPath)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(paths);
+        ArgumentNullException.ThrowIfNull(localization);
 
         _paths = paths;
         _basemap = initialBitmap;
         _basemapPath = initialPath;
-        _allObjects = BuildEntityList(loader);
+        _allObjects = BuildEntityList(loader, localization);
 
         RebuildFilteredObjects();
     }
 
     /// <summary>
     /// Flatten <see cref="ISaveLoader.ListFieldPositions"/> into a
-    /// dropdown-ready <see cref="EntityChoice"/> list. Labels are
-    /// stable per-kind so the user can scan the list by region /
-    /// instance ID.
+    /// dropdown-ready <see cref="EntityChoice"/> list with resolved
+    /// per-language names. Resolves:
+    /// <list type="bullet">
+    ///   <item>GimmickInfoKey → display name via <c>gimmickinfo.pabgb</c>
+    ///     + PALOC hash-hop at <c>lo32=0x200</c>.</item>
+    ///   <item>Mercenary / active char CharacterKey → display name via
+    ///     <c>characterinfo.pabgb</c> + PALOC at <c>lo32=0x30</c>.</item>
+    ///   <item>FieldInfoKey → region name via <c>regioninfo.pabgb</c>
+    ///     (internal name only — no PALOC chain for RegionKey).</item>
+    /// </list>
+    /// Falls back to raw numeric IDs when any of the catalogs isn't
+    /// loaded (no game install configured) so the picker stays usable.
     /// </summary>
-    private static List<EntityChoice> BuildEntityList(ISaveLoader loader)
+    private static List<EntityChoice> BuildEntityList(
+        ISaveLoader loader, LocalizationProvider localization)
     {
         var positions = loader.ListFieldPositions(out _);
         var list = new List<EntityChoice>(positions.Count);
         foreach (var rec in positions)
         {
-            var label = rec.Kind switch
+            // Region label (RegionKey is internal-name only across all
+            // languages — same value in English / secondary columns, so
+            // RegionName is a single string rather than a pair).
+            var regionRaw = localization.ResolveByFieldTypeName(
+                "RegionKey", rec.FieldInfoKey);
+            var regionName = string.IsNullOrEmpty(regionRaw) ? null : regionRaw;
+
+            string? englishName = null;
+            string? secondaryName = null;
+            string nameDisplay;
+            uint rawKey;
+
+            switch (rec.Kind)
             {
-                PositionKind.ActiveChar => "Active char",
-                PositionKind.Mercenary => string.Format(
-                    CultureInfo.InvariantCulture,
-                    "Mercenary #{0}",
-                    rec.MercenaryNo),
-                PositionKind.Gimmick => string.Format(
-                    CultureInfo.InvariantCulture,
-                    "Gimmick {0}  (region {1})",
-                    rec.GimmickInfoKey,
-                    rec.FieldInfoKey),
-                _ => "Unknown",
-            };
+                case PositionKind.ActiveChar:
+                    rawKey = rec.CharacterKey;
+                    (englishName, secondaryName) = ResolveNamePair(
+                        localization, "CharacterKey", rawKey);
+                    nameDisplay = FormatNamePair(englishName, secondaryName)
+                                  ?? "Active char";
+                    nameDisplay = "Active char — " + nameDisplay;
+                    break;
+                case PositionKind.Mercenary:
+                    rawKey = rec.CharacterKey;
+                    (englishName, secondaryName) = ResolveNamePair(
+                        localization, "CharacterKey", rawKey);
+                    var mercName = FormatNamePair(englishName, secondaryName);
+                    nameDisplay = mercName is not null
+                        ? string.Format(CultureInfo.InvariantCulture,
+                            "{0}  ·  Mercenary #{1}", mercName, rec.MercenaryNo)
+                        : string.Format(CultureInfo.InvariantCulture,
+                            "Mercenary #{0}", rec.MercenaryNo);
+                    break;
+                case PositionKind.Gimmick:
+                    rawKey = rec.GimmickInfoKey;
+                    (englishName, secondaryName) = ResolveNamePair(
+                        localization, "GimmickInfoKey", rawKey);
+                    var gimName = FormatNamePair(englishName, secondaryName);
+                    nameDisplay = gimName is not null
+                        ? string.Format(CultureInfo.InvariantCulture,
+                            "{0}  ·  #{1}", gimName, rawKey)
+                        : string.Format(CultureInfo.InvariantCulture,
+                            "Gimmick #{0}", rawKey);
+                    break;
+                default:
+                    rawKey = 0;
+                    nameDisplay = "Unknown";
+                    break;
+            }
+
+            var label = regionName is not null
+                ? string.Format(CultureInfo.InvariantCulture,
+                    "{0}  ·  [{1}]", nameDisplay, regionName)
+                : nameDisplay;
+
             list.Add(new EntityChoice(
-                rec.Kind, label, rec.PosX, rec.PosZ, rec.FieldInfoKey));
+                Kind: rec.Kind,
+                DisplayLabel: label,
+                EnglishName: englishName,
+                SecondaryName: secondaryName,
+                RegionName: regionName,
+                RawKey: rawKey,
+                WorldX: rec.PosX,
+                WorldZ: rec.PosZ,
+                FieldInfoKey: rec.FieldInfoKey));
         }
         return list;
+    }
+
+    /// <summary>
+    /// Resolve <paramref name="typeName"/> + <paramref name="key"/> into
+    /// English + secondary names by re-using the LocalizationProvider's
+    /// public resolver. Returns <c>(null, null)</c> when the catalog
+    /// isn't loaded or the key has no entry.
+    /// </summary>
+    private static (string? English, string? Secondary) ResolveNamePair(
+        LocalizationProvider localization, string typeName, uint key)
+    {
+        if (key == 0) return (null, null);
+        // ResolveByFieldTypeName returns the pre-formatted "English / Secondary"
+        // (or just one side, or empty). For filter matching we want the
+        // raw per-language strings, not the joined display form. Re-derive
+        // by calling each language separately via the existing low-level
+        // PALOC + table-driven entry points the provider exposes.
+        //
+        // Simpler approach for now: split the formatted result back. The
+        // formatter joins with " / " so a single split works for the
+        // bilingual case. Single-language results have no " / " and land
+        // entirely in English.
+        var combined = localization.ResolveByFieldTypeName(typeName, key);
+        if (string.IsNullOrEmpty(combined)) return (null, null);
+        var sep = combined.IndexOf(" / ", StringComparison.Ordinal);
+        if (sep < 0)
+        {
+            return (combined, null);
+        }
+        return (combined[..sep], combined[(sep + 3)..]);
+    }
+
+    /// <summary>
+    /// Re-join an English + secondary pair into a single display string.
+    /// Returns <c>null</c> when neither side resolves so callers can fall
+    /// back to "Gimmick #1000583"-style numeric labels.
+    /// </summary>
+    private static string? FormatNamePair(string? english, string? secondary)
+    {
+        if (english is null && secondary is null) return null;
+        if (english is not null && secondary is not null)
+        {
+            return string.Format(CultureInfo.InvariantCulture,
+                "{0} / {1}", english, secondary);
+        }
+        return english ?? secondary;
     }
 
     /// <summary>
