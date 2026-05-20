@@ -87,6 +87,23 @@ finally {
     Pop-Location
 }
 
+# ── 2b. Strip residual .pdb files ───────────────────────────────────────────
+# The Ui csproj has a StripPdbsAfterPublish target that catches managed PDBs +
+# the NuGet-shipped native PDBs (libSkiaSharp, libHarfBuzzSharp). It does NOT
+# catch CrimsonAtomtic.pdb, which is the *native* PDB produced by the ILC AOT
+# compiler — that file is emitted after the Publish target chain completes, so
+# the in-MSBuild Delete misses it. We sweep one more time here.
+$pdbs = Get-ChildItem $DistRoot -Recurse -Filter *.pdb -ErrorAction SilentlyContinue
+if ($pdbs) {
+    $pdbBytes = ($pdbs | Measure-Object Length -Sum).Sum
+    Write-Host ""
+    Write-Host ("==> Stripping {0} residual .pdb file(s) ({1:N1} MB)" -f $pdbs.Count, ($pdbBytes / 1MB)) -ForegroundColor Cyan
+    foreach ($p in $pdbs) {
+        Write-Host "    rm $($p.Name)" -ForegroundColor DarkGray
+        Remove-Item -Force $p.FullName
+    }
+}
+
 # ── 3. Summary ──────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "==> Bundle staged at $DistRoot" -ForegroundColor Green

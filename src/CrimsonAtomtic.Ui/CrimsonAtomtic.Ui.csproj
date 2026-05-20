@@ -69,4 +69,19 @@
     </Content>
   </ItemGroup>
 
+  <!-- Strip .pdb files from the publish bundle. We still produce PDBs in
+       bin/Release/ for crash-dump symbolication during development, but
+       the AOT-published artifact under dist/ is what we ship to users —
+       and there the managed PDBs are dead weight (managed assemblies
+       aren't shipped after AOT) while the native PDBs that ride along
+       with SkiaSharp / HarfBuzzSharp NuGets add ~200 MB on top of a
+       ~50 MB usable bundle. Build output is untouched; publish output
+       is what gets pruned. -->
+  <Target Name="StripPdbsAfterPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <_PublishPdbs Include="$(PublishDir)**\*.pdb" />
+    </ItemGroup>
+    <Delete Files="@(_PublishPdbs)" />
+  </Target>
+
 </Project>
