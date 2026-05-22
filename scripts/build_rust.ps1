@@ -68,29 +68,48 @@ try {
         throw "cargo build failed (exit $cargoExit)"
     }
 
-    # Warning-block state machine. A block starts at `warning:` and
-    # continues through cargo's `-->` location, `|` column gutter,
-    # `   = note:` annotations, code-line `<num> | <code>`, caret
-    # pointers, and `...` ellipses. Exit on the first line that
-    # doesn't match any continuation pattern.
-    $inWarning = $false
+    # Stateless warning-block filter. Cargo's warning blocks are made
+    # of these line shapes — none of them appear in cargo's normal
+    # progress / error output, so we can drop each independently
+    # without tracking "are we still inside a warning block?":
+    #
+    #   warning: <text>            — block start (or the rollup summary
+    #                                "warning: `crate` (lib) generated
+    #                                N warnings")
+    #   <sp>--> file:line:col       — location pointer
+    #   <sp>|                       — column-gutter / code-context line
+    #   <sp>= note: | = help:       — annotations
+    #   <num> | <code>             — source-code line (with-or-without
+    #                                leading whitespace on the line
+    #                                number)
+    #   ...                         — source-elision marker (no leading
+    #                                whitespace — caught the previous
+    #                                state-machine version off guard
+    #                                and broke its end-of-block heuristic)
+    #   <sp>^^^                     — caret highlight
+    #
+    # Real cargo errors (`error:`, `error[Exxxx]:`) and progress lines
+    # (`   Compiling`, `   Finished`, `   Running`, etc.) don't match
+    # any of these patterns, so they pass through untouched.
+    #
+    # Also collapse runs of consecutive blank lines into a single blank
+    # — dropping warning blocks leaves 50+ trailing blanks (their
+    # natural separators) which would visually look like the build hung
+    # between cargo's "Compiling" and "Finished" lines.
+    $prevBlank = $false
     foreach ($line in $rawLines) {
-        if ($line -match '^warning:') {
-            $inWarning = $true
+        if ($line -match '^warning:' -or
+            $line -match '^\s+-->' -or
+            $line -match '^\s+\|' -or
+            $line -match '^\s+=' -or
+            $line -match '^\s*\d+\s*\|' -or
+            $line -match '^\.\.\.$' -or
+            $line -match '^\s*\^') {
             continue
         }
-        if ($inWarning) {
-            if ($line -match '^\s*$' -or
-                $line -match '^\s+-->' -or
-                $line -match '^\s+\|' -or
-                $line -match '^\s+=' -or
-                $line -match '^\s*\d+\s*\|' -or
-                $line -match '^\s+\.\.\.' -or
-                $line -match '^\s*\^') {
-                continue
-            }
-            $inWarning = $false
-        }
+        $isBlank = $line -match '^\s*$'
+        if ($isBlank -and $prevBlank) { continue }
+        $prevBlank = $isBlank
         Write-Host $line
     }
 }
