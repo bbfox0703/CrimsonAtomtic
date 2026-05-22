@@ -2089,6 +2089,53 @@ public sealed class NativeGlobalGameEventInfoCatalog : IDisposable
         }
     }
 
+    /// <summary>
+    /// The <c>GlobalGameEventGroupKey</c> for this event (resolvable via
+    /// <see cref="NativeGlobalGameEventGroupInfoCatalog.LookupStringKey"/>).
+    /// Returns <see langword="null"/> when the event key isn't in the
+    /// table. Universal across all 103 rows in 1.07/1.08 — every event
+    /// belongs to exactly one of the 7 group keys.
+    /// </summary>
+    public uint? LookupGroupKey(uint globalGameEventInfoKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var rc = NativeMethods.GlobalGameEventInfoLookupGroupKey(
+            _handle, globalGameEventInfoKey, out var groupKey);
+        if (rc == NativeMethods.NOT_FOUND) return null;
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_global_game_event_info_lookup_group_key({globalGameEventInfoKey}) " +
+                $"failed: {NameBuffer.ErrorName(rc)}");
+        }
+        return groupKey;
+    }
+
+    /// <summary>
+    /// The 64-bit PALOC key (<c>hi32 = event_key, lo32 = namespace</c>)
+    /// for this event's localized display name. Returns <see langword="null"/>
+    /// when the event key isn't in the table; returns <c>0</c> when the
+    /// row exists but lacks an embedded <c>PalocStringRef</c> (the
+    /// <c>RoyalSupply</c> + <c>FactionBlockEvent_*</c> groups — ~24 of
+    /// 103 rows in 1.07/1.08). Callers should treat <c>0</c> as "no
+    /// localized name" and fall back to
+    /// <see cref="LookupStringKey(uint)"/>.
+    /// </summary>
+    public ulong? LookupPalocKey(uint globalGameEventInfoKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var rc = NativeMethods.GlobalGameEventInfoLookupPalocKey(
+            _handle, globalGameEventInfoKey, out var palocKey);
+        if (rc == NativeMethods.NOT_FOUND) return null;
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_global_game_event_info_lookup_paloc_key({globalGameEventInfoKey}) " +
+                $"failed: {NameBuffer.ErrorName(rc)}");
+        }
+        return palocKey;
+    }
+
     public void Dispose()
     {
         if (_disposed) return;

@@ -3,7 +3,33 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-18 part 14 (World Map parchment composite shipped but **user-reported visual mismatch** — the blur_height layer + road_sdf layer don't agree on world coverage, so roads land in the wrong places relative to the coastline. Iteration paused; tomorrow's session should validate per-layer world ranges and likely fall back to the 785-tile terrain composite where world coverage is known per-tile).
+> Last updated: 2026-05-22 part 15 (Staticlib pivot for AOT publish — `dist\win-x64\` no longer ships `crimson_rs.dll`; the Rust core is folded into `CrimsonAtomtic.exe` via NativeAOT's `<DirectPInvoke>` + `<NativeLibrary>`. Vendor refreshed to `b0cbd38` (1.08 baseline). GlobalGameEvent body-field bridge wired (`group_key` + `paloc_key`). World Map parchment layer-alignment bug from part 14 still open — unchanged this session).
+>
+> ## 🎯 This session — what shipped (2026-05-22 part 15)
+>
+> Two cross-cutting changes from the user's directive "vendor 有更新：對應的功能更新。另外，這次使用 library 方式 import crimson_rs (dist 不需要再帶有 crimson_rs.dll)":
+>
+> | Area | Scope |
+> |---|---|
+> | **Staticlib pivot — `dist\win-x64\` drops `crimson_rs.dll`** | Vendor `b0cbd38` (specifically `e4f77ca`) makes `cargo build --features c_abi --release` emit both `crimson_rs.dll` (cdylib, 1.1 MB) **and** `crimson_rs.lib` (staticlib, 14.3 MB) in one pass. `CrimsonAtomtic.Ui.csproj` now declares `<DirectPInvoke Include="crimson_rs"/>` + `<NativeLibrary Include="..\..\vendor\crimson-rs\target\release\crimson_rs.lib"/>` so the ILC linker folds the Rust code into the AOT exe. The existing `<Content Include="...crimson_rs.dll">` flipped to `<CopyToPublishDirectory>Never</CopyToPublishDirectory>` — dev / `dotnet run` / `dotnet test` still LoadLibrary the dll from `bin\`, but publish bundles drop it. Result: `dist\win-x64\` contains 4 files (`CrimsonAtomtic.exe` 26.7 MB, `av_libglesv2.dll`, `libHarfBuzzSharp.dll`, `libSkiaSharp.dll`) — the .NET-side single-file shape was already there, and now the Rust-side dll is gone too. Verified via `dumpbin /dependents`: the exe's import list shows only Windows system DLLs (`KERNEL32`, `ntdll`, `bcryptprimitives`, `ADVAPI32`, `bcrypt`, `ole32`, `OLEAUT32`, `api-ms-win-*`) — no `crimson_rs.dll`. **One linker gotcha not mentioned in the upstream doc**: Rust std's `env::home_dir` transitively pulls `GetUserProfileDirectoryW` from `userenv.dll`, so we also add `<NativeLibrary Include="Userenv.lib"/>` — without it the AOT publish fails with `LNK2019: unresolved external symbol __imp_GetUserProfileDirectoryW`. `scripts\package_aot.ps1` now asserts no `crimson_rs.dll` in `dist\` + runs `dumpbin /imports` for the second invariant (skipped cleanly when dumpbin isn't on PATH — needs a VS dev shell to activate). `scripts\build_rust.ps1` now reports both artifacts and fails loudly if the `.lib` is missing. |
+> | **`NativeGlobalGameEventCatalog` body-field wiring** | The only un-wired ABI from the vendor refresh: vendor `2be7493` adds `crimson_global_game_event_info_lookup_group_key` (returns the row's `GlobalGameEventGroupKey` for cross-reference into the existing group bridge — universal coverage across all 103/188 rows) and `_lookup_paloc_key` (returns the 64-bit PALOC key for the row's localized display name, or 0 for the ~24 `RoyalSupply` + `FactionBlockEvent_*` rows that lack the embedded `PalocStringRef`). C# side: two new `[LibraryImport]` entries in `NativeSaveLoader.cs::NativeMethods`, two new `LookupGroupKey(uint) → uint?` / `LookupPalocKey(uint) → ulong?` methods on `NativeGlobalGameEventInfoCatalog` in `NativeKeyInfoCatalogs.cs` (the `?` on the return type distinguishes "row not found" from "row exists but no PALOC"; for paloc, the `ulong?` is non-null when found, with the value 0 being the absent-PalocStringRef sentinel). Test pin added to `NicheBridges_LiveInstall_LoadAllAndResolveKnownKeys`: Drought_Varnian (0x4258) → group 0x4240 + paloc 72_945_724_555_969; RoyalSupply_Hernand (0x424a) → paloc 0. No UI consumer yet — the wrapper is parked for whenever the editor wants to surface localized event names. |
+>
+> Side maintenance from the 1.07 → 1.08 vendor bump (`5583e0e`): live-install row-count pins in `KeyInfoCatalogsTests.NicheBridges_LiveInstall_LoadAllAndResolveKnownKeys` flipped from exact equals to lower-bound `>=` (GlobalGameEvent grew 103 → 188, GlobalGameEventGroup grew 7 → 12 — the others stayed at 1.07 counts, but the lower-bound shape future-proofs them too). The exact `LookupStringKey(known_key) == known_value` assertions are unchanged — those still catch genuine schema drift. The `StringInfoCatalogTests.LoadFromBytes_LiveInstall_ResolvesItemIconPath` first-entry pin (1.06-specific `(0x2ad9f89e, "RealWorld")`) was replaced with a round-trip property check (`entry[0].value == LookupByHash(entry[0].hash)`) since the on-disk first-entry hash drifts across game patches.
+>
+> Tests: **287 → 294 pass** (+7 — most are from the 1.08 vendor refresh adding new tests upstream that cascade into the live-install suite; the GlobalGameEvent body assertions added here are inline with an existing test method so don't change the test count). Debug build clean. AOT publish verified — `dist\win-x64\CrimsonAtomtic.exe` 26.7 MB, single-file shape confirmed via `dumpbin /dependents`. **Visual UI verification still pending for the part-14 World Map parchment alignment bug** — that follow-on carries forward unchanged.
+>
+> ### Open follow-ons noted during this session
+>
+> - **`GlobalGameEvent` consumer wiring** — the `LookupGroupKey` / `LookupPalocKey` surface exists but has no UI consumer. Wire it into the localization pipeline whenever the editor surfaces event names (e.g., a future event-filter UI).
+> - **AOT publish gotcha doc** — the `Userenv.lib` requirement isn't in `vendor/crimson-rs/docs/c-sharp-nativeaot-integration.md`. Worth a PR to the vendor doc next time we touch it.
+>
+> ### Vendor state
+>
+> `vendor/crimson-rs` at `b0cbd38` (was `090a73d` per part 7). Run `vendor\update_vendors.ps1` at session start to refresh.
+>
+> ---
+>
+> Last previous update: 2026-05-18 part 14 (World Map parchment composite shipped but **user-reported visual mismatch** — the blur_height layer + road_sdf layer don't agree on world coverage, so roads land in the wrong places relative to the coastline. Iteration paused; tomorrow's session should validate per-layer world ranges and likely fall back to the 785-tile terrain composite where world coverage is known per-tile).
 >
 > ## 🎯 Next-session quick pickup
 >

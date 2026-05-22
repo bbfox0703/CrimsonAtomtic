@@ -54,19 +54,41 @@
     <ProjectReference Include="..\CrimsonAtomtic.RustInterop\CrimsonAtomtic.RustInterop.csproj" />
   </ItemGroup>
 
-  <!-- crimson_rs.dll is produced by .\scripts\build_rust.ps1.
-       Copy it next to CrimsonAtomtic.exe so [LibraryImport("crimson_rs")]
-       can resolve it at runtime (dotnet build, run, and publish all
-       pick this up). The Condition lets the project still build before
-       the dll has ever been produced — runtime calls would fail then,
-       but that surfaces in tests, not in the build. -->
+  <!-- crimson_rs.dll is produced by .\scripts\build_rust.ps1 (alongside
+       crimson_rs.lib — see the staticlib ItemGroup below).
+       Dev / `dotnet run` / `dotnet test` use the dll via LoadLibrary
+       since those paths don't run AOT. CopyToPublishDirectory is set to
+       Never because the AOT publish statically links the .lib instead —
+       dist/ ships as a single self-contained .exe. The Condition lets
+       the project build before the dll has ever been produced; runtime
+       calls would fail then, but that surfaces in tests, not the build. -->
   <ItemGroup>
     <Content Include="..\..\vendor\crimson-rs\target\release\crimson_rs.dll"
              Condition="Exists('..\..\vendor\crimson-rs\target\release\crimson_rs.dll')">
       <Link>crimson_rs.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
     </Content>
+  </ItemGroup>
+
+  <!-- NativeAOT publish: statically link the Rust core into the
+       single-file exe via crimson_rs.lib (no crimson_rs.dll on disk at
+       runtime). DirectPInvoke's Include must match the logical name in
+       every [LibraryImport("crimson_rs")]. NativeLibrary hands the .lib
+       to the ILC linker. Both items are no-ops outside the AOT publish
+       step, so we leave them unconditional (apart from the Exists guard
+       so a missing .lib doesn't break Debug builds). See
+       vendor/crimson-rs/docs/c-sharp-nativeaot-integration.md.
+
+       Userenv.lib: the Rust std pulls GetUserProfileDirectoryW (in
+       userenv.dll) transitively for env::home_dir. NativeAOT's default
+       linker input list doesn't include userenv.lib, so the staticlib
+       fails to resolve __imp_GetUserProfileDirectoryW without this. -->
+  <ItemGroup>
+    <DirectPInvoke Include="crimson_rs" />
+    <NativeLibrary Include="..\..\vendor\crimson-rs\target\release\crimson_rs.lib"
+                   Condition="Exists('..\..\vendor\crimson-rs\target\release\crimson_rs.lib')" />
+    <NativeLibrary Include="Userenv.lib" />
   </ItemGroup>
 
   <!-- Strip .pdb files from the publish bundle. We still produce PDBs in

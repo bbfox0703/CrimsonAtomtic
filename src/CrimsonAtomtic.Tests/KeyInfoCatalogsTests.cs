@@ -463,96 +463,114 @@ public sealed class KeyInfoCatalogsTests
         if (live is null) return;
         var (paz, p0008, _) = live.Value;
 
-        // 1. HouseKey — 4 rows, name-only.
+        // Counts below are 1.07 baselines; we assert ≥ so the test
+        // survives game patches that add rows (1.08 already bumped
+        // GlobalGameEvent 103 → 188 and GlobalGameEventGroup 7 → 12).
+        // Schema-drift detection still comes from the exact
+        // LookupStringKey(known_key) == known_value assertions.
+
+        // 1. HouseKey — 4 rows in 1.07.
         var housePabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "houseinfo.pabgb");
         var housePabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "houseinfo.pabgh");
         using var houseCat = NativeHouseInfoCatalog.LoadFromBytes(housePabgb, housePabgh);
-        Assert.Equal(4, houseCat.EntryCount);
+        Assert.True(houseCat.EntryCount >= 4, $"expected ≥4 House entries, got {houseCat.EntryCount}");
         Assert.Equal("DefaultHouse_Lv1", houseCat.LookupStringKey(0x4247));
         Assert.Null(houseCat.LookupStringKey(uint.MaxValue));
 
-        // 2. RoyalSupplyKey — 4 rows.
+        // 2. RoyalSupplyKey — 4 rows in 1.07.
         var rsPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "royalsupply.pabgb");
         var rsPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "royalsupply.pabgh");
         using var rsCat = NativeRoyalSupplyInfoCatalog.LoadFromBytes(rsPabgb, rsPabgh);
-        Assert.Equal(4, rsCat.EntryCount);
+        Assert.True(rsCat.EntryCount >= 4, $"expected ≥4 RoyalSupply entries, got {rsCat.EntryCount}");
         Assert.Equal("RoyalSupply_Hernand", rsCat.LookupStringKey(0x4242));
 
-        // 3. CraftToolKey — 17 rows.
+        // 3. CraftToolKey — 17 rows in 1.07.
         var ctPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "crafttoolinfo.pabgb");
         var ctPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "crafttoolinfo.pabgh");
         using var ctCat = NativeCraftToolInfoCatalog.LoadFromBytes(ctPabgb, ctPabgh);
-        Assert.Equal(17, ctCat.EntryCount);
+        Assert.True(ctCat.EntryCount >= 17, $"expected ≥17 CraftTool entries, got {ctCat.EntryCount}");
         Assert.Equal("CraftTool_Enchant", ctCat.LookupStringKey(28001));
 
-        // 4. CraftToolGroupKey — 10 rows.
+        // 4. CraftToolGroupKey — 10 rows in 1.07.
         var ctgPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "crafttoolgroupinfo.pabgb");
         var ctgPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "crafttoolgroupinfo.pabgh");
         using var ctgCat = NativeCraftToolGroupInfoCatalog.LoadFromBytes(ctgPabgb, ctgPabgh);
-        Assert.Equal(10, ctgCat.EntryCount);
+        Assert.True(ctgCat.EntryCount >= 10, $"expected ≥10 CraftToolGroup entries, got {ctgCat.EntryCount}");
         Assert.Equal("CraftTool_Equip_Enchant", ctgCat.LookupStringKey(16960));
 
-        // 5. TriggerRegionKey — 12 rows.
+        // 5. TriggerRegionKey — 12 rows in 1.07.
         var trPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "triggerregioninfo.pabgb");
         var trPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "triggerregioninfo.pabgh");
         using var trCat = NativeTriggerRegionInfoCatalog.LoadFromBytes(trPabgb, trPabgh);
-        Assert.Equal(12, trCat.EntryCount);
+        Assert.True(trCat.EntryCount >= 12, $"expected ≥12 TriggerRegion entries, got {trCat.EntryCount}");
         Assert.Equal("Swamp", trCat.LookupStringKey(1000000));
 
-        // 6. GamePlayVariableKey — 47 rows.
+        // 6. GamePlayVariableKey — 47 rows in 1.07.
         var gpvPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "gameplayvariableinfo.pabgb");
         var gpvPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "gameplayvariableinfo.pabgh");
         using var gpvCat = NativeGamePlayVariableInfoCatalog.LoadFromBytes(gpvPabgb, gpvPabgh);
-        Assert.Equal(47, gpvCat.EntryCount);
+        Assert.True(gpvCat.EntryCount >= 47, $"expected ≥47 GamePlayVariable entries, got {gpvCat.EntryCount}");
         Assert.Equal("CD_Live", gpvCat.LookupStringKey(1000041));
 
-        // 7. GlobalGameEventInfoKey — 103 rows.
+        // 7. GlobalGameEventInfoKey — 103 rows in 1.07, 188 in 1.08.
+        // Use a lower-bound rather than an exact count so the test
+        // survives future game patches that add more events.
         var ggePabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "globalgameevent.pabgb");
         var ggePabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "globalgameevent.pabgh");
         using var ggeCat = NativeGlobalGameEventInfoCatalog.LoadFromBytes(ggePabgb, ggePabgh);
-        Assert.Equal(103, ggeCat.EntryCount);
+        Assert.True(ggeCat.EntryCount >= 103,
+            $"expected ≥103 GlobalGameEvent entries, got {ggeCat.EntryCount}");
         Assert.Equal("Drought_Varnian", ggeCat.LookupStringKey(0x4258));
+        // Body fields: every Weather event row carries the same group key
+        // (0x4240 = WeatherEventGroup) and a non-zero PALOC key. The
+        // RoyalSupply group is the canonical "row exists, no PALOC" case —
+        // 0x424a (RoyalSupply_Hernand) returns paloc=0, not null.
+        Assert.Equal(0x4240u, ggeCat.LookupGroupKey(0x4258));
+        Assert.Equal(72_945_724_555_969UL, ggeCat.LookupPalocKey(0x4258));
+        Assert.Equal(0UL, ggeCat.LookupPalocKey(0x424a));
+        Assert.Null(ggeCat.LookupGroupKey(0xFFFFFFFFu));
+        Assert.Null(ggeCat.LookupPalocKey(0xFFFFFFFFu));
 
-        // 8. GlobalGameEventGroupKey — 7 rows.
+        // 8. GlobalGameEventGroupKey — 7 rows in 1.07, 12 in 1.08.
         var ggegPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "globalgameeventgroup.pabgb");
         var ggegPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "globalgameeventgroup.pabgh");
         using var ggegCat = NativeGlobalGameEventGroupInfoCatalog.LoadFromBytes(ggegPabgb, ggegPabgh);
-        Assert.Equal(7, ggegCat.EntryCount);
+        Assert.True(ggegCat.EntryCount >= 7, $"expected ≥7 GlobalGameEventGroup entries, got {ggegCat.EntryCount}");
         Assert.Equal("WeatherEventGroup", ggegCat.LookupStringKey(0x4240));
 
-        // 9. GameAdviceInfoKey — 461 rows.
+        // 9. GameAdviceInfoKey — 461 rows in 1.07.
         var gaPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "gameadviceinfo.pabgb");
         var gaPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "gameadviceinfo.pabgh");
         using var gaCat = NativeGameAdviceInfoCatalog.LoadFromBytes(gaPabgb, gaPabgh);
-        Assert.Equal(461, gaCat.EntryCount);
+        Assert.True(gaCat.EntryCount >= 461, $"expected ≥461 GameAdvice entries, got {gaCat.EntryCount}");
         Assert.Equal("Advice_Control_Move", gaCat.LookupStringKey(0x9cfd99b0));
 
-        // 10. GameAdviceGroupKey — 8 rows.
+        // 10. GameAdviceGroupKey — 8 rows in 1.07.
         var gagPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "gameadvicegroupinfo.pabgb");
         var gagPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "gameadvicegroupinfo.pabgh");
         using var gagCat = NativeGameAdviceGroupInfoCatalog.LoadFromBytes(gagPabgb, gagPabgh);
-        Assert.Equal(8, gagCat.EntryCount);
+        Assert.True(gagCat.EntryCount >= 8, $"expected ≥8 GameAdviceGroup entries, got {gagCat.EntryCount}");
         Assert.Equal("GameAdviceGroup_ControlBasics", gagCat.LookupStringKey(1000008));
 
-        // 11. ReserveSlotKey — 27 rows.
+        // 11. ReserveSlotKey — 27 rows in 1.07.
         var rsiPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "reserveslot.pabgb");
         var rsiPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "reserveslot.pabgh");
         using var rsiCat = NativeReserveSlotInfoCatalog.LoadFromBytes(rsiPabgb, rsiPabgh);
-        Assert.Equal(27, rsiCat.EntryCount);
+        Assert.True(rsiCat.EntryCount >= 27, $"expected ≥27 ReserveSlot entries, got {rsiCat.EntryCount}");
         Assert.Equal("ArrowItem", rsiCat.LookupStringKey(1000000));
 
-        // 12. RegionKey — 1,004 rows.
+        // 12. RegionKey — 1,004 rows in 1.07.
         var regPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "regioninfo.pabgb");
         var regPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "regioninfo.pabgh");
         using var regCat = NativeRegionInfoCatalog.LoadFromBytes(regPabgb, regPabgh);
-        Assert.Equal(1004, regCat.EntryCount);
+        Assert.True(regCat.EntryCount >= 1004, $"expected ≥1004 Region entries, got {regCat.EntryCount}");
         Assert.Equal("Region_Pywel", regCat.LookupStringKey(1));
 
-        // 13. ItemGroupKey — 1,500 rows.
+        // 13. ItemGroupKey — 1,500 rows in 1.07.
         var igPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "itemgroupinfo.pabgb");
         var igPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "itemgroupinfo.pabgh");
         using var igCat = NativeItemGroupInfoCatalog.LoadFromBytes(igPabgb, igPabgh);
-        Assert.Equal(1500, igCat.EntryCount);
+        Assert.True(igCat.EntryCount >= 1500, $"expected ≥1500 ItemGroup entries, got {igCat.EntryCount}");
         Assert.Equal("ItemGroup_Category_Equipment", igCat.LookupStringKey(18167));
     }
 

@@ -2510,6 +2510,16 @@ internal static partial class NativeMethods
         CrimsonGlobalGameEventInfoHandle handle, uint globalGameEventInfoKey,
         byte* buf, nuint bufLen, out nuint required);
 
+    [LibraryImport(LibraryName, EntryPoint = "crimson_global_game_event_info_lookup_group_key")]
+    public static partial int GlobalGameEventInfoLookupGroupKey(
+        CrimsonGlobalGameEventInfoHandle handle, uint globalGameEventInfoKey,
+        out uint outGroupKey);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_global_game_event_info_lookup_paloc_key")]
+    public static partial int GlobalGameEventInfoLookupPalocKey(
+        CrimsonGlobalGameEventInfoHandle handle, uint globalGameEventInfoKey,
+        out ulong outPalocKey);
+
     [LibraryImport(LibraryName, EntryPoint = "crimson_global_game_event_info_get_entry")]
     public static unsafe partial int GlobalGameEventInfoGetEntry(
         CrimsonGlobalGameEventInfoHandle handle, uint idx, out uint outKey,

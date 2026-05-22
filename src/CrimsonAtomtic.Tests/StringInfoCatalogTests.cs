@@ -110,16 +110,21 @@ public sealed class StringInfoCatalogTests
             pamt, "gamedata/binary__/client/bin", "stringinfo.pabgb");
 
         using var cat = NativeStringInfoCatalog.LoadFromBytes(bytes);
-        // 1.06 ships ~30,206 entries; sanity-check the order of magnitude.
+        // 1.06 ships ~30,206 entries; 1.08 ships more. Sanity-check
+        // the order of magnitude rather than pinning an exact count
+        // that drifts each game patch.
         Assert.True(cat.EntryCount > 20_000,
             $"expected >20k entries, got {cat.EntryCount}");
 
-        // The first entry on disk in 1.06 is the well-known "RealWorld"
-        // mapping. Pinning it catches a schema drift loudly.
+        // Entry 0 must round-trip: the value at index 0 must lookup to
+        // itself via LookupByHash. Patch-specific hash pins (1.06's
+        // 0x2ad9f89e = "RealWorld") drift with each game version, so
+        // we use the round-trip property to catch parser schema drift
+        // without coupling the test to a specific shipped game build.
         var first = cat.GetEntry(0);
         Assert.NotNull(first);
-        Assert.Equal(0x2ad9f89eu, first!.Value.Hash);
-        Assert.Equal("RealWorld", first.Value.Value);
+        Assert.False(string.IsNullOrEmpty(first!.Value.Value));
+        Assert.Equal(first.Value.Value, cat.LookupByHash(first.Value.Hash));
 
         // Round-trip: any hash returned by GetEntry must lookup to the
         // same value via LookupByHash. Spot-check a handful.

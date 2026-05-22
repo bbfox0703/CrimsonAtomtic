@@ -6,12 +6,16 @@
 
 .DESCRIPTION
     1. Build vendor/crimson-rs with the c_abi feature -> crimson_rs.dll
-       (via .\scripts\build_rust.ps1).
+       (LoadLibrary path for dev/test) + crimson_rs.lib (NativeAOT
+       staticlib for the publish bundle). Both are produced in one pass
+       via .\scripts\build_rust.ps1.
     2. dotnet publish -c Release -r <Runtime> -p:PublishAot=true on the
-       Avalonia UI project. The Ui csproj copies crimson_rs.dll next to
-       the AOT exe automatically (CopyToPublishDirectory=PreserveNewest).
+       Avalonia UI project. The Ui csproj wires crimson_rs.lib into ILC
+       via <DirectPInvoke> + <NativeLibrary>, so the Rust core is folded
+       into CrimsonAtomtic.exe — no separate crimson_rs.dll in dist/.
     3. Stage the published directory under dist/<Runtime>/.
-    4. Print a summary of what was produced.
+    4. Verify the single-file shape (no crimson_rs.dll on disk; no
+       crimson_rs.dll import in the exe) and print a summary.
 
     No zip step yet — the user's distribution flow may want signing /
     code-signing in between. Keep it explicit for now.
@@ -56,8 +60,15 @@ if (-not $SkipRustBuild) {
 }
 
 $DllSource = Join-Path $ProjectRoot "vendor\crimson-rs\target\release\crimson_rs.dll"
+$LibSource = Join-Path $ProjectRoot "vendor\crimson-rs\target\release\crimson_rs.lib"
+if (-not (Test-Path $LibSource)) {
+    throw "Expected crimson_rs.lib (NativeAOT staticlib) at $LibSource. Run without -SkipRustBuild."
+}
 if (-not (Test-Path $DllSource)) {
-    throw "Expected crimson_rs.dll at $DllSource. Run without -SkipRustBuild."
+    # The dll isn't used at publish time, but its absence suggests an
+    # incomplete cargo build — flag it so dev/test workflows don't break
+    # silently after the publish.
+    Write-Warning "crimson_rs.dll is missing at $DllSource — dev/test paths that LoadLibrary the dll will fail until you re-run build_rust.ps1."
 }
 
 # ── 2. dotnet publish (AOT) ─────────────────────────────────────────────────
@@ -104,21 +115,58 @@ if ($pdbs) {
     }
 }
 
-# ── 3. Summary ──────────────────────────────────────────────────────────────
+# ── 3. Verify single-file shape ─────────────────────────────────────────────
+# Two invariants for the staticlib publish path:
+#   (a) dist/ must NOT contain crimson_rs.dll — the Ui csproj sets
+#       CopyToPublishDirectory=Never, and the AOT publish must respect
+#       that or we've silently regressed to the dual-file shape.
+#   (b) CrimsonAtomtic.exe must NOT import crimson_rs.dll — confirms ILC
+#       actually picked up <DirectPInvoke> + <NativeLibrary> and folded
+#       the staticlib in. If this fails, the Include= name probably
+#       doesn't match the [DllImport("crimson_rs")] string.
+$strayDll = Get-ChildItem $DistRoot -Recurse -Filter "crimson_rs.dll" -ErrorAction SilentlyContinue
+if ($strayDll) {
+    Write-Warning "Found crimson_rs.dll in the publish output (single-file shape regression):"
+    $strayDll | ForEach-Object { Write-Host "      $($_.FullName)" -ForegroundColor Yellow }
+}
+
+$exe = Get-ChildItem $DistRoot -Filter "CrimsonAtomtic.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+$dumpbinImportsOk = $null
+if ($exe) {
+    $dumpbin = Get-Command dumpbin.exe -ErrorAction SilentlyContinue
+    if ($dumpbin) {
+        $imports = & dumpbin.exe /imports $exe.FullName 2>$null
+        $crimsonImport = $imports | Select-String -SimpleMatch "crimson_rs.dll"
+        if ($crimsonImport) {
+            Write-Warning "CrimsonAtomtic.exe still imports crimson_rs.dll — DirectPInvoke didn't take effect:"
+            $crimsonImport | ForEach-Object { Write-Host "      $($_.Line)" -ForegroundColor Yellow }
+            $dumpbinImportsOk = $false
+        } else {
+            $dumpbinImportsOk = $true
+        }
+    } else {
+        Write-Host "    (dumpbin not on PATH — skipping import verification; run from a VS dev shell to enable)" -ForegroundColor DarkGray
+    }
+}
+
+# ── 4. Summary ──────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "==> Bundle staged at $DistRoot" -ForegroundColor Green
 
-$exe = Get-ChildItem $DistRoot -Filter "CrimsonAtomtic.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-$dll = Get-ChildItem $DistRoot -Filter "crimson_rs.dll"     -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($exe) {
     Write-Host ("    CrimsonAtomtic.exe : {0:N1} MB" -f ($exe.Length / 1MB))
 } else {
     Write-Warning "    CrimsonAtomtic.exe not found in the publish output."
 }
-if ($dll) {
-    Write-Host ("    crimson_rs.dll     : {0:N1} MB" -f ($dll.Length / 1MB))
+if ($strayDll) {
+    Write-Host ("    crimson_rs.dll     : present (REGRESSION — should be folded into the exe via staticlib)") -ForegroundColor Yellow
 } else {
-    Write-Warning "    crimson_rs.dll not found in the publish output."
+    Write-Host "    crimson_rs.dll     : absent (folded into exe via staticlib)" -ForegroundColor DarkGreen
+}
+if ($dumpbinImportsOk -eq $true) {
+    Write-Host "    exe imports        : no crimson_rs.dll import (DirectPInvoke OK)" -ForegroundColor DarkGreen
+} elseif ($dumpbinImportsOk -eq $false) {
+    Write-Host "    exe imports        : crimson_rs.dll STILL IMPORTED (DirectPInvoke regression)" -ForegroundColor Yellow
 }
 
 $totalBytes = (Get-ChildItem $DistRoot -Recurse -File | Measure-Object Length -Sum).Sum
