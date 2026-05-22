@@ -52,8 +52,47 @@ try {
     if ($Profile -eq "release") { $cargoArgs += "--release" }
 
     Write-Host "Running: cargo $($cargoArgs -join ' ') (in $VendorRs)" -ForegroundColor Cyan
-    & cargo @cargoArgs
-    if ($LASTEXITCODE -ne 0) { throw "cargo build failed (exit $LASTEXITCODE)" }
+
+    # Capture cargo's combined output. The vendor crate ships ~51
+    # dead_code / unused warnings that we don't act on — we don't
+    # develop on vendor/crimson-rs from this project, we just consume
+    # the build artifact (the vendor's own CI gates -D warnings via
+    # clippy). On success we filter those warning blocks out so the
+    # build log stays readable; on failure we dump the full unfiltered
+    # log so real errors are never hidden.
+    $rawLines = & cargo @cargoArgs 2>&1 | ForEach-Object { "$_" }
+    $cargoExit = $LASTEXITCODE
+
+    if ($cargoExit -ne 0) {
+        foreach ($line in $rawLines) { Write-Host $line }
+        throw "cargo build failed (exit $cargoExit)"
+    }
+
+    # Warning-block state machine. A block starts at `warning:` and
+    # continues through cargo's `-->` location, `|` column gutter,
+    # `   = note:` annotations, code-line `<num> | <code>`, caret
+    # pointers, and `...` ellipses. Exit on the first line that
+    # doesn't match any continuation pattern.
+    $inWarning = $false
+    foreach ($line in $rawLines) {
+        if ($line -match '^warning:') {
+            $inWarning = $true
+            continue
+        }
+        if ($inWarning) {
+            if ($line -match '^\s*$' -or
+                $line -match '^\s+-->' -or
+                $line -match '^\s+\|' -or
+                $line -match '^\s+=' -or
+                $line -match '^\s*\d+\s*\|' -or
+                $line -match '^\s+\.\.\.' -or
+                $line -match '^\s*\^') {
+                continue
+            }
+            $inWarning = $false
+        }
+        Write-Host $line
+    }
 }
 finally {
     Pop-Location
