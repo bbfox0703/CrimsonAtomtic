@@ -225,6 +225,83 @@
   <sys:String x:Key="FindItemsFlagNewMarkTip">_isNewMark = true (item has the in-game "new" badge)</sys:String>
   <sys:String x:Key="FindItemsRefresh">Refresh</sys:String>
 
+  <!-- Detail-pane labels — iteminfo.pabgb static metadata surfaced via
+       crimson_iteminfo_lookup_summary (vendor 2b1307a). -->
+  <sys:String x:Key="FindItemsDetailPaneTitle">Item details</sys:String>
+  <sys:String x:Key="FindItemsDetailPaneEmpty">Select a row on the left to see its iteminfo flags and static metadata.</sys:String>
+  <sys:String x:Key="FindItemsDetailNoSummary">This item key isn't in iteminfo.pabgb — likely a dev / content-stripped entry. Save-side fields (Locked / NewMark) are still listed in the main grid.</sys:String>
+  <sys:String x:Key="FindItemsDetailSectionFlags">Static flags</sys:String>
+  <sys:String x:Key="FindItemsDetailFlagsEmpty">No static flags set.</sys:String>
+  <sys:String x:Key="FindItemsDetailSectionScalars">Static metadata</sys:String>
+  <sys:String x:Key="FindItemsDetailItemType">Item type</sys:String>
+  <sys:String x:Key="FindItemsDetailItemTier">Tier</sys:String>
+  <sys:String x:Key="FindItemsDetailEquipableLevel">Equip level</sys:String>
+  <sys:String x:Key="FindItemsDetailMaxEndurance">Max endurance</sys:String>
+  <sys:String x:Key="FindItemsDetailMaxStack">Max stack</sys:String>
+  <sys:String x:Key="FindItemsDetailCooltime">Cooldown</sys:String>
+  <sys:String x:Key="FindItemsDetailRespawnTime">Respawn (s)</sys:String>
+  <sys:String x:Key="FindItemsDetailCategoryInfo">Category</sys:String>
+
+  <!-- Iteminfo static-flag labels + tooltips. Bit positions are part
+       of the C ABI contract — see CRIMSON_ITEMINFO_FLAG_* in
+       vendor/crimson-rs/src/c_abi/iteminfo.rs. -->
+  <sys:String x:Key="ItemFlagLabelIsBlocked">Blocked</sys:String>
+  <sys:String x:Key="ItemFlagTipIsBlocked">Dev-blocked / unused entry</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsDyeable">Dyeable</sys:String>
+  <sys:String x:Key="ItemFlagTipIsDyeable">Has at least one dye slot</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsDestroyWhenBroken">Destroy when broken</sys:String>
+  <sys:String x:Key="ItemFlagTipIsDestroyWhenBroken">Removed from inventory when endurance hits 0</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsHousingOnly">Housing only</sys:String>
+  <sys:String x:Key="ItemFlagTipIsHousingOnly">Only meaningful inside player housing</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsEquipQuickSlotVisible">Quick-slot visible</sys:String>
+  <sys:String x:Key="ItemFlagTipIsEquipQuickSlotVisible">Eligible for the equip quick-slot bar (1.08+)</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsImportantItem">Important</sys:String>
+  <sys:String x:Key="ItemFlagTipIsImportantItem">Story / quest-important item</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsShieldItem">Shield</sys:String>
+  <sys:String x:Key="ItemFlagTipIsShieldItem">Equippable in the off-hand shield slot</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsTowerShieldItem">Tower shield</sys:String>
+  <sys:String x:Key="ItemFlagTipIsTowerShieldItem">Tower-shield variant (larger hitbox / different stance)</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsWild">Wild</sys:String>
+  <sys:String x:Key="ItemFlagTipIsWild">Gathered from the world rather than crafted</sys:String>
+  <sys:String x:Key="ItemFlagLabelHideFromInventoryOnPopItem">Hide on pop</sys:String>
+  <sys:String x:Key="ItemFlagTipHideFromInventoryOnPopItem">Hidden from inventory after the PopItem use action runs</sys:String>
+  <sys:String x:Key="ItemFlagLabelDiscardable">Discardable</sys:String>
+  <sys:String x:Key="ItemFlagTipDiscardable">Player is allowed to discard</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsRegisterTradeMarket">Tradeable</sys:String>
+  <sys:String x:Key="ItemFlagTipIsRegisterTradeMarket">Eligible for the trade-market posting flow</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsEditorUsable">Editor</sys:String>
+  <sys:String x:Key="ItemFlagTipIsEditorUsable">Reserved for in-engine editor tooling</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsEditableGrime">Editable grime</sys:String>
+  <sys:String x:Key="ItemFlagTipIsEditableGrime">Has an editable dirt / wear overlay</sys:String>
+  <sys:String x:Key="ItemFlagLabelUseImmediately">Use immediately</sys:String>
+  <sys:String x:Key="ItemFlagTipUseImmediately">Triggers its use effect on pickup rather than from inventory</sys:String>
+  <sys:String x:Key="ItemFlagLabelApplyMaxStackCap">Apply stack cap</sys:String>
+  <sys:String x:Key="ItemFlagTipApplyMaxStackCap">Caps runtime stack count to max_stack_count</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsBlockedStoreSell">No store sell</sys:String>
+  <sys:String x:Key="ItemFlagTipIsBlockedStoreSell">Blocked from store sell-back regardless of category</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsPreorderItem">Preorder</sys:String>
+  <sys:String x:Key="ItemFlagTipIsPreorderItem">Granted via a pre-order entitlement bundle</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsHasItemUseDataInventoryBuff">Inventory buff</sys:String>
+  <sys:String x:Key="ItemFlagTipIsHasItemUseDataInventoryBuff">Carries an inventory-time buff payload</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsPreservedOnExtract">Carry-out</sys:String>
+  <sys:String x:Key="ItemFlagTipIsPreservedOnExtract">Preserved during extraction-style runs</sys:String>
+  <sys:String x:Key="ItemFlagLabelEnableAlertSystemToUi">UI alert</sys:String>
+  <sys:String x:Key="ItemFlagTipEnableAlertSystemToUi">Item pickup raises a UI alert</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsSaveGameDataAtUseItem">Save on use</sys:String>
+  <sys:String x:Key="ItemFlagTipIsSaveGameDataAtUseItem">Use action triggers a save-game write</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsLogoutAtUseItem">Logout on use</sys:String>
+  <sys:String x:Key="ItemFlagTipIsLogoutAtUseItem">Use action ends the session</sys:String>
+  <sys:String x:Key="ItemFlagLabelEnableEquipInCloneActor">Clone-actor</sys:String>
+  <sys:String x:Key="ItemFlagTipEnableEquipInCloneActor">Equippable on a player's clone-actor (mirror combat)</sys:String>
+  <sys:String x:Key="ItemFlagLabelCanDisassemble">Disassemble</sys:String>
+  <sys:String x:Key="ItemFlagTipCanDisassemble">Eligible for the disassemble / salvage workflow</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsAllGimmickSealable">Gimmick-sealable</sys:String>
+  <sys:String x:Key="ItemFlagTipIsAllGimmickSealable">Sealable against all gimmick effects</sys:String>
+  <sys:String x:Key="ItemFlagLabelDeleteByGimmickUnlock">Auto-delete</sys:String>
+  <sys:String x:Key="ItemFlagTipDeleteByGimmickUnlock">Auto-deleted when its bound gimmick gets unlocked</sys:String>
+  <sys:String x:Key="ItemFlagLabelUseDropSetTarget">Drop-set</sys:String>
+  <sys:String x:Key="ItemFlagTipUseDropSetTarget">Used as a drop-set targeting key (loot-table marker)</sys:String>
+
   <!-- Browse-characters dialog -->
   <sys:String x:Key="MenuBrowseCharacters">Browse _Characters / NPCs…</sys:String>
   <sys:String x:Key="CharacterPickerWindowTitle">Browse characters / NPCs</sys:String>

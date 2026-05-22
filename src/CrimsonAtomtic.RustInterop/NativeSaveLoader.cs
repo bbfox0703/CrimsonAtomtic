@@ -2075,6 +2075,30 @@ internal static partial class NativeMethods
         uint idx,
         out uint outGemKey);
 
+    // ── ItemInfo static-metadata surface (vendor 2b1307a) ──────────────────
+    //
+    // One-shot 80-byte snapshot of every static field the iteminfo bridge
+    // tracks, plus the 27-bit flag bitmask exposed separately for callers
+    // that only care about booleans. Both read from the same per-key
+    // summary cache built once at handle load (no re-parse on lookup).
+    //
+    // The user-facing motivation: questions like "why isn't is_housing_only
+    // visible when I look up an inventory item?" — that flag lives in
+    // iteminfo.pabgb, not in save-side InventorySaveData. The detail pane
+    // in FindItemsWindow drives off this summary.
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_iteminfo_lookup_flags")]
+    public static partial int ItemInfoLookupFlags(
+        CrimsonItemInfoHandle handle,
+        uint itemKey,
+        out uint outFlags);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_iteminfo_lookup_summary")]
+    public static partial int ItemInfoLookupSummary(
+        CrimsonItemInfoHandle handle,
+        uint itemKey,
+        out ItemInfoSummary outSummary);
+
     // ── StringInfo bridge (stringinfo.pabgb) ────────────────────────────────
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_string_info_load_from_file",

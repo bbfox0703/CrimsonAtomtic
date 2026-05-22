@@ -232,6 +232,83 @@
   <sys:String x:Key="FindItemsFlagNewMarkTip">_isNewMark = true (ゲーム内の「NEW」バッジが付いています)</sys:String>
   <sys:String x:Key="FindItemsRefresh">更新</sys:String>
 
+  <!-- 詳細ペインのラベル — vendor 2b1307a の crimson_iteminfo_lookup_summary
+       経由で iteminfo.pabgb の静的メタデータを表示する。 -->
+  <sys:String x:Key="FindItemsDetailPaneTitle">アイテム詳細</sys:String>
+  <sys:String x:Key="FindItemsDetailPaneEmpty">左側の行を選択すると、iteminfo のフラグと静的メタデータが表示されます。</sys:String>
+  <sys:String x:Key="FindItemsDetailNoSummary">このアイテムキーは iteminfo.pabgb に存在しません — おそらく開発用 / 内容が外されたエントリです。セーブ側のフィールド (Locked / NewMark) は左の表に残っています。</sys:String>
+  <sys:String x:Key="FindItemsDetailSectionFlags">静的フラグ</sys:String>
+  <sys:String x:Key="FindItemsDetailFlagsEmpty">静的フラグは設定されていません。</sys:String>
+  <sys:String x:Key="FindItemsDetailSectionScalars">静的メタデータ</sys:String>
+  <sys:String x:Key="FindItemsDetailItemType">アイテム種別</sys:String>
+  <sys:String x:Key="FindItemsDetailItemTier">ティア</sys:String>
+  <sys:String x:Key="FindItemsDetailEquipableLevel">装備可能レベル</sys:String>
+  <sys:String x:Key="FindItemsDetailMaxEndurance">最大耐久値</sys:String>
+  <sys:String x:Key="FindItemsDetailMaxStack">最大スタック</sys:String>
+  <sys:String x:Key="FindItemsDetailCooltime">クールダウン</sys:String>
+  <sys:String x:Key="FindItemsDetailRespawnTime">リスポーン (秒)</sys:String>
+  <sys:String x:Key="FindItemsDetailCategoryInfo">カテゴリ</sys:String>
+
+  <!-- iteminfo 静的フラグのラベル + ツールチップ。ビット位置は
+       C ABI コントラクトの一部 — vendor/crimson-rs/src/c_abi/iteminfo.rs の
+       CRIMSON_ITEMINFO_FLAG_* を参照。 -->
+  <sys:String x:Key="ItemFlagLabelIsBlocked">ブロック</sys:String>
+  <sys:String x:Key="ItemFlagTipIsBlocked">開発用 / 未使用エントリ</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsDyeable">染色可能</sys:String>
+  <sys:String x:Key="ItemFlagTipIsDyeable">少なくとも 1 つの染色スロットがある</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsDestroyWhenBroken">破損時に消去</sys:String>
+  <sys:String x:Key="ItemFlagTipIsDestroyWhenBroken">耐久値が 0 になるとインベントリから削除される</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsHousingOnly">ハウジング専用</sys:String>
+  <sys:String x:Key="ItemFlagTipIsHousingOnly">プレイヤーハウジング内でのみ意味を持つ</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsEquipQuickSlotVisible">クイックスロット表示</sys:String>
+  <sys:String x:Key="ItemFlagTipIsEquipQuickSlotVisible">装備クイックスロットバーに登録可能 (1.08+)</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsImportantItem">重要</sys:String>
+  <sys:String x:Key="ItemFlagTipIsImportantItem">ストーリー / クエスト関連の重要アイテム</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsShieldItem">シールド</sys:String>
+  <sys:String x:Key="ItemFlagTipIsShieldItem">オフハンドのシールドスロットに装備可能</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsTowerShieldItem">タワーシールド</sys:String>
+  <sys:String x:Key="ItemFlagTipIsTowerShieldItem">タワーシールドのバリエーション</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsWild">野生</sys:String>
+  <sys:String x:Key="ItemFlagTipIsWild">作成ではなく世界から採取するアイテム</sys:String>
+  <sys:String x:Key="ItemFlagLabelHideFromInventoryOnPopItem">使用後に非表示</sys:String>
+  <sys:String x:Key="ItemFlagTipHideFromInventoryOnPopItem">PopItem 使用後にインベントリから非表示になる</sys:String>
+  <sys:String x:Key="ItemFlagLabelDiscardable">破棄可能</sys:String>
+  <sys:String x:Key="ItemFlagTipDiscardable">プレイヤーが破棄できる</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsRegisterTradeMarket">取引可能</sys:String>
+  <sys:String x:Key="ItemFlagTipIsRegisterTradeMarket">取引所への出品が可能</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsEditorUsable">エディタ</sys:String>
+  <sys:String x:Key="ItemFlagTipIsEditorUsable">エンジン内エディタツール用</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsEditableGrime">汚れ編集可</sys:String>
+  <sys:String x:Key="ItemFlagTipIsEditableGrime">編集可能な汚れ / 摩耗オーバーレイあり</sys:String>
+  <sys:String x:Key="ItemFlagLabelUseImmediately">即時使用</sys:String>
+  <sys:String x:Key="ItemFlagTipUseImmediately">インベントリからではなく取得時に使用効果が発動</sys:String>
+  <sys:String x:Key="ItemFlagLabelApplyMaxStackCap">スタック上限適用</sys:String>
+  <sys:String x:Key="ItemFlagTipApplyMaxStackCap">実行時のスタック数を max_stack_count で制限</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsBlockedStoreSell">店売り不可</sys:String>
+  <sys:String x:Key="ItemFlagTipIsBlockedStoreSell">カテゴリに関わらず店舗売却を禁止</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsPreorderItem">予約特典</sys:String>
+  <sys:String x:Key="ItemFlagTipIsPreorderItem">予約購入特典バンドルで付与される</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsHasItemUseDataInventoryBuff">所持中バフ</sys:String>
+  <sys:String x:Key="ItemFlagTipIsHasItemUseDataInventoryBuff">インベントリ所持中のバフペイロードを持つ</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsPreservedOnExtract">持ち出し</sys:String>
+  <sys:String x:Key="ItemFlagTipIsPreservedOnExtract">抽出形式のランで保持される</sys:String>
+  <sys:String x:Key="ItemFlagLabelEnableAlertSystemToUi">UI アラート</sys:String>
+  <sys:String x:Key="ItemFlagTipEnableAlertSystemToUi">取得時に UI アラートを発生させる</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsSaveGameDataAtUseItem">使用時セーブ</sys:String>
+  <sys:String x:Key="ItemFlagTipIsSaveGameDataAtUseItem">使用するとセーブデータが書き込まれる</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsLogoutAtUseItem">使用時ログアウト</sys:String>
+  <sys:String x:Key="ItemFlagTipIsLogoutAtUseItem">使用するとセッションが終了する</sys:String>
+  <sys:String x:Key="ItemFlagLabelEnableEquipInCloneActor">クローン装備可</sys:String>
+  <sys:String x:Key="ItemFlagTipEnableEquipInCloneActor">プレイヤーのクローンアクター (ミラー戦闘) に装備可能</sys:String>
+  <sys:String x:Key="ItemFlagLabelCanDisassemble">分解可能</sys:String>
+  <sys:String x:Key="ItemFlagTipCanDisassemble">分解 / サルベージ可能</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsAllGimmickSealable">ギミック封印可</sys:String>
+  <sys:String x:Key="ItemFlagTipIsAllGimmickSealable">全ギミック効果に対して封印可能</sys:String>
+  <sys:String x:Key="ItemFlagLabelDeleteByGimmickUnlock">自動削除</sys:String>
+  <sys:String x:Key="ItemFlagTipDeleteByGimmickUnlock">関連付けられたギミックが解除されたときに自動削除</sys:String>
+  <sys:String x:Key="ItemFlagLabelUseDropSetTarget">ドロップ対象</sys:String>
+  <sys:String x:Key="ItemFlagTipUseDropSetTarget">ドロップセットのターゲットキーとして使用 (戦利品テーブルマーカー)</sys:String>
+
   <!-- Browse-characters dialog -->
   <sys:String x:Key="MenuBrowseCharacters">キャラクター / NPC を参照(_C)…</sys:String>
   <sys:String x:Key="CharacterPickerWindowTitle">キャラクター / NPC を参照</sys:String>

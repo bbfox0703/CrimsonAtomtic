@@ -249,6 +249,60 @@ public sealed class NativeItemInfoCatalog : IItemInfoCatalog
     }
 
     /// <summary>
+    /// One-shot static-metadata snapshot for <paramref name="itemKey"/>.
+    /// Returns <c>null</c> when the item isn't in iteminfo. Read-from a
+    /// per-key cache built at handle-load time, so this is the cheapest
+    /// way to grab all of the static fields (flags + scalars) at once
+    /// — pair with the dedicated <see cref="LookupStringKey"/> /
+    /// <see cref="LookupSocketCaps"/> for the variable-length data the
+    /// summary intentionally omits.
+    /// </summary>
+    /// <remarks>
+    /// Backs the FindItems detail pane: when the user selects a row,
+    /// the VM calls this once and surfaces the 28-bit flag set + key
+    /// scalars (item_type, tier, equipable_level, max_endurance,
+    /// cooltime, respawn) without 20 round-trips through individual
+    /// getters.
+    /// </remarks>
+    public ItemInfoSummary? LookupSummary(uint itemKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var rc = NativeMethods.ItemInfoLookupSummary(_handle, itemKey, out var summary);
+        if (rc == NativeMethods.NOT_FOUND)
+        {
+            return null;
+        }
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_iteminfo_lookup_summary({itemKey}) failed: {ErrorName(rc)}");
+        }
+        return summary;
+    }
+
+    /// <summary>
+    /// Convenience getter that returns just the 28-bit flag bitmask
+    /// for <paramref name="itemKey"/>. Equivalent to
+    /// <c>LookupSummary(itemKey)?.Flags</c> but uses a slimmer FFI
+    /// surface — useful for hot paths that only need the booleans.
+    /// </summary>
+    public ItemInfoFlags? LookupFlags(uint itemKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var rc = NativeMethods.ItemInfoLookupFlags(_handle, itemKey, out var bits);
+        if (rc == NativeMethods.NOT_FOUND)
+        {
+            return null;
+        }
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_iteminfo_lookup_flags({itemKey}) failed: {ErrorName(rc)}");
+        }
+        return (ItemInfoFlags)bits;
+    }
+
+    /// <summary>
     /// Number of itemkeys in the canonical gem set (sorted-ascending
     /// union of every item's <c>socket_item_list</c>). Drives the
     /// gem-picker dropdown.

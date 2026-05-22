@@ -5,17 +5,20 @@
         xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
         xmlns:svc="using:CrimsonAtomtic.Ui.Services"
         mc:Ignorable="d"
-        d:DesignWidth="1200"
-        d:DesignHeight="600"
+        d:DesignWidth="1480"
+        d:DesignHeight="640"
         x:Class="CrimsonAtomtic.Ui.Views.FindItemsWindow"
         x:DataType="vm:FindItemsViewModel"
         Title="{DynamicResource FindItemsWindowTitle}"
         Icon="/Assets/MainIcon.ico"
-        Width="1200" Height="640"
-        MinWidth="700" MinHeight="380">
+        Width="1480" Height="700"
+        MinWidth="900" MinHeight="420">
 
-  <Grid RowDefinitions="Auto,Auto,*,Auto"
-        Margin="12">
+  <Grid ColumnDefinitions="*,Auto,320" Margin="12">
+
+    <!-- Left: main browse grid (was the whole window pre-2026-05-22). -->
+    <Grid Grid.Column="0"
+          RowDefinitions="Auto,Auto,*,Auto">
 
     <!-- Filter box -->
     <TextBox Grid.Row="0"
@@ -30,9 +33,11 @@
 
     <!-- Results grid. Default sort is (Bag, Slot) matching the
          in-game UI layout; user can re-sort by clicking column
-         headers. -->
+         headers. Selection drives the right-hand detail pane. -->
     <DataGrid Grid.Row="2"
               ItemsSource="{Binding Results}"
+              SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
+              SelectionMode="Single"
               IsReadOnly="True"
               CanUserResizeColumns="True"
               CanUserSortColumns="True"
@@ -138,5 +143,175 @@
               Content="{DynamicResource FindItemsRefresh}"
               Command="{Binding RefreshCommand}" />
     </Grid>
+    </Grid>
+
+    <!-- Splitter between grid and detail pane. Fixed gap; the pane
+         width is constant 320 px so the grid can claim the remaining
+         space cleanly. -->
+    <Border Grid.Column="1" Width="1" Margin="8,0"
+            Background="{DynamicResource ThemeBorderLowBrush}" />
+
+    <!-- Right: iteminfo static-metadata detail pane. Populated when a
+         row is selected. The pane is the answer to "why isn't
+         is_housing_only visible when I look up an inventory item?" —
+         those flags live in iteminfo.pabgb, not save data, so they
+         only become visible once the C ABI surface exposes them
+         (vendor 2b1307a / crimson_iteminfo_lookup_summary). -->
+    <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Spacing="10" Margin="0,0,0,8">
+
+        <!-- Pane title -->
+        <TextBlock Text="{DynamicResource FindItemsDetailPaneTitle}"
+                   FontSize="15" FontWeight="SemiBold" />
+
+        <!-- Empty-state hint when no row is selected -->
+        <TextBlock Text="{DynamicResource FindItemsDetailPaneEmpty}"
+                   IsVisible="{Binding SelectedRow, Converter={x:Static ObjectConverters.IsNull}}"
+                   Opacity="0.6"
+                   TextWrapping="Wrap" />
+
+        <!-- Selected-row body. The outer StackPanel keeps the VM
+             DataContext so the visibility binding resolves against
+             FindItemsViewModel; the inner one switches into the row
+             scope so the body bindings see FindItemsRow. Splitting
+             the two avoids Avalonia's compiled-binding x:DataType
+             ambiguity when a single element both switches DataContext
+             and binds something against the parent. -->
+        <StackPanel IsVisible="{Binding SelectedRow, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <StackPanel Spacing="10"
+                    DataContext="{Binding SelectedRow}"
+                    x:DataType="vm:FindItemsRow">
+
+          <!-- Header: icon + name + IDs -->
+          <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto"
+                ColumnSpacing="10" RowSpacing="2">
+            <Image Grid.Column="0" Grid.RowSpan="2"
+                   Source="{Binding ItemKey, Converter={x:Static svc:ItemKeyToIconConverter.Instance}}"
+                   Width="56" Height="56"
+                   Stretch="Uniform"
+                   VerticalAlignment="Top" />
+            <TextBlock Grid.Column="1" Grid.Row="0"
+                       Text="{Binding ItemNameEnglish}"
+                       FontWeight="SemiBold"
+                       TextWrapping="Wrap" />
+            <TextBlock Grid.Column="1" Grid.Row="1"
+                       Text="{Binding ItemKey, StringFormat='ItemKey {0}'}"
+                       Opacity="0.7"
+                       FontFamily="Consolas,Menlo,Courier New,monospace" />
+          </Grid>
+
+          <!-- No-summary case: iteminfo doesn't know this item (dev /
+               content-stripped). Show a one-line note instead of an
+               empty section. -->
+          <TextBlock Text="{DynamicResource FindItemsDetailNoSummary}"
+                     IsVisible="{Binding !HasSummary}"
+                     Opacity="0.6"
+                     TextWrapping="Wrap" />
+
+          <!-- Flag chips. Only set bits get a chip; hover shows the
+               tooltip describing what the flag means. -->
+          <StackPanel Spacing="6" IsVisible="{Binding HasSummary}">
+            <TextBlock Text="{DynamicResource FindItemsDetailSectionFlags}"
+                       FontWeight="SemiBold" />
+            <ItemsControl ItemsSource="{Binding SetFlagChips}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ItemFlagChipModel">
+                  <Border CornerRadius="3" Padding="6,2" Margin="0,0,4,4"
+                          Background="{DynamicResource ThemeAccentBrush2}"
+                          ToolTip.Tip="{Binding Tooltip}">
+                    <TextBlock Text="{Binding Label}"
+                               Foreground="{DynamicResource ThemeForegroundBrush}"
+                               FontSize="12" />
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="{DynamicResource FindItemsDetailFlagsEmpty}"
+                       IsVisible="{Binding HasSummaryAndNoFlagsSet}"
+                       Opacity="0.55"
+                       FontStyle="Italic"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+
+          <!-- Scalar metadata. Always shown when HasSummary; bind to
+               the *Text getters which return the InvariantCulture
+               string for stable formatting. -->
+          <Grid IsVisible="{Binding HasSummary}"
+                ColumnDefinitions="Auto,*"
+                RowSpacing="3" ColumnSpacing="10">
+            <Grid.Styles>
+              <Style Selector="TextBlock.label">
+                <Setter Property="Opacity" Value="0.7" />
+              </Style>
+              <Style Selector="TextBlock.value">
+                <Setter Property="FontFamily" Value="Consolas,Menlo,Courier New,monospace" />
+              </Style>
+            </Grid.Styles>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Grid.ColumnSpan="2"
+                       Text="{DynamicResource FindItemsDetailSectionScalars}"
+                       FontWeight="SemiBold" Margin="0,4,0,2" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Classes="label"
+                       Text="{DynamicResource FindItemsDetailItemType}" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Classes="value"
+                       Text="{Binding ItemTypeText}" />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Classes="label"
+                       Text="{DynamicResource FindItemsDetailItemTier}" />
+            <TextBlock Grid.Row="2" Grid.Column="1" Classes="value"
+                       Text="{Binding ItemTierText}" />
+
+            <TextBlock Grid.Row="3" Grid.Column="0" Classes="label"
+                       Text="{DynamicResource FindItemsDetailEquipableLevel}" />
+            <TextBlock Grid.Row="3" Grid.Column="1" Classes="value"
+                       Text="{Binding EquipableLevelText}" />
+
+            <TextBlock Grid.Row="4" Grid.Column="0" Classes="label"
+                       Text="{DynamicResource FindItemsDetailMaxEndurance}" />
+            <TextBlock Grid.Row="4" Grid.Column="1" Classes="value"
+                       Text="{Binding MaxEnduranceText}" />
+
+            <TextBlock Grid.Row="5" Grid.Column="0" Classes="label"
+                       Text="{DynamicResource FindItemsDetailMaxStack}" />
+            <TextBlock Grid.Row="5" Grid.Column="1" Classes="value"
+                       Text="{Binding MaxStackCountText}" />
+
+            <TextBlock Grid.Row="6" Grid.Column="0" Classes="label"
+                       Text="{DynamicResource FindItemsDetailCooltime}" />
+            <TextBlock Grid.Row="6" Grid.Column="1" Classes="value"
+                       Text="{Binding CooltimeText}" />
+
+            <TextBlock Grid.Row="7" Grid.Column="0" Classes="label"
+                       Text="{DynamicResource FindItemsDetailRespawnTime}" />
+            <TextBlock Grid.Row="7" Grid.Column="1" Classes="value"
+                       Text="{Binding RespawnTimeText}" />
+
+            <TextBlock Grid.Row="8" Grid.Column="0" Classes="label"
+                       Text="{DynamicResource FindItemsDetailCategoryInfo}" />
+            <TextBlock Grid.Row="8" Grid.Column="1" Classes="value"
+                       Text="{Binding CategoryInfoText}" />
+          </Grid>
+        </StackPanel>
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
   </Grid>
 </Window>

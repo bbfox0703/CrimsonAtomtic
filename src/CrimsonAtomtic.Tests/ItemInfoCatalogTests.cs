@@ -136,6 +136,68 @@ public sealed class ItemInfoCatalogTests
     }
 
     [Fact]
+    public void ItemInfoSummary_Layout_MatchesRustAbi()
+    {
+        // The C ABI surface pins this at 80 bytes via
+        // `const _: () = { assert!(size_of::<CrimsonItemInfoSummary>() == 80) }`
+        // in vendor/crimson-rs/src/c_abi/iteminfo.rs. Mirror the
+        // assertion on the C# side so any drift in either layout
+        // breaks the build, not the consumer at runtime.
+        var size = System.Runtime.InteropServices.Marshal.SizeOf<ItemInfoSummary>();
+        Assert.Equal(80, size);
+    }
+
+    [Fact]
+    public void LookupSummary_LiveInstall_PinsKnownItem()
+    {
+        if (!File.Exists("crimson_rs.dll")) return;
+        var pamt = FindIteminfoPamt();
+        if (pamt is null) return;
+        var extractor = new NativePazExtractor();
+        var bytes = extractor.ExtractFile(
+            pamt, "gamedata/binary__/client/bin", "iteminfo.pabgb");
+        using var cat = NativeItemInfoCatalog.LoadFromBytes(bytes);
+
+        // Unknown key → null (NOT_FOUND path).
+        Assert.Null(cat.LookupSummary(uint.MaxValue));
+        Assert.Null(cat.LookupFlags(uint.MaxValue));
+
+        // Pyeonjeon_Arrow (key 2200) — vendor pins this as
+        // item_type=0 (arrow) and explicitly NOT
+        // IS_EQUIP_QUICK_SLOT_VISIBLE in the upstream live-install
+        // test. We mirror just enough of that pin to catch a parser
+        // regression here; the broader cross-version drift the upstream
+        // covers is out of scope for this binding test.
+        var arrow = cat.LookupSummary(2200);
+        Assert.NotNull(arrow);
+        Assert.Equal(2200u, arrow!.Value.Key);
+        Assert.Equal(0, arrow.Value.ItemType);
+        Assert.False(arrow.Value.Flags.HasFlag(ItemInfoFlags.IsEquipQuickSlotVisible),
+            "Pyeonjeon_Arrow should not be flagged as IS_EQUIP_QUICK_SLOT_VISIBLE");
+
+        // Marni_Devotee_PlateArmor_Helm (key 14510) — vendor pin says
+        // item_type=24 and IS_EQUIP_QUICK_SLOT_VISIBLE set. Mirrors
+        // the upstream c_abi_iteminfo_static_lookups_live pin.
+        var helm = cat.LookupSummary(14510);
+        Assert.NotNull(helm);
+        Assert.Equal(14510u, helm!.Value.Key);
+        Assert.Equal(24, helm.Value.ItemType);
+        Assert.True(helm.Value.Flags.HasFlag(ItemInfoFlags.IsEquipQuickSlotVisible),
+            "Marni_Devotee_PlateArmor_Helm should be flagged as IS_EQUIP_QUICK_SLOT_VISIBLE");
+
+        // The flags-only lookup must agree with the summary lookup's
+        // Flags field — both read from the same cache so they should be
+        // identical bit-for-bit.
+        Assert.Equal(arrow.Value.Flags, cat.LookupFlags(2200));
+        Assert.Equal(helm.Value.Flags, cat.LookupFlags(14510));
+
+        // Reserved padding byte must round-trip through the marshaller
+        // as 0 (Rust side writes `_reserved: 0`).
+        Assert.Equal(0, arrow.Value.ReservedByte);
+        Assert.Equal(0, helm.Value.ReservedByte);
+    }
+
+    [Fact]
     public void LookupStringKey_AfterDispose_Throws()
     {
         if (!File.Exists("crimson_rs.dll"))

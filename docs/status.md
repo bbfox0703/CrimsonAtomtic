@@ -3,7 +3,34 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-22 part 15 (Staticlib pivot for AOT publish — `dist\win-x64\` no longer ships `crimson_rs.dll`; the Rust core is folded into `CrimsonAtomtic.exe` via NativeAOT's `<DirectPInvoke>` + `<NativeLibrary>`. Vendor refreshed to `b0cbd38` (1.08 baseline). GlobalGameEvent body-field bridge wired (`group_key` + `paloc_key`). World Map parchment layer-alignment bug from part 14 still open — unchanged this session).
+> Last updated: 2026-05-22 part 16 (Iteminfo static-metadata surface — vendor `2b1307a` opens up 28 static flags + a one-shot 80-byte `CrimsonItemInfoSummary` getter. C# now has a `[Flags] ItemInfoFlags` enum + `ItemInfoSummary` `[StructLayout(Sequential)]` struct + `NativeItemInfoCatalog.LookupSummary`; FindItems window grows a right-side detail pane that renders the active row's flag chips + key scalar fields. Closes the long-standing "why isn't `is_housing_only` visible when I look up an inventory item?" gap. World Map parchment layer-alignment bug from part 14 still open — unchanged this session).
+>
+> ## ✅ This session — what shipped (2026-05-22 part 16)
+>
+> User-directive: "vendor/crimson_rs 已經更新，依更新來改善我們的功能" — and pick the depth: full ABI + UI surface in the inventory item detail.
+>
+> | Area | Scope |
+> |---|---|
+> | **`ItemInfoFlags` + `ItemInfoSummary` C# binding** | New `src/CrimsonAtomtic.RustInterop/ItemInfoSummary.cs`. `[Flags] enum ItemInfoFlags : uint` mirrors the 28 `CRIMSON_ITEMINFO_FLAG_*` constants (bits 0–27; bits 28–31 reserved). `readonly struct ItemInfoSummary` with `[StructLayout(LayoutKind.Sequential)]` mirrors the Rust 80-byte `CrimsonItemInfoSummary` field-for-field (u64×3 → u32×9 → u16×4 → u8×8, plus 4 bytes of struct-alignment padding). Field order is byte-identical to the Rust side — pinned by a unit test calling `Marshal.SizeOf<ItemInfoSummary>() == 80`. Two new `[LibraryImport]` entries in `NativeSaveLoader.NativeMethods`: `ItemInfoLookupFlags` (returns just the 27-bit bitmask, cheaper for hot paths) and `ItemInfoLookupSummary` (one-shot fill of the whole struct via `out` parameter). |
+> | **`NativeItemInfoCatalog.LookupSummary` + `LookupFlags`** | Thin `NOT_FOUND → null` wrappers on top of the P/Invokes. The catalog already exposed `LookupStringKey` / `LookupMaxStackCount` / `LookupSocketCaps` / `LookupIconPathHash`; the summary surface fills in the long tail (item_type / item_tier / equipable_level / max_endurance / cooltime / respawn_time_seconds / category_info / inventory_info + the 28 flags). `LocalizationProvider.LookupItemInfoSummary(uint itemKey)` exposes the catalog method to view models. |
+> | **Live-install pin for the binding** | `LookupSummary_LiveInstall_PinsKnownItem` in `ItemInfoCatalogTests` pins two items against the 1.08 install: Pyeonjeon_Arrow (key 2200, item_type 0, **NOT** `IS_EQUIP_QUICK_SLOT_VISIBLE`) and Marni_Devotee_PlateArmor_Helm (key 14510, item_type 24, `IS_EQUIP_QUICK_SLOT_VISIBLE` set). Mirrors the upstream `c_abi_iteminfo_static_lookups_live` pin. Also asserts the `LookupFlags` and `LookupSummary` paths agree bit-for-bit (they read from the same cache) and that the `_reserved` padding byte round-trips through the marshaller as 0. |
+> | **FindItems detail pane** | `src/CrimsonAtomtic.Ui/Views/FindItemsWindow.axaml` grew a fixed 320-px right column. When a `FindItemsRow` is selected, the pane shows: the item icon + English name + ItemKey; a **Static flags** section with wrap-panel chips (each chip carries a tooltip describing the flag's semantics); a **Static metadata** grid showing item_type, tier, equipable_level, max_endurance, max_stack, cooltime, respawn (s), category. Empty state when nothing is selected; explanatory "this key isn't in iteminfo.pabgb" hint for dev / content-stripped items. `FindItemsRow` is now populated at row-construction time via `LocalizationProvider.LookupItemInfoSummary` — one extra O(1) FFI call per row, negligible against the existing PALOC name resolution. The `SelectedRow` ObservableProperty on the VM drives the pane through `DataGrid.SelectedItem` TwoWay binding. |
+> | **Bilingual strings (en / ja / zh-TW)** | 28 flag display labels + 28 flag tooltip explanations + 8 scalar field labels + 6 pane-level strings (title / empty / no-summary / section headers / no-flags-set) — 70 entries × 3 languages. Resource keys: `ItemFlagLabel*` / `ItemFlagTip*` / `FindItemsDetailPane*` / `FindItemsDetailSection*` / `FindItemsDetail{ItemType,ItemTier,EquipableLevel,MaxEndurance,MaxStack,Cooltime,RespawnTime,CategoryInfo}`. Loaded at chip-construction time via `Application.Current.TryGetResource(...)` (same pattern as `MarkChallengeCompleteTip` in `MainWindowViewModel`); falls back to a stable English default if the key is missing so the pane never renders a blank chip. |
+>
+> Tests: **294 → 296 pass** (+2 — `ItemInfoSummary_Layout_MatchesRustAbi` + `LookupSummary_LiveInstall_PinsKnownItem`). Debug build clean. AOT publish verified — `dist\win-x64\CrimsonAtomtic.exe` 26.8 MB (was 26.7 — the new summary cache + getters add ~100 KB net), single-file shape preserved (no `crimson_rs.dll` in dist).
+>
+> ### Open follow-ons noted during this session
+>
+> - **Additional UI surfaces for the summary** — the binding is now general-purpose; other dialogs that show items (Browse Items, Vendor Buyback, Socket Editor, Dye Editor) could surface the same detail pane or a flag-chip column. Left as a follow-on since the FindItems case is the user-question motivator and the rest would benefit from the same scoping conversation.
+> - **Flag-based filtering in FindItems** — the user could ask "show me only dyeable items" or "show me only housing-only items". `ItemInfoFlags` is now plumbed end-to-end; adding a filter row above the DataGrid is straightforward but out of scope for this session.
+>
+> ### Vendor state
+>
+> `vendor/crimson-rs` at `2b1307a` (was `b0cbd38` per part 15). Run `vendor\update_vendors.ps1` at session start to refresh.
+>
+> ---
+>
+> Last previous update: 2026-05-22 part 15 (Staticlib pivot for AOT publish — `dist\win-x64\` no longer ships `crimson_rs.dll`; the Rust core is folded into `CrimsonAtomtic.exe` via NativeAOT's `<DirectPInvoke>` + `<NativeLibrary>`. Vendor refreshed to `b0cbd38` (1.08 baseline). GlobalGameEvent body-field bridge wired (`group_key` + `paloc_key`). World Map parchment layer-alignment bug from part 14 still open — unchanged this session).
 >
 > ## 🎯 This session — what shipped (2026-05-22 part 15)
 >

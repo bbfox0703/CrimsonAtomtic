@@ -1345,6 +1345,16 @@ public sealed class LocalizationProvider : IDisposable
         _itemInfo?.LookupMaxStackCount(itemKey);
 
     /// <summary>
+    /// One-shot static-metadata snapshot for <paramref name="itemKey"/>.
+    /// Returns <c>null</c> when iteminfo isn't loaded yet or the key
+    /// isn't in the table. The detail pane in FindItemsWindow drives
+    /// off this — pair with <see cref="LookupItemName"/> + the existing
+    /// stack / icon / socket helpers to render a complete item card.
+    /// </summary>
+    public ItemInfoSummary? LookupItemInfoSummary(uint itemKey) =>
+        _itemInfo?.LookupSummary(itemKey);
+
+    /// <summary>
     /// <c>StringInfoKey</c> (u32 hash) of an item's primary icon —
     /// the first entry of <c>item_icon_list[0].icon_path</c>. Pair
     /// with <see cref="ResolveStringInfoHash(uint)"/> to get the

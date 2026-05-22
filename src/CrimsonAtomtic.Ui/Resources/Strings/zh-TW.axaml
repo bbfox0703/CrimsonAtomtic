@@ -232,6 +232,82 @@
   <sys:String x:Key="FindItemsFlagNewMarkTip">_isNewMark = true (物品帶有遊戲中的「新」標記)</sys:String>
   <sys:String x:Key="FindItemsRefresh">重新整理</sys:String>
 
+  <!-- 詳細面板標籤 — 透過 vendor 2b1307a 的 crimson_iteminfo_lookup_summary
+       顯示 iteminfo.pabgb 的靜態 metadata。 -->
+  <sys:String x:Key="FindItemsDetailPaneTitle">物品詳細資訊</sys:String>
+  <sys:String x:Key="FindItemsDetailPaneEmpty">點選左側列以查看其 iteminfo 旗標與靜態 metadata。</sys:String>
+  <sys:String x:Key="FindItemsDetailNoSummary">此 ItemKey 不在 iteminfo.pabgb 中 — 應該是開發用 / 內容已被移除的條目。Save 端欄位 (Locked / NewMark) 仍會顯示在左側主表格。</sys:String>
+  <sys:String x:Key="FindItemsDetailSectionFlags">靜態旗標</sys:String>
+  <sys:String x:Key="FindItemsDetailFlagsEmpty">未設定任何靜態旗標。</sys:String>
+  <sys:String x:Key="FindItemsDetailSectionScalars">靜態 metadata</sys:String>
+  <sys:String x:Key="FindItemsDetailItemType">物品類型</sys:String>
+  <sys:String x:Key="FindItemsDetailItemTier">階層</sys:String>
+  <sys:String x:Key="FindItemsDetailEquipableLevel">裝備等級</sys:String>
+  <sys:String x:Key="FindItemsDetailMaxEndurance">最大耐久</sys:String>
+  <sys:String x:Key="FindItemsDetailMaxStack">最大堆疊</sys:String>
+  <sys:String x:Key="FindItemsDetailCooltime">冷卻時間</sys:String>
+  <sys:String x:Key="FindItemsDetailRespawnTime">重生 (秒)</sys:String>
+  <sys:String x:Key="FindItemsDetailCategoryInfo">類別</sys:String>
+
+  <!-- iteminfo 靜態旗標標籤 + tooltip。位元位置屬於 C ABI 合約 —
+       見 vendor/crimson-rs/src/c_abi/iteminfo.rs 的 CRIMSON_ITEMINFO_FLAG_*。 -->
+  <sys:String x:Key="ItemFlagLabelIsBlocked">封鎖</sys:String>
+  <sys:String x:Key="ItemFlagTipIsBlocked">開發用 / 未使用條目</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsDyeable">可染色</sys:String>
+  <sys:String x:Key="ItemFlagTipIsDyeable">至少有一個染色槽</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsDestroyWhenBroken">毀損時銷毀</sys:String>
+  <sys:String x:Key="ItemFlagTipIsDestroyWhenBroken">耐久值歸 0 時從背包移除</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsHousingOnly">僅限房屋</sys:String>
+  <sys:String x:Key="ItemFlagTipIsHousingOnly">僅在玩家房屋中有意義</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsEquipQuickSlotVisible">快速欄可見</sys:String>
+  <sys:String x:Key="ItemFlagTipIsEquipQuickSlotVisible">可放入裝備快速欄 (1.08+)</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsImportantItem">重要</sys:String>
+  <sys:String x:Key="ItemFlagTipIsImportantItem">劇情 / 任務重要物品</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsShieldItem">盾牌</sys:String>
+  <sys:String x:Key="ItemFlagTipIsShieldItem">可裝備於副手盾牌欄位</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsTowerShieldItem">塔盾</sys:String>
+  <sys:String x:Key="ItemFlagTipIsTowerShieldItem">塔盾類型 (較大碰撞框 / 不同站姿)</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsWild">野生</sys:String>
+  <sys:String x:Key="ItemFlagTipIsWild">從世界採集而非製作的物品</sys:String>
+  <sys:String x:Key="ItemFlagLabelHideFromInventoryOnPopItem">使用後隱藏</sys:String>
+  <sys:String x:Key="ItemFlagTipHideFromInventoryOnPopItem">PopItem 使用動作後從背包隱藏</sys:String>
+  <sys:String x:Key="ItemFlagLabelDiscardable">可丟棄</sys:String>
+  <sys:String x:Key="ItemFlagTipDiscardable">允許玩家丟棄</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsRegisterTradeMarket">可交易</sys:String>
+  <sys:String x:Key="ItemFlagTipIsRegisterTradeMarket">可上架到交易市場</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsEditorUsable">編輯器</sys:String>
+  <sys:String x:Key="ItemFlagTipIsEditorUsable">保留給引擎內編輯器工具</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsEditableGrime">可編輯髒污</sys:String>
+  <sys:String x:Key="ItemFlagTipIsEditableGrime">具有可編輯的髒污 / 磨損外觀</sys:String>
+  <sys:String x:Key="ItemFlagLabelUseImmediately">立即使用</sys:String>
+  <sys:String x:Key="ItemFlagTipUseImmediately">拾取時即觸發使用效果，無需從背包使用</sys:String>
+  <sys:String x:Key="ItemFlagLabelApplyMaxStackCap">套用堆疊上限</sys:String>
+  <sys:String x:Key="ItemFlagTipApplyMaxStackCap">執行時的堆疊數量受 max_stack_count 限制</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsBlockedStoreSell">禁止商店出售</sys:String>
+  <sys:String x:Key="ItemFlagTipIsBlockedStoreSell">無論類別為何皆禁止商店回收</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsPreorderItem">預購</sys:String>
+  <sys:String x:Key="ItemFlagTipIsPreorderItem">透過預購特典 bundle 獲得</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsHasItemUseDataInventoryBuff">持有 buff</sys:String>
+  <sys:String x:Key="ItemFlagTipIsHasItemUseDataInventoryBuff">持有時提供 buff 效果</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsPreservedOnExtract">可帶出</sys:String>
+  <sys:String x:Key="ItemFlagTipIsPreservedOnExtract">在 extraction 類型的場次中可保留</sys:String>
+  <sys:String x:Key="ItemFlagLabelEnableAlertSystemToUi">UI 提示</sys:String>
+  <sys:String x:Key="ItemFlagTipEnableAlertSystemToUi">拾取時觸發 UI 提示</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsSaveGameDataAtUseItem">使用時存檔</sys:String>
+  <sys:String x:Key="ItemFlagTipIsSaveGameDataAtUseItem">使用動作會觸發遊戲存檔寫入</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsLogoutAtUseItem">使用後登出</sys:String>
+  <sys:String x:Key="ItemFlagTipIsLogoutAtUseItem">使用動作會結束本次遊戲 session</sys:String>
+  <sys:String x:Key="ItemFlagLabelEnableEquipInCloneActor">分身可裝備</sys:String>
+  <sys:String x:Key="ItemFlagTipEnableEquipInCloneActor">可裝備於玩家分身 (鏡像對戰)</sys:String>
+  <sys:String x:Key="ItemFlagLabelCanDisassemble">可分解</sys:String>
+  <sys:String x:Key="ItemFlagTipCanDisassemble">可進行分解 / 回收</sys:String>
+  <sys:String x:Key="ItemFlagLabelIsAllGimmickSealable">機關可封印</sys:String>
+  <sys:String x:Key="ItemFlagTipIsAllGimmickSealable">對所有機關效果均可封印</sys:String>
+  <sys:String x:Key="ItemFlagLabelDeleteByGimmickUnlock">自動刪除</sys:String>
+  <sys:String x:Key="ItemFlagTipDeleteByGimmickUnlock">當綁定的機關被解鎖時自動刪除</sys:String>
+  <sys:String x:Key="ItemFlagLabelUseDropSetTarget">掉落集</sys:String>
+  <sys:String x:Key="ItemFlagTipUseDropSetTarget">作為掉落集的目標 key 使用 (戰利品表標記)</sys:String>
+
   <!-- Browse-characters dialog -->
   <sys:String x:Key="MenuBrowseCharacters">瀏覽角色 / NPC(_C)…</sys:String>
   <sys:String x:Key="CharacterPickerWindowTitle">瀏覽角色 / NPC</sys:String>
