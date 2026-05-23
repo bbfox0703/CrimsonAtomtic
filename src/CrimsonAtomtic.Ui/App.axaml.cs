@@ -106,16 +106,27 @@ public sealed class App : Application
                 DataContext = new MainWindowViewModel(loader, paths, localization, backupService, uiLanguage),
             };
 
-            // First-launch legal disclaimer. Show AFTER the main window
-            // has rendered once so the user sees the editor's frame
-            // behind the modal — clearer that "Quit" exits the whole
-            // app, not just dismisses a splash. The Opened event is
-            // the Avalonia-idiomatic post-paint hook; we capture the
-            // already-loaded `settings` (above) so the dialog reuses
-            // the same snapshot the secondary-language wiring used.
+            // First-launch legal disclaimer + game-data-version
+            // mismatch warning. Both fire AFTER the main window has
+            // rendered once so the user sees the editor's frame behind
+            // the modal — clearer that "Quit" exits the whole app, not
+            // just dismisses a splash. The version-mismatch dialog runs
+            // FIRST: if the user opts to quit on a mismatched install,
+            // we shouldn't have nagged them with the disclaimer first.
+            //
+            // Order: opened → version-mismatch (skipped on compatible
+            // installs) → disclaimer (skipped if already accepted).
+            // Quit on either → desktop.Shutdown.
             var startupSettings = settings;
             mainWindow.Opened += async (_, _) =>
             {
+                var versionOk = await GameVersionMismatchDialog.ShowIfMismatchedAsync(
+                    mainWindow, localization.GameDataVersion);
+                if (!versionOk)
+                {
+                    desktop.Shutdown();
+                    return;
+                }
                 var accepted = await DisclaimerDialog.ShowIfNotAcceptedAsync(
                     mainWindow, startupSettings, paths.LocalAppDataDirectory);
                 if (!accepted)

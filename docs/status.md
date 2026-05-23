@@ -3,7 +3,45 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-22 part 16 (Iteminfo static-metadata surface — vendor `2b1307a` opens up 28 static flags + a one-shot 80-byte `CrimsonItemInfoSummary` getter. C# now has a `[Flags] ItemInfoFlags` enum + `ItemInfoSummary` `[StructLayout(Sequential)]` struct + `NativeItemInfoCatalog.LookupSummary`; FindItems window grows a right-side detail pane that renders the active row's flag chips + key scalar fields. Closes the long-standing "why isn't `is_housing_only` visible when I look up an inventory item?" gap. World Map parchment layer-alignment bug from part 14 still open — unchanged this session).
+> Last updated: 2026-05-23 part 17 (Game-data version detection — vendor `61c2f52` adds a `meta/0.paver` reader exposed as `crimson_paver_read_from_file` / `_read_from_bytes`. C# `NativePaverReader.TryReadFromInstall` + new `GameDataVersion` record-struct; `LocalizationProvider.GameDataVersion` getter populated at bootstrap. App startup now checks `Minor == ParserTargetMinor` (currently 8) before the disclaimer; a new `GameVersionMismatchDialog` warns the user with Continue / Quit when the install is e.g. 1.07 against a 1.08-targeted parser. World Map parchment layer-alignment bug from part 14 still open — unchanged this session).
+>
+> ## ✅ This session — what shipped (2026-05-23 part 17)
+>
+> User question: "新的讀取 1.08 的程式，讀取 1.07 會 crash，那有沒有什麼方式可偵測遊戲資料版本，提供 ABI?" — find a way to detect game-data version so the C# side can warn before iteminfo / save-body parsing crashes.
+>
+> Answer found in `docs/game-versions.md`: every Crimson Desert install carries a 10-byte `meta/0.paver` version stamp. Layout decode confirmed against the live 1.08 install:
+>
+> ```text
+> 1.08.00 build 0xdc39b03e:  01 00 08 00 00 00 3e b0 39 dc
+>                            └─┬─┘ └─┬─┘ └─┬─┘ └────┬────┘
+>                            major minor patch    build (LE u32)
+> ```
+>
+> `minor` is the schema-compatibility key: 1.08 vs 1.08.01 share minor=8 (compatible), 1.07 has minor=7 (incompatible).
+>
+> | Area | Scope |
+> |---|---|
+> | **Vendor: `Paver` parser + C ABI** (`crimson-rs` commit `61c2f52`) | `src/binary/paver.rs` is a 10-byte fixed-layout parser with `from_bytes(&[u8])` + `from_file(P)`. `src/c_abi/paver.rs` exposes two extern "C" entry points: `crimson_paver_read_from_file(path, *out_major, *out_minor, *out_patch, *out_build)` (auto-appends `meta/0.paver` when `path` is the install-root directory via `is_dir()`) and `crimson_paver_read_from_bytes(data, len, *out_…)` (in-memory variant). Error codes: `OK` / `NULL_ARG` / `INVALID_PATH` / `NOT_FOUND` / `IO` / `BODY_PARSE` / `PANIC`. Outputs untouched on failure. 10 new tests (5 binary + 5 c_abi); upstream cargo test `311 → 321`, clippy clean. |
+> | **C# binding** | `NativePaverReader.TryReadFromInstall(string?)` → `GameDataVersion?` and `TryReadFromBytes(ReadOnlySpan<byte>)` thin wrappers. `GameDataVersion` is a `readonly record struct (Major, Minor, Patch, Build)` with `IsCompatibleWithParser`, `DisplayString` (`"1.08.00 build 0xdc39b03e"`), and `ShortVersionString` (`"1.08.00"`). `ParserTargetMinor = 8` constant baked into the C# side — bump this on the next vendor refresh that targets 1.09. P/Invokes live next to `crimson_paloc_load_from_file` in `NativeSaveLoader.NativeMethods`. |
+> | **Bootstrap wiring** | `LocalizationProvider.GameDataVersion` getter populated inside `TryBootstrapFromGameRoot` as the very first step (before iteminfo / PALOC). Read failure leaves the property `null` and bootstrap proceeds — the iteminfo `try`/`catch (CrimsonSaveException)` path already degrades gracefully, so a 1.07 install loaded against a 1.08 parser still yields a startable editor minus item-name resolution. |
+> | **`GameVersionMismatchDialog`** | New modal dialog (sibling of `DisclaimerDialog`): headline, "detected install" + "parser targets" labels, explanation paragraph, Continue / Quit buttons. Shown via `ShowIfMismatchedAsync(owner, detected)` — skips itself when `detected` is null OR compatible. The hosting `App.axaml.cs` runs it on `mainWindow.Opened` BEFORE the disclaimer (so users on a mismatched install can quit without first being nagged about the legal text); Quit calls `desktop.Shutdown()`. |
+> | **Bilingual strings (en / ja / zh-TW)** | Six new resource keys: `GameVersionMismatchTitle`, `Headline`, `DetectedLabel`, `TargetLabel`, `Explanation`, `Continue`, `Quit`. Wording emphasises "Continue at your own risk" / 「リスクは自己責任で」 / 「請自行斟酌風險」 per the user's directive for warn-then-continue (not hard-block). |
+>
+> Tests: **296 → 301 pass** (+5 — `TryReadFromBytes_HappyPath_Returns_1_08_Live`, `_ShortBuffer_ReturnsNull`, `_LegacyMinor_FlagsIncompatible`, `TryReadFromInstall_NullOrEmpty_ReturnsNullWithoutCallingNative`, `_LiveInstall_PinsCurrent`). Debug build clean. AOT publish verified — `dist\win-x64\CrimsonAtomtic.exe` 26.8 MB, single-file shape preserved (no `crimson_rs.dll`).
+>
+> ### Open follow-ons noted during this session
+>
+> - **`ParserTargetMinor` drift hazard** — the constant is duplicated between the Rust parser's implicit assumption (it targets the latest patch only, per upstream's CLAUDE.md note) and `GameDataVersion.ParserTargetMinor = 8` on the C# side. Worth promoting to a `crimson_parser_target_gamedata_minor()` ABI in a future vendor commit so the C# side stops hard-coding; the user opted for the simpler "game-data version only" ABI shape this session, so this is parked as a follow-on.
+> - **Save-header version (offset 0x04 u16)** — the save file's own version field is distinct from the game-data version and is not currently surfaced through any ABI. Useful as a cross-check ("this save was written by game version X") if a future patch breaks save-format compat too. Out of scope for this session.
+> - **About / Settings version readout** — `localization.GameDataVersion?.DisplayString` is computed but not yet surfaced anywhere except the warning dialog. A status-bar field or an About dialog entry would let users self-diagnose without re-launching.
+>
+> ### Vendor state
+>
+> `vendor/crimson-rs` at `61c2f52` (was `2b1307a` per part 16). Run `vendor\update_vendors.ps1` at session start to refresh. **Note**: `crimson-rs` follows a PR-to-`main` workflow (see its CLAUDE.md); this session's `61c2f52` is pushed to `origin/dev` and a PR to `main` should be opened manually for CI green-light + merge.
+>
+> ---
+>
+> Last previous update: 2026-05-22 part 16 (Iteminfo static-metadata surface — vendor `2b1307a` opens up 28 static flags + a one-shot 80-byte `CrimsonItemInfoSummary` getter. C# now has a `[Flags] ItemInfoFlags` enum + `ItemInfoSummary` `[StructLayout(Sequential)]` struct + `NativeItemInfoCatalog.LookupSummary`; FindItems window grows a right-side detail pane that renders the active row's flag chips + key scalar fields. Closes the long-standing "why isn't `is_housing_only` visible when I look up an inventory item?" gap. World Map parchment layer-alignment bug from part 14 still open — unchanged this session).
 >
 > ## ✅ This session — what shipped (2026-05-22 part 16)
 >

@@ -356,6 +356,16 @@
   <sys:String x:Key="LocalizationCopyValueTip">英語の値をクリップボードにコピー</sys:String>
   <sys:String x:Key="LocalizationCopyValue2Tip">セカンダリ言語の値をクリップボードにコピー</sys:String>
 
+  <!-- ゲームデータ・バージョン不一致の警告。起動時に meta/0.paver
+       の minor が parser のターゲットと異なる場合に表示。 -->
+  <sys:String x:Key="GameVersionMismatchTitle">ゲームバージョン不一致</sys:String>
+  <sys:String x:Key="GameVersionMismatchHeadline">CrimsonAtomtic のパーサーが対象とするゲームバージョンと、インストール済みバージョンが一致していません。</sys:String>
+  <sys:String x:Key="GameVersionMismatchDetectedLabel">検出されたインストール:</sys:String>
+  <sys:String x:Key="GameVersionMismatchTargetLabel">パーサーの対象:</sys:String>
+  <sys:String x:Key="GameVersionMismatchExplanation">Pearl Abyss のパッチ間でアイテム / セーブデータのレイアウトが変わる場合があります。このビルドの CrimsonAtomtic を別パッチのデータに対して実行すると、iteminfo の読み込み時にクラッシュしたり、値が黙って誤デコードされたり、書き込み時にセーブを破損させたりする可能性があります。リスクは自己責任で。終了してインストールをダウン/アップグレードしてから再起動することもできます。</sys:String>
+  <sys:String x:Key="GameVersionMismatchContinue">そのまま続行</sys:String>
+  <sys:String x:Key="GameVersionMismatchQuit">終了</sys:String>
+
   <!-- First-launch legal disclaimer -->
   <sys:String x:Key="DisclaimerTitle">CrimsonAtomtic — 免責事項</sys:String>
   <sys:String x:Key="DisclaimerAccept">同意する</sys:String>

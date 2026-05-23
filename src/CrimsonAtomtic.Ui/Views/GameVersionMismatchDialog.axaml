@@ -1,0 +1,71 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        d:DesignWidth="560"
+        d:DesignHeight="320"
+        x:Class="CrimsonAtomtic.Ui.Views.GameVersionMismatchDialog"
+        Title="{DynamicResource GameVersionMismatchTitle}"
+        Icon="/Assets/MainIcon.ico"
+        Width="560" Height="320"
+        MinWidth="480" MinHeight="260"
+        CanResize="False"
+        ShowInTaskbar="True"
+        WindowStartupLocation="CenterOwner">
+
+  <!-- Warning shown when the install's meta/0.paver minor doesn't
+       match GameDataVersion.ParserTargetMinor. The user can continue
+       at their own risk (iteminfo / save-body loads may parse-crash
+       or silently mis-decode) or quit the app. -->
+  <Grid Margin="16" RowDefinitions="Auto,Auto,Auto,*,Auto">
+
+    <!-- Headline -->
+    <TextBlock Grid.Row="0"
+               Text="{DynamicResource GameVersionMismatchHeadline}"
+               FontWeight="SemiBold"
+               FontSize="14"
+               TextWrapping="Wrap" />
+
+    <!-- Detected vs target table -->
+    <Grid Grid.Row="1" Margin="0,12,0,0"
+          ColumnDefinitions="Auto,*"
+          RowDefinitions="Auto,Auto"
+          ColumnSpacing="10" RowSpacing="4">
+      <TextBlock Grid.Row="0" Grid.Column="0"
+                 Text="{DynamicResource GameVersionMismatchDetectedLabel}"
+                 Opacity="0.7" />
+      <TextBlock x:Name="DetectedVersionText"
+                 Grid.Row="0" Grid.Column="1"
+                 FontFamily="Consolas,Menlo,Courier New,monospace" />
+      <TextBlock Grid.Row="1" Grid.Column="0"
+                 Text="{DynamicResource GameVersionMismatchTargetLabel}"
+                 Opacity="0.7" />
+      <TextBlock x:Name="TargetVersionText"
+                 Grid.Row="1" Grid.Column="1"
+                 FontFamily="Consolas,Menlo,Courier New,monospace" />
+    </Grid>
+
+    <!-- Why it matters explanation -->
+    <TextBlock Grid.Row="2"
+               Text="{DynamicResource GameVersionMismatchExplanation}"
+               TextWrapping="Wrap"
+               Margin="0,16,0,0"
+               LineHeight="20" />
+
+    <!-- Footer buttons -->
+    <StackPanel Grid.Row="4"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="8"
+                Margin="0,16,0,0">
+      <Button Content="{DynamicResource GameVersionMismatchQuit}"
+              Click="OnQuit"
+              MinWidth="140" />
+      <Button Content="{DynamicResource GameVersionMismatchContinue}"
+              Click="OnContinue"
+              MinWidth="160"
+              IsDefault="True" />
+    </StackPanel>
+  </Grid>
+</Window>

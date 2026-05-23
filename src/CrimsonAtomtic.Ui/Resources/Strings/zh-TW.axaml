@@ -355,6 +355,16 @@
   <sys:String x:Key="LocalizationCopyValueTip">將英文 value 複製到剪貼簿</sys:String>
   <sys:String x:Key="LocalizationCopyValue2Tip">將次要語言 value 複製到剪貼簿</sys:String>
 
+  <!-- 遊戲資料版本不一致警告。啟動時若 meta/0.paver 的 minor 與
+       parser 目標不符就會顯示。 -->
+  <sys:String x:Key="GameVersionMismatchTitle">遊戲版本不一致</sys:String>
+  <sys:String x:Key="GameVersionMismatchHeadline">CrimsonAtomtic 的 parser 鎖定的遊戲版本與目前安裝的版本不同。</sys:String>
+  <sys:String x:Key="GameVersionMismatchDetectedLabel">偵測到的安裝：</sys:String>
+  <sys:String x:Key="GameVersionMismatchTargetLabel">Parser 目標：</sys:String>
+  <sys:String x:Key="GameVersionMismatchExplanation">Pearl Abyss 在不同 patch 之間可能更動 item / save 資料的 layout。將此版本的 CrimsonAtomtic 用在不同 patch 的資料上，可能會在 iteminfo 載入時 crash、靜默地把 value 解錯，或寫入時毀掉存檔。請自行斟酌風險。你也可以先離開、把遊戲安裝降版或升版後再重啟。</sys:String>
+  <sys:String x:Key="GameVersionMismatchContinue">仍然繼續</sys:String>
+  <sys:String x:Key="GameVersionMismatchQuit">離開</sys:String>
+
   <!-- First-launch legal disclaimer -->
   <sys:String x:Key="DisclaimerTitle">CrimsonAtomtic — 免責聲明</sys:String>
   <sys:String x:Key="DisclaimerAccept">我同意</sys:String>

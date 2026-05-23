@@ -1732,6 +1732,34 @@ internal static partial class NativeMethods
         byte* bytes,
         nuint bytesLen);
 
+    // ── Paver — game-install version stamp (meta/0.paver) ──────────────────
+    //
+    // 10-byte fixed-layout file Pearl Abyss writes at install / patch time.
+    // Read this BEFORE iteminfo / save-body loading to detect schema-version
+    // mismatches; the parsers target a specific minor and may crash against
+    // a different patch's data. See vendor/crimson-rs/src/c_abi/paver.rs.
+    //
+    // The path argument is permissive: pass either the .paver file directly
+    // or the game-install root directory (the Rust side auto-appends
+    // meta/0.paver via is_dir()).
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_paver_read_from_file",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int PaverReadFromFile(
+        string path,
+        out ushort outMajor,
+        out ushort outMinor,
+        out ushort outPatch,
+        out uint outBuild);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_paver_read_from_bytes")]
+    public static unsafe partial int PaverReadFromBytes(
+        byte* data, nuint dataLen,
+        out ushort outMajor,
+        out ushort outMinor,
+        out ushort outPatch,
+        out uint outBuild);
+
     // ── PALOC catalog ───────────────────────────────────────────────────────
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_paloc_load_from_file",

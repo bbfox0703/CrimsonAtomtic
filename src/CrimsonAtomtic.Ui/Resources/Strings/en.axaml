@@ -349,6 +349,16 @@
   <sys:String x:Key="LocalizationCopyValueTip">Copy the English value to the clipboard</sys:String>
   <sys:String x:Key="LocalizationCopyValue2Tip">Copy the secondary-language value to the clipboard</sys:String>
 
+  <!-- Game-data version mismatch warning. Surfaced on startup when
+       meta/0.paver's minor doesn't match the parser's target. -->
+  <sys:String x:Key="GameVersionMismatchTitle">Game version mismatch</sys:String>
+  <sys:String x:Key="GameVersionMismatchHeadline">CrimsonAtomtic's parser targets a different game version than what's installed.</sys:String>
+  <sys:String x:Key="GameVersionMismatchDetectedLabel">Detected install:</sys:String>
+  <sys:String x:Key="GameVersionMismatchTargetLabel">Parser targets:</sys:String>
+  <sys:String x:Key="GameVersionMismatchExplanation">Item / save data layouts can change between Pearl Abyss patches. Running this build of CrimsonAtomtic against a different patch's data may crash on item-info loading, silently mis-decode values, or corrupt a saved file on write. Continue at your own risk — you can also quit, downgrade or upgrade your install, and relaunch.</sys:String>
+  <sys:String x:Key="GameVersionMismatchContinue">Continue anyway</sys:String>
+  <sys:String x:Key="GameVersionMismatchQuit">Quit</sys:String>
+
   <!-- First-launch legal disclaimer -->
   <sys:String x:Key="DisclaimerTitle">CrimsonAtomtic — Disclaimer</sys:String>
   <sys:String x:Key="DisclaimerAccept">I Accept</sys:String>

@@ -421,6 +421,16 @@ public sealed class LocalizationProvider : IDisposable
     public string? GameRoot => _gameRoot;
 
     /// <summary>
+    /// Parsed <c>meta/0.paver</c> for the bootstrapped install — the
+    /// authoritative game-data version. <c>null</c> when no install
+    /// root was detected OR the paver file couldn't be read (very
+    /// rare; would indicate an unusual install layout). Use
+    /// <see cref="GameDataVersion.IsCompatibleWithParser"/> to decide
+    /// whether to warn the user before save / iteminfo operations.
+    /// </summary>
+    public GameDataVersion? GameDataVersion { get; private set; }
+
+    /// <summary>
     /// PAZ extractor the provider was constructed with. Exposed so
     /// downstream actions (icon extraction, future asset operations)
     /// can reuse the same instance instead of allocating a new one.
@@ -484,6 +494,14 @@ public sealed class LocalizationProvider : IDisposable
             return false;
         }
         _gameRoot = gameRoot;
+
+        // ── Read meta/0.paver FIRST so the caller (App startup) can
+        // surface a warning dialog if the install's game-data version
+        // doesn't match what the parser targets. We still proceed with
+        // bootstrap regardless — the iteminfo / save-body steps are
+        // wrapped in CrimsonSaveException catches so a mismatched parse
+        // degrades gracefully rather than crashing the whole app.
+        GameDataVersion = NativePaverReader.TryReadFromInstall(gameRoot);
 
         // ── iteminfo bridge (group 0008). Required for any item-name
         // resolution to work. Failure here means we still load PALOC
