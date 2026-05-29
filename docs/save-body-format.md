@@ -115,30 +115,6 @@ The decoder tries body offsets `{cursor, cursor+1, cursor+2, cursor+3}` and pick
 | otherwise                          | 1 / 2 / 4 / 8 | `u8 / u16 / u32 / u64` |
 | otherwise                          | anything else | raw `bytes`     |
 
-## Naming map (ours vs. the legacy Python parser)
-
-The Python `save_parser.py` in the old reference repo used different
-names for the same concepts. We don't try to stay compatible (per
-[data-policy.md](data-policy.md)); the table below is just for cross-
-referencing while the old repo is still useful to read.
-
-| Our Rust API (`vendor/crimson-rs/src/save/body/`) | Legacy Python (`save_parser.py`)          |
-| ------------------------------------------------- | ----------------------------------------- |
-| `Body { prefix, schema, toc }`                    | output dict of `parse_schema` + `parse_toc` |
-| `Schema { header_tag, header_zero, type_count, root_type, types, schema_end }` | `parse_schema()` return dict        |
-| `TypeDef { index, name, fields, start_offset, end_offset }`                    | `TypeDef` dataclass                  |
-| `FieldDef { name, type_name, meta_kind, meta_size, meta_aux, start_offset, end_offset }` | `FieldDef` dataclass            |
-| `Toc { prefix_zero, toc_count, stream_size, entries }`                         | `parse_toc()` return dict             |
-| `TocEntry { index, class_index, sentinel1, sentinel2, data_offset, data_size, entry_offset }` | `TocEntry` dataclass         |
-| `ObjectBlock { class_index, class_name, data_offset, data_size, mask_byte_count, mask_bytes, reserved_u32, fields, undecoded_ranges }` | `ObjectBlock` dataclass             |
-| `DecodedField { field_index, name, type_name, meta_kind, meta_size, meta_aux, present, kind, value, start, end, note }` | `GenericFieldValue` dataclass (many optional attributes) |
-| `FieldKind::FixedPrefix / FixedSuffix / InlineBytes / DynamicArray / ObjectLocator / ObjectList / Absent / Unknown` | `decode_kind` string `"fixed_prefix" / …`                |
-| `ScalarValue::U32(u32)` (typed)                  | `value_repr: str` (e.g. `"42"`) + `edit_format: str` (e.g. `"<I"`) |
-| `FieldValue::InlineBytes { count, bytes }`       | `count` + raw bytes encoded back into `value_repr`               |
-| `FieldValue::DynamicArray { count, bytes, header_variant }` | same plus `note: str`                                 |
-| `FieldValue::Locator { child_type_*, child_payload_offset, child }` | numerous `child_*` attributes on `GenericFieldValue` |
-| `FieldValue::ObjectList { count, header_variant, elements }` | `list_count`, `list_header_size`, `list_elements`, etc.    |
-
 ## What the inspect tools do with this
 
 - [`tools/inspect/inspect_save_body.py`](../tools/inspect/inspect_save_body.py) — show schema + TOC only (cheap).
@@ -149,7 +125,7 @@ referencing while the old repo is still useful to read.
 234 blocks have a small region between the end of the forward walk
 and the start of the reverse-peeled tail (or, when no reverse pass
 ran, at the very end of the block) that the schema doesn't model.
-The original Python parser leaves these bytes as undecoded; we
+CRIMSON-DESERT-SAVE-EDITOR's Python parser leaves these bytes as undecoded; we
 capture them on `ObjectBlock.trailing_pad: Vec<u8>` so they
 round-trip.
 
@@ -191,7 +167,7 @@ Empirically the engine sometimes writes a stale or wrong-looking
 `payload_offset` value while the actual payload still sits immediately
 after the wrapper — observed across many `FactionNodeElementSaveData`
 list elements where `payload_offset` pointed hundreds of bytes later
-into the block. The original Python parser only recurses when
+into the block. CRIMSON-DESERT-SAVE-EDITOR's Python parser only recurses when
 `payload_offset == wrapper_end` and consequently leaves all those
 "non-inline-looking" elements as undecoded; we don't, so the residual
 that motivated this work no longer appears.

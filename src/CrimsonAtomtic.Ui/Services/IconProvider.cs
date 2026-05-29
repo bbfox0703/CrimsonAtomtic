@@ -21,7 +21,7 @@ namespace CrimsonAtomtic.Ui.Services;
 /// </para>
 ///
 /// <para>
-/// File format: WebP (the reference repo's <c>icons_local/</c>
+/// File format: WebP (CRIMSON-DESERT-SAVE-EDITOR's <c>icons_local/</c>
 /// folder uses it; SkiaSharp / Avalonia 12 decodes it natively).
 /// Naming convention: filename is the decimal <c>ItemKey</c>, e.g.
 /// <c>11.webp</c> for Camp Funds.

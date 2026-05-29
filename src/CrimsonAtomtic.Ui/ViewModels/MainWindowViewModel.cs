@@ -3919,7 +3919,7 @@ public sealed partial class MainWindowViewModel(
     ///     discovery flags.</item>
     ///   <item><c>Knowledge_LevelGimmickIcon_AbyssGate</c> /
     ///     <c>Knowledge_LevelGimmickIcon_HyperSpace</c> — map-icon header
-    ///     entries that the reference editor's 398-key pack treats as
+    ///     entries that CRIMSON-DESERT-SAVE-EDITOR's 398-key pack treats as
     ///     mandatory prelude rows. Without them the map icons stay
     ///     hidden even after the per-gate keys are present.</item>
     /// </list>
@@ -3963,7 +3963,7 @@ public sealed partial class MainWindowViewModel(
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Mirrors the reference PyQt5 editor's "No Map Reveal Abyss Gate
+    /// Mirrors CRIMSON-DESERT-SAVE-EDITOR's "No Map Reveal Abyss Gate
     /// Unlock Only" pack flow (398 hand-curated keys) — but the
     /// keyset is harvested live from <c>knowledgeinfo.pabgb</c> via
     /// <see cref="LocalizationProvider.EnumerateKnowledgeByNamePrefix"/>

@@ -452,7 +452,7 @@ data/*/
 out/
 dist/
 
-# Local game-asset mining outputs (one-time copies from old reference repo,
+# Local game-asset mining outputs (one-time copies from CRIMSON-DESERT-SAVE-EDITOR,
 # reprocessed before commit if at all)
 data/_mined/
 data/_raw/

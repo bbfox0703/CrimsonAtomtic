@@ -132,7 +132,7 @@ is checked in at [docs/oct/features-highlights.md](docs/oct/features-highlights.
 
 ## Thanks
 
-Thanks to the community save editor `CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS` for being a useful reference point during early reverse-engineering.
+Thanks to the community save editor `CRIMSON-DESERT-SAVE-EDITOR` for being a useful reference point during early reverse-engineering.
 
 ## First-time setup
 

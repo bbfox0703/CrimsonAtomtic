@@ -38,7 +38,7 @@
         <!-- Icon column. Image source resolves lazily through the
              ItemKeyToIconConverter singleton (binds value to the
              active IconProvider's cache). Width = 48 + a couple of
-             px padding; icons are 64×64 in the reference repo but we
+             px padding; icons are 64×64 in CRIMSON-DESERT-SAVE-EDITOR but we
              render them at 40×40 so the row stays compact. Empty
              when no icon directory is configured / file missing —
              Image.Source = null hides the bitmap and the StackPanel
