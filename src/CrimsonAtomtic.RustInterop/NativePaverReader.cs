@@ -14,44 +14,62 @@ namespace CrimsonAtomtic.RustInterop;
 /// <param name="Minor">Minor — the **schema-compatibility key**.
 /// Iteminfo / save-body parsers target a specific minor; running them
 /// against a mismatched minor either crashes or silently corrupts.
-/// Currently <see cref="ParserTargetMinor"/> = 8.</param>
-/// <param name="Patch">Sub-version (e.g. <c>1.08</c> → 0, <c>1.08.01</c> → 1).
+/// Currently <see cref="ParserTargetMinor"/> = 9.</param>
+/// <param name="Patch">Sub-version (e.g. <c>1.09</c> → 0, <c>1.09.01</c> → 1).
 /// Compatible within the same minor.</param>
 /// <param name="Build">Opaque build identifier. Bumps every PA hotfix
 /// — informational only.</param>
 public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort Patch, uint Build)
 {
     /// <summary>
-    /// The minor version this crimson-rs build targets. The Rust-side
-    /// iteminfo / save-body parsers assume this schema; loads against
-    /// a different minor may parse-crash or silently mis-decode.
+    /// The latest game-data minor this crimson-rs build targets — the
+    /// canonical schema reference and the version shown as "parser
+    /// targets …" in the mismatch dialog. The Rust-side iteminfo /
+    /// save-body parsers assume this schema. Always a member of
+    /// <see cref="CompatibleMinors"/>.
     /// </summary>
     /// <remarks>
     /// Bumped together with the vendor refresh that lands a new
-    /// patch's parser (e.g. 1.07 → 1.08 in vendor commit
-    /// <c>5583e0e</c>). Keep this in sync with the Rust side; ideally
-    /// the next vendor refresh that targets 1.09 will bump both at
-    /// the same time.
+    /// patch's parser. Latest: 1.08 → 1.09 in vendor commit
+    /// <c>0619789</c>, which validated the full toolkit against the
+    /// live 1.09 install — a content-only delta over 1.08 with no
+    /// schema drift (iteminfo byte-identical, all 30 gamedata tables
+    /// parse, save roundtrip clean). Keep this in sync with the Rust
+    /// side; bump both at the same time on the next patch.
     /// </remarks>
-    public const ushort ParserTargetMinor = 8;
+    public const ushort ParserTargetMinor = 9;
 
     /// <summary>
-    /// True when this install's schema matches the parser's target.
+    /// Every game-data minor whose iteminfo / save-body schema this
+    /// build can load without mis-decoding — not just the single
+    /// latest target. 1.08 and 1.09 share a byte-identical iteminfo
+    /// schema (verified in crimson-rs <c>0619789</c>: "item key list
+    /// byte-identical to 1.08"), so both are accepted and a user who
+    /// hasn't yet updated from 1.08 isn't warned. 1.07 and earlier
+    /// used a different iteminfo layout (item-name resolution fails
+    /// against this parser), so they are deliberately excluded.
+    /// <see cref="ParserTargetMinor"/> is always present here.
+    /// </summary>
+    public static readonly ushort[] CompatibleMinors = [8, 9];
+
+    /// <summary>
+    /// True when this install's schema is one this parser build can
+    /// load (i.e. <see cref="Minor"/> is in <see cref="CompatibleMinors"/>).
     /// False values should surface a UI warning before iteminfo /
     /// save-body loading; the user can still opt to continue but the
     /// load may crash or mis-decode.
     /// </summary>
-    public bool IsCompatibleWithParser => Minor == ParserTargetMinor;
+    public bool IsCompatibleWithParser => Array.IndexOf(CompatibleMinors, Minor) >= 0;
 
     /// <summary>
-    /// Human-readable version (e.g. <c>"1.08.00 build 0xdc39b03e"</c>).
+    /// Human-readable version (e.g. <c>"1.09.00 build 0xbbf34824"</c>).
     /// Suitable for an About / Settings dialog or a status-bar field.
     /// </summary>
     public string DisplayString =>
         $"{Major}.{Minor:D2}.{Patch:D2} build 0x{Build:x8}";
 
     /// <summary>
-    /// Short version string without the build id (e.g. <c>"1.08.00"</c>).
+    /// Short version string without the build id (e.g. <c>"1.09.00"</c>).
     /// Suitable for inline log lines / warning dialogs where the build
     /// number is noise.
     /// </summary>

@@ -11,27 +11,50 @@ namespace CrimsonAtomtic.Tests;
 /// </summary>
 public sealed class NativePaverReaderTests
 {
-    /// <summary>Bit-for-bit copy of the live 1.08.00 install's paver.</summary>
-    private static readonly byte[] Paver_1_08_Live =
+    /// <summary>Bit-for-bit copy of the live 1.09.00 install's paver.</summary>
+    private static readonly byte[] Paver_1_09_Live =
+        [0x01, 0x00, 0x09, 0x00, 0x00, 0x00, 0x24, 0x48, 0xf3, 0xbb];
+
+    /// <summary>The previous patch's paver (1.08.00) — kept to pin that
+    /// it stays compatible, since 1.08 and 1.09 share an iteminfo schema
+    /// (both are in <c>CompatibleMinors</c>).</summary>
+    private static readonly byte[] Paver_1_08_Prev =
         [0x01, 0x00, 0x08, 0x00, 0x00, 0x00, 0x3e, 0xb0, 0x39, 0xdc];
 
     [Fact]
-    public void TryReadFromBytes_HappyPath_Returns_1_08_Live()
+    public void TryReadFromBytes_HappyPath_Returns_1_09_Live()
     {
         if (!File.Exists("crimson_rs.dll"))
         {
             return;
         }
-        var v = NativePaverReader.TryReadFromBytes(Paver_1_08_Live);
+        var v = NativePaverReader.TryReadFromBytes(Paver_1_09_Live);
         Assert.NotNull(v);
         Assert.Equal(1, v!.Value.Major);
-        Assert.Equal(8, v.Value.Minor);
+        Assert.Equal(9, v.Value.Minor);
         Assert.Equal(0, v.Value.Patch);
-        Assert.Equal(0xdc39b03eu, v.Value.Build);
+        Assert.Equal(0xbbf34824u, v.Value.Build);
         Assert.True(v.Value.IsCompatibleWithParser,
-            "1.08.00 should be compatible with the current ParserTargetMinor=8");
-        Assert.Equal("1.08.00", v.Value.ShortVersionString);
-        Assert.Equal("1.08.00 build 0xdc39b03e", v.Value.DisplayString);
+            "1.09.00 should be compatible with the current ParserTargetMinor=9");
+        Assert.Equal("1.09.00", v.Value.ShortVersionString);
+        Assert.Equal("1.09.00 build 0xbbf34824", v.Value.DisplayString);
+    }
+
+    [Fact]
+    public void TryReadFromBytes_PreviousMinor_StaysCompatible()
+    {
+        if (!File.Exists("crimson_rs.dll"))
+        {
+            return;
+        }
+        // 1.08 and 1.09 share a byte-identical iteminfo schema, so the
+        // compatibility gate accepts both (CompatibleMinors = {8, 9}).
+        // A user who hasn't yet updated from 1.08 is NOT warned.
+        var v = NativePaverReader.TryReadFromBytes(Paver_1_08_Prev);
+        Assert.NotNull(v);
+        Assert.Equal(8, v!.Value.Minor);
+        Assert.True(v.Value.IsCompatibleWithParser,
+            "1.08.00 must stay compatible — it shares 1.09's iteminfo schema");
     }
 
     [Fact]
@@ -55,14 +78,35 @@ public sealed class NativePaverReaderTests
         {
             return;
         }
-        // Synthetic 1.07.xx layout: minor = 7 ≠ ParserTargetMinor = 8.
+        // Synthetic 1.07.xx layout: minor = 7 is not in CompatibleMinors
+        // {8, 9} — 1.07 used a different iteminfo layout.
         ReadOnlySpan<byte> bytes =
             [0x01, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
         var v = NativePaverReader.TryReadFromBytes(bytes);
         Assert.NotNull(v);
         Assert.Equal(7, v!.Value.Minor);
         Assert.False(v.Value.IsCompatibleWithParser,
-            "1.07.xx must NOT be compatible with ParserTargetMinor=8");
+            "1.07.xx must NOT be compatible — not in CompatibleMinors {8, 9}");
+    }
+
+    [Fact]
+    public void TryReadFromBytes_FutureMinor_FlagsIncompatible()
+    {
+        if (!File.Exists("crimson_rs.dll"))
+        {
+            return;
+        }
+        // Synthetic 1.10.xx layout: minor = 10 is past the validated set.
+        // The gate is an explicit allow-list, not "≥ target", so a future
+        // patch this build hasn't been validated against is flagged until
+        // CompatibleMinors is extended.
+        ReadOnlySpan<byte> bytes =
+            [0x01, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        var v = NativePaverReader.TryReadFromBytes(bytes);
+        Assert.NotNull(v);
+        Assert.Equal(10, v!.Value.Minor);
+        Assert.False(v.Value.IsCompatibleWithParser,
+            "1.10.xx must NOT be compatible — not yet in CompatibleMinors {8, 9}");
     }
 
     [Fact]

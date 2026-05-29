@@ -2,7 +2,7 @@
 
 ## Current install
 
-`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 1.07**
+`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 1.09**
 
 Top-level layout:
 
@@ -19,7 +19,18 @@ Crimson Desert/
 
 - **Engine**: proprietary Pearl Abyss engine, DirectX 12.
 - **Total size on disk**: ~126 GB.
-- **Version stamp**: `meta/0.paver` is 10 bytes, binary-encoded. The first 4 bytes hold a little-endian `(major, minor)` u16 pair — `01 00 06 00 ...` on 1.06, `01 00 07 00 ...` on 1.07. TODO: confirm the trailing 6 bytes' layout via `crimson-rs`.
+- **Version stamp**: `meta/0.paver` is 10 bytes, binary-encoded. Layout
+  is fully decoded (see `crimson-rs` `src/binary/paver.rs`, exposed via
+  `crimson_paver_read_from_*`): three little-endian u16s `(major, minor,
+  patch)` followed by a little-endian u32 `build`. The **minor** is the
+  schema-compatibility key. Live 1.09.00 install:
+  `01 00 09 00 00 00 24 48 f3 bb` → major 1, minor 9, patch 0,
+  build `0xbbf34824`. (1.08.00 was `01 00 08 00 00 00 3e b0 39 dc`,
+  build `0xdc39b03e`.) The editor reads this at startup and warns when
+  the install's minor isn't one the parser can load
+  (`GameDataVersion.CompatibleMinors`, currently `{8, 9}` — 1.08 and
+  1.09 share a byte-identical iteminfo schema; `ParserTargetMinor = 9`
+  is the latest of that set and the version the dialog displays).
 
 ## Historical versions
 
@@ -68,4 +79,4 @@ When a new patch lands and a parser fails:
 3. Run `tools/diff/diff_pamt.py` to find which pack groups changed (most patches only touch a few).
 4. If a binary format's bytes shifted, narrow the field range with `crimson-rs`'s `BinaryReadTracked` trait, then patch the parser. Add a fixture + regression test.
 
-The 1.05 → 1.06 jump turned out to be **zero schema changes** (only +17 items), so the parser stayed the same. The 1.06 → 1.07 jump similarly stayed data-only on the save-body side (the editor continues to load 1.06 + 1.07 saves through one schema path). We expect most patches to be data-only; structural changes are the exception (e.g. the slot104 / 1.05-era 23-field `ItemSaveData` vs 1.06+'s 25-field shape — see [status.md](status.md)), and our pipeline is built to make those exceptions detectable.
+The 1.05 → 1.06 jump turned out to be **zero schema changes** (only +17 items), so the parser stayed the same. The 1.06 → 1.07, 1.07 → 1.08, and 1.08 → 1.09 jumps similarly stayed data-only — the editor loads them all through one schema path. 1.08 → 1.09 in particular was content-only with **no schema drift** (`crimson-rs` commit `0619789`): iteminfo byte-identical to 1.08, all 30 gamedata tables parse, save read/decode/mutate/write-reseal roundtrip clean; per-table key deltas vs 1.08 were character +6, skill +5, knowledge +5, factionspawn +1, gimmick −8, the other 25 tables unchanged. We expect most patches to be data-only; structural changes are the exception (e.g. the slot104 / 1.05-era 23-field `ItemSaveData` vs 1.06+'s 25-field shape — see [status.md](status.md)), and our pipeline is built to make those exceptions detectable.
