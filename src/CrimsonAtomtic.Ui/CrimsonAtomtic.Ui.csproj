@@ -41,11 +41,24 @@
 
   <ItemGroup>
     <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Angle.Windows.Natives" />
+    <PackageReference Include="Avalonia.BuildServices">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.FreeDesktop" />
+    <PackageReference Include="Avalonia.HarfBuzz" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
     <PackageReference Include="Avalonia.Controls.DataGrid" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="HarfBuzzSharp" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.macOS" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.WebAssembly" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.Win32" />
+    <PackageReference Include="MicroCom.Runtime" />
   </ItemGroup>
 
   <ItemGroup>
@@ -63,8 +76,7 @@
        the project build before the dll has ever been produced; runtime
        calls would fail then, but that surfaces in tests, not the build. -->
   <ItemGroup>
-    <Content Include="..\..\vendor\crimson-rs\target\release\crimson_rs.dll"
-             Condition="Exists('..\..\vendor\crimson-rs\target\release\crimson_rs.dll')">
+    <Content Include="..\..\vendor\crimson-rs\target\release\crimson_rs.dll" Condition="Exists('..\..\vendor\crimson-rs\target\release\crimson_rs.dll')">
       <Link>crimson_rs.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>Never</CopyToPublishDirectory>
@@ -86,8 +98,7 @@
        fails to resolve __imp_GetUserProfileDirectoryW without this. -->
   <ItemGroup>
     <DirectPInvoke Include="crimson_rs" />
-    <NativeLibrary Include="..\..\vendor\crimson-rs\target\release\crimson_rs.lib"
-                   Condition="Exists('..\..\vendor\crimson-rs\target\release\crimson_rs.lib')" />
+    <NativeLibrary Include="..\..\vendor\crimson-rs\target\release\crimson_rs.lib" Condition="Exists('..\..\vendor\crimson-rs\target\release\crimson_rs.lib')" />
     <NativeLibrary Include="Userenv.lib" />
   </ItemGroup>
 

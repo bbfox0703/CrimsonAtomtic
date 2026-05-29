@@ -14,9 +14,49 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Avalonia.Angle.Windows.Natives" />
+    <PackageReference Include="Avalonia.BuildServices">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Avalonia.FreeDesktop" />
+    <PackageReference Include="Avalonia.HarfBuzz" />
+    <PackageReference Include="Azure.Core" />
+    <PackageReference Include="Azure.Monitor.OpenTelemetry.Exporter" />
+    <PackageReference Include="HarfBuzzSharp" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.macOS" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.WebAssembly" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.Win32" />
+    <PackageReference Include="MicroCom.Runtime" />
+    <PackageReference Include="Microsoft.ApplicationInsights" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" />
+    <PackageReference Include="Microsoft.CodeCoverage" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+    <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" />
+    <PackageReference Include="Microsoft.IdentityModel.Abstractions" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.Testing.Extensions.Telemetry" />
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport.Abstractions" />
+    <PackageReference Include="Microsoft.Testing.Platform" />
+    <PackageReference Include="Microsoft.Testing.Platform.MSBuild" />
+    <PackageReference Include="OpenTelemetry.PersistentStorage.Abstractions" />
+    <PackageReference Include="OpenTelemetry.PersistentStorage.FileSystem" />
+    <PackageReference Include="runtime.win-x64.Microsoft.DotNet.ILCompiler" />
     <PackageReference Include="xunit.v3" />
-    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>
@@ -34,8 +74,7 @@
        (produced by .\scripts\build_rust.ps1). Copy the dll into the
        test runner's output so [LibraryImport] can resolve it. -->
   <ItemGroup>
-    <Content Include="..\..\vendor\crimson-rs\target\release\crimson_rs.dll"
-             Condition="Exists('..\..\vendor\crimson-rs\target\release\crimson_rs.dll')">
+    <Content Include="..\..\vendor\crimson-rs\target\release\crimson_rs.dll" Condition="Exists('..\..\vendor\crimson-rs\target\release\crimson_rs.dll')">
       <Link>crimson_rs.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
