@@ -3,7 +3,33 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-23 part 17 (Game-data version detection — vendor `61c2f52` adds a `meta/0.paver` reader exposed as `crimson_paver_read_from_file` / `_read_from_bytes`. C# `NativePaverReader.TryReadFromInstall` + new `GameDataVersion` record-struct; `LocalizationProvider.GameDataVersion` getter populated at bootstrap. App startup now checks `Minor == ParserTargetMinor` (currently 8) before the disclaimer; a new `GameVersionMismatchDialog` warns the user with Continue / Quit when the install is e.g. 1.07 against a 1.08-targeted parser. World Map parchment layer-alignment bug from part 14 still open — unchanged this session).
+> Last updated: 2026-05-29 (Editor aligned to game **1.09** — the live install bumped 1.08 → 1.09, so `GameDataVersion.ParserTargetMinor` 8 → 9 and the compatibility gate became an allow-list `CompatibleMinors = {8, 9}` (1.08/1.09 share a byte-identical iteminfo schema, so un-updated 1.08 users aren't warned). Vendor `crimson-rs` was already at `0619789`, which validated the full toolkit against live 1.09 (content-only delta over 1.08, **no schema drift**: iteminfo byte-identical, all 30 gamedata tables parse, save roundtrip clean) — so no vendor refresh was needed, only the C#-side constant + tests + docs. World Map parchment layer-alignment bug from part 14 still open — unchanged this session).
+>
+> ## ✅ This session — what shipped (2026-05-29 — Editor aligned to game 1.09)
+>
+> User directive: "1.09版出來了，修正Editor版本為對齊 1.09版" — game patched to 1.09; align the editor's parser target.
+>
+> Findings before touching anything: the live install's `meta/0.paver` now reads `01 00 09 00 00 00 24 48 f3 bb` (major 1, minor 9, patch 0, build `0xbbf34824`). Both `vendor/crimson-rs` and source `D:\Github\crimson-rs` were **already** at `0619789` ("validate toolkit on Crimson Desert 1.09") — 1.09 is a content-only delta over 1.08 with no schema drift, so the Rust foundation was ready and **no vendor refresh / rebuild was required** (the built `crimson_rs.lib`/`.dll` already reflect it). Per-table key deltas vs 1.08: character +6, skill +5, knowledge +5, factionspawn +1, gimmick −8; other 25 unchanged.
+>
+> | Area | Scope |
+> |---|---|
+> | **`ParserTargetMinor` 8 → 9 + `CompatibleMinors` allow-list** | `src/CrimsonAtomtic.RustInterop/NativePaverReader.cs` — `ParserTargetMinor` (the latest/displayed target) bumped to 9, and the gate changed from a strict single-minor equality to an allow-list: `public static readonly ushort[] CompatibleMinors = [8, 9]` with `IsCompatibleWithParser => Array.IndexOf(CompatibleMinors, Minor) >= 0` (AOT-safe, no LINQ). 1.08 and 1.09 share a byte-identical iteminfo schema (crimson-rs `0619789`), so both load fine and a user mid-update from 1.08 isn't warned; 1.07-and-earlier (different iteminfo layout) and any not-yet-validated future minor stay flagged. `GameVersionMismatchDialog`'s target string auto-derives from `ParserTargetMinor` (`$"1.{ParserTargetMinor:D2}.xx"` → "1.09.xx"), so no dialog edit needed. |
+> | **Paver tests re-pinned** | `src/CrimsonAtomtic.Tests/NativePaverReaderTests.cs` — happy-path now pins the 1.09 stamp (minor 9, build `0xbbf34824`, "1.09.00"); `TryReadFromBytes_PreviousMinor_StaysCompatible` pins 1.08 as still-compatible (shared schema), and new `TryReadFromBytes_FutureMinor_FlagsIncompatible` (synthetic 1.10) locks the allow-list's upper bound so we don't drift into accept-everything-≥8. Live-install pin (`TryReadFromInstall_LiveInstall_PinsCurrent`) only checks Major, so it already survived the bump. The live-install catalog tests (`KeyInfoCatalogsTests`, `StringInfoCatalogTests`) use lower-bound `>=` / round-trip checks, so the table deltas (incl. gimmick −8) didn't break them. |
+> | **Docs** | Root `CLAUDE.md` "currently 1.07" → "1.09". `docs/game-versions.md`: current install → 1.09, resolved the 6-trailing-bytes paver-layout TODO (fully decoded: `(major,minor,patch)` u16 + `build` u32 LE), added the 1.09 stamp example, and extended the diffing playbook with the 1.07→1.08 / 1.08→1.09 data-only history. |
+>
+> Tests: **301 → 303 pass** (+2: `_PreviousMinor_StaysCompatible` and `_FutureMinor_FlagsIncompatible`). Debug build clean (0 warnings / 0 errors). Live-install tests ran (0 skipped) against the real 1.09 install. AOT publish NOT re-run this session — no native or publish-shape change; worth a smoke `build.cmd publish` before the next release tag.
+>
+> ### Open follow-ons noted during this session
+>
+> - **`ParserTargetMinor` / `CompatibleMinors` still hard-coded C#-side** — the part-17 drift hazard stands: promote to a `crimson_parser_target_gamedata_minor()` (and a compatible-set) ABI so the values aren't duplicated between Rust and C#. Even lower-friction now that we've done one more manual bump + an allow-list.
+>
+> ### Vendor state
+>
+> `vendor/crimson-rs` at `0619789` (in sync with source `D:\Github\crimson-rs`, branch `dev`). No refresh needed this session — it already targets 1.09.
+>
+> ---
+>
+> Last previous update: 2026-05-23 part 17 (Game-data version detection — vendor `61c2f52` adds a `meta/0.paver` reader exposed as `crimson_paver_read_from_file` / `_read_from_bytes`. C# `NativePaverReader.TryReadFromInstall` + new `GameDataVersion` record-struct; `LocalizationProvider.GameDataVersion` getter populated at bootstrap. App startup now checks `Minor == ParserTargetMinor` (currently 8) before the disclaimer; a new `GameVersionMismatchDialog` warns the user with Continue / Quit when the install is e.g. 1.07 against a 1.08-targeted parser. World Map parchment layer-alignment bug from part 14 still open — unchanged this session).
 >
 > ## ✅ This session — what shipped (2026-05-23 part 17)
 >
