@@ -49,7 +49,7 @@ auto-detection. Cross-platform goal: Windows (must), Linux, macOS.
 8. **Vendor deps**: cloned into [`vendor/`](vendor/), never git submodules. `vendor/<name>/` is **read-only** — any change to `crimson-rs` is committed at the source repo `D:\Github\crimson-rs` first, then mirrored in via [`vendor/update_vendors.ps1`](vendor/update_vendors.ps1) (which does `reset --hard origin/dev` and silently wipes any local edits). See [`vendor/README.md`](vendor/README.md).
 9. **Python tools**: every `.py` prints usage + exits with code 2 when called with no args. No side effects at import time. See [tools/CLAUDE.md](tools/CLAUDE.md).
 10. **No derived data committed**: if file B is generated from A, only A is committed. B is in `.gitignore` and the generator is documented in the relevant `README.md`. See [docs/data-policy.md](docs/data-policy.md).
-11. **Old reference repo is one-time-mining only**: `D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS` may be mined once for images / parser ideas; the new project must not depend on it going forward. The only ongoing external dependency is `vendor/crimson-rs`.
+11. **`CRIMSON-DESERT-SAVE-EDITOR` is one-time-mining only**: `D:\Github\CRIMSON-DESERT-SAVE-EDITOR` may be mined once for images / parser ideas; the new project must not depend on it going forward. The only ongoing external dependency is `vendor/crimson-rs`.
 12. **Foundation over workaround**: when parsing produces wrong data, fix the parser or schema, not the consumer. See [docs/data-policy.md](docs/data-policy.md).
 
 ## Workflow rules
@@ -65,7 +65,7 @@ auto-detection. Cross-platform goal: Windows (must), Linux, macOS.
 - Architecture decision (A1, Avalonia + crimson-rs C ABI): [docs/architecture.md](docs/architecture.md)
 - Game install + save paths, version history: [docs/game-versions.md](docs/game-versions.md)
 - `.save` format (header, ChaCha20, HMAC, LZ4): [docs/save-format.md](docs/save-format.md)
-- Decompressed save body (schema + TOC + decoder, Python ↔ Rust naming map): [docs/save-body-format.md](docs/save-body-format.md)
+- Decompressed save body (schema + TOC + decoder): [docs/save-body-format.md](docs/save-body-format.md)
 - PABGB format family (iteminfo, skill, store, field, …): [docs/pabgb-formats.md](docs/pabgb-formats.md)
 - Asset containers (PAZ, PAMT, PAPGT, PALOC): [docs/paz-containers.md](docs/paz-containers.md)
 - CrimsonForge coverage gaps (the canonical RE-reference repo for CD formats): [docs/crimsonforge-coverage-gaps.md](docs/crimsonforge-coverage-gaps.md)

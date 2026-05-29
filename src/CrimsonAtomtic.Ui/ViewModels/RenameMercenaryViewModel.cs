@@ -18,7 +18,7 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 /// </summary>
 /// <remarks>
 /// <para>
-/// "Pet rename" in the predecessor save editor is mercenary rename in
+/// "Pet rename" in CRIMSON-DESERT-SAVE-EDITOR is mercenary rename in
 /// the save model — pets / horses / companions are all stored as
 /// mercenary entries; equip count == 0 typically infers an animal.
 /// </para>

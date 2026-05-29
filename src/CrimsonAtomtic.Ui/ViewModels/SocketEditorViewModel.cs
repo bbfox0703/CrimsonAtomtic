@@ -42,7 +42,7 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 /// </para>
 /// <para>
 /// Out of scope: socket-count unlock for items that ship with
-/// <c>_maxSocketCount = 0</c> (zero-record list). The predecessor
+/// <c>_maxSocketCount = 0</c> (zero-record list). CRIMSON-DESERT-SAVE-EDITOR
 /// hard-warned "0→positive on a zero-record list may crash" because
 /// it requires length-changing the list itself — different mutation
 /// surface than the in-place fill v2 uses.
@@ -82,8 +82,8 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     /// "AbyssGear" is the engine-internal name for what's localized as
     /// "gem" in-game; gems split into stat-modifier gems
     /// (<c>Item_Stat_AbyssGear_*</c>) and skill-bestowing gems
-    /// (<c>Item_Skill_AbyssGear_*</c>). 100% of the predecessor save
-    /// editor's curated 189-entry gem list falls under one of these
+    /// (<c>Item_Skill_AbyssGear_*</c>). 100% of CRIMSON-DESERT-SAVE-EDITOR's
+    /// curated 189-entry gem list falls under one of these
     /// two prefixes in the 1.06 baseline dump.
     /// </summary>
     public static readonly IReadOnlyList<string> GemStringKeyPrefixes =

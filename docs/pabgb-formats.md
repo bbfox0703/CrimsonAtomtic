@@ -16,9 +16,9 @@ PyO3 bindings exposed:
 - `parse_iteminfo_from_file`, `write_iteminfo_to_file`, `serialize_iteminfo`
 - `parse_skillinfo_from_bytes`, `serialize_skillinfo`
 
-## What the old reference repo has (to port)
+## What CRIMSON-DESERT-SAVE-EDITOR has (to port)
 
-The old Python parsers cover many other PABGB tables, each in its own file:
+The CRIMSON-DESERT-SAVE-EDITOR Python parsers cover many other PABGB tables, each in its own file:
 
 - `storeinfo_parser.py` — vendor inventory, prices, stock limits
 - `dropsetinfo` — loot tables (referenced by `dropset_editor.py`)
@@ -45,7 +45,7 @@ Port each table into `crimson-rs` one at a time, in priority order. For each:
 3. **Add round-trip test** — serialize matches input bytes for the live game files.
 4. **Expose via PyO3** for the Python tools.
 5. **Expose via C ABI** only if the C# app needs it (most game-data tables are tooling-only and won't be linked into the UI).
-6. **Delete the corresponding Python parser** from anywhere in our project (it stays in the old repo, which we don't touch).
+6. **Delete the corresponding Python parser** from anywhere in our project (it stays in CRIMSON-DESERT-SAVE-EDITOR, which we don't touch).
 
 ### Priority order (proposal — to confirm)
 

@@ -4,9 +4,9 @@
 
 This is the contract for how data flows into and through this project. The rules below keep the codebase coherent over time and avoid the data-drift failure modes that compound silently otherwise.
 
-## 1. Old reference repo is one-time mining only
+## 1. CRIMSON-DESERT-SAVE-EDITOR is one-time mining only
 
-- **Repo**: `D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS`.
+- **Repo**: `D:\Github\CRIMSON-DESERT-SAVE-EDITOR`.
 - **Permitted use**: read it once to understand a format, copy icon assets, or extract parser logic that we then rewrite cleanly.
 - **Forbidden**: importing from it at runtime, depending on its scripts or data, syncing updates from it.
 - After we have mined what we need, this repo is no longer a dependency of the codebase.
@@ -48,7 +48,7 @@ If you're tempted to add `if value == "weird_legacy_thing": handle specially` in
 
 ## 6. Images: copy once, reprocess, then own
 
-- Any icon WebP files mined once from the reference repo run through a thumbnail/cache step before the UI ever sees them — full-size icons displayed at 32 px are wasteful.
+- Any icon WebP files mined once from CRIMSON-DESERT-SAVE-EDITOR run through a thumbnail/cache step before the UI ever sees them — full-size icons displayed at 32 px are wasteful.
 - Going forward, new icons come from extracting game assets via `crimson-rs` directly.
 - See `docs/ui-design.md` for the asset pipeline plan.
 

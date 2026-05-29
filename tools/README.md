@@ -78,4 +78,4 @@ with `tools/CLAUDE.md`. If it does anything else, it's a bug.
 - The save editor app itself (that's `src/`).
 - Anything that links into the Avalonia binary (FFI via C ABI is the boundary).
 - Long-lived integration tests against game files (those live near `crimson-rs`).
-- Anything that depends on the **old reference repo**. The only external dependency is `vendor/crimson-rs`.
+- Anything that depends on **`CRIMSON-DESERT-SAVE-EDITOR`**. The only external dependency is `vendor/crimson-rs`.

@@ -10,7 +10,7 @@
 - **data-policy.md** — hygiene rules for game data and reference data (foundation-first)
 - **game-versions.md** — paths to current and historical game installs; version detection; diffing
 - **save-format.md** — `.save` file format (header, ChaCha20 + HMAC + LZ4 body)
-- **save-body-format.md** — decompressed body: schema, TOC, per-block decoder, meta_kind dispatch, Python-↔-Rust naming map
+- **save-body-format.md** — decompressed body: schema, TOC, per-block decoder, meta_kind dispatch
 - **pabgb-formats.md** — `.pabgb` family (iteminfo, skill, store, field, etc.)
 - **paz-containers.md** — asset archives: `.paz`, `.pamt`, `.papgt`, `.paloc`, trie buffers
 - **ui-design.md** — UI/UX principles for the editor, with the design constraints they derive from

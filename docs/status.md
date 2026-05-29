@@ -671,7 +671,7 @@
 >
 > | Area | Scope |
 > |---|---|
-> | **Dye color group palette accessors** | Upstream investigation (vendor `d8c15cd`) pinned a critical model correction: the save's `_dyeColorR/G/B/A` scalars are **NOT freeform** — they index into a 109-position palette per Color_Group theme (9 grayscale + 10×10 chromatic). All 11 RGBs observed in slot103 (6 Hernand + 5 Pororin) hit exact gradient positions; **zero off-grid values**. The PyQt5 reference editor's freeform R/G/B sliders are technically valid bytes but reach colors the engine can't display. Critical byte-order finding: the on-disk palette is BGRA but the save uses logical RGBA — the parser now swaps automatically so palette values compare directly. 3 new C ABI exports bound on `NativeDyeColorGroupInfoCatalog`: `PaletteSize(themeKey)` → 109 in 1.07, `PaletteAt(themeKey, idx)` → logical `(R, G, B, A)` ready to write into the save, `PositionForRgb(themeKey, r, g, b)` → reverse lookup (NOT_FOUND for off-grid). New live-install roundtrip test pins forward + reverse symmetry on the first theme. **DyeSlot editor UX rewrite deferred** — vendor docs spec a visual 11-row palette picker grid replacing the freeform sliders; tracked as a follow-on so the ABI binding ships independently of the bigger UX change. |
+> | **Dye color group palette accessors** | Upstream investigation (vendor `d8c15cd`) pinned a critical model correction: the save's `_dyeColorR/G/B/A` scalars are **NOT freeform** — they index into a 109-position palette per Color_Group theme (9 grayscale + 10×10 chromatic). All 11 RGBs observed in slot103 (6 Hernand + 5 Pororin) hit exact gradient positions; **zero off-grid values**. CRIMSON-DESERT-SAVE-EDITOR's freeform R/G/B sliders are technically valid bytes but reach colors the engine can't display. Critical byte-order finding: the on-disk palette is BGRA but the save uses logical RGBA — the parser now swaps automatically so palette values compare directly. 3 new C ABI exports bound on `NativeDyeColorGroupInfoCatalog`: `PaletteSize(themeKey)` → 109 in 1.07, `PaletteAt(themeKey, idx)` → logical `(R, G, B, A)` ready to write into the save, `PositionForRgb(themeKey, r, g, b)` → reverse lookup (NOT_FOUND for off-grid). New live-install roundtrip test pins forward + reverse symmetry on the first theme. **DyeSlot editor UX rewrite deferred** — vendor docs spec a visual 11-row palette picker grid replacing the freeform sliders; tracked as a follow-on so the ABI binding ships independently of the bigger UX change. |
 >
 > Tests: **268 → 269** (+1 palette roundtrip). Debug build clean.
 >
@@ -936,7 +936,7 @@
 > | **3 dye gamedata bridge bindings + LocalizationProvider integration** | New `NativeDyeCatalogs.cs` exposes `NativeDyeColorGroupInfoCatalog` (10 named groups), `NativePartPrefabDyeTexturePalleteCatalog` (11 palette tiers × 2-3 sub-records each), `NativePartPrefabDyeSlotInfoCatalog` (1,105 per-prefab slot definitions). `LocalizationProvider` adds `TryBootstrapDyeGamedata` (reusable `TryLoadDyeBridge<T>` helper) + `HasDyeGamedata` + 3 direct accessors. Dye slot info bridge is bound for future use; v1 editor doesn't consume it yet (still blocked on `_itemKey → _partPrefabKey` cross-reference upstream). |
 > | **Tools → Edit Item Dyes…** | Master dialog (`DyeEditorWindow` + `DyeEditorViewModel`) walks every `InventorySaveData` block via `list_inventory_items`, finds items whose `_itemDyeDataList` is present + non-empty, lists them one row per dyed item with icon / bag / item name / slot count / Edit button. Per-row Edit opens the child slot editor (`DyeSlotEditorWindow` + `DyeSlotEditorViewModel`) which lists every slot in that item's dye list with NumericUpDown editors for R/G/B/A (0–255) + grime (−128..127) + ComboBox dropdowns for Material (palette tier) + Color group. Per-slot Apply writes only the modified-from-original scalars; promotes absent fields to present via `SetScalarFieldPresent` when needed. Edits propagate dirty back through child → master → MainWindow on close. |
 >
-> v1 scope is **edit-existing-dye only** — adding dye to a previously-undyed item is deferred until the upstream `set_object_list_present` ABI lands (per `vendor/crimson-rs/docs/dye-editor-scope.md`). The 3 schema corrections from the upstream survey are honoured: `_dyeSlotNo` is signed `int8`, `_texturePalleteKey` is fixed `u16`, `_disableSymbol` is the 9th field (PyQt5 RE missed it).
+> v1 scope is **edit-existing-dye only** — adding dye to a previously-undyed item is deferred until the upstream `set_object_list_present` ABI lands (per `vendor/crimson-rs/docs/dye-editor-scope.md`). The 3 schema corrections from the upstream survey are honoured: `_dyeSlotNo` is signed `int8`, `_texturePalleteKey` is fixed `u16`, `_disableSymbol` is the 9th field (CRIMSON-DESERT-SAVE-EDITOR missed it).
 >
 > Tests: **180/180 pass** (was 177; +3 covering the three dye bridges' live-install load + lookup + bounds + miss paths). Debug build clean. Rebuilt `crimson_rs.dll` to expose the new exports.
 >
@@ -991,29 +991,29 @@
 >
 > | Area | Scope |
 > |---|---|
-> | **Tools → Edit Item Sockets…** | New menu item; opens [`SocketEditorWindow`](../src/CrimsonAtomtic.Ui/Views/SocketEditorWindow.axaml) bound to [`SocketEditorViewModel`](../src/CrimsonAtomtic.Ui/ViewModels/SocketEditorViewModel.cs). Walks every `InventorySaveData._inventorylist[*]._itemList[*]._socketSaveDataList[*]`, surfaces one row per **filled** socket (mask present + `_itemKey > 0`). Empty sockets are not shown — per the predecessor's hard caveat, embedding gems into empty sockets requires the in-game Witch NPC and forcing fills can crash. |
+> | **Tools → Edit Item Sockets…** | New menu item; opens [`SocketEditorWindow`](../src/CrimsonAtomtic.Ui/Views/SocketEditorWindow.axaml) bound to [`SocketEditorViewModel`](../src/CrimsonAtomtic.Ui/ViewModels/SocketEditorViewModel.cs). Walks every `InventorySaveData._inventorylist[*]._itemList[*]._socketSaveDataList[*]`, surfaces one row per **filled** socket (mask present + `_itemKey > 0`). Empty sockets are not shown — per CRIMSON-DESERT-SAVE-EDITOR's hard caveat, embedding gems into empty sockets requires the in-game Witch NPC and forcing fills can crash. |
 > | **DataGrid columns** | Bag (InventoryKey-resolved label) / Item name (PALOC-resolved) / ItemKey / Slot # / Current gem name / Current gem key / Change Gem… button / Applied gem name (post-edit). |
 > | **Change Gem… flow** | Clicking the per-row button raises `SocketEditorViewModel.ChangeGemRequested`; MainWindow code-behind opens a **gem-filtered** [`ItemPickerWindow`](../src/CrimsonAtomtic.Ui/Views/ItemPickerWindow.axaml). Picker is filtered via the new `ItemPickerViewModel(localization, allowedStringKeyPrefixes)` overload to `Item_Stat_AbyssGear_*` + `Item_Skill_AbyssGear_*`. Action button relabelled to "Pick" via the new `ItemPickerViewModel.ActionButtonLabel` / `ActionButtonTooltip` init-only properties. |
-> | **Apply** | On pick, `SocketEditorViewModel.ApplyGemPick(row, gemKey)` writes the 4-byte gem `_itemKey` in-place via `ISaveLoader.SetScalarField` with a 3-step path: `_inventorylist[bag] → _itemList[item] → _socketSaveDataList[socket] → _itemKey`. No length-changing edits. Mirrors the predecessor's "swap-only" practice — fill_socket_slots / clear_socket_slots / socket-count unlock are explicitly out of v1 scope per the safe-edit contract. |
+> | **Apply** | On pick, `SocketEditorViewModel.ApplyGemPick(row, gemKey)` writes the 4-byte gem `_itemKey` in-place via `ISaveLoader.SetScalarField` with a 3-step path: `_inventorylist[bag] → _itemList[item] → _socketSaveDataList[socket] → _itemKey`. No length-changing edits. Mirrors CRIMSON-DESERT-SAVE-EDITOR's "swap-only" practice — fill_socket_slots / clear_socket_slots / socket-count unlock are explicitly out of v1 scope per the safe-edit contract. |
 >
-> Gem identification: TWO string-key prefixes (`Item_Stat_AbyssGear_*` for stat-mod gems, `Item_Skill_AbyssGear_*` for skill-bestowing gems). Internally Pearl Abyss called these "AbyssGear" — only localised to "gem" in display. 100% of the predecessor save editor's curated 189-entry gem list falls under one of these two prefixes in the 1.06.01 baseline. No vendored JSON; the picker enumerates live from `iteminfo.pabgb` via the existing iteminfo bridge.
+> Gem identification: TWO string-key prefixes (`Item_Stat_AbyssGear_*` for stat-mod gems, `Item_Skill_AbyssGear_*` for skill-bestowing gems). Internally Pearl Abyss called these "AbyssGear" — only localised to "gem" in display. 100% of CRIMSON-DESERT-SAVE-EDITOR's curated 189-entry gem list falls under one of these two prefixes in the 1.06.01 baseline. No vendored JSON; the picker enumerates live from `iteminfo.pabgb` via the existing iteminfo bridge.
 >
 > Out of v1 scope (documented in the [`SocketEditorViewModel`](../src/CrimsonAtomtic.Ui/ViewModels/SocketEditorViewModel.cs) docstring):
-> - **Fill empty socket** — length-changing splice; the predecessor exposes the Python function but the UI route is "swap only" because empty sockets need the in-game Witch NPC.
+> - **Fill empty socket** — length-changing splice; CRIMSON-DESERT-SAVE-EDITOR exposes the Python function but the UI route is "swap only" because empty sockets need the in-game Witch NPC.
 > - **Clear filled socket** — length-changing splice with sibling-offset cascading.
-> - **Socket-count unlock** — triple coupled write (`_maxSocketCount` + `_validSocketCount` + `_endurance` high byte). The predecessor explicitly warns "0 → positive on a zero-record list may crash".
+> - **Socket-count unlock** — triple coupled write (`_maxSocketCount` + `_validSocketCount` + `_endurance` high byte). CRIMSON-DESERT-SAVE-EDITOR explicitly warns "0 → positive on a zero-record list may crash".
 >
 > Tests: **170/170 pass** (no new tests for v1 — the FFI surface is `SetScalarField` which is already covered by `SetScalarField_NestedPath_RoundTripsThroughWriteToFile`; v1's net code is UI plumbing over existing primitives). AOT build clean.
 >
 > ## ✅ This session — what shipped (2026-05-15 part 4)
 >
 > Pick #3 of the porting roadmap — **Rename Mercenary** (the "Pet rename"
-> feature from the predecessor save editor; pets live as mercenary
+> feature from CRIMSON-DESERT-SAVE-EDITOR; pets live as mercenary
 > entries in this game's save model). Required a new Rust FFI entry
 > point and the C# side around it.
 >
 > Equipment-set duplicator dropped from this iteration — see the
-> survey notes below; the predecessor's "duplicator" is actually a
+> survey notes below; CRIMSON-DESERT-SAVE-EDITOR's "duplicator" is actually a
 > stack-count exploit rather than a literal duplication, and our
 > single-loadout `EquipmentSaveData` shape doesn't map cleanly to
 > "duplicate set A to set B". Revisit if/when users actually ask.
@@ -1705,8 +1705,8 @@ remain out-of-scope; await a future Pattern B v2.
 ~~**Next session — pick by appetite from the porting roadmap below.**~~
 **[2026-05-17: roadmap exhausted]** — items #1 / #3 / #4 / #5 / #6 /
 #7 / #8 / #9 shipped; #2 (Item Pack import) deferred by user choice.
-The original 5-pick survey against the predecessor save editor
-(`D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS`, mined once for
+The original 5-pick survey against CRIMSON-DESERT-SAVE-EDITOR
+(`D:\Github\CRIMSON-DESERT-SAVE-EDITOR`, mined once for
 ideas per CLAUDE.md rule 11) is fully consumed. For the current
 open-task list see the top of this file.
 
@@ -1716,9 +1716,9 @@ open-task list see the top of this file.
 |---|---|---|---|
 | 1 | ~~**Auto-find saves on launch**~~ | ~~EASY~~ | ✅ **Shipped 2026-05-15 part 2.** Steam / Epic / Game Pass plain-folder probe + most-recent-mtime preference + `preferred_platform` settings persistence + platform-scoped backup tree with legacy migration. Game Pass wgs UWP container deferred. Linux Proton prefix detection (appid `3321460`) deferred. |
 | 2 | ~~**Item Pack import**~~ | DEFERRED | Decided not to ship for now — user can already use the Item Picker + Add-to-bag for individual items, and curating safe pack JSONs against the 1.06 schema is more upfront work than the convenience gain warrants. Revisit if/when there's demand for batch-imported gear loadouts. |
-| 3 | ~~**Pet rename + Equipment-set duplicator**~~ | ~~EASY~~ | ✅ **Pet rename shipped 2026-05-15 part 4** (as Rename Mercenary; the predecessor's "Pet rename" is mercenary rename in this game's save model). Required a new `set_inline_bytes_field` Rust FFI because `_mercenaryName` is `meta_kind=1` which the existing scalar setters reject. Equipment-set duplicator dropped — the predecessor's "duplicator" is a stack-count exploit, not a true duplication, and our `EquipmentSaveData` shape has no multi-loadout slot to duplicate into. |
-| 4 | ~~**Sockets editor (fill / clear / swap gems, up to 5 sockets/item)**~~ | ~~MEDIUM~~ | ✅ **v1 (swap-only) shipped 2026-05-15 part 5.** Tools → Edit Item Sockets… surfaces every filled socket across inventory; per-row Change Gem… opens a gem-filtered Item Picker (`Item_Stat_AbyssGear_*` / `Item_Skill_AbyssGear_*`) → writes new gem `_itemKey` via `SetScalarField`. Fill/clear/unlock deferred per predecessor's safe-edit contract (empty-socket fill needs in-game Witch NPC; socket-count unlock has triple-coupled-write risk). |
-| 5 | ~~**Dye editor (RGB / material / grime)**~~ | ~~MEDIUM~~ | ✅ **Shipped 2026-05-16 part 9.** Master `Tools → Edit Item Dyes…` lists every dyed item; per-row Edit opens a child slot editor (R/G/B/A NumericUpDowns + grime + material/color-group dropdowns + per-slot Apply). v1 scope = edit-existing-dye only; add-dye-to-undyed-item deferred until upstream `set_object_list_present` ABI ships. All three `dye*.pabgb` gamedata bridges from the 2026-05-16 vendor refresh bound + integrated into `LocalizationProvider` (replaces the PyQt5 reference editor's `dye_slot_counts.json`). |
+| 3 | ~~**Pet rename + Equipment-set duplicator**~~ | ~~EASY~~ | ✅ **Pet rename shipped 2026-05-15 part 4** (as Rename Mercenary; CRIMSON-DESERT-SAVE-EDITOR's "Pet rename" is mercenary rename in this game's save model). Required a new `set_inline_bytes_field` Rust FFI because `_mercenaryName` is `meta_kind=1` which the existing scalar setters reject. Equipment-set duplicator dropped — CRIMSON-DESERT-SAVE-EDITOR's "duplicator" is a stack-count exploit, not a true duplication, and our `EquipmentSaveData` shape has no multi-loadout slot to duplicate into. |
+| 4 | ~~**Sockets editor (fill / clear / swap gems, up to 5 sockets/item)**~~ | ~~MEDIUM~~ | ✅ **v1 (swap-only) shipped 2026-05-15 part 5.** Tools → Edit Item Sockets… surfaces every filled socket across inventory; per-row Change Gem… opens a gem-filtered Item Picker (`Item_Stat_AbyssGear_*` / `Item_Skill_AbyssGear_*`) → writes new gem `_itemKey` via `SetScalarField`. Fill/clear/unlock deferred per CRIMSON-DESERT-SAVE-EDITOR's safe-edit contract (empty-socket fill needs in-game Witch NPC; socket-count unlock has triple-coupled-write risk). |
+| 5 | ~~**Dye editor (RGB / material / grime)**~~ | ~~MEDIUM~~ | ✅ **Shipped 2026-05-16 part 9.** Master `Tools → Edit Item Dyes…` lists every dyed item; per-row Edit opens a child slot editor (R/G/B/A NumericUpDowns + grime + material/color-group dropdowns + per-slot Apply). v1 scope = edit-existing-dye only; add-dye-to-undyed-item deferred until upstream `set_object_list_present` ABI ships. All three `dye*.pabgb` gamedata bridges from the 2026-05-16 vendor refresh bound + integrated into `LocalizationProvider` (replaces CRIMSON-DESERT-SAVE-EDITOR's `dye_slot_counts.json`). |
 | 6 | ~~**Unlock All Abyss Gates (Knowledge bulk-append)**~~ | ~~EASY~~ | ✅ **Shipped 2026-05-15 part 8** as TWO Tools menu items: (a) **Unlock All Abyss Gates (Map Discovery)** — bulk knowledge inject covering the discovery-flag layer (`KnowledgeSaveData._list`), keyset harvested live from `knowledgeinfo.pabgb` by prefix match (no JSON pack vendored); (b) **Edit Abyss Gates (Lock/Unlock per gate)** — per-gate dialog for the gate-state layer (`FieldGimmickSaveData._initStateNameHash`, three known constants from `vendor/crimson-rs/docs/abyss-gate-map.md`). v1 limitation on the per-gate dialog: walks top-level FieldGimmickSaveData only, nested blocks deferred. |
 | 7 | ~~**Wire CharacterKey through the new `character_info` C ABI bridge**~~ | ~~EASY~~ | ✅ **Shipped** (rolled in with the Tier 1 / Tier 2 key-resolver wave, before this roadmap was last updated). `NativeCharacterInfoCatalog` lives at `src/CrimsonAtomtic.RustInterop/NativeKeyInfoCatalogs.cs`, `CharacterKey` is in `LocalizationProvider.TableDrivenKeyTypes`, and `ResolveKeyTableOne` routes through `DisplayOrFallback(_characterInfo, ...)` with the lo24 cat-byte strip + internal-name fallback. |
 | 8 | ~~**NPC portrait pipeline + Rename Mercenary portrait column**~~ | ~~MEDIUM~~ | ✅ **Shipped.** `PortraitProvider` (`src/CrimsonAtomtic.Ui/Services/PortraitProvider.cs`) lazy-loads `.dds` portraits into `%LOCALAPPDATA%\CrimsonAtomtic\PortraitCache\` via `crimson_characterinfo_resolve_portrait`. `MercenaryRow.StartPortraitLoad` kicks off the background load on row construction; Rename Mercenary dialog renders the Image when one matches above the score threshold, falling back to the per-category Unicode glyph (`🐎` / `🛒` / `🎈` / `🦌` / `👤` / `🐾` / `❔`) otherwise. The same `PortraitProvider` instance also drives the Browse Characters / NPCs picker (#9) and the new Character Refs Browser (2026-05-17). |
@@ -1962,8 +1962,8 @@ via in-game purchase). Documented in
 - `D:\Github\crimson-rs\out\items.jsonl` — every iteminfo entry
   for 1.06; useful for "what should THIS field look like for
   beer vs Water" comparisons.
-- `D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS\CrimsonGameMods\parc_inserter3.py`
-  — the legacy reference's full insert recipe. We've cribbed 6
+- `D:\Github\CRIMSON-DESERT-SAVE-EDITOR\CrimsonGameMods\parc_inserter3.py`
+  — CRIMSON-DESERT-SAVE-EDITOR's full insert recipe. We've cribbed 6
   of its 7 fixup passes; the gap is either in the per-item field
   patches it does (lines 202–259 build_item_from_template) or in
   a structural fixup we haven't translated.
@@ -2655,8 +2655,8 @@ No public API breakage on the existing surface; the new code only adds wrappers.
   Abyss owns the artwork, so we deliberately don't bundle the
   6,011-icon set. `AppSettings.IconCacheDirectory` (configurable
   via Tools → Set Icon Folder…) points at a directory of
-  `<ItemKey>.webp` files; the reference repo
-  (`D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS\icons_local\`)
+  `<ItemKey>.webp` files; CRIMSON-DESERT-SAVE-EDITOR
+  (`D:\Github\CRIMSON-DESERT-SAVE-EDITOR\icons_local\`)
   is the canonical source the user can re-point to. Probe order:
   configured setting → `<exe-dir>/IconCache/` → nothing.
   `IconProvider` (cached `Bitmap?` per ItemKey, IO + decode on
@@ -2803,7 +2803,7 @@ No public API breakage on the existing surface; the new code only adds wrappers.
   analyzer even though the marshaller never constructs one (LoadFromFile
   returns IntPtr, wrapped explicitly by `FromOwnedPointer`).
 - **Data policy** ([docs/data-policy.md](data-policy.md)) — never commit
-  derived data. Old reference repo (`D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS`)
+  derived data. CRIMSON-DESERT-SAVE-EDITOR (`D:\Github\CRIMSON-DESERT-SAVE-EDITOR`)
   is one-time mining only.
 - **Foundation-first** — when parsing produces wrong data, fix the parser
   or schema. Never add workarounds in consumers.

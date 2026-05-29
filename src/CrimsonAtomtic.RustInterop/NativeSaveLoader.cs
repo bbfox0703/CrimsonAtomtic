@@ -2892,7 +2892,7 @@ internal static partial class NativeMethods
 
     // Palette accessors — the dye picker is a 109-position grid per
     // theme (9 grayscale + 10×10 chromatic), NOT freeform RGB. The
-    // PyQt5 reference editor's free-form RGB sliders were wrong; the
+    // CRIMSON-DESERT-SAVE-EDITOR's free-form RGB sliders were wrong; the
     // engine constrains visible colors to the palette positions. Per
     // vendor/crimson-rs/docs/dye-editor-scope.md §"Recommended C#
     // editor UX".
@@ -2976,7 +2976,7 @@ internal static partial class NativeMethods
     //
     // PartPrefabKey (u32) → per-prefab slot count + per-slot default
     // material / mask / tail-name detail. 1,105 rows in 1.07.
-    // Replaces the PyQt5 editor's dye_slot_counts.json — once the
+    // Replaces CRIMSON-DESERT-SAVE-EDITOR's dye_slot_counts.json — once the
     // _itemKey → _partPrefabKey cross-reference lands. Bound here for
     // future use; v1 Dye editor doesn't consume this bridge yet.
 
@@ -3032,7 +3032,7 @@ internal static partial class NativeMethods
 
     // ── item_part_prefab join (iteminfo + stringinfo + partprefabdyeslotinfo) ─
     //
-    // Replaces the PyQt5 editor's hand-maintained dye_slot_counts.json end-to-
+    // Replaces CRIMSON-DESERT-SAVE-EDITOR's hand-maintained dye_slot_counts.json end-to-
     // end. ItemKey → PartPrefabKey traversal is precomputed at load time;
     // ResolveDyeSlotCount is the one-shot "how many dye slots?" wrapper that
     // chains the partprefabdyeslotinfo lookup. See

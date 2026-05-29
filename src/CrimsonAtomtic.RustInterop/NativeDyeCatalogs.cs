@@ -408,8 +408,8 @@ internal sealed class CrimsonPartPrefabDyeTexturePalleteHandle : SafeHandle
 /// <summary>
 /// <c>PartPrefabKey (u32)</c> → prefab internal name + per-slot detail
 /// (slot count, 3 default-material names, 3 mat indices, 3 mask
-/// bytes, next-prefab/tail-name). 1,105 rows in 1.07. Replaces the
-/// PyQt5 editor's hand-maintained <c>dye_slot_counts.json</c>.
+/// bytes, next-prefab/tail-name). 1,105 rows in 1.07. Replaces
+/// CRIMSON-DESERT-SAVE-EDITOR's hand-maintained <c>dye_slot_counts.json</c>.
 ///
 /// <para>
 /// The Dye editor v1 doesn't consume this bridge yet — it walks
@@ -664,7 +664,7 @@ public enum DyeSlotCountSource : uint
 /// <c>ItemKey → list&lt;PartPrefabKey&gt;</c> via the 3-table join
 /// (<c>iteminfo</c> + <c>stringinfo</c> + <c>partprefabdyeslotinfo</c>) plus
 /// the <c>ResolveDyeSlotCount</c> one-shot wrapper that chains the
-/// partprefabdyeslotinfo lookup. Replaces the PyQt5 editor's
+/// partprefabdyeslotinfo lookup. Replaces CRIMSON-DESERT-SAVE-EDITOR's
 /// hand-maintained <c>dye_slot_counts.json</c> end-to-end — the C# Dye
 /// editor uses this to surface per-item slot counts at scan time and
 /// drive the "Add Dye" slot-picker.
