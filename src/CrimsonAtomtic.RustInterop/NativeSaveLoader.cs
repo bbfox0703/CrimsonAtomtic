@@ -940,6 +940,63 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         }
     }
 
+    /// <summary>
+    /// Graft an <c>object_list</c> element from <paramref name="source"/>
+    /// (a separately-loaded save) into this save's list, remapping the
+    /// element's embedded schema type-indices by class name. Both saves
+    /// must share the same field definitions (same game version). Wraps
+    /// <c>crimson_save_transplant_list_element</c>.
+    /// </summary>
+    public void TransplantListElement(
+        NativeSaveLoader source,
+        int targetBlockIndex,
+        ReadOnlySpan<PathStep> targetPath,
+        int targetFieldIndex,
+        int insertAt,
+        int sourceBlockIndex,
+        ReadOnlySpan<PathStep> sourcePath,
+        int sourceFieldIndex,
+        int sourceElementIndex)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentOutOfRangeException.ThrowIfNegative(targetBlockIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(targetFieldIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(insertAt);
+        ArgumentOutOfRangeException.ThrowIfNegative(sourceBlockIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(sourceFieldIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(sourceElementIndex);
+
+        var target = RequireLoaded(nameof(TransplantListElement));
+        var src = source.RequireLoaded(nameof(TransplantListElement));
+        unsafe
+        {
+            fixed (PathStep* pTarget = targetPath)
+            fixed (PathStep* pSource = sourcePath)
+            {
+                var rc = NativeMethods.TransplantListElement(
+                    target,
+                    (uint)targetBlockIndex,
+                    pTarget,
+                    (nuint)targetPath.Length,
+                    (uint)targetFieldIndex,
+                    (uint)insertAt,
+                    src,
+                    (uint)sourceBlockIndex,
+                    pSource,
+                    (nuint)sourcePath.Length,
+                    (uint)sourceFieldIndex,
+                    (uint)sourceElementIndex);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_save_transplant_list_element(targetBlock={targetBlockIndex}, " +
+                        $"insertAt={insertAt}, sourceBlock={sourceBlockIndex}, " +
+                        $"sourceElem={sourceElementIndex}) failed: {ErrorName(rc)}");
+                }
+            }
+        }
+    }
+
     public void SetScalarFieldPresent(
         int blockIndex,
         ReadOnlySpan<PathStep> path,
@@ -1692,6 +1749,21 @@ internal static partial class NativeMethods
         uint fieldIdx,
         uint srcElementIdx,
         uint dstElementIdx);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_transplant_list_element")]
+    public static unsafe partial int TransplantListElement(
+        CrimsonSaveHandle targetHandle,
+        uint targetBlockIdx,
+        PathStep* targetPath,
+        nuint targetPathLen,
+        uint targetFieldIdx,
+        uint insertAt,
+        CrimsonSaveHandle sourceHandle,
+        uint sourceBlockIdx,
+        PathStep* sourcePath,
+        nuint sourcePathLen,
+        uint sourceFieldIdx,
+        uint sourceElementIdx);
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_save_set_scalar_field_present")]
     public static unsafe partial int SetScalarFieldPresent(
