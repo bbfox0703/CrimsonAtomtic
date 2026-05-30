@@ -23,6 +23,64 @@
 >
 > - **`ParserTargetMinor` / `CompatibleMinors` still hard-coded C#-side** — the part-17 drift hazard stands: promote to a `crimson_parser_target_gamedata_minor()` (and a compatible-set) ABI so the values aren't duplicated between Rust and C#. Even lower-friction now that we've done one more manual bump + an allow-list.
 >
+> ### Feature-parity backlog vs `CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS` (audit 2026-05-30)
+>
+> Reference editor = Python/PySide6 at `D:\Github\CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS`. Plain comparison for backlog planning. Legend: ✅ dedicated feature · 🔸 partial / only via the generic field-tree editor · ❌ absent · ❓ unconfirmed. Direction for **game-data-driven mount/character unlock**: enumerate mountable charKeys from `characterinfo`/`mercenaryinfo` (both already parsed + C-ABI bridged), then `ListCloneElement` an existing mercenary + `SetScalarField` the new `_characterKey`/`_mercenaryNo`, instead of the reference's hardcoded per-mount hex templates.
+>
+> **⚠️ Blocker found — 2026-05-30 clone experiment (throwaway harness, since deleted).** Mechanics + discovery all proven against live slot104: `MercenaryClanSaveData` = block 10, `_mercenaryDataList` = field#1 with 96 elements, per-element `_characterKey`=#0 / `_mercenaryNo`=#2 (matches the in-app screenshot), source Rokade (charKey 31378) at element[8], freeMercNo = max(3475)+1 = 3476. **But `ListCloneElement` fails with `LIST_VARIANT_UNSUPPORTED`**: `_mercenaryDataList` uses the `marker_run_plus_zeros` object-list header variant (run of `01` markers → `00` → u32 count → 13 zero bytes; see `save/body/decoder.rs:803`), and the length-changing ops only support the 4 fixed-size variants — `update_object_list_count_in_header` (`c_abi/mod.rs:1615`) bails on `marker_run_plus_zeros` because `FieldValue::ObjectList` doesn't retain the marker-run length to re-emit the header. **Adding a mount requires growing this list, so it is hard-blocked until crimson-rs supports the variant for clone/insert/remove.** Fix = upstream `D:\Github\crimson-rs` (dev) change: capture marker-run length at decode into `FieldValue::ObjectList`, re-emit it on encode, patch the u32 count at offset `run_len+1`, add roundtrip + clone/insert/remove tests on a `marker_run_plus_zeros` list, then `vendor/update_vendors.ps1` + rebuild dll. Settles the earlier "Rust vs editor?" question: **crimson-rs first, then the C# UI.**
+>
+> **✅ RESOLVED — same session (2026-05-30).** Turned out simpler than the comment in `update_object_list_count_in_header` feared: `FieldValue::ObjectList` *already* keeps `header_bytes` verbatim, and the `marker_run_plus_zeros` header is fixed at the TAIL (`[01…][00][u32 count LE][13 zero bytes]`), so the count is always the u32 17 bytes before the end of `header_bytes` — no struct/decoder/encoder change needed, just a tail-anchored count patch in the count-update fn. crimson-rs `dev` commit **`858cd30`** ("feat(c-abi): support marker_run_plus_zeros in length-changing list ops") + 2 tests (live-save clone→remove byte-roundtrip on the marker list + a pure-logic offset guard incl. a `01`-pad case); `cargo test` list-ops all pass, clippy clean (`c_abi,python -D warnings`). Vendored via `update_vendors.ps1` (vendor now at `858cd30`), dll rebuilt. **End-to-end C# probe now passes**: clone Rokade[8] → append[96] → set `_characterKey=1003918` (Silver Fang/Wolf) + `_mercenaryNo=3476` → write → reload → HMAC ok, list 96→97, new element verified. The verified save was placed in **slot104** for an in-game check (original backed up to `%TEMP%\slot104-save.premount-backup.save`; slot105 left pristine). **Next: in-game load to confirm the engine spawns a usable mount** (caveat: Rokade base — if broken, clone an existing *mount* for a richer field shape), then the **C# Mount-Unlock UI** (game-data-driven charKey enumeration via `characterinfo`/`mercenaryinfo`, reusing `ListCloneElement` + `SetScalarField`).
+>
+> **🧪 In-game findings — 2026-05-30 (mount insertion is NOT just a charKey swap).** Multiple slot104 in-game loads (all against the real on-disk save, reset from pristine slot105 each time; user confirmed via hashes):
+> - **Round 1** — clone Rokade (charKey 31378, a *unique* special mount, also user-renamed to "AE86") → re-key Wolf (1003918): **CTD**.
+> - **Round 2/3** — clone Herspia (charKey 1003120, a *normal* Tiuta horse, no custom name) → re-key Wolf: **still CTD**. Rules out the humanoid/name/stale-base theories.
+> - **Round 4 (control)** — clone Herspia, **charKey unchanged** (duplicate horse, fresh `_mercenaryNo`): **loads without CTD, but no new mount appears in the stable.**
+> - **Read-only save probe** (`MountProbe`, since deleted): the save has **26 block classes and NO separate stable/mount/vehicle/roster structure** — only `MercenaryClanSaveData`. The working mount Rokade is referenced outside `_mercenaryDataList` *only* by `QuestSaveData._stageStateData[..]._connectCharacterList` (×2) and `ContentsMiscSaveData._alertHistorySaveDataList` — neither a roster. So the **stable is derived directly from `_mercenaryDataList`** (no second structure to update).
+>
+> **Conclusions:** (1) the marker_run fix + insert mechanism are sound — a cloned element yields a loadable save; (2) the stable **de-dups by charKey**, so the duplicate-Herspia control showed no new mount (inconclusive-by-design); (3) **re-keying an element to a foreign-species charKey CTDs** — the element's content (`_levelData`/ExperienceLevelSaveData + others) must be consistent with the charKey. Corroborated by the reference editor: its *confirmed* mounts each shipped a **real captured per-mount hex element**; its charKey-swap-on-generic-template mounts were **untested** (and, per our result, don't work). **Therefore adding a mount the player lacks needs that mount's REAL element content, not a charKey swap.** Open options: (A) capture a real element from a save that contains the target mount; (B) port `vehicleinfo`/`characterinfo` mount data to construct correct elements from game data (large); (C) adapt the reference's hardcoded per-mount templates (fast, version-fragile, needs type-index patching). Diffing Rokade-vs-Herspia won't reveal wolf requirements (both are working mounts; difference is special-vs-normal-*horse* config — Herspia's minimal field set already works).
+>
+> **Save-side editing**
+>
+> | Feature | Reference | Ours |
+> |---|---|---|
+> | Generic field/block-tree editor (edit any scalar) | ❌ | ✅ |
+> | Inventory: list / add / remove / itemKey swap / stack count | ✅ | ✅ |
+> | Bulk fill max stacks | ✅ | ✅ |
+> | Sockets / gems | ✅ | ✅ |
+> | Dye / cosmetics | ✅ | ✅ |
+> | Vendor buyback / repurchase | ✅ (also add/clone to vendor) | ✅ list/remove + jump-to-inventory (≈ inventory itemKey edit) |
+> | Mercenary rename | ✅ | ✅ |
+> | Abyss Gates unlock | ✅ | ✅ |
+> | Sealed Abyss artifact challenge complete | ❓ | ✅ |
+> | Auto-backup + restore | ✅ (+ pristine reference) | ✅ |
+> | Change review / undo | ✅ | ✅ |
+> | Equipment enchant level | ✅ | 🔸 field edit |
+> | Mount / character unlock | ✅ (hardcoded hex) | ❌ → planned (game-data-driven) |
+> | Quest state / stage editing | ✅ (Quest Editor + Quest DB) | 🔸 field edit |
+> | Knowledge / codex learn–unlearn | ✅ (all categories) | 🔸 Abyss Gates only |
+> | Faction nodes (discover / set state) | ✅ | 🔸 field edit |
+> | Reveal map / fog of war | ✅ | ❌ (World Map view-only) |
+> | Item packs (share / import / export) | ✅ | ❌ |
+> | Auto-find save across launchers | ✅ (Steam/Epic/GamePass/Proton) | 🔸 picker + manual install path |
+> | Multi-language UI (en/ja/zh-TW + secondary) | 🔸 | ✅ |
+> | Game-data version detect + mismatch warn | ❌ | ✅ |
+> | Icon extraction / cache | ✅ | ✅ |
+>
+> **Game-data ("Mods") editing — writes modified tables back into game PAZ; we currently treat game data as read-only reference**
+>
+> | Feature (table edited) | Reference | Ours |
+> |---|---|---|
+> | ItemBuffs — iteminfo stats / buffs / enchant, transmog | ✅ | ❌ (iteminfo parsed read-only) |
+> | Stores — storeinfo prices / stock | ✅ | ❌ (name lookup only) |
+> | DropSets — dropsetinfo loot tables | ✅ | ❌ (no parser) |
+> | SpawnEdit — spawn density | ✅ | ❌ (no parser) |
+> | Skills — skill.pabgb params | ✅ | ❌ (skill parsed read-only) |
+> | FieldEdit — fieldinfo / vehicleinfo (mounts-everywhere, invincible, killable NPC) | ✅ | ❌ (no parser) |
+> | Storage expansion (inventory.pabgb patch) | ✅ | ❌ |
+> | Low-level PABGB browser | ✅ | 🔸 Python inspect tools (read-only) |
+>
+> The whole game-data-mods column is a direction decision, not just features: the Rust core parses iteminfo + skill byte-perfect but exposes the rest (characterinfo / storeinfo / mercenaryinfo / gimmickinfo) only as name-lookup bridges; vehicleinfo / fieldinfo / dropsetinfo / spawn tables have no parser yet.
+>
 > ### Vendor state
 >
 > `vendor/crimson-rs` at `0619789` (in sync with source `D:\Github\crimson-rs`, branch `dev`). No refresh needed this session — it already targets 1.09.
