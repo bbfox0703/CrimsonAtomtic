@@ -624,6 +624,20 @@ public interface ISaveLoader
         ReadOnlySpan<byte> newBytes);
 
     /// <summary>
+    /// Read the raw payload bytes of an <c>inline_bytes</c> field
+    /// (<c>meta_kind == 1</c>) — the read counterpart to
+    /// <see cref="SetInlineBytesField"/>. Returns the verbatim payload
+    /// (no NUL terminator); decode caller-side (e.g. UTF-8 for
+    /// <c>_mercenaryName</c>). An absent / empty field returns an empty
+    /// array. Throws <c>NOT_INLINE_BYTES</c> when the field's
+    /// <c>meta_kind</c> isn't 1.
+    /// </summary>
+    byte[] GetInlineBytesField(
+        int blockIndex,
+        ReadOnlySpan<PathStep> path,
+        int fieldIndex);
+
+    /// <summary>
     /// Produce the minimal valid bytes for a list element of
     /// <paramref name="classIndex"/>: a wrapper with an all-zero mask
     /// (every field absent) and an empty inline payload. Total size is

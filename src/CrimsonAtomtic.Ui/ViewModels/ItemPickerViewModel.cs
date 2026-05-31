@@ -130,7 +130,7 @@ public sealed partial class ItemPickerViewModel : ObservableObject
 
     /// <summary>
     /// When true the picker shows a single prominent top action bar
-    /// (driven by <see cref="SelectedRow"/> + <see cref="TargetDescription"/>)
+    /// (driven by <see cref="SelectedRow"/> + <see cref="SourceName"/>)
     /// and hides the per-row "+ Bag" action button. This is the unified
     /// Add-Item flow used by Tools → Browse Items and the per-row
     /// "Add Item…" button. The Sockets gem-picker leaves this at the
@@ -152,13 +152,15 @@ public sealed partial class ItemPickerViewModel : ObservableObject
     private ItemPickerRow? _selectedRow;
 
     /// <summary>
-    /// Live "where this lands" phrase pushed in by the main window, e.g.
-    /// <c>from "Bullet / 子彈"</c>. Updates as the user reselects rows in
-    /// the inventory grid while the picker is open.
+    /// Live clone-source display name pushed in by the main window (e.g.
+    /// <c>"Bullet / 子彈"</c>), or null for the first-row fallback. The
+    /// localized action phrase is composed from this name, so word order
+    /// stays per-language. Updates as the user reselects inventory rows
+    /// while the picker is open.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AddActionText))]
-    private string? _targetDescription;
+    private string? _sourceName;
 
     /// <summary>
     /// Whether the current main-window context can accept an added item
@@ -172,10 +174,19 @@ public sealed partial class ItemPickerViewModel : ObservableObject
     private bool _canAddToTarget;
 
     /// <summary>
+    /// Resolve a localized UI string by resource key (null when absent).
+    /// Mirrors the helper in MainWindowViewModel / FindItemsViewModel.
+    /// </summary>
+    private static string? LookupUiResourceString(string key)
+        => Avalonia.Application.Current?.TryGetResource(key, null, out var v) == true && v is string s
+            ? s
+            : null;
+
+    /// <summary>
     /// Composed label for the top action button: names the picked item
-    /// and (when there's a valid target) where it goes. English-composed
-    /// like the app's other VM-side status text; the item label itself
-    /// carries the secondary-language name.
+    /// and (when there's a valid clone source) where it comes from. Built
+    /// from localized format strings so en/zh/ja each control word order;
+    /// the item label itself carries the secondary-language name.
     /// </summary>
     public string AddActionText
     {
@@ -183,17 +194,27 @@ public sealed partial class ItemPickerViewModel : ObservableObject
         {
             if (SelectedRow is not { } row)
             {
-                return "Select an item below, then Add";
+                return LookupUiResourceString("ItemPickerSelectPrompt")
+                    ?? "Select an item below, then Add";
             }
-            return CanAddToTarget && !string.IsNullOrEmpty(TargetDescription)
-                ? $"+ Add \"{row.DisplayLabel}\" {TargetDescription}"
-                : $"+ Add \"{row.DisplayLabel}\"";
+            return CanAddToTarget && !string.IsNullOrEmpty(SourceName)
+                ? string.Format(
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    LookupUiResourceString("ItemPickerAddWithSource") ?? "+ Add \"{0}\" from \"{1}\"",
+                    row.DisplayLabel, SourceName)
+                : string.Format(
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    LookupUiResourceString("ItemPickerAddNoSource") ?? "+ Add \"{0}\"",
+                    row.DisplayLabel);
         }
     }
 
     /// <summary>Hint shown under the bar when adding is currently blocked.</summary>
     public string? TopActionHint =>
-        CanAddToTarget ? null : "Open a bag (drill into an item list) and pick a row to clone from.";
+        CanAddToTarget
+            ? null
+            : LookupUiResourceString("ItemPickerOpenBagHint")
+              ?? "Open a bag (drill into an item list) and pick a row to clone from.";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ResultsCountText))]

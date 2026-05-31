@@ -67,7 +67,7 @@
   <sys:String x:Key="SocketEditorNotAvailableTitle">此存檔沒有已鑲嵌寶石的孔</sys:String>
   <sys:String x:Key="SocketEditorNotAvailableBody">載入的存檔沒有任何物品有已填入的插槽 (或根本沒有任何物品帶有 _socketSaveDataList)。在遊戲中鑲入一顆寶石後，已填入的槽位就會出現在這裡。</sys:String>
   <sys:String x:Key="SocketEditorPickerTitle">選擇寶石</sys:String>
-  <sys:String x:Key="RenameMercenaryHeader">為傭兵 / 寵物改名。「名稱」欄顯示由 CharacterKey 解析出來的角色 / 樣板名稱 (與主視窗 mercenaryDataList 名稱欄同源) — 用來辨識每一列。你自訂的改名 (已存於 _mercenaryName) 不會顯示 — read-side FFI 尚未實作。輸入新名稱並逐列按下 Apply。改動會在下一次存檔時儲存回檔案。</sys:String>
+  <sys:String x:Key="RenameMercenaryHeader">為傭兵 / 寵物改名。「名稱」欄顯示由 CharacterKey 解析出來的角色 / 樣板名稱 (與主視窗 mercenaryDataList 名稱欄同源) — 用來辨識每一列。「新名稱」欄會預先帶入目前的自訂名稱 (_mercenaryName)；編輯後逐列按下 Apply。欄位留空則清除自訂名稱。改動會在下一次存檔時儲存回檔案。</sys:String>
   <sys:String x:Key="RenameMercenaryColIdx">索引</sys:String>
   <sys:String x:Key="RenameMercenaryColMercNo">MercNo</sys:String>
   <sys:String x:Key="RenameMercenaryColCharKey">CharKey</sys:String>
@@ -260,6 +260,20 @@
   <!-- Item-picker dialog -->
   <sys:String x:Key="ItemPickerWindowTitle">瀏覽物品</sys:String>
   <sys:String x:Key="ItemPickerSearchPlaceholder">依 ItemKey、string id 或本地化名稱篩選…</sys:String>
+  <!-- 新增道具列 (格式字串: {0}=道具, {1}=來源列)。 -->
+  <sys:String x:Key="ItemPickerSelectPrompt">請在下方選擇一個道具，再按新增</sys:String>
+  <sys:String x:Key="ItemPickerAddWithSource">+ 從「{1}」新增「{0}」</sys:String>
+  <sys:String x:Key="ItemPickerAddNoSource">+ 新增「{0}」</sys:String>
+  <sys:String x:Key="ItemPickerOpenBagHint">請先開啟一個背包 (展開進道具清單)，並選擇要複製的來源列。</sys:String>
+  <!-- 新增道具狀態訊息。 -->
+  <sys:String x:Key="AddItemStatusOpenBag">請先開啟背包 (展開進 _inventorylist[N]._itemList)。</sys:String>
+  <sys:String x:Key="AddItemStatusWrongList">此清單存放的是 {0}，並非 ItemSaveData。不支援在此新增。</sys:String>
+  <sys:String x:Key="AddItemStatusMissingFields">來源元素缺少 _itemKey / _stackCount / _slotNo / _itemNo 其中之一 — 背包結構與複製貼補策略不相容。</sys:String>
+  <sys:String x:Key="AddItemStatusProgress">正在新增道具 {0} (範本: {1})…</sys:String>
+  <sys:String x:Key="AddItemStatusSuccess">已從「{1}」新增道具 {0} (數量 {2}、欄位 {3}、itemNo {4})。</sys:String>
+  <sys:String x:Key="AddItemStatusFailed">新增失敗: {0}</sys:String>
+  <sys:String x:Key="AddItemSourceSelected">已選 [{0}]: {1}</sys:String>
+  <sys:String x:Key="AddItemSourceFirst">[0]: 第一個元素</sys:String>
   <sys:String x:Key="ItemPickerColIcon">圖示</sys:String>
   <sys:String x:Key="ItemPickerColKey">ItemKey</sys:String>
   <sys:String x:Key="ItemPickerColStringKey">String ID</sys:String>

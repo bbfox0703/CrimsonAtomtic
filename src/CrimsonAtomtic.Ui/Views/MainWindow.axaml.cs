@@ -1256,7 +1256,7 @@ public sealed partial class MainWindow : Window
         {
             ShowTopActionBar = true,
             CanAddToTarget = vm.CanAddItemToCurrentList,
-            TargetDescription = vm.AddItemTargetDescription,
+            SourceName = vm.AddItemSourceName,
         };
         pickerVm.AddItemRequested += itemKey =>
         {
@@ -1271,9 +1271,9 @@ public sealed partial class MainWindow : Window
             {
                 pickerVm.CanAddToTarget = vm.CanAddItemToCurrentList;
             }
-            else if (args.PropertyName == nameof(MainWindowViewModel.AddItemTargetDescription))
+            else if (args.PropertyName == nameof(MainWindowViewModel.AddItemSourceName))
             {
-                pickerVm.TargetDescription = vm.AddItemTargetDescription;
+                pickerVm.SourceName = vm.AddItemSourceName;
             }
         };
         vm.PropertyChanged += handler;

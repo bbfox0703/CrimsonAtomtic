@@ -798,6 +798,56 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         }
     }
 
+    public byte[] GetInlineBytesField(
+        int blockIndex,
+        ReadOnlySpan<PathStep> path,
+        int fieldIndex)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
+
+        var cached = RequireLoaded(nameof(GetInlineBytesField));
+        unsafe
+        {
+            // Two-call: size query first (buf_len = 0 reports the count).
+            nuint required = 0;
+            fixed (PathStep* pPath = path)
+            {
+                var sizeRc = NativeMethods.GetInlineBytesField(
+                    cached, (uint)blockIndex, pPath, (nuint)path.Length,
+                    (uint)fieldIndex, null, 0, out required);
+                if (sizeRc != NativeMethods.BUFFER_TOO_SMALL && sizeRc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(sizeRc,
+                        $"crimson_save_get_inline_bytes_field(block={blockIndex}, "
+                        + $"path_len={path.Length}, field={fieldIndex}) size query failed: "
+                        + $"{ErrorName(sizeRc)}");
+                }
+            }
+            if (required == 0)
+            {
+                return Array.Empty<byte>();
+            }
+
+            var buf = new byte[(int)required];
+            fixed (PathStep* pPath = path)
+            fixed (byte* pBuf = buf)
+            {
+                var rc = NativeMethods.GetInlineBytesField(
+                    cached, (uint)blockIndex, pPath, (nuint)path.Length,
+                    (uint)fieldIndex, pBuf, (nuint)buf.Length, out _);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_save_get_inline_bytes_field(block={blockIndex}, "
+                        + $"path_len={path.Length}, field={fieldIndex}) fill failed: "
+                        + $"{ErrorName(rc)}");
+                }
+            }
+            return buf;
+        }
+    }
+
     public uint[] DynamicArrayGetU32Elements(
         int blockIndex,
         ReadOnlySpan<PathStep> path,
@@ -1734,6 +1784,17 @@ internal static partial class NativeMethods
         uint fieldIdx,
         byte* newBytes,
         nuint newBytesLen);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_get_inline_bytes_field")]
+    public static unsafe partial int GetInlineBytesField(
+        CrimsonSaveHandle handle,
+        uint blockIdx,
+        PathStep* path,
+        nuint pathLen,
+        uint fieldIdx,
+        byte* buf,
+        nuint bufLen,
+        out nuint required);
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_save_write_to_file",
                    StringMarshalling = StringMarshalling.Utf8)]
