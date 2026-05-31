@@ -115,6 +115,9 @@
         <MenuItem Header="{DynamicResource MenuEditAbyssGates}"
                   Click="OnEditAbyssGatesClick"
                   IsEnabled="{Binding HasSave}" />
+        <MenuItem Header="{DynamicResource MenuUnlockMounts}"
+                  Click="OnUnlockMountsClick"
+                  IsEnabled="{Binding HasSave}" />
         <MenuItem Header="{DynamicResource MenuRenameMercenary}"
                   Click="OnRenameMercenaryClick"
                   IsEnabled="{Binding HasSave}" />

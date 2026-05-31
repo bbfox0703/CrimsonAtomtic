@@ -80,6 +80,7 @@
   <sys:String x:Key="MenuUnlockAllAbyssGates">_Unlock All Abyss Gates (Map Discovery)…</sys:String>
   <sys:String x:Key="MenuBulkCompleteHeldSAChallenges">_Complete Eligible Held Sealed Abyss Artifact Challenges…</sys:String>
   <sys:String x:Key="MenuEditAbyssGates">_Edit Abyss Gates (Lock/Unlock per gate)…</sys:String>
+  <sys:String x:Key="MenuUnlockMounts">Unlock Mo_unts (Sigils + Dragon)…</sys:String>
   <sys:String x:Key="MenuEditItemDyes">Edit Item _Dyes…</sys:String>
   <sys:String x:Key="MenuVendorBuyback">_Vendor Buyback…</sys:String>
   <sys:String x:Key="MenuReviewChanges">_Review Pending Changes…</sys:String>
@@ -177,6 +178,16 @@
   <sys:String x:Key="AbyssGatesClose">Close</sys:String>
   <sys:String x:Key="AbyssGatesNotAvailableTitle">No abyss gates in this save</sys:String>
   <sys:String x:Key="AbyssGatesNotAvailableBody">No nested FieldGimmickSaveData elements inside FieldSaveData._fieldGimmickSaveDataList matched the abyss / hyperspace allowlist from gimmickinfo.pabgb. Either the save has no FieldSaveData root yet (very early-game), or the game install is unconfigured so gimmickinfo isn't available.</sys:String>
+
+  <!-- Mount Unlock dialog -->
+  <sys:String x:Key="MountUnlockWindowTitle">Unlock Mounts</sys:String>
+  <sys:String x:Key="MountUnlockHeader">Sigil mounts (bears, deer, ibex, warthog, Silver Fang, Phoenix) are granted as a Sigil of Solidarity into Quest Artifacts — load the game and USE the sigil to finish the unlock (the engine then summons + grants riding). The Dragon (Blackstar) is unlocked directly: its real mount element is transplanted from a bundled donor save + its summon knowledge injected. Saves to the file on next File → Save.</sys:String>
+  <sys:String x:Key="MountUnlockColMount">Mount</sys:String>
+  <sys:String x:Key="MountUnlockColType">Type</sys:String>
+  <sys:String x:Key="MountUnlockColMethod">Method</sys:String>
+  <sys:String x:Key="MountUnlockColAction">Action</sys:String>
+  <sys:String x:Key="MountUnlockAction">Unlock</sys:String>
+  <sys:String x:Key="MountUnlockClose">Close</sys:String>
   <sys:String x:Key="MenuFontSize">_Font Size</sys:String>
   <sys:String x:Key="SummaryToggleTip">Show / hide the Save Summary panel — claim more room for the main grids.</sys:String>
   <sys:String x:Key="MenuLanguage">_Secondary Language</sys:String>

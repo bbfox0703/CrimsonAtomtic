@@ -972,6 +972,28 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Tools → Unlock Mounts… handler. Opens the mount-unlock dialog over
+    /// the loaded save: sigil mounts grant a Sigil of Solidarity into Quest
+    /// Artifacts (use in-game to finish); the dragon is transplanted +
+    /// knowledge-injected directly. The dialog routes each row back into
+    /// <see cref="MainWindowViewModel.UnlockMountAsync"/>, which owns the
+    /// loader and flips the main VM's dirty flag itself — so no close-time
+    /// dirty handler is needed here. Gated on <c>HasSave</c>.
+    /// </summary>
+    private void OnUnlockMountsClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm
+            || vm.LoadedPath is null
+            || vm.Summary is not { Blocks: not null })
+        {
+            return;
+        }
+        var dialogVm = new MountUnlockViewModel(vm, vm.Localization);
+        var child = new MountUnlockWindow { DataContext = dialogVm };
+        child.Show(this);
+    }
+
+    /// <summary>
     /// Tools → Find Items… handler. Opens the cross-bag item-search
     /// dialog powered by <see cref="ISaveLoader.ListInventoryItems"/>.
     /// Read-only; the menu item is gated on <c>HasSave</c> so this
