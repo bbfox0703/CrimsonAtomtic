@@ -139,6 +139,11 @@ See [docs/status.md](docs/status.md) for the full feature ledger and roadmap.
 
 Thanks to the community save editor `CRIMSON-DESERT-SAVE-EDITOR` for being a useful reference point during early reverse-engineering.
 
+Thanks also to NattKh's
+[CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS](https://github.com/NattKh/CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS)
+— a valuable reference for several save structures (including the dragon-mount
+element + knowledge set behind our Mount Unlock feature).
+
 ## First-time setup
 
 ```powershell
