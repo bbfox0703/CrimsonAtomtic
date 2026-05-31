@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -1015,6 +1016,32 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Tools → Complete Sealed Abyss Artifact Challenges. Scans for
+    /// eligible challenges, then opens a checkbox preview so the user
+    /// picks which to mark complete (replaces the former one-shot bulk
+    /// command). When nothing is eligible, surfaces the breakdown in the
+    /// status footer instead of opening an empty dialog.
+    /// </summary>
+    private async void OnCompleteSealedArtifactChallengesClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm
+            || vm.LoadedPath is null
+            || vm.Summary is not { Blocks: not null })
+        {
+            return;
+        }
+        var dialogVm = await SealedArtifactChallengeViewModel.CreateAsync(vm);
+        if (!dialogVm.HasCandidates)
+        {
+            vm.BulkOpStatus = dialogVm.NoCandidatesSummary;
+            return;
+        }
+        dialogVm.ConfirmRequested = (title, msg) => ConfirmDialog.ShowAsync(this, title, msg);
+        var child = new SealedArtifactChallengeWindow { DataContext = dialogVm };
+        child.Show(this);
+    }
+
+    /// <summary>
     /// Tools → Find Items… handler. Opens the cross-bag item-search
     /// dialog powered by <see cref="ISaveLoader.ListInventoryItems"/>.
     /// Read-only; the menu item is gated on <c>HasSave</c> so this
@@ -1162,30 +1189,72 @@ public sealed partial class MainWindow : Window
 
     private void OnBrowseItemsClick(object? sender, RoutedEventArgs e)
     {
+        if (DataContext is MainWindowViewModel vm)
+        {
+            OpenAddItemPicker(vm);
+        }
+    }
+
+    /// <summary>
+    /// Per-row "Add Item…" button on the elements DataGrid. Sets the
+    /// clicked row as the clone template (so the picker's top bar reads
+    /// "from &lt;that row&gt;") and opens the unified Add-Item picker.
+    /// </summary>
+    private void OnAddItemFromRowClick(object? sender, RoutedEventArgs e)
+    {
         if (DataContext is not MainWindowViewModel vm)
         {
             return;
         }
+        if (sender is Control { DataContext: ElementRowViewModel row })
+        {
+            // Becomes the clone donor + drives the live "from X" label.
+            vm.SelectedElement = row;
+        }
+        OpenAddItemPicker(vm);
+    }
+
+    /// <summary>
+    /// Open the unified Add-Item picker (top-action-bar mode). The picker
+    /// names the item to add and where it lands; the "from X" half is
+    /// pushed live as the user reselects inventory rows or navigates while
+    /// the picker stays open. Routes the Add click through
+    /// <see cref="MainWindowViewModel.AddItemToCurrentListAsync"/>.
+    /// </summary>
+    private void OpenAddItemPicker(MainWindowViewModel vm)
+    {
         if (vm.Localization.ItemCount == 0)
         {
             return;
         }
-        var pickerVm = new ItemPickerViewModel(vm.Localization);
-        // PR B.4.2 — wire the picker's "+ Bag" click back into the main
-        // window so a click clones-and-patches the item into the
-        // currently-displayed inventory list. The handler is fire-and-
-        // forget on the UI thread; AddItemToCurrentListAsync drives the
-        // FFI on a Task.Run worker. The picker stays decoupled — other
-        // call sites can show it without subscribing and the "+ Bag"
-        // button still works (just no-ops the click).
+        var pickerVm = new ItemPickerViewModel(vm.Localization)
+        {
+            ShowTopActionBar = true,
+            CanAddToTarget = vm.CanAddItemToCurrentList,
+            TargetDescription = vm.AddItemTargetDescription,
+        };
         pickerVm.AddItemRequested += itemKey =>
         {
             _ = vm.AddItemToCurrentListAsync(itemKey);
         };
-        var child = new ItemPickerWindow
+
+        // Live-sync the picker's target bar to the main VM as the user
+        // reselects rows / navigates. Unsubscribed on close.
+        PropertyChangedEventHandler handler = (_, args) =>
         {
-            DataContext = pickerVm,
+            if (args.PropertyName == nameof(MainWindowViewModel.CanAddItemToCurrentList))
+            {
+                pickerVm.CanAddToTarget = vm.CanAddItemToCurrentList;
+            }
+            else if (args.PropertyName == nameof(MainWindowViewModel.AddItemTargetDescription))
+            {
+                pickerVm.TargetDescription = vm.AddItemTargetDescription;
+            }
         };
+        vm.PropertyChanged += handler;
+
+        var child = new ItemPickerWindow { DataContext = pickerVm };
+        child.Closed += (_, _) => vm.PropertyChanged -= handler;
         child.Show(this);
     }
 

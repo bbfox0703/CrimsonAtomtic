@@ -111,7 +111,8 @@
         <MenuItem Header="{DynamicResource MenuUnlockAllAbyssGates}"
                   Command="{Binding UnlockAllAbyssGatesCommand}" />
         <MenuItem Header="{DynamicResource MenuBulkCompleteHeldSAChallenges}"
-                  Command="{Binding BulkCompleteHeldSealedArtifactChallengesCommand}" />
+                  Click="OnCompleteSealedArtifactChallengesClick"
+                  IsEnabled="{Binding HasSave}" />
         <MenuItem Header="{DynamicResource MenuEditAbyssGates}"
                   Click="OnEditAbyssGatesClick"
                   IsEnabled="{Binding HasSave}" />
@@ -651,6 +652,23 @@
                             MinHeight="0"
                             Command="{Binding $parent[DataGrid].((vm:MainWindowViewModel)DataContext).BulkFillItemListMaxStackCommand}"
                             CommandParameter="{Binding}" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <!-- "Add Item…" button — discoverable entry point to the
+                   unified Add-Item picker. Visible only on ItemSaveData
+                   item rows (IsSingleFillCandidate). Clicking sets this
+                   row as the clone template and opens the picker with a
+                   top action bar ("+ Add … from <this row>"). -->
+              <DataGridTemplateColumn Header="{DynamicResource ElementsColAddItem}" Width="110">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate x:DataType="vm:ElementRowViewModel">
+                    <Button Content="{DynamicResource ElementsAddItemButton}"
+                            ToolTip.Tip="{DynamicResource ElementsAddItemTip}"
+                            IsVisible="{Binding IsSingleFillCandidate}"
+                            Padding="8,2"
+                            MinHeight="0"
+                            Click="OnAddItemFromRowClick" />
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>

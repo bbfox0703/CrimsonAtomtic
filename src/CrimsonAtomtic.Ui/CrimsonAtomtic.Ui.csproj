@@ -30,6 +30,12 @@
     <NoWarn>$(NoWarn);IL2104;IL3053</NoWarn>
   </PropertyGroup>
 
+  <!-- Expose internal helpers (e.g. MainWindowViewModel.TryComputeTargetStack)
+       to the xUnit project for pure-logic unit tests. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="CrimsonAtomtic.Tests" />
+  </ItemGroup>
+
   <!-- Bundle the window icon and the logo background as Avalonia
        resources so MainWindow.axaml can resolve them at runtime via
        avares:// URIs (compatible with AOT — no runtime reflection,
