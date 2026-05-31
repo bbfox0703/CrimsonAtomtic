@@ -88,6 +88,7 @@
   <sys:String x:Key="MenuBulkCompleteHeldSAChallenges">所持中で現在処理可能な封印アビス遺物チャレンジを全てクリア(_C)…</sys:String>
   <sys:String x:Key="MenuEditAbyssGates">アビスゲートを編集 (個別にロック/アンロック)(_E)…</sys:String>
   <sys:String x:Key="MenuUnlockMounts">騎乗をアンロック (シジル + ドラゴン)(_U)…</sys:String>
+  <sys:String x:Key="MenuEditKnowledge">ナレッジを編集 (カテゴリ別に習得)(_K)…</sys:String>
   <sys:String x:Key="MenuEditItemDyes">アイテムの染色を編集(_D)…</sys:String>
   <sys:String x:Key="MenuVendorBuyback">商人の買い戻しリスト(_V)…</sys:String>
   <sys:String x:Key="MenuReviewChanges">未保存の変更を確認(_R)…</sys:String>
@@ -195,6 +196,25 @@
   <sys:String x:Key="MountUnlockColAction">操作</sys:String>
   <sys:String x:Key="MountUnlockAction">アンロック</sys:String>
   <sys:String x:Key="MountUnlockClose">閉じる</sys:String>
+
+  <!-- ナレッジ編集ダイアログ -->
+  <sys:String x:Key="KnowledgeWindowTitle">ナレッジを編集</sys:String>
+  <sys:String x:Key="KnowledgeHeader">ナレッジ／コーデックスを項目別・カテゴリ別に習得します。カテゴリ選択や検索で絞り込み、習得したい行にチェックを入れて「選択を習得」を押します。「カテゴリを一括習得」は現在の表示にある未習得項目をすべて注入します（地図解放の Node、コーデックスの Collection は警告あり）。次回の「ファイル → 保存」でファイルに書き込まれます。</sys:String>
+  <sys:String x:Key="KnowledgeCategory">カテゴリ:</sys:String>
+  <sys:String x:Key="KnowledgeSearchHint">名前・キー・カテゴリで絞り込み…</sys:String>
+  <sys:String x:Key="KnowledgeUnlearnedOnly">未習得のみ</sys:String>
+  <sys:String x:Key="KnowledgeLearnedOnly">習得済みのみ</sys:String>
+  <sys:String x:Key="KnowledgeColKey">キー</sys:String>
+  <sys:String x:Key="KnowledgeColName">名前</sys:String>
+  <sys:String x:Key="KnowledgeColInternal">内部名</sys:String>
+  <sys:String x:Key="KnowledgeColCategory">カテゴリ</sys:String>
+  <sys:String x:Key="KnowledgeColStatus">状態</sys:String>
+  <sys:String x:Key="KnowledgeSelectAll">すべて選択</sys:String>
+  <sys:String x:Key="KnowledgeUnselectAll">選択を解除</sys:String>
+  <sys:String x:Key="KnowledgeInvert">選択を反転</sys:String>
+  <sys:String x:Key="KnowledgeLearnSelected">選択を習得</sys:String>
+  <sys:String x:Key="KnowledgeLearnCategory">カテゴリを一括習得</sys:String>
+  <sys:String x:Key="KnowledgeClose">閉じる</sys:String>
   <sys:String x:Key="MenuFontSize">フォントサイズ(_F)</sys:String>
   <sys:String x:Key="SummaryToggleTip">セーブサマリーパネルを表示 / 非表示 — メイングリッドにスペースを譲ります。</sys:String>
   <sys:String x:Key="MenuLanguage">セカンダリ言語(_S)</sys:String>

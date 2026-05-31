@@ -4917,6 +4917,72 @@ public sealed partial class MainWindowViewModel(
     }
 
     /// <summary>
+    /// The set of knowledge keys already learned in this save
+    /// (<c>KnowledgeSaveData._list._key</c>), or <c>null</c> when there's no
+    /// save / no knowledge block. Drives the Knowledge editor's
+    /// learned/unlearned column.
+    /// </summary>
+    internal HashSet<uint>? GetLearnedKnowledgeKeys()
+    {
+        if (Summary is not { Blocks: { } blocks })
+        {
+            return null;
+        }
+        return ResolveKnowledgeList(blocks, out _)?.ExistingKeys;
+    }
+
+    /// <summary>
+    /// Learn (inject) the given knowledge keys into
+    /// <c>KnowledgeSaveData._list</c>, skipping any already present. Used by
+    /// the Knowledge editor's "Learn selected" / "Learn all in category"
+    /// actions. Returns <c>(ok, applied, message)</c>; sets
+    /// <see cref="IsDirty"/> + logs on success.
+    /// </summary>
+    internal async Task<(bool Ok, int Applied, string Message)> LearnKnowledgeAsync(
+        IReadOnlyCollection<uint> keys)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+        if (_loadedPath is null || Summary is not { Blocks: { } blocks })
+        {
+            return (false, 0, "No save loaded.");
+        }
+        var ctx = ResolveKnowledgeList(blocks, out var error);
+        if (ctx is null)
+        {
+            return (false, 0, error ?? "Knowledge list unavailable.");
+        }
+        var toAdd = keys.Where(k => !ctx.ExistingKeys.Contains(k)).Distinct().ToList();
+        if (toAdd.Count == 0)
+        {
+            return (true, 0, "All selected knowledge is already learned.");
+        }
+        toAdd.Sort();
+
+        var (applied, injectError, failedKey) = await ApplyKnowledgeInjectAsync(ctx, toAdd);
+        RefreshSelectedBlockSilently();
+
+        if (injectError is not null)
+        {
+            if (applied > 0)
+            {
+                IsDirty = true;
+                Journal.Log("Knowledge",
+                    $"Learned {applied} of {toAdd.Count} knowledge key(s) before failure "
+                    + $"at 0x{failedKey:X8}");
+                OnPropertyChanged(nameof(WindowTitle));
+            }
+            return (false, applied,
+                $"Failed after {applied}/{toAdd.Count}: {injectError.Message} "
+                + $"(code {injectError.ErrorCode}).");
+        }
+
+        IsDirty = true;
+        Journal.Log("Knowledge", $"Learned {applied} knowledge key(s)");
+        OnPropertyChanged(nameof(WindowTitle));
+        return (true, applied, $"Learned {applied} knowledge key(s).");
+    }
+
+    /// <summary>
     /// Linear scan for the first block whose <c>ClassName</c> matches
     /// <paramref name="className"/>. Used by bulk-op flows that
     /// target a known singleton block (KnowledgeSaveData,

@@ -118,6 +118,9 @@
         <MenuItem Header="{DynamicResource MenuUnlockMounts}"
                   Click="OnUnlockMountsClick"
                   IsEnabled="{Binding HasSave}" />
+        <MenuItem Header="{DynamicResource MenuEditKnowledge}"
+                  Click="OnEditKnowledgeClick"
+                  IsEnabled="{Binding HasSave}" />
         <MenuItem Header="{DynamicResource MenuRenameMercenary}"
                   Click="OnRenameMercenaryClick"
                   IsEnabled="{Binding HasSave}" />

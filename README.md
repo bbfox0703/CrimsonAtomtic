@@ -91,6 +91,11 @@ set of Tools-menu bulk operations. Highlights:
   blob whose schema type-indices are remapped onto your save by class name)
   is inserted, its 187-key riding knowledge injected, and its HP filled — no
   whole-save donor required.
+- **Knowledge editor** — Tools → **Edit Knowledge**. Every `knowledgeinfo`
+  entry bucketed into 16 curated categories, with search + learned/unlearned
+  filters and a checkbox table (Select all / Unselect all / Invert). Learn
+  per-item or per-category — never a blunt "learn everything" — with a
+  warning before map-reveal (`Node`) or codex (`Collection`) bulk sets.
 - **Vendor Buyback** — list every item the player has sold to vendors
   (StoreKey resolved live via `storeinfo.pabgb`), per-row Remove to
   free a buyback slot, per-row **Jump…** to open the item in the main
