@@ -1,6 +1,6 @@
 # CrimsonAtomtic
 
-<img src="./img/Logo.jpg" alt="CrimsonAtomic"/>  
+<img src="./img/Logo.webp" alt="CrimsonAtomic"/>  
 
 [![Platform](https://img.shields.io/badge/Platform-Windows%20x64-0078D4)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -16,6 +16,8 @@ its own schema, so the editor reads and **re-saves any patch's save (1.05–1.09
 in that save's own format**, with no version conversion (and no need to
 downgrade your install to open an older save). Cross-platform goal: Windows
 (primary), Linux, macOS.
+
+<img src="./img/UI_demo_01.webp" alt="UI"/>  
 
 ## Layout
 
