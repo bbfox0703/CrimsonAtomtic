@@ -63,13 +63,52 @@ public static class MountCatalog
     public const uint DragonCharacterKey = 1000799;
 
     /// <summary>
-    /// Embedded-resource logical name of the donor save that owns the
-    /// dragon in <c>MercenaryClanSaveData._mercenaryDataList</c>. Kept in
-    /// sync with the <c>&lt;LogicalName&gt;</c> in
-    /// <c>CrimsonAtomtic.Ui.csproj</c>.
+    /// The dragon's base max HP. The donor element is captured mid-fight
+    /// (1038/2500), so after grafting we fill <c>_currentHp</c> to this. The
+    /// value is cross-confirmed: the reference editor's full-HP
+    /// <c>DRAGON_HEX</c> carries 2500 (0x09C4) at the same <c>_currentHp</c>
+    /// slot. The field is a packed TStat (<c>01 00 01 01 01 [u16 current] 00</c>);
+    /// we set only the inner current-HP u16, leaving the rest untouched.
     /// </summary>
-    public const string DragonDonorResourceName =
-        "CrimsonAtomtic.Ui.Assets.mounts.dragon_donor.save";
+    public const ushort DragonFullHp = 2500;
+
+    /// <summary>
+    /// The dragon's real <c>_mercenaryDataList</c> element, captured once from
+    /// a save that owns it (212 bytes, hex). Inserted via
+    /// <c>ISaveLoader.ListInsertElement</c> after remapping its embedded
+    /// schema type-indices to the target save (see
+    /// <see cref="DragonElementTypeIndexFixups"/>) — this replaces the old
+    /// 1.47 MB whole-save donor embed. A charKey swap on a generic clone
+    /// CTDs, so the real element content is required.
+    /// </summary>
+    public const string DragonElementHex =
+        "06000d19003f0806370000ffffffffffffffff96ae1200000000005f450f00" +
+        "80020000000000000100000001001c390000ffffffffffffffffbcae120000" +
+        "0000000100002d0000ffffffffffffffffd2ae12000000000004000000" +
+        "0100002d0000ffffffffffffffffecae12000000000004000000" +
+        "0100002d0000ffffffffffffffff06af1200000000000400000052000000" +
+        "a055e6cb00000000a055e6cb00000000012c0c22c6fb671a44821d79c5" +
+        "b46d83be01000000010101010001010108040000000000000000000000" +
+        "000000b9000000";
+
+    /// <summary>
+    /// Where the type-indices live inside <see cref="DragonElementHex"/> and
+    /// the class each one names. At unlock time we read the target save's
+    /// type-index for each class (from one of its own merc elements) and
+    /// overwrite the u16 at each offset — the same class-name → type-index
+    /// remap <c>crimson_save_transplant_list_element</c> does internally, but
+    /// for a byte blob. Offsets are byte positions from the element start;
+    /// values are little-endian u16. Source indices in the captured bytes are
+    /// Mercenary=55, ExperienceLevel=57, FriendlyDailyCount=45.
+    /// </summary>
+    public static readonly (int Offset, string ClassName)[] DragonElementTypeIndexFixups =
+    [
+        (8,   "MercenarySaveData"),
+        (46,  "ExperienceLevelSaveData"),
+        (68,  "FriendlyDailyCountSaveData"),
+        (94,  "FriendlyDailyCountSaveData"),
+        (120, "FriendlyDailyCountSaveData"),
+    ];
 
     /// <summary>
     /// The 187-key dragon ("Blackstar") knowledge set — the

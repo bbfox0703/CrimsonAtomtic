@@ -3742,7 +3742,7 @@ public sealed partial class MainWindowViewModel(
 
         if (!dragonAlreadyPresent)
         {
-            var graftError = await GraftDragonElementAsync(tgt.Value);
+            var graftError = await InsertDragonElementAsync(tgt.Value);
             if (graftError is not null)
             {
                 return (false, graftError);
@@ -3779,174 +3779,273 @@ public sealed partial class MainWindowViewModel(
             }
         }
 
+        // Fill the grafted/existing dragon's HP to full (the donor was
+        // captured mid-fight at 1038/2500). Runs on both the fresh and the
+        // already-present paths so a half-done earlier run gets healed too.
+        var (hpChanged, hpNote) = await FillDragonHpAsync();
+
         RefreshSelectedBlockSilently();
 
         // Only dirty the save if something actually changed (a re-run with the
-        // element + all 187 keys already present is a no-op).
-        var changed = !dragonAlreadyPresent || kApplied > 0;
+        // element + all 187 keys + full HP already in place is a no-op).
+        var changed = !dragonAlreadyPresent || kApplied > 0 || hpChanged;
         if (changed)
         {
             IsDirty = true;
             Journal.Log("Mount unlock", dragonAlreadyPresent
-                ? $"Dragon already present — injected {kApplied} knowledge key(s)"
+                ? $"Dragon already present — injected {kApplied} knowledge key(s){hpNote}"
                 : $"Transplanted dragon (charKey {MountCatalog.DragonCharacterKey}) "
-                    + $"+ {kApplied} knowledge key(s)");
+                    + $"+ {kApplied} knowledge key(s){hpNote}");
             OnPropertyChanged(nameof(WindowTitle));
         }
 
-        if (dragonAlreadyPresent && kApplied == 0)
+        if (dragonAlreadyPresent && kApplied == 0 && !hpChanged)
         {
-            return (true, "Dragon already fully unlocked (element + all knowledge present). "
+            return (true, "Dragon already fully unlocked (element + all knowledge + full HP). "
                 + "If it still won't summon, the issue is outside the save.");
         }
         return (true,
             (dragonAlreadyPresent
                 ? "Dragon element was already present — injected the missing knowledge."
                 : "Dragon unlocked: real element transplanted.")
-            + knowledgeNote + " Load in-game to summon.");
+            + knowledgeNote + hpNote + " Load in-game to summon.");
     }
 
     /// <summary>
-    /// Graft the dragon's real <c>_mercenaryDataList</c> element from the
-    /// embedded donor save into the loaded save (a charKey swap on a generic
-    /// clone CTDs — the element content must match the charKey). The donor is
-    /// extracted to a temp file because the save loader is file-path only. The
-    /// grafted element is re-numbered (fresh u64 <c>_mercenaryNo</c>) and
-    /// de-flagged as main so it doesn't displace the player's active mount.
-    /// Returns <c>null</c> on success, else an error message.
+    /// Fill the (already-present) dragon's <c>_currentHp</c> to
+    /// <see cref="MountCatalog.DragonFullHp"/>. The field is a packed TStat —
+    /// <c>[01 00 01 01 01][u16 current][00]</c> for the donor's dragon — so we
+    /// overwrite only the inner current-HP u16 and leave the rest of the 8
+    /// bytes untouched, and ONLY when the bytes match that exact known shape
+    /// (so an unexpected layout is never corrupted). Returns
+    /// <c>(changed, note)</c>: <c>changed</c> is true only when HP was actually
+    /// raised; <c>note</c> is a short status fragment for the result message.
     /// </summary>
-    private async Task<string?> GraftDragonElementAsync(
+    private async Task<(bool Changed, string Note)> FillDragonHpAsync()
+    {
+        if (_loadedPath is null || Summary is not { Blocks: { } blocks })
+        {
+            return (false, string.Empty);
+        }
+        var merc = LoadMercList(loader, _loadedPath, blocks);
+        if (merc is null)
+        {
+            return (false, string.Empty);
+        }
+
+        // Find the dragon element + its _currentHp field index + raw value.
+        var dragonIdx = -1;
+        var hpFieldIdx = -1;
+        ulong hpRaw = 0;
+        for (var i = 0; i < merc.Value.Elements.Count && dragonIdx < 0; i++)
+        {
+            var el = merc.Value.Elements[i];
+            var isDragon = false;
+            var fi = -1;
+            ulong raw = 0;
+            foreach (var f in el.Fields)
+            {
+                if (string.Equals(f.Name, "_characterKey", StringComparison.Ordinal)
+                    && TryParseScalarUInt(f.Value, out var ck)
+                    && ck == MountCatalog.DragonCharacterKey)
+                {
+                    isDragon = true;
+                }
+                else if (string.Equals(f.Name, "_currentHp", StringComparison.Ordinal))
+                {
+                    fi = f.FieldIndex;
+                    if (TryParseScalarUInt(f.Value, out var parsedHp))
+                    {
+                        raw = parsedHp;
+                    }
+                }
+            }
+            if (isDragon)
+            {
+                dragonIdx = i;
+                hpFieldIdx = fi;
+                hpRaw = raw;
+            }
+        }
+        if (dragonIdx < 0 || hpFieldIdx < 0)
+        {
+            return (false, string.Empty);
+        }
+
+        var hp = BitConverter.GetBytes(hpRaw); // 8 LE bytes
+        // Guard: only the known donor-dragon TStat shape. byte[5..7] = the
+        // current-HP u16; bytes 0..5 are the marker and byte 7 is 0.
+        if (hp.Length != 8 || hp[0] != 0x01 || hp[1] != 0x00 || hp[2] != 0x01
+            || hp[3] != 0x01 || hp[4] != 0x01 || hp[7] != 0x00)
+        {
+            return (false, string.Empty);
+        }
+        var current = (ushort)(hp[5] | (hp[6] << 8));
+        if (current >= MountCatalog.DragonFullHp)
+        {
+            return (false, " HP already full.");
+        }
+
+        var full = BitConverter.GetBytes(MountCatalog.DragonFullHp);
+        hp[5] = full[0];
+        hp[6] = full[1];
+
+        var path = new[] { new PathStep((uint)merc.Value.ListFieldIndex, (uint)dragonIdx) };
+        var blockIdx = merc.Value.BlockIndex;
+        var bytes = hp;
+        CrimsonSaveException? error = null;
+        await Task.Run(() =>
+        {
+            try { loader.SetScalarField(blockIdx, path, hpFieldIdx, bytes); }
+            catch (CrimsonSaveException ex) { error = ex; }
+        });
+        return error is not null
+            ? (false, $" HP fill failed: {error.Message}.")
+            : (true, $" HP filled to {MountCatalog.DragonFullHp}.");
+    }
+
+    /// <summary>
+    /// Insert the dragon's real <c>_mercenaryDataList</c> element (captured as
+    /// <see cref="MountCatalog.DragonElementHex"/>) into the loaded save (a
+    /// charKey swap on a generic clone CTDs — the element content must match
+    /// the charKey). The captured bytes carry the source save's schema
+    /// type-indices, so we remap them to THIS save's indices by class name
+    /// (read from the save's own merc elements) — the same remap
+    /// <c>crimson_save_transplant_list_element</c> does, but for a byte blob,
+    /// so no whole-save donor embed is needed. The inserted element is
+    /// re-numbered (fresh u64 <c>_mercenaryNo</c>) and de-flagged as main so
+    /// it doesn't displace the player's active mount. Returns <c>null</c> on
+    /// success, else an error message.
+    /// </summary>
+    private async Task<string?> InsertDragonElementAsync(
         (int BlockIndex, int ListFieldIndex, IReadOnlyList<BlockDetails> Elements) tgt)
     {
-        string? tempPath = null;
-        NativeSaveLoader? sourceLoader = null;
+        if (tgt.Elements.Count == 0)
+        {
+            return "No existing mercenary to read this save's schema type-indices from.";
+        }
+
+        // Collect this save's type-index for each class the dragon element
+        // nests, plus the _mercenaryNo / _isMainMercenary field indices —
+        // both by walking the save's own merc elements (same schema).
+        var classIndices = new Dictionary<string, int>(StringComparer.Ordinal);
+        var mercNoFieldIdx = -1;
+        var isMainFieldIdx = -1;
+        foreach (var el in tgt.Elements)
+        {
+            CollectClassIndices(el, classIndices);
+            foreach (var f in el.Fields)
+            {
+                if (mercNoFieldIdx < 0
+                    && string.Equals(f.Name, "_mercenaryNo", StringComparison.Ordinal))
+                {
+                    mercNoFieldIdx = f.FieldIndex;
+                }
+                else if (isMainFieldIdx < 0
+                    && string.Equals(f.Name, "_isMainMercenary", StringComparison.Ordinal))
+                {
+                    isMainFieldIdx = f.FieldIndex;
+                }
+            }
+            if (mercNoFieldIdx >= 0 && isMainFieldIdx >= 0
+                && Array.TrueForAll(MountCatalog.DragonElementTypeIndexFixups,
+                    fx => classIndices.ContainsKey(fx.ClassName)))
+            {
+                break;
+            }
+        }
+
+        // Remap the captured element's type-indices to this save.
+        var bytes = Convert.FromHexString(MountCatalog.DragonElementHex);
+        foreach (var (offset, className) in MountCatalog.DragonElementTypeIndexFixups)
+        {
+            if (!classIndices.TryGetValue(className, out var targetIdx))
+            {
+                return $"This save has no '{className}' type to remap the dragon element onto.";
+            }
+            if (targetIdx > ushort.MaxValue || offset + 2 > bytes.Length)
+            {
+                return "Dragon element remap offset out of range (schema drift?).";
+            }
+            bytes[offset] = (byte)(targetIdx & 0xFF);
+            bytes[offset + 1] = (byte)((targetIdx >> 8) & 0xFF);
+        }
+
+        // Append at the tail; pick a collision-free _mercenaryNo (u64).
+        var insertAt = tgt.Elements.Count;
+        ulong maxMercNo = 0;
+        foreach (var el in tgt.Elements)
+        {
+            foreach (var f in el.Fields)
+            {
+                if (string.Equals(f.Name, "_mercenaryNo", StringComparison.Ordinal)
+                    && f.Present && TryParseScalarUInt(f.Value, out var mn) && mn > maxMercNo)
+                {
+                    maxMercNo = mn;
+                }
+            }
+        }
+        var newMercNo = maxMercNo + 1;
+
+        var blockIdx = tgt.BlockIndex;
+        var listFieldIdx = tgt.ListFieldIndex;
         CrimsonSaveException? error = null;
-        try
+        await Task.Run(() =>
         {
-            // Extract the embedded donor save to a temp file.
-            var asm = typeof(MountCatalog).Assembly;
-            await using (var res = asm.GetManifestResourceStream(MountCatalog.DragonDonorResourceName))
+            try
             {
-                if (res is null)
+                loader.ListInsertElement(
+                    blockIdx, ReadOnlySpan<PathStep>.Empty, listFieldIdx, insertAt, bytes);
+                var dragonPath = new[] { new PathStep((uint)listFieldIdx, (uint)insertAt) };
+                // Fresh u64 _mercenaryNo so it can't collide with an existing
+                // merc/mount; the captured element's number would.
+                if (mercNoFieldIdx >= 0)
                 {
-                    return "Embedded dragon donor is missing from this build.";
+                    loader.SetScalarField(
+                        blockIdx, dragonPath, mercNoFieldIdx, BitConverter.GetBytes(newMercNo));
                 }
-                tempPath = System.IO.Path.Combine(
-                    System.IO.Path.GetTempPath(), $"cd_dragon_donor_{Guid.NewGuid():N}.save");
-                await using var fs = System.IO.File.Create(tempPath);
-                await res.CopyToAsync(fs);
-            }
-
-            sourceLoader = new NativeSaveLoader();
-            var srcLoader = sourceLoader;
-            var srcSummary = await Task.Run(() => srcLoader.Load(tempPath));
-            var src = LoadMercList(srcLoader, tempPath, srcSummary.Blocks);
-            if (src is null)
-            {
-                return "Donor save shape unexpected (no merc list).";
-            }
-
-            // Find the dragon element + its _mercenaryNo / _isMainMercenary
-            // field indices (schema-stable, so they apply to the clone too).
-            var dragonIdx = -1;
-            var mercNoFieldIdx = -1;
-            var isMainFieldIdx = -1;
-            for (var i = 0; i < src.Value.Elements.Count; i++)
-            {
-                var el = src.Value.Elements[i];
-                var isDragon = false;
-                foreach (var f in el.Fields)
+                // Clear _isMainMercenary so the dragon doesn't displace the
+                // player's current active mount on load.
+                if (isMainFieldIdx >= 0)
                 {
-                    if (string.Equals(f.Name, "_characterKey", StringComparison.Ordinal)
-                        && TryParseScalarUInt(f.Value, out var ck)
-                        && ck == MountCatalog.DragonCharacterKey)
-                    {
-                        isDragon = true;
-                    }
-                    else if (string.Equals(f.Name, "_mercenaryNo", StringComparison.Ordinal))
-                    {
-                        mercNoFieldIdx = f.FieldIndex;
-                    }
-                    else if (string.Equals(f.Name, "_isMainMercenary", StringComparison.Ordinal))
-                    {
-                        isMainFieldIdx = f.FieldIndex;
-                    }
-                }
-                if (isDragon)
-                {
-                    dragonIdx = i;
-                    break;
+                    loader.SetScalarField(
+                        blockIdx, dragonPath, isMainFieldIdx, new byte[] { 0 });
                 }
             }
-            if (dragonIdx < 0)
+            catch (CrimsonSaveException ex)
             {
-                return "Donor save no longer contains the dragon element.";
+                error = ex;
             }
-
-            // Append at the tail; pick a collision-free _mercenaryNo (u64).
-            var insertAt = tgt.Elements.Count;
-            ulong maxMercNo = 0;
-            foreach (var el in tgt.Elements)
-            {
-                foreach (var f in el.Fields)
-                {
-                    if (string.Equals(f.Name, "_mercenaryNo", StringComparison.Ordinal)
-                        && f.Present && TryParseScalarUInt(f.Value, out var mn) && mn > maxMercNo)
-                    {
-                        maxMercNo = mn;
-                    }
-                }
-            }
-            var newMercNo = maxMercNo + 1;
-
-            var tgtBlock = tgt.BlockIndex;
-            var tgtField = tgt.ListFieldIndex;
-            var srcBlock = src.Value.BlockIndex;
-            var srcField = src.Value.ListFieldIndex;
-            var sl = srcLoader;
-            await Task.Run(() =>
-            {
-                try
-                {
-                    loader.TransplantListElement(
-                        sl,
-                        tgtBlock, ReadOnlySpan<PathStep>.Empty, tgtField, insertAt,
-                        srcBlock, ReadOnlySpan<PathStep>.Empty, srcField, dragonIdx);
-                    var dragonPath = new[] { new PathStep((uint)tgtField, (uint)insertAt) };
-                    // Fresh u64 _mercenaryNo so it can't collide with an
-                    // existing merc/mount; the donor's number would.
-                    if (mercNoFieldIdx >= 0)
-                    {
-                        loader.SetScalarField(
-                            tgtBlock, dragonPath, mercNoFieldIdx, BitConverter.GetBytes(newMercNo));
-                    }
-                    // Clear _isMainMercenary so the dragon doesn't displace the
-                    // player's current active mount on load.
-                    if (isMainFieldIdx >= 0)
-                    {
-                        loader.SetScalarField(
-                            tgtBlock, dragonPath, isMainFieldIdx, new byte[] { 0 });
-                    }
-                }
-                catch (CrimsonSaveException ex)
-                {
-                    error = ex;
-                }
-            });
-        }
-        finally
-        {
-            sourceLoader?.Dispose();
-            if (tempPath is not null)
-            {
-                try { System.IO.File.Delete(tempPath); }
-                catch (IOException) { /* temp leak is harmless */ }
-            }
-        }
+        });
 
         return error is not null
-            ? $"Dragon transplant failed: {error.Message} (code {error.ErrorCode})."
+            ? $"Dragon element insert failed: {error.Message} (code {error.ErrorCode})."
             : null;
+    }
+
+    /// <summary>
+    /// Recursively collect <c>class name → schema type-index</c> from a
+    /// decoded object tree (first occurrence wins). Used to learn THIS save's
+    /// type-indices for the classes the dragon element nests, so the captured
+    /// bytes can be remapped onto it.
+    /// </summary>
+    private static void CollectClassIndices(BlockDetails obj, Dictionary<string, int> into)
+    {
+        into.TryAdd(obj.ClassName, obj.ClassIndex);
+        foreach (var f in obj.Fields)
+        {
+            if (f.Child is { } child)
+            {
+                CollectClassIndices(child, into);
+            }
+            if (f.Elements is { } elements)
+            {
+                foreach (var e in elements)
+                {
+                    CollectClassIndices(e, into);
+                }
+            }
+        }
     }
 
     /// <summary>

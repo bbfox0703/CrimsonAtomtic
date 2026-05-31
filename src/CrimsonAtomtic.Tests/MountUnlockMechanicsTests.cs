@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Globalization;
 using CrimsonAtomtic.RustInterop;
 using CrimsonAtomtic.SaveModel;
@@ -7,17 +8,17 @@ using Xunit;
 namespace CrimsonAtomtic.Tests;
 
 /// <summary>
-/// End-to-end mechanics test for the dragon mount-unlock path at the loader
-/// level (the genuinely-new runtime pieces: extract the embedded donor →
-/// temp file → load as a source loader → <see cref="ISaveLoader.TransplantListElement"/>
-/// into a real save → write + reload). Mirrors what
-/// <c>MainWindowViewModel.UnlockDragonAsync</c> does, minus the VM glue, so
-/// the transplant + HMAC round-trip is guarded without needing
-/// InternalsVisibleTo.
+/// End-to-end mechanics test for the dragon mount-unlock at the loader level
+/// (mirrors <c>MainWindowViewModel.InsertDragonElementAsync</c> +
+/// <c>FillDragonHpAsync</c>, minus the VM glue): remap the embedded
+/// <see cref="MountCatalog.DragonElementHex"/>'s schema type-indices onto a
+/// real save by class name, <see cref="ISaveLoader.ListInsertElement"/> it,
+/// fill HP, then write + reload and confirm HMAC + the dragon decodes with its
+/// nested objects resolving to the right classes (proving the remap). This is
+/// the guard for the no-donor (no 1.47 MB embed) path.
 ///
-/// <para>Skips cleanly when no live save is present (CI / fresh machine),
-/// matching every other save-touching test. Never writes the user's real
-/// save — it loads read-only and writes only to a temp output.</para>
+/// <para>Skips when no live save is present. Never writes the user's real
+/// save — loads read-only, writes only to a temp output.</para>
 /// </summary>
 public sealed class MountUnlockMechanicsTests
 {
@@ -39,8 +40,6 @@ public sealed class MountUnlockMechanicsTests
         }
         foreach (var user in Directory.EnumerateDirectories(root))
         {
-            // Prefer the manual slots (more likely fully-progressed), then
-            // the autosaves.
             foreach (var slot in new[] { "slot105", "slot100", "slot0", "slot1", "slot2" })
             {
                 var p = Path.Combine(user, slot, "save.save");
@@ -53,18 +52,7 @@ public sealed class MountUnlockMechanicsTests
         return null;
     }
 
-    private static string ExtractDonorToTemp()
-    {
-        var asm = typeof(MountCatalog).Assembly;
-        using var res = asm.GetManifestResourceStream(MountCatalog.DragonDonorResourceName);
-        Assert.NotNull(res);
-        var tmp = Path.Combine(Path.GetTempPath(), $"cd_dragon_donor_test_{Guid.NewGuid():N}.save");
-        using var fs = File.Create(tmp);
-        res!.CopyTo(fs);
-        return tmp;
-    }
-
-    private static (int BlockIndex, int FieldIndex, int Count) FindMercList(
+    private static (int BlockIndex, int FieldIndex, IReadOnlyList<BlockDetails> Elements)? FindMercList(
         NativeSaveLoader loader, string path, IReadOnlyList<BlockSummary> blocks)
     {
         foreach (var b in blocks)
@@ -79,37 +67,30 @@ public sealed class MountUnlockMechanicsTests
                 if (string.Equals(f.Name, MercListField, StringComparison.Ordinal)
                     && f.Elements is { } els)
                 {
-                    return (b.Index, f.FieldIndex, els.Count);
+                    return (b.Index, f.FieldIndex, els);
                 }
             }
         }
-        return (-1, -1, -1);
+        return null;
     }
 
-    private static int FindCharKeyElement(
-        NativeSaveLoader loader, string path, int blockIdx, uint charKey)
+    private static void CollectClassIndices(BlockDetails obj, Dictionary<string, int> into)
     {
-        var details = loader.LoadBlockDetails(path, blockIdx);
-        foreach (var f in details.Fields)
+        into.TryAdd(obj.ClassName, obj.ClassIndex);
+        foreach (var f in obj.Fields)
         {
-            if (!string.Equals(f.Name, MercListField, StringComparison.Ordinal)
-                || f.Elements is not { } els)
+            if (f.Child is { } child)
             {
-                continue;
+                CollectClassIndices(child, into);
             }
-            for (var i = 0; i < els.Count; i++)
+            if (f.Elements is { } elements)
             {
-                foreach (var cf in els[i].Fields)
+                foreach (var e in elements)
                 {
-                    if (string.Equals(cf.Name, CharKeyField, StringComparison.Ordinal)
-                        && ParseLeadingUInt(cf.Value) == charKey)
-                    {
-                        return i;
-                    }
+                    CollectClassIndices(e, into);
                 }
             }
         }
-        return -1;
     }
 
     private static uint ParseLeadingUInt(string formatted)
@@ -119,8 +100,15 @@ public sealed class MountUnlockMechanicsTests
             ? v : 0;
     }
 
+    private static ulong ParseLeadingUInt64(string formatted)
+    {
+        var token = formatted.Split(' ', 2)[0];
+        return ulong.TryParse(token, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v)
+            ? v : 0;
+    }
+
     [Fact]
-    public void TransplantDragon_GrowsMercList_AndSurvivesRoundTrip()
+    public void InsertDragonElement_RemapsTypeIndices_FillsHp_AndSurvivesRoundTrip()
     {
         var targetPath = FindLiveSave();
         if (targetPath is null)
@@ -128,61 +116,82 @@ public sealed class MountUnlockMechanicsTests
             return; // No live save — skip on CI / fresh machine.
         }
 
-        var donorPath = ExtractDonorToTemp();
-        var outPath = Path.Combine(Path.GetTempPath(), $"cd_dragon_out_{Guid.NewGuid():N}.save");
+        var outPath = Path.Combine(Path.GetTempPath(), $"cd_dragon_insert_{Guid.NewGuid():N}.save");
         try
         {
-            using var target = new NativeSaveLoader();
-            var targetSummary = target.Load(targetPath);
+            using var loader = new NativeSaveLoader();
+            var summary = loader.Load(targetPath);
+            var merc = FindMercList(loader, targetPath, summary.Blocks);
+            Assert.NotNull(merc);
+            Assert.True(merc!.Value.Elements.Count > 0);
 
-            using var source = new NativeSaveLoader();
-            var sourceSummary = source.Load(donorPath);
+            // Learn this save's type-indices for the dragon element's classes.
+            var classIndices = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var el in merc.Value.Elements)
+            {
+                CollectClassIndices(el, classIndices);
+            }
+            foreach (var fx in MountCatalog.DragonElementTypeIndexFixups)
+            {
+                Assert.True(classIndices.ContainsKey(fx.ClassName),
+                    $"save lacks '{fx.ClassName}' to remap onto");
+            }
 
-            var tgt = FindMercList(target, targetPath, targetSummary.Blocks);
-            var src = FindMercList(source, donorPath, sourceSummary.Blocks);
-            Assert.True(tgt.BlockIndex >= 0, "target has no MercenaryClanSaveData merc list");
-            Assert.True(src.BlockIndex >= 0, "donor has no MercenaryClanSaveData merc list");
+            // Remap the captured element bytes onto this save.
+            var bytes = Convert.FromHexString(MountCatalog.DragonElementHex);
+            foreach (var (offset, className) in MountCatalog.DragonElementTypeIndexFixups)
+            {
+                var idx = classIndices[className];
+                bytes[offset] = (byte)(idx & 0xFF);
+                bytes[offset + 1] = (byte)((idx >> 8) & 0xFF);
+            }
 
-            var dragonIdx = FindCharKeyElement(source, donorPath, src.BlockIndex,
-                MountCatalog.DragonCharacterKey);
-            Assert.True(dragonIdx >= 0,
-                "embedded donor no longer contains the dragon element (charKey 1000799)");
+            var insertAt = merc.Value.Elements.Count;
+            loader.ListInsertElement(merc.Value.BlockIndex, ReadOnlySpan<PathStep>.Empty,
+                merc.Value.FieldIndex, insertAt, bytes);
 
-            var insertAt = tgt.Count;
-            target.TransplantListElement(
-                source,
-                tgt.BlockIndex, ReadOnlySpan<PathStep>.Empty, tgt.FieldIndex, insertAt,
-                src.BlockIndex, ReadOnlySpan<PathStep>.Empty, src.FieldIndex, dragonIdx);
+            // Fill HP on the just-inserted element (current u16 at bytes 5..7).
+            var afterInsert = loader.LoadBlockDetails(targetPath, merc.Value.BlockIndex);
+            var listAfter = afterInsert.Fields.Single(f => f.Name == MercListField && f.Elements is not null);
+            var dragonElem = listAfter.Elements![insertAt];
+            Assert.Equal(MountCatalog.DragonCharacterKey,
+                ParseLeadingUInt(dragonElem.Fields.Single(f => f.Name == CharKeyField).Value));
+            // Nested objects must resolve to the right classes — proves the remap.
+            var dragonClasses = new Dictionary<string, int>(StringComparer.Ordinal);
+            CollectClassIndices(dragonElem, dragonClasses);
+            Assert.Contains("ExperienceLevelSaveData", dragonClasses.Keys);
+            Assert.Contains("FriendlyDailyCountSaveData", dragonClasses.Keys);
 
-            // The list grew by exactly one and the tail is the dragon.
-            var afterCount = FindMercList(target, targetPath, targetSummary.Blocks).Count;
-            Assert.Equal(insertAt + 1, afterCount);
-            var newDragonIdx = FindCharKeyElement(target, targetPath, tgt.BlockIndex,
-                MountCatalog.DragonCharacterKey);
-            Assert.Equal(insertAt, newDragonIdx);
+            var hpField = dragonElem.Fields.Single(f => f.Name == "_currentHp");
+            var hp = BitConverter.GetBytes(ParseLeadingUInt64(hpField.Value));
+            var full = BitConverter.GetBytes(MountCatalog.DragonFullHp);
+            hp[5] = full[0];
+            hp[6] = full[1];
+            var dragonPath = new[] { new PathStep((uint)merc.Value.FieldIndex, (uint)insertAt) };
+            loader.SetScalarField(merc.Value.BlockIndex, dragonPath, hpField.FieldIndex, hp);
 
-            // Persisted shape survives a full encode → HMAC → reload.
-            target.WriteToFile(outPath);
+            // Full encode → HMAC → reload.
+            loader.WriteToFile(outPath);
             using var reloaded = new NativeSaveLoader();
             var reSummary = reloaded.Load(outPath);
-            Assert.True(reSummary.HmacOk, "round-tripped save failed HMAC");
-            var reBlock = FindMercList(reloaded, outPath, reSummary.Blocks);
-            Assert.Equal(insertAt + 1, reBlock.Count);
-            Assert.True(
-                FindCharKeyElement(reloaded, outPath, reBlock.BlockIndex,
-                    MountCatalog.DragonCharacterKey) >= 0,
-                "dragon element missing after reload");
+            Assert.True(reSummary.HmacOk, "dragon-inserted save failed HMAC");
+
+            var reMerc = FindMercList(reloaded, outPath, reSummary.Blocks);
+            Assert.NotNull(reMerc);
+            Assert.Equal(insertAt + 1, reMerc!.Value.Elements.Count);
+            var reDetails = reloaded.LoadBlockDetails(outPath, reMerc.Value.BlockIndex);
+            var reList = reDetails.Fields.Single(f => f.Name == MercListField && f.Elements is not null);
+            var reDragon = reList.Elements![insertAt];
+            Assert.Equal(MountCatalog.DragonCharacterKey,
+                ParseLeadingUInt(reDragon.Fields.Single(f => f.Name == CharKeyField).Value));
+            var reHp = BitConverter.GetBytes(
+                ParseLeadingUInt64(reDragon.Fields.Single(f => f.Name == "_currentHp").Value));
+            Assert.Equal(MountCatalog.DragonFullHp, (ushort)(reHp[5] | (reHp[6] << 8)));
         }
         finally
         {
-            TryDelete(donorPath);
-            TryDelete(outPath);
+            try { if (File.Exists(outPath)) File.Delete(outPath); }
+            catch (IOException) { /* temp leak is harmless */ }
         }
-    }
-
-    private static void TryDelete(string p)
-    {
-        try { if (File.Exists(p)) File.Delete(p); }
-        catch (IOException) { /* temp leak is harmless */ }
     }
 }

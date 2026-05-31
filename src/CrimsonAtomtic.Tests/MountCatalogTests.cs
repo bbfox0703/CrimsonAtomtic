@@ -74,13 +74,26 @@ public sealed class MountCatalogTests
     }
 
     [Fact]
-    public void DonorResourceName_MatchesEmbeddedLogicalName()
+    public void DragonElement_HexAndFixups_AreConsistent()
     {
-        // The donor is embedded with this exact LogicalName in the .csproj;
-        // a mismatch would surface only at runtime as "donor missing".
-        var asm = typeof(MountCatalog).Assembly;
-        using var stream = asm.GetManifestResourceStream(MountCatalog.DragonDonorResourceName);
-        Assert.NotNull(stream);
-        Assert.True(stream!.Length > 0, "Embedded dragon donor save is empty.");
+        // The captured dragon element is 212 bytes (replaces the 1.47 MB
+        // whole-save donor embed).
+        var bytes = Convert.FromHexString(MountCatalog.DragonElementHex);
+        Assert.Equal(212, bytes.Length);
+
+        // Every type-index fixup offset is in range with room for a u16, and
+        // names only the classes the element actually nests.
+        var allowed = new[]
+        {
+            "MercenarySaveData", "ExperienceLevelSaveData", "FriendlyDailyCountSaveData",
+        };
+        Assert.NotEmpty(MountCatalog.DragonElementTypeIndexFixups);
+        foreach (var (offset, className) in MountCatalog.DragonElementTypeIndexFixups)
+        {
+            Assert.InRange(offset, 0, bytes.Length - 2);
+            Assert.Contains(className, allowed);
+        }
+        // The main element type-index sits at offset 8 (mbc=6 → 2+6).
+        Assert.Contains((8, "MercenarySaveData"), MountCatalog.DragonElementTypeIndexFixups);
     }
 }

@@ -39,18 +39,6 @@
     <AvaloniaResource Include="Assets\Logo.jpg" />
   </ItemGroup>
 
-  <!-- Mount-Unlock donor save: a real Crimson Desert save that owns the
-       dragon (charKey 1000799) in MercenaryClanSaveData._mercenaryDataList.
-       Embedded so the dragon's real element can be transplanted into the
-       user's save without them supplying a source save. Loaded at runtime
-       via a temp file (the save loader is file-path only). See
-       Services/MountCatalog.cs + ViewModels/MountUnlockViewModel. -->
-  <ItemGroup>
-    <EmbeddedResource Include="Assets\mounts\dragon_donor.save">
-      <LogicalName>CrimsonAtomtic.Ui.Assets.mounts.dragon_donor.save</LogicalName>
-    </EmbeddedResource>
-  </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Angle.Windows.Natives" />
