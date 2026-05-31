@@ -10,9 +10,12 @@
 [![Game Version](https://img.shields.io/badge/Game-Crimson%20Desert%201.05%E2%80%931.09-D63B3B)](https://www.playcrimsondesert.com/)
 
 A clean, fast save editor + game-data toolchain for **Crimson Desert** (Pearl
-Abyss). Tracks the live game install (currently **1.09**) and remains
-compatible with 1.05 / 1.06 / 1.08 saves via schema auto-detection. Cross-platform
-goal: Windows (primary), Linux, macOS.
+Abyss). It targets the live game install (currently **1.09**) for game-data /
+name resolution. Save parsing itself is **version-agnostic** — each save embeds
+its own schema, so the editor reads and **re-saves any patch's save (1.05–1.09)
+in that save's own format**, with no version conversion (and no need to
+downgrade your install to open an older save). Cross-platform goal: Windows
+(primary), Linux, macOS.
 
 ## Layout
 
@@ -122,13 +125,6 @@ set of Tools-menu bulk operations. Highlights:
   `9102 <u32>`.
 
 See [docs/status.md](docs/status.md) for the full feature ledger and roadmap.
-
-### Forum post drafts
-
-A pre-built feature-highlights post in
-[opencheattables.com phpBB markdown](docs/oct/phpBB-markdown-syntax.md)
-is checked in at [docs/oct/features-highlights.md](docs/oct/features-highlights.md)
-— ready to paste into a forum announcement after filling in the GitHub URL.
 
 ## Stack
 

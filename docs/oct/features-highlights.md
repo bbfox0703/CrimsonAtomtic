@@ -1,6 +1,6 @@
 # CrimsonAtomtic — Crimson Desert Save Editor
 
-A free save editor for **Crimson Desert** — works with game patches **1.05 / 1.06 / 1.08 / 1.09** and finds your save file automatically whether you bought the game on Steam, Epic, or Game Pass.
+A free save editor for **Crimson Desert**, built for the current game (patch **1.08 / 1.09**). It also opens older saves (1.05 / 1.06) and re-saves them in **their own format** — your save is never converted to a newer version. It finds your save file automatically whether you bought the game on Steam, Epic, or Game Pass.
 
 Just download one `.exe`, double-click it, no installer.
 
