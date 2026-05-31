@@ -1,0 +1,78 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        mc:Ignorable="d"
+        d:DesignWidth="860"
+        d:DesignHeight="480"
+        x:Class="CrimsonAtomtic.Ui.Views.MountUnlockWindow"
+        x:DataType="vm:MountUnlockViewModel"
+        Title="{DynamicResource MountUnlockWindowTitle}"
+        Icon="/Assets/MainIcon.ico"
+        Width="860" Height="480"
+        MinWidth="640" MinHeight="320"
+        FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
+
+  <DockPanel LastChildFill="True" Margin="12">
+    <!-- Header explains the two unlock paths. -->
+    <TextBlock DockPanel.Dock="Top"
+               Text="{DynamicResource MountUnlockHeader}"
+               TextWrapping="Wrap"
+               Opacity="0.7"
+               Margin="0,0,0,8" />
+
+    <!-- Status footer + Close -->
+    <Grid DockPanel.Dock="Bottom"
+          ColumnDefinitions="*,Auto"
+          ColumnSpacing="12"
+          Margin="0,8,0,0">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding StatusMessage}"
+                 Opacity="0.7"
+                 VerticalAlignment="Center"
+                 TextWrapping="Wrap" />
+      <Button Grid.Column="1"
+              Content="{DynamicResource MountUnlockClose}"
+              Click="OnCloseClick"
+              MinWidth="80"
+              VerticalAlignment="Top" />
+    </Grid>
+
+    <DataGrid ItemsSource="{Binding Rows}"
+              IsReadOnly="True"
+              CanUserResizeColumns="True"
+              CanUserSortColumns="False"
+              GridLinesVisibility="Horizontal"
+              HeadersVisibility="Column"
+              AutoGenerateColumns="False">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="{DynamicResource MountUnlockColMount}"
+                            Binding="{Binding DisplayName}"
+                            Width="260" />
+        <DataGridTextColumn Header="{DynamicResource MountUnlockColType}"
+                            Binding="{Binding KindLabel}"
+                            Width="130" />
+        <DataGridTextColumn Header="{DynamicResource MountUnlockColMethod}"
+                            Binding="{Binding MethodLabel}"
+                            Width="220" />
+        <DataGridTemplateColumn Header="{DynamicResource MountUnlockColAction}" Width="*">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate DataType="vm:MountUnlockRow">
+              <StackPanel Orientation="Horizontal" Spacing="8"
+                          VerticalAlignment="Center">
+                <Button Content="{DynamicResource MountUnlockAction}"
+                        Command="{Binding UnlockCommand}"
+                        Padding="8,2" MinHeight="0" />
+                <TextBlock Text="{Binding StatusText}"
+                           Opacity="0.7"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+      </DataGrid.Columns>
+    </DataGrid>
+  </DockPanel>
+</Window>

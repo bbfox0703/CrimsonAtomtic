@@ -87,6 +87,7 @@
   <sys:String x:Key="MenuUnlockAllAbyssGates">全てのアビスゲートをアンロック (マップ発見)(_U)…</sys:String>
   <sys:String x:Key="MenuBulkCompleteHeldSAChallenges">所持中で現在処理可能な封印アビス遺物チャレンジを全てクリア(_C)…</sys:String>
   <sys:String x:Key="MenuEditAbyssGates">アビスゲートを編集 (個別にロック/アンロック)(_E)…</sys:String>
+  <sys:String x:Key="MenuUnlockMounts">騎乗をアンロック (シジル + ドラゴン)(_U)…</sys:String>
   <sys:String x:Key="MenuEditItemDyes">アイテムの染色を編集(_D)…</sys:String>
   <sys:String x:Key="MenuVendorBuyback">商人の買い戻しリスト(_V)…</sys:String>
   <sys:String x:Key="MenuReviewChanges">未保存の変更を確認(_R)…</sys:String>
@@ -184,6 +185,16 @@
   <sys:String x:Key="AbyssGatesClose">閉じる</sys:String>
   <sys:String x:Key="AbyssGatesNotAvailableTitle">このセーブにアビスゲートがありません</sys:String>
   <sys:String x:Key="AbyssGatesNotAvailableBody">FieldSaveData._fieldGimmickSaveDataList 内に、gimmickinfo.pabgb の abyss / hyperspace 許可リストに一致する FieldGimmickSaveData 要素がありません。セーブに FieldSaveData の root がまだないか (ゲーム序盤)、ゲームインストールパスが未設定で gimmickinfo を読めない可能性があります。</sys:String>
+
+  <!-- 騎乗アンロックダイアログ -->
+  <sys:String x:Key="MountUnlockWindowTitle">騎乗をアンロック</sys:String>
+  <sys:String x:Key="MountUnlockHeader">シジル騎乗 (クマ、シカ、アイベックス、イボイノシシ、シルバーファング、フェニックス) は「結束のシジル」としてクエストアーティファクトに付与されます。ゲームを起動してシジルを「使用」するとアンロックが完了します (エンジンが召喚と騎乗能力を付与)。ドラゴン (ブラックスター) は直接アンロックされます: 同梱のドナーセーブから実際の騎乗要素を移植し、召喚ナレッジを注入します。次回の「ファイル → 保存」でファイルに書き込まれます。</sys:String>
+  <sys:String x:Key="MountUnlockColMount">騎乗</sys:String>
+  <sys:String x:Key="MountUnlockColType">種類</sys:String>
+  <sys:String x:Key="MountUnlockColMethod">方法</sys:String>
+  <sys:String x:Key="MountUnlockColAction">操作</sys:String>
+  <sys:String x:Key="MountUnlockAction">アンロック</sys:String>
+  <sys:String x:Key="MountUnlockClose">閉じる</sys:String>
   <sys:String x:Key="MenuFontSize">フォントサイズ(_F)</sys:String>
   <sys:String x:Key="SummaryToggleTip">セーブサマリーパネルを表示 / 非表示 — メイングリッドにスペースを譲ります。</sys:String>
   <sys:String x:Key="MenuLanguage">セカンダリ言語(_S)</sys:String>

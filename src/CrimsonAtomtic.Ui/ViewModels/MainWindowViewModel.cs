@@ -3488,6 +3488,493 @@ public sealed partial class MainWindowViewModel(
     }
 
     /// <summary>
+    /// Grant one item into a specific inventory container addressed by its
+    /// <c>_inventoryKey</c> (e.g. 5 = Quest Artifacts), independent of the
+    /// current navigation. Clones an existing <c>ItemSaveData</c> template
+    /// in that container's <c>_itemList</c> and patches it to a fresh,
+    /// collision-free entry — the same recipe as
+    /// <see cref="AddItemToCurrentListAsync"/> (incl. the
+    /// <c>_transferredItemKey</c> engine cross-check) but container-targeted.
+    /// Used by the Mount-Unlock dialog to drop a Sigil of Solidarity into
+    /// Quest Artifacts. Returns <c>(ok, message)</c>; sets
+    /// <see cref="IsDirty"/> + logs on success.
+    /// </summary>
+    internal async Task<(bool Ok, string Message)> GrantItemToContainerAsync(
+        uint inventoryKey, uint itemKey)
+    {
+        if (_loadedPath is null || Summary is not { Blocks: { } blocks })
+        {
+            return (false, "No save loaded.");
+        }
+        var invBlock = FindFirstBlockByClassName(blocks, "InventorySaveData");
+        if (invBlock is null)
+        {
+            return (false, "No InventorySaveData block in this save.");
+        }
+        BlockDetails invDetails;
+        try
+        {
+            invDetails = loader.LoadBlockDetails(_loadedPath, invBlock.Index);
+        }
+        catch (CrimsonSaveException ex)
+        {
+            return (false, $"Could not read inventory: {ex.Message}");
+        }
+
+        var invListField = FindFieldByName(invDetails, "_inventorylist");
+        if (invListField?.Elements is not { Count: > 0 } containers)
+        {
+            return (false, "Inventory has no _inventorylist containers.");
+        }
+        // Find the container element whose _inventoryKey matches.
+        var containerIdx = -1;
+        for (var i = 0; i < containers.Count && containerIdx < 0; i++)
+        {
+            foreach (var f in containers[i].Fields)
+            {
+                if (string.Equals(f.Name, "_inventoryKey", StringComparison.Ordinal)
+                    && TryParseScalarUInt(f.Value, out var ik) && ik == inventoryKey)
+                {
+                    containerIdx = i;
+                    break;
+                }
+            }
+        }
+        if (containerIdx < 0)
+        {
+            return (false,
+                $"No inventory container with _inventoryKey={inventoryKey} in this save "
+                + "(it may be virtual / not yet materialised).");
+        }
+        var container = containers[containerIdx];
+        var itemListField = FindFieldByName(container, "_itemList");
+        if (itemListField is null
+            || !string.Equals(itemListField.Kind, "object_list", StringComparison.Ordinal)
+            || itemListField.Elements is not { Count: > 0 } items)
+        {
+            return (false,
+                $"Container _inventoryKey={inventoryKey} has no item to use as a clone template "
+                + "(empty container). Pick up any item into it in-game first, then retry.");
+        }
+
+        // Resolve field indices off the template (item[0]) — schema is
+        // uniform across the list, so the same indices apply to the clone.
+        var template = items[0];
+        if (!TryFindItemSaveDataFieldIndices(template, out var idxItemKey, out var idxStackCount,
+                out var idxSlotNo, out var idxItemNo))
+        {
+            return (false, "Container's item template is missing "
+                + "_itemKey / _stackCount / _slotNo / _itemNo.");
+        }
+        var idxTransferred = -1;
+        var idxIsNewMark = -1;
+        for (var i = 0; i < template.Fields.Count; i++)
+        {
+            var n = template.Fields[i].Name;
+            if (n == "_transferredItemKey") idxTransferred = i;
+            else if (n == "_isNewMark") idxIsNewMark = i;
+        }
+        var sourceIsNewMarkPresent = idxIsNewMark >= 0 && template.Fields[idxIsNewMark].Present;
+
+        var (maxSlot, maxItemNo) = ScanItemListMaxes(items);
+        var newSlotNo = (ushort)Math.Min(maxSlot + 1, ushort.MaxValue);
+        var newItemNo = maxItemNo + 1;
+        const ulong newStackCount = 1UL;
+
+        var blockIdx = invBlock.Index;
+        var itemListFieldIdx = itemListField.FieldIndex;
+        // Path to the container element that owns _itemList.
+        var listPath = new[]
+        {
+            new PathStep((uint)invListField.FieldIndex, (uint)containerIdx),
+        };
+        const int dstIdx = 0;
+        // Where the clone lands once inserted at index 0.
+        var clonePath = new[]
+        {
+            new PathStep((uint)invListField.FieldIndex, (uint)containerIdx),
+            new PathStep((uint)itemListFieldIdx, (uint)dstIdx),
+        };
+
+        var batchOps = new List<ScalarBatchOp>(6)
+        {
+            new(blockIdx, clonePath, idxItemKey,    BitConverter.GetBytes(itemKey)),
+            new(blockIdx, clonePath, idxStackCount, BitConverter.GetBytes(newStackCount)),
+            new(blockIdx, clonePath, idxSlotNo,     BitConverter.GetBytes(newSlotNo)),
+            new(blockIdx, clonePath, idxItemNo,     BitConverter.GetBytes(newItemNo)),
+        };
+        // _transferredItemKey = ((itemKey & 0xFFFF) << 16) | 0x0101 — the
+        // engine cross-check field; omitting it corrupts the entry (see
+        // AddItemToCurrentListAsync for the empirical derivation).
+        if (idxTransferred >= 0)
+        {
+            var newTransferred = (uint)(((itemKey & 0xFFFFu) << 16) | 0x0101u);
+            batchOps.Add(new ScalarBatchOp(
+                blockIdx, clonePath, idxTransferred, BitConverter.GetBytes(newTransferred)));
+        }
+
+        CrimsonSaveException? error = null;
+        await Task.Run(() =>
+        {
+            try
+            {
+                loader.ListCloneElement(blockIdx, listPath, itemListFieldIdx,
+                    sourceIndex: 0, destinationIndex: dstIdx);
+                loader.SetScalarFieldsBatch(batchOps);
+                if (idxIsNewMark >= 0)
+                {
+                    var markByte = new byte[] { 0x01 };
+                    if (!sourceIsNewMarkPresent)
+                    {
+                        loader.SetScalarFieldPresent(blockIdx, clonePath, idxIsNewMark,
+                            makePresent: true, markByte);
+                    }
+                    else
+                    {
+                        loader.SetScalarField(blockIdx, clonePath, idxIsNewMark, markByte);
+                    }
+                }
+            }
+            catch (CrimsonSaveException ex)
+            {
+                error = ex;
+            }
+        });
+
+        // Refresh the navigation view if it's currently showing this block.
+        try
+        {
+            var freshTop = loader.LoadBlockDetails(_loadedPath, blockIdx);
+            RefreshNavStack(freshTop);
+            RebuildFromTop();
+        }
+        catch (CrimsonSaveException)
+        {
+            // Stale view is better than a crash.
+        }
+
+        if (error is not null)
+        {
+            return (false, $"Grant failed: {error.Message} (code {error.ErrorCode}).");
+        }
+        IsDirty = true;
+        var name = localization.LookupItemName(itemKey, LocalizationProvider.DefaultLanguage)
+                   ?? localization.ItemInfoStringKey(itemKey)
+                   ?? itemKey.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        Journal.Log("Mount unlock",
+            $"Granted {name} (ItemKey {itemKey}) into container _inventoryKey={inventoryKey}");
+        OnPropertyChanged(nameof(WindowTitle));
+        return (true,
+            $"Granted {name} (slot {newSlotNo}, itemNo {newItemNo}).");
+    }
+
+    /// <summary>
+    /// Apply the unlock for one <see cref="MountEntry"/>, dispatching on its
+    /// <see cref="MountEntry.Kind"/>: sigil mounts get the sigil item granted
+    /// into Quest Artifacts (use in-game to finish); the dragon gets its real
+    /// element transplanted + knowledge injected. Returns <c>(ok, message)</c>.
+    /// </summary>
+    internal async Task<(bool Ok, string Message)> UnlockMountAsync(MountEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        switch (entry.Kind)
+        {
+            case MountUnlockKind.SigilGrant:
+            {
+                var (ok, msg) = await GrantItemToContainerAsync(
+                    MountCatalog.QuestArtifactsInventoryKey, entry.SigilItemKey);
+                if (!ok)
+                {
+                    return (false, msg);
+                }
+                return (true, msg
+                    + " Load the game and USE the sigil from Quest Artifacts to finish the unlock.");
+            }
+            case MountUnlockKind.DragonTransplant:
+                return await UnlockDragonAsync(entry);
+            default:
+                return (false, $"Unsupported unlock kind: {entry.Kind}.");
+        }
+    }
+
+    /// <summary>
+    /// Unlock the dragon: transplant its real <c>_mercenaryDataList</c>
+    /// element from the embedded donor save (a charKey swap on a generic
+    /// clone CTDs — the element content must match the charKey), then inject
+    /// its identity / summon knowledge. The donor is extracted to a temp file
+    /// because the save loader is file-path only. Post-transplant the element
+    /// is re-numbered (fresh <c>_mercenaryNo</c>) and de-flagged as main so it
+    /// doesn't displace the player's active mount.
+    /// </summary>
+    private async Task<(bool Ok, string Message)> UnlockDragonAsync(MountEntry entry)
+    {
+        if (_loadedPath is null || Summary is not { Blocks: { } blocks })
+        {
+            return (false, "No save loaded.");
+        }
+        var tgt = LoadMercList(loader, _loadedPath, blocks);
+        if (tgt is null)
+        {
+            return (false, "No MercenaryClanSaveData._mercenaryDataList in this save.");
+        }
+        // If the dragon element is already present (e.g. an earlier run added
+        // the element but with an incomplete knowledge set), skip the
+        // transplant and fall through to the knowledge inject below — this
+        // makes the unlock idempotent and lets a half-done run be repaired.
+        var dragonAlreadyPresent = false;
+        foreach (var el in tgt.Value.Elements)
+        {
+            foreach (var f in el.Fields)
+            {
+                if (string.Equals(f.Name, "_characterKey", StringComparison.Ordinal)
+                    && TryParseScalarUInt(f.Value, out var ck)
+                    && ck == MountCatalog.DragonCharacterKey)
+                {
+                    dragonAlreadyPresent = true;
+                    break;
+                }
+            }
+            if (dragonAlreadyPresent)
+            {
+                break;
+            }
+        }
+
+        if (!dragonAlreadyPresent)
+        {
+            var graftError = await GraftDragonElementAsync(tgt.Value);
+            if (graftError is not null)
+            {
+                return (false, graftError);
+            }
+        }
+
+        // Inject the dragon's identity / summon knowledge (the proven 187-key
+        // "no-quests" set), filtered to what's not already present. A
+        // knowledge failure here is non-fatal — the element already landed —
+        // so we report it as a warning.
+        var kApplied = 0;
+        string knowledgeNote;
+        var ctx = ResolveKnowledgeList(blocks, out var kErr);
+        if (ctx is null)
+        {
+            knowledgeNote = $" Knowledge inject skipped: {kErr}";
+        }
+        else
+        {
+            var toAdd = MountCatalog.DragonKnowledgeKeys
+                .Where(k => !ctx.ExistingKeys.Contains(k))
+                .ToList();
+            if (toAdd.Count == 0)
+            {
+                knowledgeNote = " Knowledge already present.";
+            }
+            else
+            {
+                var (applied, injectErr, _) = await ApplyKnowledgeInjectAsync(ctx, toAdd);
+                kApplied = applied;
+                knowledgeNote = injectErr is null
+                    ? $" + {applied} knowledge key(s)."
+                    : $" Knowledge inject failed: {injectErr.Message}.";
+            }
+        }
+
+        RefreshSelectedBlockSilently();
+
+        // Only dirty the save if something actually changed (a re-run with the
+        // element + all 187 keys already present is a no-op).
+        var changed = !dragonAlreadyPresent || kApplied > 0;
+        if (changed)
+        {
+            IsDirty = true;
+            Journal.Log("Mount unlock", dragonAlreadyPresent
+                ? $"Dragon already present — injected {kApplied} knowledge key(s)"
+                : $"Transplanted dragon (charKey {MountCatalog.DragonCharacterKey}) "
+                    + $"+ {kApplied} knowledge key(s)");
+            OnPropertyChanged(nameof(WindowTitle));
+        }
+
+        if (dragonAlreadyPresent && kApplied == 0)
+        {
+            return (true, "Dragon already fully unlocked (element + all knowledge present). "
+                + "If it still won't summon, the issue is outside the save.");
+        }
+        return (true,
+            (dragonAlreadyPresent
+                ? "Dragon element was already present — injected the missing knowledge."
+                : "Dragon unlocked: real element transplanted.")
+            + knowledgeNote + " Load in-game to summon.");
+    }
+
+    /// <summary>
+    /// Graft the dragon's real <c>_mercenaryDataList</c> element from the
+    /// embedded donor save into the loaded save (a charKey swap on a generic
+    /// clone CTDs — the element content must match the charKey). The donor is
+    /// extracted to a temp file because the save loader is file-path only. The
+    /// grafted element is re-numbered (fresh u64 <c>_mercenaryNo</c>) and
+    /// de-flagged as main so it doesn't displace the player's active mount.
+    /// Returns <c>null</c> on success, else an error message.
+    /// </summary>
+    private async Task<string?> GraftDragonElementAsync(
+        (int BlockIndex, int ListFieldIndex, IReadOnlyList<BlockDetails> Elements) tgt)
+    {
+        string? tempPath = null;
+        NativeSaveLoader? sourceLoader = null;
+        CrimsonSaveException? error = null;
+        try
+        {
+            // Extract the embedded donor save to a temp file.
+            var asm = typeof(MountCatalog).Assembly;
+            await using (var res = asm.GetManifestResourceStream(MountCatalog.DragonDonorResourceName))
+            {
+                if (res is null)
+                {
+                    return "Embedded dragon donor is missing from this build.";
+                }
+                tempPath = System.IO.Path.Combine(
+                    System.IO.Path.GetTempPath(), $"cd_dragon_donor_{Guid.NewGuid():N}.save");
+                await using var fs = System.IO.File.Create(tempPath);
+                await res.CopyToAsync(fs);
+            }
+
+            sourceLoader = new NativeSaveLoader();
+            var srcLoader = sourceLoader;
+            var srcSummary = await Task.Run(() => srcLoader.Load(tempPath));
+            var src = LoadMercList(srcLoader, tempPath, srcSummary.Blocks);
+            if (src is null)
+            {
+                return "Donor save shape unexpected (no merc list).";
+            }
+
+            // Find the dragon element + its _mercenaryNo / _isMainMercenary
+            // field indices (schema-stable, so they apply to the clone too).
+            var dragonIdx = -1;
+            var mercNoFieldIdx = -1;
+            var isMainFieldIdx = -1;
+            for (var i = 0; i < src.Value.Elements.Count; i++)
+            {
+                var el = src.Value.Elements[i];
+                var isDragon = false;
+                foreach (var f in el.Fields)
+                {
+                    if (string.Equals(f.Name, "_characterKey", StringComparison.Ordinal)
+                        && TryParseScalarUInt(f.Value, out var ck)
+                        && ck == MountCatalog.DragonCharacterKey)
+                    {
+                        isDragon = true;
+                    }
+                    else if (string.Equals(f.Name, "_mercenaryNo", StringComparison.Ordinal))
+                    {
+                        mercNoFieldIdx = f.FieldIndex;
+                    }
+                    else if (string.Equals(f.Name, "_isMainMercenary", StringComparison.Ordinal))
+                    {
+                        isMainFieldIdx = f.FieldIndex;
+                    }
+                }
+                if (isDragon)
+                {
+                    dragonIdx = i;
+                    break;
+                }
+            }
+            if (dragonIdx < 0)
+            {
+                return "Donor save no longer contains the dragon element.";
+            }
+
+            // Append at the tail; pick a collision-free _mercenaryNo (u64).
+            var insertAt = tgt.Elements.Count;
+            ulong maxMercNo = 0;
+            foreach (var el in tgt.Elements)
+            {
+                foreach (var f in el.Fields)
+                {
+                    if (string.Equals(f.Name, "_mercenaryNo", StringComparison.Ordinal)
+                        && f.Present && TryParseScalarUInt(f.Value, out var mn) && mn > maxMercNo)
+                    {
+                        maxMercNo = mn;
+                    }
+                }
+            }
+            var newMercNo = maxMercNo + 1;
+
+            var tgtBlock = tgt.BlockIndex;
+            var tgtField = tgt.ListFieldIndex;
+            var srcBlock = src.Value.BlockIndex;
+            var srcField = src.Value.ListFieldIndex;
+            var sl = srcLoader;
+            await Task.Run(() =>
+            {
+                try
+                {
+                    loader.TransplantListElement(
+                        sl,
+                        tgtBlock, ReadOnlySpan<PathStep>.Empty, tgtField, insertAt,
+                        srcBlock, ReadOnlySpan<PathStep>.Empty, srcField, dragonIdx);
+                    var dragonPath = new[] { new PathStep((uint)tgtField, (uint)insertAt) };
+                    // Fresh u64 _mercenaryNo so it can't collide with an
+                    // existing merc/mount; the donor's number would.
+                    if (mercNoFieldIdx >= 0)
+                    {
+                        loader.SetScalarField(
+                            tgtBlock, dragonPath, mercNoFieldIdx, BitConverter.GetBytes(newMercNo));
+                    }
+                    // Clear _isMainMercenary so the dragon doesn't displace the
+                    // player's current active mount on load.
+                    if (isMainFieldIdx >= 0)
+                    {
+                        loader.SetScalarField(
+                            tgtBlock, dragonPath, isMainFieldIdx, new byte[] { 0 });
+                    }
+                }
+                catch (CrimsonSaveException ex)
+                {
+                    error = ex;
+                }
+            });
+        }
+        finally
+        {
+            sourceLoader?.Dispose();
+            if (tempPath is not null)
+            {
+                try { System.IO.File.Delete(tempPath); }
+                catch (IOException) { /* temp leak is harmless */ }
+            }
+        }
+
+        return error is not null
+            ? $"Dragon transplant failed: {error.Message} (code {error.ErrorCode})."
+            : null;
+    }
+
+    /// <summary>
+    /// Locate <c>MercenaryClanSaveData._mercenaryDataList</c> on a loader and
+    /// return its block index, list field index, and current elements. Used
+    /// by the dragon transplant for both the target (this save) and source
+    /// (donor) loaders. Returns <c>null</c> when the block / field is absent.
+    /// </summary>
+    private static (int BlockIndex, int ListFieldIndex, IReadOnlyList<BlockDetails> Elements)? LoadMercList(
+        ISaveLoader ld, string savePath, IReadOnlyList<BlockSummary> blocks)
+    {
+        var b = FindFirstBlockByClassName(blocks, "MercenaryClanSaveData");
+        if (b is null)
+        {
+            return null;
+        }
+        BlockDetails d;
+        try { d = ld.LoadBlockDetails(savePath, b.Index); }
+        catch (CrimsonSaveException) { return null; }
+        var listField = FindFieldByName(d, "_mercenaryDataList");
+        if (listField?.Elements is not { } elements)
+        {
+            return null;
+        }
+        return (b.Index, listField.FieldIndex, elements);
+    }
+
+    /// <summary>
     /// Locate field indices of <c>_itemKey</c>, <c>_stackCount</c>,
     /// <c>_slotNo</c>, and <c>_itemNo</c> on an <c>ItemSaveData</c>
     /// element. All four must be present in the source's field list
@@ -4006,106 +4493,33 @@ public sealed partial class MainWindowViewModel(
             return;
         }
 
-        // Locate the KnowledgeSaveData top-level block + its _list field.
-        var blockSummary = FindFirstBlockByClassName(blocks, KnowledgeSaveDataClass);
-        if (blockSummary is null)
+        var ctx = ResolveKnowledgeList(blocks, out var resolveError);
+        if (ctx is null)
         {
-            BulkOpStatus = $"Nothing to do — no {KnowledgeSaveDataClass} block in this save.";
-            return;
-        }
-        BlockDetails details;
-        try
-        {
-            details = loader.LoadBlockDetails(_loadedPath, blockSummary.Index);
-        }
-        catch (CrimsonSaveException ex)
-        {
-            BulkOpStatus = $"Could not read {KnowledgeSaveDataClass}: {ex.Message}";
-            return;
-        }
-        var listField = FindFieldByName(details, KnowledgeListFieldName);
-        if (listField is null)
-        {
-            BulkOpStatus = $"Schema drift: {KnowledgeSaveDataClass} has no {KnowledgeListFieldName} field. "
-                + "Bridge needs a new schema baseline.";
-            return;
-        }
-        // Reject the legacy dynamic_array shape — would mean a fresh
-        // schema we haven't designed for. The append path is built
-        // for object_list elements only.
-        if (!string.Equals(listField.Kind, "object_list", StringComparison.Ordinal)
-            || listField.Elements is not { } existingElements)
-        {
-            BulkOpStatus =
-                $"Schema drift: {KnowledgeSaveDataClass}.{KnowledgeListFieldName} "
-                + $"is '{listField.Kind}', expected object_list. "
-                + "Bridge needs an update.";
-            return;
-        }
-        if (existingElements.Count == 0)
-        {
-            BulkOpStatus = $"Refusing to bulk-append into an empty {KnowledgeSaveDataClass}._list "
-                + "(need at least one template element to clone). "
-                + "Discover any knowledge in-game first.";
+            BulkOpStatus = resolveError;
             return;
         }
 
-        // Discover the per-element field indices from the first existing
-        // element — schema is uniform within a list.
-        int keyFieldIdx = -1, learnedTimeFieldIdx = -1, isNewMarkFieldIdx = -1;
-        foreach (var f in existingElements[0].Fields)
-        {
-            if (string.Equals(f.Name, KnowledgeElemKeyField, StringComparison.Ordinal))
-                keyFieldIdx = f.FieldIndex;
-            else if (string.Equals(f.Name, KnowledgeElemLearnedTimeField, StringComparison.Ordinal))
-                learnedTimeFieldIdx = f.FieldIndex;
-            else if (string.Equals(f.Name, KnowledgeElemIsNewMarkField, StringComparison.Ordinal))
-                isNewMarkFieldIdx = f.FieldIndex;
-        }
-        if (keyFieldIdx < 0)
-        {
-            BulkOpStatus =
-                $"Schema drift: KnowledgeElementSaveData has no '{KnowledgeElemKeyField}' field. "
-                + "Bridge needs an update.";
-            return;
-        }
-
-        // Pre-flight: scan the catalog for matching prefixes + read the
-        // current list contents. Both on a background thread because the
-        // catalog scan walks ~2k entries.
+        // Pre-flight: harvest the matching catalog keys + diff against
+        // what's already present. Background thread — the catalog scan
+        // walks ~2k entries.
         var preview = await Task.Run(() =>
         {
             var harvested = localization
                 .EnumerateKnowledgeByNamePrefix(AbyssGateKnowledgePrefixes)
                 .Select(e => e.KnowledgeKey)
                 .ToHashSet();
-            var existingSet = new HashSet<uint>(existingElements.Count);
-            foreach (var elem in existingElements)
-            {
-                foreach (var f in elem.Fields)
-                {
-                    if (!string.Equals(f.Name, KnowledgeElemKeyField, StringComparison.Ordinal))
-                        continue;
-                    if (TryParseScalarUInt(f.Value, out var k) && k <= uint.MaxValue)
-                    {
-                        existingSet.Add((uint)k);
-                    }
-                    break;
-                }
-            }
             var alreadyHave = 0;
             var toAdd = new List<uint>(harvested.Count);
             foreach (var k in harvested)
             {
-                if (existingSet.Contains(k)) alreadyHave++;
+                if (ctx.ExistingKeys.Contains(k)) alreadyHave++;
                 else toAdd.Add(k);
             }
-            // Sort the toAdd list for deterministic order — the diff
-            // against an unedited save stays minimal regardless of
-            // HashSet hash-seed variation.
+            // Sort for deterministic order — keeps the diff against an
+            // unedited save minimal regardless of HashSet seed variation.
             toAdd.Sort();
-            return (Harvested: harvested.Count, AlreadyHave: alreadyHave,
-                    ToAdd: toAdd, BaselineCount: existingElements.Count);
+            return (Harvested: harvested.Count, AlreadyHave: alreadyHave, ToAdd: toAdd);
         });
 
         if (preview.Harvested == 0)
@@ -4139,102 +4553,11 @@ public sealed partial class MainWindowViewModel(
             return;
         }
 
-        BulkOpStatus = $"Injecting {preview.ToAdd.Count} knowledge key(s)…";
-        var blockIdx = blockSummary.Index;
-        var listFieldIdx = listField.FieldIndex;
-        var baselineCount = preview.BaselineCount;
         var keysToAdd = preview.ToAdd;
-        var applied = 0;
-        var failed = 0;
-        CrimsonSaveException? firstError = null;
-        uint? firstFailedKey = null;
-
-        await Task.Run(() =>
-        {
-            // Wrap the per-key inject loop in a deferred-redecode batch
-            // (see vendor/crimson-rs/docs/save-deferred-redecode.md).
-            // Each key costs 1 ListCloneElement (length-changing) + up
-            // to 3 SetScalarField (in-place); without the batch every
-            // ListCloneElement triggers a full body re-decode (~25ms on
-            // a 5MB body). For a ~30-key inject (typical abyss-gate
-            // count) that's ~30 re-decodes ≈ 750ms; with the batch
-            // every clone stays in the in-memory tree and the trailing
-            // commit runs ONE encode + parse + decode pass.
-            //
-            // Partial-success preserved: per-op exceptions are caught
-            // inside the inner try/catch + `return` out of the lambda.
-            // RunDeferred sees normal completion → commits whatever
-            // already landed. A commit-time MUTATION_INVALID surfaces
-            // through the outer try/catch as applied=0.
-            try
-            {
-                loader.RunDeferred(() =>
-                {
-                    for (var i = 0; i < keysToAdd.Count; i++)
-                    {
-                        var newIdx = baselineCount + i;
-                        var key = keysToAdd[i];
-                        try
-                        {
-                            // Clone element 0 as a fresh template at the tail.
-                            loader.ListCloneElement(
-                                blockIdx,
-                                ReadOnlySpan<PathStep>.Empty,
-                                listFieldIdx,
-                                sourceIndex: 0,
-                                destinationIndex: newIdx);
-
-                            var newPath = new[] { new PathStep((uint)listFieldIdx, (uint)newIdx) };
-
-                            // Patch _key → the abyss-gate knowledge key.
-                            loader.SetScalarField(
-                                blockIdx, newPath, keyFieldIdx, BitConverter.GetBytes(key));
-
-                            // Patch _learnedFieldTime → 0 (bulk-inject sentinel —
-                            // distinguishes editor-injected discoveries from
-                            // organically learned ones). Optional; only if the
-                            // field is part of the schema.
-                            if (learnedTimeFieldIdx >= 0)
-                            {
-                                loader.SetScalarField(
-                                    blockIdx, newPath, learnedTimeFieldIdx,
-                                    BitConverter.GetBytes((ulong)0));
-                            }
-                            // Patch _isNewMark → false so the bulk-injected
-                            // entries don't all flash as new in the player's
-                            // UI on the next load.
-                            if (isNewMarkFieldIdx >= 0)
-                            {
-                                loader.SetScalarField(
-                                    blockIdx, newPath, isNewMarkFieldIdx, new byte[] { 0 });
-                            }
-                            applied++;
-                        }
-                        catch (CrimsonSaveException ex)
-                        {
-                            failed++;
-                            firstError ??= ex;
-                            firstFailedKey ??= key;
-                            // Abort the sweep on first failure — the list shape
-                            // may now be inconsistent, and continuing risks
-                            // compounding the error. Reload without saving to
-                            // revert. Returning out of the lambda lets the
-                            // deferred batch commit the partial progress.
-                            return;
-                        }
-                    }
-                });
-            }
-            catch (CrimsonSaveException commitEx)
-            {
-                // End_*'s commit failed (MUTATION_INVALID): the Rust
-                // side already rolled `blocks` back to pre-begin, so
-                // nothing landed. Reset applied so the post-loop
-                // reporting matches reality.
-                applied = 0;
-                firstError ??= commitEx;
-            }
-        });
+        var baselineCount = ctx.BaselineCount;
+        BulkOpStatus = $"Injecting {keysToAdd.Count} knowledge key(s)…";
+        var (applied, firstError, firstFailedKey) =
+            await ApplyKnowledgeInjectAsync(ctx, keysToAdd);
 
         RefreshSelectedBlockSilently();
 
@@ -4268,6 +4591,230 @@ public sealed partial class MainWindowViewModel(
                     ? "Reload the save without writing to revert the partial progress."
                     : "No changes written.");
         }
+    }
+
+    /// <summary>
+    /// Resolved handles for appending into <c>KnowledgeSaveData._list</c>:
+    /// the owning block, the list field index, the current element count
+    /// (= append index), the per-element scalar field indices, and the
+    /// set of <c>_key</c> values already present. Shared by the abyss-gate
+    /// bulk-unlock and the mount-unlock dragon flow so neither duplicates
+    /// the schema-drift guards.
+    /// </summary>
+    private sealed record KnowledgeListContext(
+        int BlockIndex,
+        int ListFieldIndex,
+        int BaselineCount,
+        int KeyFieldIndex,
+        int LearnedTimeFieldIndex,
+        int IsNewMarkFieldIndex,
+        HashSet<uint> ExistingKeys);
+
+    /// <summary>
+    /// Locate <c>KnowledgeSaveData._list</c> (an <c>object_list</c>), read
+    /// its per-element field indices off element 0, and collect the
+    /// <c>_key</c> values already present. Returns <c>null</c> and sets
+    /// <paramref name="error"/> on any not-found / schema-drift / empty-list
+    /// condition (the same guards the abyss flow shipped with). Requires a
+    /// loaded save.
+    /// </summary>
+    private KnowledgeListContext? ResolveKnowledgeList(
+        IReadOnlyList<BlockSummary> blocks, out string? error)
+    {
+        error = null;
+        if (_loadedPath is null)
+        {
+            error = "No save loaded.";
+            return null;
+        }
+        var blockSummary = FindFirstBlockByClassName(blocks, KnowledgeSaveDataClass);
+        if (blockSummary is null)
+        {
+            error = $"Nothing to do — no {KnowledgeSaveDataClass} block in this save.";
+            return null;
+        }
+        BlockDetails details;
+        try
+        {
+            details = loader.LoadBlockDetails(_loadedPath, blockSummary.Index);
+        }
+        catch (CrimsonSaveException ex)
+        {
+            error = $"Could not read {KnowledgeSaveDataClass}: {ex.Message}";
+            return null;
+        }
+        var listField = FindFieldByName(details, KnowledgeListFieldName);
+        if (listField is null)
+        {
+            error = $"Schema drift: {KnowledgeSaveDataClass} has no {KnowledgeListFieldName} field. "
+                + "Bridge needs a new schema baseline.";
+            return null;
+        }
+        // Reject the legacy dynamic_array shape — would mean a fresh
+        // schema we haven't designed for. The append path is built
+        // for object_list elements only.
+        if (!string.Equals(listField.Kind, "object_list", StringComparison.Ordinal)
+            || listField.Elements is not { } existingElements)
+        {
+            error =
+                $"Schema drift: {KnowledgeSaveDataClass}.{KnowledgeListFieldName} "
+                + $"is '{listField.Kind}', expected object_list. "
+                + "Bridge needs an update.";
+            return null;
+        }
+        if (existingElements.Count == 0)
+        {
+            error = $"Refusing to bulk-append into an empty {KnowledgeSaveDataClass}._list "
+                + "(need at least one template element to clone). "
+                + "Discover any knowledge in-game first.";
+            return null;
+        }
+
+        // Discover the per-element field indices from the first existing
+        // element — schema is uniform within a list.
+        int keyFieldIdx = -1, learnedTimeFieldIdx = -1, isNewMarkFieldIdx = -1;
+        foreach (var f in existingElements[0].Fields)
+        {
+            if (string.Equals(f.Name, KnowledgeElemKeyField, StringComparison.Ordinal))
+                keyFieldIdx = f.FieldIndex;
+            else if (string.Equals(f.Name, KnowledgeElemLearnedTimeField, StringComparison.Ordinal))
+                learnedTimeFieldIdx = f.FieldIndex;
+            else if (string.Equals(f.Name, KnowledgeElemIsNewMarkField, StringComparison.Ordinal))
+                isNewMarkFieldIdx = f.FieldIndex;
+        }
+        if (keyFieldIdx < 0)
+        {
+            error =
+                $"Schema drift: KnowledgeElementSaveData has no '{KnowledgeElemKeyField}' field. "
+                + "Bridge needs an update.";
+            return null;
+        }
+
+        var existingSet = new HashSet<uint>(existingElements.Count);
+        foreach (var elem in existingElements)
+        {
+            foreach (var f in elem.Fields)
+            {
+                if (!string.Equals(f.Name, KnowledgeElemKeyField, StringComparison.Ordinal))
+                    continue;
+                if (TryParseScalarUInt(f.Value, out var k) && k <= uint.MaxValue)
+                {
+                    existingSet.Add((uint)k);
+                }
+                break;
+            }
+        }
+
+        return new KnowledgeListContext(
+            blockSummary.Index, listField.FieldIndex, existingElements.Count,
+            keyFieldIdx, learnedTimeFieldIdx, isNewMarkFieldIdx, existingSet);
+    }
+
+    /// <summary>
+    /// Append <paramref name="keysToAdd"/> into <c>KnowledgeSaveData._list</c>
+    /// via a deferred clone+patch batch: clone element 0 to the tail, then
+    /// patch <c>_key</c> (+ zero <c>_learnedFieldTime</c> / clear
+    /// <c>_isNewMark</c> when present). Returns the count applied and the
+    /// first error (with its key) on partial failure. Caller is expected to
+    /// pass keys NOT already present (use <see cref="KnowledgeListContext"/>
+    /// <c>.ExistingKeys</c> to filter). Runs on a background thread.
+    /// </summary>
+    private async Task<(int Applied, CrimsonSaveException? FirstError, uint? FirstFailedKey)>
+        ApplyKnowledgeInjectAsync(KnowledgeListContext ctx, List<uint> keysToAdd)
+    {
+        var blockIdx = ctx.BlockIndex;
+        var listFieldIdx = ctx.ListFieldIndex;
+        var baselineCount = ctx.BaselineCount;
+        var keyFieldIdx = ctx.KeyFieldIndex;
+        var learnedTimeFieldIdx = ctx.LearnedTimeFieldIndex;
+        var isNewMarkFieldIdx = ctx.IsNewMarkFieldIndex;
+        var applied = 0;
+        CrimsonSaveException? firstError = null;
+        uint? firstFailedKey = null;
+
+        await Task.Run(() =>
+        {
+            // Wrap the per-key inject loop in a deferred-redecode batch
+            // (see vendor/crimson-rs/docs/save-deferred-redecode.md).
+            // Each key costs 1 ListCloneElement (length-changing) + up
+            // to 3 SetScalarField (in-place); without the batch every
+            // ListCloneElement triggers a full body re-decode (~25ms on
+            // a 5MB body). For a ~30-key inject that's ~30 re-decodes ≈
+            // 750ms; with the batch every clone stays in the in-memory
+            // tree and the trailing commit runs ONE encode+parse+decode.
+            //
+            // Partial-success preserved: per-op exceptions are caught
+            // inside the inner try/catch + `return` out of the lambda.
+            // RunDeferred sees normal completion → commits whatever
+            // already landed. A commit-time MUTATION_INVALID surfaces
+            // through the outer try/catch as applied=0.
+            try
+            {
+                loader.RunDeferred(() =>
+                {
+                    for (var i = 0; i < keysToAdd.Count; i++)
+                    {
+                        var newIdx = baselineCount + i;
+                        var key = keysToAdd[i];
+                        try
+                        {
+                            // Clone element 0 as a fresh template at the tail.
+                            loader.ListCloneElement(
+                                blockIdx,
+                                ReadOnlySpan<PathStep>.Empty,
+                                listFieldIdx,
+                                sourceIndex: 0,
+                                destinationIndex: newIdx);
+
+                            var newPath = new[] { new PathStep((uint)listFieldIdx, (uint)newIdx) };
+
+                            // Patch _key → the target knowledge key.
+                            loader.SetScalarField(
+                                blockIdx, newPath, keyFieldIdx, BitConverter.GetBytes(key));
+
+                            // Patch _learnedFieldTime → 0 (inject sentinel —
+                            // distinguishes editor-injected discoveries from
+                            // organically learned ones). Only if in schema.
+                            if (learnedTimeFieldIdx >= 0)
+                            {
+                                loader.SetScalarField(
+                                    blockIdx, newPath, learnedTimeFieldIdx,
+                                    BitConverter.GetBytes((ulong)0));
+                            }
+                            // Patch _isNewMark → false so the injected entries
+                            // don't all flash as new in the player's UI on the
+                            // next load.
+                            if (isNewMarkFieldIdx >= 0)
+                            {
+                                loader.SetScalarField(
+                                    blockIdx, newPath, isNewMarkFieldIdx, new byte[] { 0 });
+                            }
+                            applied++;
+                        }
+                        catch (CrimsonSaveException ex)
+                        {
+                            firstError ??= ex;
+                            firstFailedKey ??= key;
+                            // Abort the sweep on first failure — the list shape
+                            // may now be inconsistent, and continuing risks
+                            // compounding the error. Returning out of the lambda
+                            // lets the deferred batch commit the partial progress.
+                            return;
+                        }
+                    }
+                });
+            }
+            catch (CrimsonSaveException commitEx)
+            {
+                // End_*'s commit failed (MUTATION_INVALID): the Rust side
+                // already rolled `blocks` back to pre-begin, so nothing
+                // landed. Reset applied so reporting matches reality.
+                applied = 0;
+                firstError ??= commitEx;
+            }
+        });
+
+        return (applied, firstError, firstFailedKey);
     }
 
     /// <summary>

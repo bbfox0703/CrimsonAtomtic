@@ -395,6 +395,35 @@ public interface ISaveLoader
         int destinationIndex);
 
     /// <summary>
+    /// Graft an <c>object_list</c> element from a separately-loaded
+    /// <paramref name="source"/> save into this save's list at
+    /// <paramref name="insertAt"/>, remapping the grafted element's
+    /// embedded schema type-indices by class name. Both saves must share
+    /// the same field definitions (same game version); the element's
+    /// content (size) need not match any fixed-variant. Closes the
+    /// "transplant a real mount element the player lacks" path that a
+    /// charKey swap on a generic clone can't (the element content must be
+    /// consistent with the charKey or the engine CTDs on load).
+    /// </summary>
+    /// <remarks>
+    /// Requires a prior <see cref="Load"/> on both this loader and
+    /// <paramref name="source"/>. The concrete implementation requires
+    /// <paramref name="source"/> to be the same native loader type;
+    /// passing a foreign <see cref="ISaveLoader"/> throws
+    /// <see cref="ArgumentException"/>.
+    /// </remarks>
+    void TransplantListElement(
+        ISaveLoader source,
+        int targetBlockIndex,
+        ReadOnlySpan<PathStep> targetPath,
+        int targetFieldIndex,
+        int insertAt,
+        int sourceBlockIndex,
+        ReadOnlySpan<PathStep> sourcePath,
+        int sourceFieldIndex,
+        int sourceElementIndex);
+
+    /// <summary>
     /// Flip the presence bit of a fixed-size scalar field. When making
     /// the field present, <paramref name="initialBytes"/> must equal
     /// the field's <c>meta_size</c> and is decoded into the field's

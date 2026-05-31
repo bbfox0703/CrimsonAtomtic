@@ -948,7 +948,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
     /// <c>crimson_save_transplant_list_element</c>.
     /// </summary>
     public void TransplantListElement(
-        NativeSaveLoader source,
+        ISaveLoader source,
         int targetBlockIndex,
         ReadOnlySpan<PathStep> targetPath,
         int targetFieldIndex,
@@ -959,6 +959,16 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         int sourceElementIndex)
     {
         ArgumentNullException.ThrowIfNull(source);
+        // The native transplant FFI reaches into the source's decoded
+        // handle, so the source must be a NativeSaveLoader (the only
+        // ISaveLoader that owns one).
+        if (source is not NativeSaveLoader sourceNative)
+        {
+            throw new ArgumentException(
+                $"TransplantListElement requires a {nameof(NativeSaveLoader)} source; "
+                + $"got {source.GetType().Name}.",
+                nameof(source));
+        }
         ArgumentOutOfRangeException.ThrowIfNegative(targetBlockIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(targetFieldIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(insertAt);
@@ -967,7 +977,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(sourceElementIndex);
 
         var target = RequireLoaded(nameof(TransplantListElement));
-        var src = source.RequireLoaded(nameof(TransplantListElement));
+        var src = sourceNative.RequireLoaded(nameof(TransplantListElement));
         unsafe
         {
             fixed (PathStep* pTarget = targetPath)
