@@ -88,6 +88,7 @@
   <sys:String x:Key="MenuBulkCompleteHeldSAChallenges">完成目前可處理的、所有持有的封印阿比斯神器挑戰(_C)…</sys:String>
   <sys:String x:Key="MenuEditAbyssGates">編輯阿比斯之門 (每個門個別鎖/解鎖)(_E)…</sys:String>
   <sys:String x:Key="MenuUnlockMounts">解鎖坐騎 (符咒 + 龍)(_U)…</sys:String>
+  <sys:String x:Key="MenuEditKnowledge">編輯知識 (依類別學習)(_K)…</sys:String>
   <sys:String x:Key="MenuEditItemDyes">編輯物品染色(_D)…</sys:String>
   <sys:String x:Key="MenuVendorBuyback">商人回購清單(_V)…</sys:String>
   <sys:String x:Key="MenuReviewChanges">檢視待寫入的變更(_R)…</sys:String>
@@ -195,6 +196,25 @@
   <sys:String x:Key="MountUnlockColAction">操作</sys:String>
   <sys:String x:Key="MountUnlockAction">解鎖</sys:String>
   <sys:String x:Key="MountUnlockClose">關閉</sys:String>
+
+  <!-- 知識編輯對話框 -->
+  <sys:String x:Key="KnowledgeWindowTitle">編輯知識</sys:String>
+  <sys:String x:Key="KnowledgeHeader">逐項或依類別學習知識/圖鑑——選類別或搜尋，勾選想要的列，再按「學習選取項」。「學習此類別全部」會注入目前檢視中所有未學項目（地圖點位 Node、圖鑑 Collection 會提示警告）。下次「檔案 → 儲存」時寫入檔案。</sys:String>
+  <sys:String x:Key="KnowledgeCategory">類別：</sys:String>
+  <sys:String x:Key="KnowledgeSearchHint">依名稱、key 或類別過濾…</sys:String>
+  <sys:String x:Key="KnowledgeUnlearnedOnly">只顯示未學</sys:String>
+  <sys:String x:Key="KnowledgeLearnedOnly">只顯示已學</sys:String>
+  <sys:String x:Key="KnowledgeColKey">Key</sys:String>
+  <sys:String x:Key="KnowledgeColName">名稱</sys:String>
+  <sys:String x:Key="KnowledgeColInternal">內部名稱</sys:String>
+  <sys:String x:Key="KnowledgeColCategory">類別</sys:String>
+  <sys:String x:Key="KnowledgeColStatus">狀態</sys:String>
+  <sys:String x:Key="KnowledgeSelectAll">全選</sys:String>
+  <sys:String x:Key="KnowledgeUnselectAll">全不選</sys:String>
+  <sys:String x:Key="KnowledgeInvert">反選</sys:String>
+  <sys:String x:Key="KnowledgeLearnSelected">學習選取項</sys:String>
+  <sys:String x:Key="KnowledgeLearnCategory">學習此類別全部</sys:String>
+  <sys:String x:Key="KnowledgeClose">關閉</sys:String>
   <sys:String x:Key="MenuFontSize">字型大小(_F)</sys:String>
   <sys:String x:Key="SummaryToggleTip">顯示 / 隱藏存檔摘要面板 — 把空間讓給主資料表格。</sys:String>
   <sys:String x:Key="MenuLanguage">次要語言(_S)</sys:String>

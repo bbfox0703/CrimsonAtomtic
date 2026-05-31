@@ -994,6 +994,27 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Tools → Edit Knowledge… handler. Enumerates knowledgeinfo on a
+    /// background thread (CreateAsync), then opens the per-category /
+    /// multi-select Knowledge dialog. Inject routes back into
+    /// <see cref="MainWindowViewModel.LearnKnowledgeAsync"/> which flips the
+    /// main VM's dirty flag itself. Gated on <c>HasSave</c>.
+    /// </summary>
+    private async void OnEditKnowledgeClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm
+            || vm.LoadedPath is null
+            || vm.Summary is not { Blocks: not null })
+        {
+            return;
+        }
+        var dialogVm = await KnowledgeEditorViewModel.CreateAsync(vm, vm.Localization);
+        dialogVm.ConfirmRequested = (title, msg) => ConfirmDialog.ShowAsync(this, title, msg);
+        var child = new KnowledgeEditorWindow { DataContext = dialogVm };
+        child.Show(this);
+    }
+
+    /// <summary>
     /// Tools → Find Items… handler. Opens the cross-bag item-search
     /// dialog powered by <see cref="ISaveLoader.ListInventoryItems"/>.
     /// Read-only; the menu item is gated on <c>HasSave</c> so this

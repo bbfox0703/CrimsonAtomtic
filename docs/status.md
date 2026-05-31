@@ -3,7 +3,7 @@
 > **Read this first on a new session.** Living document — update at the end
 > of every session so the next pickup is seamless.
 >
-> Last updated: 2026-05-29 (Editor aligned to game **1.09** — the live install bumped 1.08 → 1.09, so `GameDataVersion.ParserTargetMinor` 8 → 9 and the compatibility gate became an allow-list `CompatibleMinors = {8, 9}` (1.08/1.09 share a byte-identical iteminfo schema, so un-updated 1.08 users aren't warned). Vendor `crimson-rs` was already at `0619789`, which validated the full toolkit against live 1.09 (content-only delta over 1.08, **no schema drift**: iteminfo byte-identical, all 30 gamedata tables parse, save roundtrip clean) — so no vendor refresh was needed, only the C#-side constant + tests + docs. World Map parchment layer-alignment bug from part 14 still open — unchanged this session).
+> Last updated: 2026-05-31 (**Mount-Unlock dialog + Knowledge editor shipped to `main`** — see the ✅ entries below; both reuse the `ResolveKnowledgeList`/`ApplyKnowledgeInjectAsync` + element bytes-insert primitives, no vendor work. Earlier this week: editor aligned to game **1.09** — the live install bumped 1.08 → 1.09, so `GameDataVersion.ParserTargetMinor` 8 → 9 and the compatibility gate became an allow-list `CompatibleMinors = {8, 9}` (1.08/1.09 share a byte-identical iteminfo schema, so un-updated 1.08 users aren't warned). Vendor `crimson-rs` was already at `0619789`, which validated the full toolkit against live 1.09 (content-only delta over 1.08, **no schema drift**: iteminfo byte-identical, all 30 gamedata tables parse, save roundtrip clean) — so no vendor refresh was needed, only the C#-side constant + tests + docs. World Map parchment layer-alignment bug from part 14 still open — unchanged this session).
 >
 > ## ✅ This session — what shipped (2026-05-29 — Editor aligned to game 1.09)
 >
@@ -65,6 +65,8 @@
 >
 > Files: `Services/MountCatalog.cs` (catalog + dragon keys + container/charKey constants), `ViewModels/MountUnlockViewModel.cs`, `Views/MountUnlockWindow.axaml(.cs)`, donor asset + csproj embed, `ISaveLoader.TransplantListElement`, menu item + en/ja/zh-TW strings. Tests: `MountCatalogTests` (catalog integrity + embedded-donor presence) + `MountUnlockMechanicsTests` (loader-level end-to-end: extract donor → transplant dragon into a live save → list grows by 1, tail = dragon → write + reload → **HMAC ok**, ran live against slot105). **310 tests pass (0 skipped), Debug clean, AOT publish clean (single 28.5 MB exe).** **Still needs the user's in-game confirmation** that (a) granted sigils are usable and (b) the transplanted dragon summons + rides — the mechanics + round-trip are proven, the in-game gate is not yet re-verified this session.
 >
+> **✅ KNOWLEDGE EDITOR SHIPPED — 2026-05-31 (Tools → Edit Knowledge, user-confirmed in-app).** Per-category / per-item knowledge learning — deliberately NOT a blunt "learn all" (which would trip codex/achievement state). `Views/KnowledgeEditorWindow` + `ViewModels/KnowledgeEditorViewModel` (+ `KnowledgeRow`): enumerates all ~5,500 `knowledgeinfo` entries (key + internal name + resolved display name on a bg thread), buckets each into one of **16 curated categories** by the `Knowledge_<Prefix>_…` token (else "Other") — the same set the reference editor uses — and shows a filterable, **checkbox-per-row** table (category dropdown + search + learned/unlearned toggles + Select all / Unselect all / Invert). "Learn selected" injects ticked-and-unlearned rows; "Learn all in category" injects the current view's unlearned rows with a **warning confirm for map-reveal `Node` / codex `Collection` sets**. Inject routes through new `MainWindowViewModel.LearnKnowledgeAsync` + `GetLearnedKnowledgeKeys`, reusing the abyss/mount `ResolveKnowledgeList` + `ApplyKnowledgeInjectAsync` primitives — **no vendor work, no new ABI**. (Categories are derived from the internal-name prefix, not `knowledgegroupinfo.pabgb` — the game's true category bridge stays unbuilt, only needed if we ever want the exact in-game codex tabs.) Menu + en/ja/zh-TW strings; `KnowledgeEditorTests` pins the `CategoryFor` bucketing. **322 tests pass, Debug clean.** Bugfix during review: "Learn all in category" did nothing because `_selectedCategory` used `NotifyPropertyChangedFor` instead of `NotifyCanExecuteChangedFor` (the command's CanExecute never refreshed) — fixed.
+>
 > **Save-side editing**
 >
 > | Feature | Reference | Ours |
@@ -83,7 +85,7 @@
 > | Equipment enchant level | ✅ | 🔸 field edit |
 > | Mount unlock (sigil mounts + dragon) | ✅ (hardcoded hex) | ✅ (Tools → Unlock Mounts: sigil-grant + dragon bytes-insert/remap + 187-key knowledge + HP fill) |
 > | Quest state / stage editing | ✅ (Quest Editor + Quest DB) | 🔸 field edit |
-> | Knowledge / codex learn–unlearn | ✅ (all categories) | 🔸 Abyss Gates only |
+> | Knowledge / codex learn–unlearn | ✅ (all categories) | ✅ (Tools → Edit Knowledge: 16 curated categories, search, per-item/per-category learn) |
 > | Faction nodes (discover / set state) | ✅ | 🔸 field edit |
 > | Reveal map / fog of war | ✅ | ❌ (World Map view-only) |
 > | Item packs (share / import / export) | ✅ | ❌ |

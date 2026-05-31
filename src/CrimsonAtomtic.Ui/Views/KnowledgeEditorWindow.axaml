@@ -1,0 +1,135 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        mc:Ignorable="d"
+        d:DesignWidth="1000"
+        d:DesignHeight="600"
+        x:Class="CrimsonAtomtic.Ui.Views.KnowledgeEditorWindow"
+        x:DataType="vm:KnowledgeEditorViewModel"
+        Title="{DynamicResource KnowledgeWindowTitle}"
+        Icon="/Assets/MainIcon.ico"
+        Width="1000" Height="620"
+        MinWidth="760" MinHeight="380"
+        FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
+
+  <DockPanel LastChildFill="True" Margin="12">
+    <TextBlock DockPanel.Dock="Top"
+               Text="{DynamicResource KnowledgeHeader}"
+               TextWrapping="Wrap"
+               Opacity="0.7"
+               Margin="0,0,0,8" />
+
+    <!-- Filter toolbar -->
+    <Grid DockPanel.Dock="Top"
+          ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto"
+          ColumnSpacing="8"
+          Margin="0,0,0,8"
+          VerticalAlignment="Center">
+      <TextBlock Grid.Column="0" Text="{DynamicResource KnowledgeCategory}"
+                 VerticalAlignment="Center" />
+      <ComboBox Grid.Column="1"
+                MinWidth="140"
+                ItemsSource="{Binding Categories}"
+                SelectedItem="{Binding SelectedCategory}" />
+      <TextBox Grid.Column="3"
+               Text="{Binding SearchText}"
+               PlaceholderText="{DynamicResource KnowledgeSearchHint}" />
+      <CheckBox Grid.Column="4" Content="{DynamicResource KnowledgeUnlearnedOnly}"
+                IsChecked="{Binding ShowUnlearnedOnly}" VerticalAlignment="Center" />
+      <CheckBox Grid.Column="5" Content="{DynamicResource KnowledgeLearnedOnly}"
+                IsChecked="{Binding ShowLearnedOnly}" VerticalAlignment="Center" />
+    </Grid>
+
+    <!-- Selection toolbar (acts on the current filtered view) -->
+    <Grid DockPanel.Dock="Top"
+          ColumnDefinitions="Auto,Auto,Auto,*"
+          ColumnSpacing="8"
+          Margin="0,0,0,8">
+      <Button Grid.Column="0"
+              Content="{DynamicResource KnowledgeSelectAll}"
+              Command="{Binding SelectAllCommand}"
+              Padding="8,2" />
+      <Button Grid.Column="1"
+              Content="{DynamicResource KnowledgeUnselectAll}"
+              Command="{Binding UnselectAllCommand}"
+              Padding="8,2" />
+      <Button Grid.Column="2"
+              Content="{DynamicResource KnowledgeInvert}"
+              Command="{Binding InvertSelectionCommand}"
+              Padding="8,2" />
+      <TextBlock Grid.Column="3"
+                 Text="{Binding FilterSummary}"
+                 Opacity="0.55"
+                 VerticalAlignment="Center"
+                 HorizontalAlignment="Right" />
+    </Grid>
+
+    <!-- Status footer + actions -->
+    <Grid DockPanel.Dock="Bottom"
+          ColumnDefinitions="*,Auto,Auto,Auto"
+          ColumnSpacing="8"
+          Margin="0,8,0,0">
+      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12"
+                  VerticalAlignment="Center">
+        <TextBlock Text="{Binding StatusMessage}"
+                   Opacity="0.75"
+                   VerticalAlignment="Center"
+                   TextWrapping="Wrap" />
+      </StackPanel>
+      <Button Grid.Column="1"
+              Content="{DynamicResource KnowledgeLearnSelected}"
+              Command="{Binding LearnSelectedCommand}"
+              MinWidth="120" />
+      <Button Grid.Column="2"
+              Content="{DynamicResource KnowledgeLearnCategory}"
+              Command="{Binding LearnCategoryCommand}"
+              MinWidth="140" />
+      <Button Grid.Column="3"
+              Content="{DynamicResource KnowledgeClose}"
+              Click="OnCloseClick"
+              MinWidth="80" />
+    </Grid>
+
+    <DataGrid ItemsSource="{Binding Rows}"
+              CanUserResizeColumns="True"
+              CanUserSortColumns="True"
+              GridLinesVisibility="Horizontal"
+              HeadersVisibility="Column"
+              AutoGenerateColumns="False">
+      <DataGrid.Columns>
+        <DataGridTemplateColumn Width="44" CanUserSort="False">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate DataType="vm:KnowledgeRow">
+              <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTextColumn Header="{DynamicResource KnowledgeColKey}"
+                            Binding="{Binding KeyText}"
+                            IsReadOnly="True"
+                            Width="110"
+                            FontFamily="Consolas, Menlo, monospace" />
+        <DataGridTextColumn Header="{DynamicResource KnowledgeColName}"
+                            Binding="{Binding DisplayName}"
+                            IsReadOnly="True"
+                            Width="280" />
+        <DataGridTextColumn Header="{DynamicResource KnowledgeColInternal}"
+                            Binding="{Binding InternalName}"
+                            IsReadOnly="True"
+                            Width="*" />
+        <DataGridTextColumn Header="{DynamicResource KnowledgeColCategory}"
+                            Binding="{Binding Category}"
+                            IsReadOnly="True"
+                            Width="120" />
+        <DataGridTextColumn Header="{DynamicResource KnowledgeColStatus}"
+                            Binding="{Binding StatusText}"
+                            IsReadOnly="True"
+                            Width="110" />
+      </DataGrid.Columns>
+    </DataGrid>
+  </DockPanel>
+</Window>
