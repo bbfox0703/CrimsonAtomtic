@@ -67,7 +67,7 @@
   <sys:String x:Key="SocketEditorNotAvailableTitle">このセーブには埋まったソケットがありません</sys:String>
   <sys:String x:Key="SocketEditorNotAvailableBody">読み込まれたセーブに、ジェムが入ったソケットを持つアイテムがありません (または _socketSaveDataList を持つアイテムが一つもありません)。ゲーム内でジェムを装着すると、ここに表示されます。</sys:String>
   <sys:String x:Key="SocketEditorPickerTitle">ジェムを選択</sys:String>
-  <sys:String x:Key="RenameMercenaryHeader">傭兵 / ペットの名前を変更します。「名前」列には CharacterKey から解決されたキャラクター / テンプレート名が表示されます (メインウィンドウの mercenaryDataList の Name 列と同じソース) — 各行を識別するために使用してください。あなたのカスタム名 (_mercenaryName に保存済み) は表示されません — read-side FFI は未実装です。新しい名前を入力し、行ごとに Apply をクリックしてください。変更内容は次回の File → Save で書き込まれます。</sys:String>
+  <sys:String x:Key="RenameMercenaryHeader">傭兵 / ペットの名前を変更します。「名前」列には CharacterKey から解決されたキャラクター / テンプレート名が表示されます (メインウィンドウの mercenaryDataList の Name 列と同じソース) — 各行を識別するために使用してください。「新しい名前」欄には現在のカスタム名 (_mercenaryName) が初期表示されます。編集して行ごとに Apply をクリックしてください。空欄にするとカスタム名が消去されます。変更内容は次回の File → Save で書き込まれます。</sys:String>
   <sys:String x:Key="RenameMercenaryColIdx">インデックス</sys:String>
   <sys:String x:Key="RenameMercenaryColMercNo">MercNo</sys:String>
   <sys:String x:Key="RenameMercenaryColCharKey">CharKey</sys:String>
@@ -260,6 +260,20 @@
   <!-- Item-picker dialog -->
   <sys:String x:Key="ItemPickerWindowTitle">アイテム一覧</sys:String>
   <sys:String x:Key="ItemPickerSearchPlaceholder">ItemKey、string id、ローカライズ名で絞り込み…</sys:String>
+  <!-- アイテム追加バー (書式文字列: {0}=アイテム, {1}=コピー元の行)。 -->
+  <sys:String x:Key="ItemPickerSelectPrompt">下の一覧からアイテムを選んで「追加」</sys:String>
+  <sys:String x:Key="ItemPickerAddWithSource">+「{1}」から「{0}」を追加</sys:String>
+  <sys:String x:Key="ItemPickerAddNoSource">+「{0}」を追加</sys:String>
+  <sys:String x:Key="ItemPickerOpenBagHint">バッグを開き (アイテムリストへ展開し)、コピー元の行を選んでください。</sys:String>
+  <!-- アイテム追加ステータス。 -->
+  <sys:String x:Key="AddItemStatusOpenBag">先にバッグを開いてください (_inventorylist[N]._itemList へ展開)。</sys:String>
+  <sys:String x:Key="AddItemStatusWrongList">このリストは {0} を保持しており、ItemSaveData ではありません。ここへの追加は未対応です。</sys:String>
+  <sys:String x:Key="AddItemStatusMissingFields">コピー元の要素に _itemKey / _stackCount / _slotNo / _itemNo のいずれかがありません — バッグ構造がクローン＆パッチ方式に対応していません。</sys:String>
+  <sys:String x:Key="AddItemStatusProgress">アイテム {0} を追加中 (テンプレート: {1})…</sys:String>
+  <sys:String x:Key="AddItemStatusSuccess">{1} からアイテム {0} を追加しました (数量 {2}、スロット {3}、itemNo {4})。</sys:String>
+  <sys:String x:Key="AddItemStatusFailed">追加に失敗しました: {0}</sys:String>
+  <sys:String x:Key="AddItemSourceSelected">選択 [{0}]: {1}</sys:String>
+  <sys:String x:Key="AddItemSourceFirst">[0]: 先頭の要素</sys:String>
   <sys:String x:Key="ItemPickerColIcon">アイコン</sys:String>
   <sys:String x:Key="ItemPickerColKey">ItemKey</sys:String>
   <sys:String x:Key="ItemPickerColStringKey">String ID</sys:String>

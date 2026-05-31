@@ -176,6 +176,26 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
         for (var i = 0; i < elements.Count; i++)
         {
             var row = BuildRow(vm, i, elements[i], localization);
+            // Pre-fill the editable box with the mercenary's already-applied
+            // custom name (_mercenaryName, an inline_bytes UTF-8 payload),
+            // read back via the get-side FFI. Empty / unset → blank box.
+            // Cheap read (navigate + copy, no re-decode); failures are
+            // non-fatal — the box just stays empty.
+            try
+            {
+                var nameBytes = loader.GetInlineBytesField(
+                    top.Index,
+                    new[] { new PathStep((uint)listField.FieldIndex, (uint)i) },
+                    nameFieldIdx);
+                if (nameBytes.Length > 0)
+                {
+                    row.NewName = System.Text.Encoding.UTF8.GetString(nameBytes);
+                }
+            }
+            catch (CrimsonSaveException)
+            {
+                // Leave NewName empty on any read failure.
+            }
             vm.Mercenaries.Add(row);
             // Kick off the portrait load eagerly so the thread pool
             // starts draining while the user reads the dialog header.

@@ -832,17 +832,18 @@ public sealed partial class MainWindowViewModel(
     private bool _canAddItemToCurrentList;
 
     /// <summary>
-    /// Live "where an added item lands" phrase for the picker's top bar,
-    /// e.g. <c>from "Bullet / 子彈"</c> (the selected clone template) or a
-    /// first-row fallback. Null when <see cref="CanAddItemToCurrentList"/>
-    /// is false.
+    /// Live clone-source display name for the picker's top bar (the
+    /// selected donor row's resolved name, e.g. <c>"Bullet / 子彈"</c>), or
+    /// <c>null</c> when nothing is selected (first-row fallback) or adding
+    /// isn't possible. The picker composes the full localized phrase from
+    /// this name so each language controls word order.
     /// </summary>
     [ObservableProperty]
-    private string? _addItemTargetDescription;
+    private string? _addItemSourceName;
 
     /// <summary>
     /// Recompute <see cref="CanAddItemToCurrentList"/> +
-    /// <see cref="AddItemTargetDescription"/> from the current nav top and
+    /// <see cref="AddItemSourceName"/> from the current nav top and
     /// <see cref="SelectedElement"/>. Mirrors the eligibility + clone-
     /// template logic in <see cref="AddItemToCurrentListAsync"/> so the
     /// picker's live bar matches what an Add will actually do.
@@ -855,22 +856,23 @@ public sealed partial class MainWindowViewModel(
             && string.Equals(parent.Elements[0].ClassName, "ItemSaveData", StringComparison.Ordinal))
         {
             CanAddItemToCurrentList = true;
-            // Prefer the selected row (the clone donor); fall back to the
-            // first element, matching AddItemToCurrentListAsync.
+            // Prefer the selected row (the clone donor); null = first-row
+            // fallback, matching AddItemToCurrentListAsync.
             if (SelectedElement is { Block: not null } selRow)
             {
-                var name = string.IsNullOrEmpty(selRow.ResolvedName) ? selRow.KeyText : selRow.ResolvedName;
-                AddItemTargetDescription = $"from \"{name}\"";
+                AddItemSourceName = string.IsNullOrEmpty(selRow.ResolvedName)
+                    ? selRow.KeyText
+                    : selRow.ResolvedName;
             }
             else
             {
-                AddItemTargetDescription = "from the first row (select a row to clone a specific item)";
+                AddItemSourceName = null;
             }
         }
         else
         {
             CanAddItemToCurrentList = false;
-            AddItemTargetDescription = null;
+            AddItemSourceName = null;
         }
     }
 
@@ -3424,7 +3426,8 @@ public sealed partial class MainWindowViewModel(
             || _navStack.Peek() is not ElementsFrame parent
             || parent.Elements.Count == 0)
         {
-            BulkOpStatus = "Open a bag first (drill into _inventorylist[N]._itemList).";
+            BulkOpStatus = LookupUiResourceString("AddItemStatusOpenBag")
+                ?? "Open a bag first (drill into _inventorylist[N]._itemList).";
             return;
         }
         // Only handle ItemSaveData lists — refusing other element classes
@@ -3433,7 +3436,11 @@ public sealed partial class MainWindowViewModel(
         var sourceClass = parent.Elements[0].ClassName;
         if (!string.Equals(sourceClass, "ItemSaveData", StringComparison.Ordinal))
         {
-            BulkOpStatus = $"This list holds {sourceClass}, not ItemSaveData. Add unsupported here.";
+            BulkOpStatus = string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                LookupUiResourceString("AddItemStatusWrongList")
+                    ?? "This list holds {0}, not ItemSaveData. Add unsupported here.",
+                sourceClass);
             return;
         }
         // Note: we deliberately do NOT refuse "+ Bag" into engine-managed
@@ -3451,7 +3458,7 @@ public sealed partial class MainWindowViewModel(
         // that don't match the item's iteminfo profile.
         int sourceIndex = 0;
         BlockDetails sourceElement = parent.Elements[0];
-        string cloneSourceLabel = "[0]: first element";
+        string cloneSourceLabel = LookupUiResourceString("AddItemSourceFirst") ?? "[0]: first element";
         if (SelectedElement is { Block: var selBlock and not null } selRow)
         {
             for (var i = 0; i < parent.Elements.Count; i++)
@@ -3461,7 +3468,10 @@ public sealed partial class MainWindowViewModel(
                     sourceIndex = i;
                     sourceElement = selBlock;
                     var name = string.IsNullOrEmpty(selRow.ResolvedName) ? selRow.KeyText : selRow.ResolvedName;
-                    cloneSourceLabel = $"selected [{i}]: {name}";
+                    cloneSourceLabel = string.Format(
+                        System.Globalization.CultureInfo.CurrentCulture,
+                        LookupUiResourceString("AddItemSourceSelected") ?? "selected [{0}]: {1}",
+                        i, name);
                     break;
                 }
             }
@@ -3476,9 +3486,10 @@ public sealed partial class MainWindowViewModel(
                 out var idxSlotNo,
                 out var idxItemNo))
         {
-            BulkOpStatus = "Source element missing one of "
-                           + "_itemKey / _stackCount / _slotNo / _itemNo — bag layout "
-                           + "incompatible with the clone-and-patch strategy.";
+            BulkOpStatus = LookupUiResourceString("AddItemStatusMissingFields")
+                ?? "Source element missing one of "
+                   + "_itemKey / _stackCount / _slotNo / _itemNo — bag layout "
+                   + "incompatible with the clone-and-patch strategy.";
             return;
         }
         // _transferredItemKey is an engine-internal handle whose high
@@ -3537,7 +3548,10 @@ public sealed partial class MainWindowViewModel(
         // already validate against iteminfo's max_stack.
         const ulong newStackCount = 1UL;
 
-        BulkOpStatus = $"Adding item {itemKey} (template: {cloneSourceLabel})…";
+        BulkOpStatus = string.Format(
+            System.Globalization.CultureInfo.CurrentCulture,
+            LookupUiResourceString("AddItemStatusProgress") ?? "Adding item {0} (template: {1})…",
+            itemKey, cloneSourceLabel);
         var blockIdx = topBlock.Index;
         var listPath = parent.PathToList is PathStep[] a ? a : parent.PathToList.ToArray();
         var listFieldIdx = (int)parent.ListFieldIndex;
@@ -3650,12 +3664,18 @@ public sealed partial class MainWindowViewModel(
             Journal.Log("Add item",
                 $"Added {addedName} (ItemKey {itemKey}, qty {newStackCount}) to inventory");
             OnPropertyChanged(nameof(WindowTitle));
-            BulkOpStatus = $"Added item {itemKey} from {cloneSourceLabel} "
-                           + $"(qty {newStackCount}, slot {newSlotNo}, itemNo {newItemNo}).";
+            BulkOpStatus = string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                LookupUiResourceString("AddItemStatusSuccess")
+                    ?? "Added item {0} from {1} (qty {2}, slot {3}, itemNo {4}).",
+                itemKey, cloneSourceLabel, newStackCount, newSlotNo, newItemNo);
         }
         else
         {
-            BulkOpStatus = $"Add failed: {error.Message}";
+            BulkOpStatus = string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                LookupUiResourceString("AddItemStatusFailed") ?? "Add failed: {0}",
+                error.Message);
         }
     }
 
