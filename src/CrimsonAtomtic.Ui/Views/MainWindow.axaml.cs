@@ -1042,6 +1042,31 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Tools → Edit Faction Nodes. Scans faction strongholds, then opens a
+    /// checkbox dialog to discover / set their <c>_factionState</c>. When
+    /// the save has no faction nodes, surfaces that in the status footer
+    /// instead of opening an empty dialog.
+    /// </summary>
+    private async void OnEditFactionNodesClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm
+            || vm.LoadedPath is null
+            || vm.Summary is not { Blocks: not null })
+        {
+            return;
+        }
+        var dialogVm = await FactionNodeEditorViewModel.CreateAsync(vm);
+        if (!dialogVm.HasNodes)
+        {
+            vm.BulkOpStatus = FactionNodeEditorViewModel.NoNodesSummary;
+            return;
+        }
+        dialogVm.ConfirmRequested = (title, msg) => ConfirmDialog.ShowAsync(this, title, msg);
+        var child = new FactionNodeEditorWindow { DataContext = dialogVm };
+        child.Show(this);
+    }
+
+    /// <summary>
     /// Tools → Find Items… handler. Opens the cross-bag item-search
     /// dialog powered by <see cref="ISaveLoader.ListInventoryItems"/>.
     /// Read-only; the menu item is gated on <c>HasSave</c> so this

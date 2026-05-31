@@ -2505,6 +2505,25 @@ internal static partial class NativeMethods
         CrimsonHouseInfoHandle handle, uint idx, out uint outKey,
         byte* buf, nuint bufLen, out nuint required);
 
+    // ── FactionNodeInfo bridge (factionnode.pabgb + factionnode.pabgh) ──────
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_factionnode_load_from_bytes")]
+    public static unsafe partial int FactionNodeInfoLoadFromBytes(
+        byte* pabgbData, nuint pabgbLen,
+        byte* pabghData, nuint pabghLen,
+        out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_factionnode_free")]
+    public static partial void FactionNodeInfoFree(IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_factionnode_entry_count")]
+    public static partial int FactionNodeInfoEntryCount(CrimsonFactionNodeInfoHandle handle, out uint count);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_factionnode_lookup_string_key")]
+    public static unsafe partial int FactionNodeInfoLookupStringKey(
+        CrimsonFactionNodeInfoHandle handle, uint factionNodeKey,
+        byte* buf, nuint bufLen, out nuint required);
+
     // ── RoyalSupplyInfo bridge (royalsupply.pabgb + royalsupply.pabgh) ──────
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_royal_supply_info_load_from_bytes")]
