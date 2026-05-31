@@ -822,6 +822,61 @@ public sealed partial class MainWindowViewModel(
     private ElementRowViewModel? _selectedElement;
 
     /// <summary>
+    /// True when the current nav top is an ItemSaveData element list, so
+    /// the Add-Item picker can clone-and-patch a new item into it. Drives
+    /// the picker's top action bar (enabled state) + the per-row
+    /// "Add Item…" button. Recomputed on every nav change and whenever
+    /// <see cref="SelectedElement"/> changes (the clone template).
+    /// </summary>
+    [ObservableProperty]
+    private bool _canAddItemToCurrentList;
+
+    /// <summary>
+    /// Live "where an added item lands" phrase for the picker's top bar,
+    /// e.g. <c>from "Bullet / 子彈"</c> (the selected clone template) or a
+    /// first-row fallback. Null when <see cref="CanAddItemToCurrentList"/>
+    /// is false.
+    /// </summary>
+    [ObservableProperty]
+    private string? _addItemTargetDescription;
+
+    /// <summary>
+    /// Recompute <see cref="CanAddItemToCurrentList"/> +
+    /// <see cref="AddItemTargetDescription"/> from the current nav top and
+    /// <see cref="SelectedElement"/>. Mirrors the eligibility + clone-
+    /// template logic in <see cref="AddItemToCurrentListAsync"/> so the
+    /// picker's live bar matches what an Add will actually do.
+    /// </summary>
+    private void RecomputeAddItemTarget()
+    {
+        if (_navStack.Count > 0
+            && _navStack.Peek() is ElementsFrame parent
+            && parent.Elements.Count > 0
+            && string.Equals(parent.Elements[0].ClassName, "ItemSaveData", StringComparison.Ordinal))
+        {
+            CanAddItemToCurrentList = true;
+            // Prefer the selected row (the clone donor); fall back to the
+            // first element, matching AddItemToCurrentListAsync.
+            if (SelectedElement is { Block: not null } selRow)
+            {
+                var name = string.IsNullOrEmpty(selRow.ResolvedName) ? selRow.KeyText : selRow.ResolvedName;
+                AddItemTargetDescription = $"from \"{name}\"";
+            }
+            else
+            {
+                AddItemTargetDescription = "from the first row (select a row to clone a specific item)";
+            }
+        }
+        else
+        {
+            CanAddItemToCurrentList = false;
+            AddItemTargetDescription = null;
+        }
+    }
+
+    partial void OnSelectedElementChanged(ElementRowViewModel? value) => RecomputeAddItemTarget();
+
+    /// <summary>
     /// Raised after a pop-back when the VM has restored selection but
     /// the View still needs to scroll the row into the viewport.
     /// Subscribed once by <c>MainWindow</c>'s code-behind, which calls
@@ -2082,101 +2137,39 @@ public sealed partial class MainWindowViewModel(
     /// the "I hold X, complete the matching Y" invariant tight.
     /// </para>
     /// </remarks>
-    [RelayCommand(CanExecute = nameof(HasSave))]
-    private async Task BulkCompleteHeldSealedArtifactChallengesAsync()
+    /// <summary>
+    /// Pre-flight scan exposed for the Sealed Abyss preview dialog (and
+    /// any future caller): enumerate every eligible SA-artifact challenge
+    /// context in the loaded save. Pure read — safe to call off the UI
+    /// thread (the dialog wraps it in <c>Task.Run</c>). Returns an empty
+    /// preview when no save / iteminfo is loaded.
+    /// </summary>
+    internal BulkSaPreview ScanSealedArtifactCandidates()
     {
-        BulkOpStatus = null;
         if (_loadedPath is null
             || Summary is not { Blocks: { } blocks }
-            || ConfirmRequested is not { } ask)
+            || localization.ItemCount == 0)
         {
-            return;
+            return new BulkSaPreview(
+                0, Array.Empty<CurrentChallengeContext>(), 0, 0, 0, 0,
+                Array.Empty<(uint, string?, string)>());
         }
-        if (localization.ItemCount == 0)
-        {
-            BulkOpStatus = "Nothing to do — iteminfo not loaded (no game install configured).";
-            return;
-        }
+        return ScanBulkSealedArtifactCandidates(blocks);
+    }
 
-        // Pre-flight on background thread: enumerate iteminfo SA
-        // artifacts → map to mission keys → find catalog rows whose
-        // FAR tracker exists → build contexts. The held-inventory gate
-        // was removed (2026-05-17) — eligibility is now purely the
-        // save-side data shape (catalog + adjacent twin + FAR tracker),
-        // so picked-up-but-no-longer-held artifacts also surface.
-        var preview = await Task.Run(() => ScanBulkSealedArtifactCandidates(blocks));
-
-        if (preview.KnownArtifactCount == 0)
+    /// <summary>
+    /// Apply Pattern B v1 to the given Sealed Abyss challenge contexts
+    /// (the checked rows from the preview dialog). Behaviour-preserving
+    /// extraction of the former bulk command's apply loop: deferred-
+    /// redecode batch, per-challenge progress, partial-success journal +
+    /// status. Returns (applied, firstError, firstErrorKey).
+    /// </summary>
+    internal async Task<(int Applied, CrimsonSaveException? Err, uint ErrKey)>
+        ApplySealedArtifactChallengesAsync(IReadOnlyList<CurrentChallengeContext> contexts)
+    {
+        if (_loadedPath is null || contexts.Count == 0)
         {
-            BulkOpStatus = "Nothing to do — no Sealed_Abyss_Artifact_* entries in iteminfo.pabgb. "
-                + "Is the game install configured?";
-            return;
-        }
-        if (preview.Candidates.Count == 0)
-        {
-            BulkOpStatus =
-                $"Nothing to apply — iteminfo lists {preview.KnownArtifactCount} SA artifact(s) but none has an "
-                + "eligible challenge in this save: either no FAR tracker exists yet (artifact "
-                + "never picked up), the catalog row is already at state=5, or the X_2 "
-                + "sub-mission key isn't in iteminfo. "
-                + $"({preview.SkippedNoMission} no-mission, {preview.SkippedNoFar} no-FAR, "
-                + $"{preview.SkippedAlreadyDone} already done, {preview.SkippedOther} other.)";
-            return;
-        }
-
-        // Build the per-key skip details section. Show every skipped
-        // entry rather than truncating — there are at most a couple
-        // dozen skips across the 141-row SA set and the user benefits
-        // from a complete picture (especially for "X_2 lookup failed",
-        // which currently affects multi-objective Living_*/Cooking
-        // challenges where Pattern B v1 doesn't apply).
-        string skipDetailSection;
-        if (preview.SkipDetails.Count == 0)
-        {
-            skipDetailSection = string.Empty;
-        }
-        else
-        {
-            var lines = new System.Text.StringBuilder();
-            lines.Append("\nSkipped challenges (per-key reason):\n");
-            foreach (var (k, n, r) in preview.SkipDetails)
-            {
-                var label = string.IsNullOrEmpty(n) ? $"{k}" : $"{k} ({n})";
-                lines.Append($"  • {label}: {r}\n");
-            }
-            skipDetailSection = lines.ToString();
-        }
-
-        var msg =
-            $"Mark {preview.Candidates.Count} Sealed Abyss Artifact challenge(s) complete "
-            + "using Pattern B v1?\n\n"
-            + $"  Known SA artifacts (iteminfo): {preview.KnownArtifactCount}\n"
-            + $"  Eligible challenges to mark: {preview.Candidates.Count}\n"
-            + $"  Skipped — already done: {preview.SkippedAlreadyDone}\n"
-            + $"  Skipped — FAR tracker not ready: {preview.SkippedNoFar}\n"
-            + $"  Skipped — no mission mapping: {preview.SkippedNoMission}\n"
-            + $"  Skipped — other (twin shape / X_2 lookup failed): {preview.SkippedOther}\n"
-            + skipDetailSection
-            + "\n"
-            + "Eligibility now ignores whether the artifact is currently "
-            + "held — only the save-side challenge data shape matters. "
-            + "Pick up the artifact in-game once (creating the FAR tracker) "
-            + "and the challenge stays eligible even after the item is "
-            + "consumed.\n\n"
-            + "Per-challenge writes: FAR tracker _state ← 5 + _completedTime stamped + visible "
-            + "tag added; X_2 sub-mission entry cloned from FAR (when missing). Catalog row + "
-            + "adjacent twin: UNTOUCHED — engine fills those at reward pickup.\n\n"
-            + "[!! VERIFIED ON Shield II / Spear I / Hooves II / Slash III IN SLOT102] "
-            + "Same recipe the per-row button uses; the bulk variant just iterates it. "
-            + "Achievements still don't unlock (in-game completion only). Backed-up at "
-            + "%LOCALAPPDATA%\\CrimsonAtomtic\\Backups\\ before write; File → Restore from "
-            + "Backup… rolls back.\n\n"
-            + "Proceed?";
-        var ok = await ask("Bulk Mark Sealed Abyss Artifact Challenges Complete?", msg);
-        if (!ok)
-        {
-            BulkOpStatus = "Bulk Mark cancelled.";
-            return;
+            return (0, null, 0u);
         }
 
         // Apply loop: read FAR key field per ctx (cheap — mutation_version
@@ -2190,14 +2183,14 @@ public sealed partial class MainWindowViewModel(
         // IProgress<T> callback marshals "N/total — challenge K"
         // ticks back to the UI thread so the status footer animates
         // instead of looking frozen.
-        var totalCandidates = preview.Candidates.Count;
+        var totalCandidates = contexts.Count;
         BulkOpStatus = $"Applying Pattern B v1: 0 / {totalCandidates}…";
         var baseCt = await Task.Run(() => ScanMaxMissionCompletedTime());
         var newCt = baseCt == 0UL ? 1UL : baseCt + 1UL;
         // Per-block running append index — different QuestSaveData
         // blocks have independent _missionStateList counts.
         var perBlockCount = new Dictionary<int, int>();
-        foreach (var c in preview.Candidates)
+        foreach (var c in contexts)
         {
             if (!perBlockCount.ContainsKey(c.MissionTopBlockIdx))
             {
@@ -2243,7 +2236,7 @@ public sealed partial class MainWindowViewModel(
             {
                 loader.RunDeferred(() =>
                 {
-                    foreach (var c in preview.Candidates)
+                    foreach (var c in contexts)
                     {
                         // Announce BEFORE applying so the user sees the
                         // current challenge key while the FFI is in
@@ -2297,13 +2290,13 @@ public sealed partial class MainWindowViewModel(
                 $"Bulk-completed {applied} Sealed Abyss Artifact challenge(s) (Pattern B v1)");
             OnPropertyChanged(nameof(WindowTitle));
             BulkOpStatus =
-                $"Done: bulk-completed {applied} of {preview.Candidates.Count} eligible "
+                $"Done: bulk-completed {applied} of {contexts.Count} eligible "
                 + $"Sealed Abyss Artifact challenge(s) via Pattern B v1.";
         }
         else
         {
             BulkOpStatus =
-                $"Bulk Mark failed at challenge {firstErrorKey} after {applied}/{preview.Candidates.Count} "
+                $"Bulk Mark failed at challenge {firstErrorKey} after {applied}/{contexts.Count} "
                 + $"applied: {firstError.Message}. Save state is partial — reload without writing to revert.";
             // Even partial success counts as dirty so the user sees
             // the title-bar warning + can still Save what landed.
@@ -2317,6 +2310,7 @@ public sealed partial class MainWindowViewModel(
             }
         }
         NotifyMarkChallengeStateChanged();
+        return (applied, firstError, firstErrorKey);
     }
 
     /// <summary>
@@ -2493,7 +2487,7 @@ public sealed partial class MainWindowViewModel(
     /// considered but rejected — surfaced in the confirm dialog so
     /// users can see exactly which challenges were skipped and why.
     /// </summary>
-    private readonly record struct BulkSaPreview(
+    internal readonly record struct BulkSaPreview(
         int KnownArtifactCount,
         IReadOnlyList<CurrentChallengeContext> Candidates,
         int SkippedNoMission,
@@ -2853,7 +2847,7 @@ public sealed partial class MainWindowViewModel(
     /// wasn't created).
     /// </para>
     /// </remarks>
-    private readonly record struct CurrentChallengeContext(
+    internal readonly record struct CurrentChallengeContext(
         uint CatalogKey,
         string InternalName,
         int MissionTopBlockIdx,
@@ -3015,15 +3009,19 @@ public sealed partial class MainWindowViewModel(
         List<StackFillCandidate> candidates;
         if (row.IsSingleFillCandidate)
         {
+            // Single-item "Fill stack" is a deliberate one-row gesture —
+            // fill to the true max, uncapped (capLarge: false).
             candidates = new List<StackFillCandidate>(1);
-            if (TryBuildSingleCandidate(row.Block, rowPath, out var c))
+            if (TryBuildSingleCandidate(row.Block, rowPath, capLarge: false, out var c))
             {
                 candidates.Add(c);
             }
         }
         else
         {
-            candidates = CollectStackFillCandidates(row.Block, rowPath);
+            // Per-container "Fill stacks" is a bulk path — cap huge-cap
+            // items at BulkFillCap (capLarge: true).
+            candidates = CollectStackFillCandidates(row.Block, rowPath, capLarge: true);
         }
 
         if (candidates.Count == 0)
@@ -3043,9 +3041,11 @@ public sealed partial class MainWindowViewModel(
                 return;
             }
             var msg = $"Set _stackCount for {candidates.Count} item(s) in this container?\n\n"
-                      + "Items with max_stack_count > 100 fill to max.\n"
+                      + "Items with max_stack_count > 100 fill to max (capped at 9,999,999 — "
+                      + "huge-cap items like currency stop there; stacks already larger are left alone).\n"
                       + "Items with max_stack_count ≤ 100 round up to the next full stack "
                       + "(e.g. count 120, max 50 → 150). Items already at a stack-boundary are skipped.\n\n"
+                      + "Tip: the single-item \"Fill stack\" button fills to the true max, uncapped.\n\n"
                       + "Reversible by reloading the save without writing.";
             var ok = await ask("Fill stacks?", msg);
             if (!ok)
@@ -4181,7 +4181,8 @@ public sealed partial class MainWindowViewModel(
     /// </summary>
     private List<StackFillCandidate> CollectStackFillCandidates(
         BlockDetails container,
-        IReadOnlyList<PathStep> parentPath)
+        IReadOnlyList<PathStep> parentPath,
+        bool capLarge)
     {
         var list = new List<StackFillCandidate>();
         foreach (var listField in container.Fields)
@@ -4194,7 +4195,7 @@ public sealed partial class MainWindowViewModel(
             {
                 var itemPath = ExtendPath(parentPath,
                                           new PathStep((uint)listField.FieldIndex, (uint)itemIdx));
-                if (TryBuildSingleCandidate(items[itemIdx], itemPath, out var candidate))
+                if (TryBuildSingleCandidate(items[itemIdx], itemPath, capLarge, out var candidate))
                 {
                     list.Add(candidate);
                 }
@@ -4214,6 +4215,7 @@ public sealed partial class MainWindowViewModel(
     private bool TryBuildSingleCandidate(
         BlockDetails item,
         IReadOnlyList<PathStep> itemPath,
+        bool capLarge,
         out StackFillCandidate candidate)
     {
         candidate = default;
@@ -4264,7 +4266,7 @@ public sealed partial class MainWindowViewModel(
         {
             return false;
         }
-        if (!TryComputeTargetStack(current, maxVal, out var target))
+        if (!TryComputeTargetStack(current, maxVal, capLarge, out var target))
         {
             return false;
         }
@@ -4290,6 +4292,18 @@ public sealed partial class MainWindowViewModel(
     }
 
     /// <summary>
+    /// Upper bound the *bulk* fill paths (Fill ALL stacks, per-container
+    /// Fill stacks) clamp huge-cap items to. Large-cap items (currency,
+    /// contributions, etc.) have <c>max_stack_count</c> in the tens of
+    /// millions; blasting them to the true max produces absurd piles, so
+    /// when <c>capLarge</c> is set we cap at this value (and leave stacks
+    /// that are already bigger untouched). The deliberate single-item
+    /// "Fill stack" button and the edit-panel "Set to Max" stay uncapped
+    /// (they pass <c>capLarge: false</c> / don't route through here).
+    /// </summary>
+    private const ulong BulkFillCap = 9_999_999UL;
+
+    /// <summary>
     /// Decide what value to write for a fill-to-max operation given
     /// the current count and the iteminfo max_stack_count. Returns
     /// false (skip the write) when the target would equal the current
@@ -4310,11 +4324,26 @@ public sealed partial class MainWindowViewModel(
     ///     </list>
     ///   </item>
     /// </list>
+    /// <para>
+    /// When <paramref name="capLarge"/> is set (the bulk paths), the
+    /// computed target is clamped to <see cref="BulkFillCap"/>: stacks
+    /// already above the cap are left alone (return false) and any target
+    /// that would exceed the cap is pulled down to it. The ≤100 round-up
+    /// branch never reaches the cap, so the clamp only affects large-cap
+    /// items.
+    /// </para>
     /// </summary>
-    private static bool TryComputeTargetStack(ulong current, ulong max, out ulong target)
+    internal static bool TryComputeTargetStack(ulong current, ulong max, bool capLarge, out ulong target)
     {
         target = 0;
         if (max == 0)
+        {
+            return false;
+        }
+        // Bulk paths leave anything already above the cap untouched — we
+        // never want to *reduce* a stack the user (or a prior uncapped
+        // fill) deliberately pushed higher.
+        if (capLarge && current > BulkFillCap)
         {
             return false;
         }
@@ -4332,24 +4361,34 @@ public sealed partial class MainWindowViewModel(
                 return false;
             }
             target = max;
-            return true;
+        }
+        else if (current < max)
+        {
+            // max ≤ 100, partial single stack → top up to max.
+            target = max;
+        }
+        else
+        {
+            var remainder = current % max;
+            if (remainder == 0)
+            {
+                return false;
+            }
+            // Round current up to the next multiple of max. The add is
+            // safe against overflow at this scale (max ≤ 100, current is
+            // a u64 game count — sum stays well below u64::MAX).
+            target = current + (max - remainder);
         }
 
-        // max ≤ 100 branch.
-        if (current < max)
+        if (capLarge && target > BulkFillCap)
         {
-            target = max;
-            return true;
+            target = BulkFillCap;
         }
-        var remainder = current % max;
-        if (remainder == 0)
+        // After clamping, a no-op (or backwards) write is a skip.
+        if (target <= current)
         {
             return false;
         }
-        // Round current up to the next multiple of max. The add is
-        // safe against overflow at this scale (max ≤ 100, current is
-        // a u64 game count — sum stays well below u64::MAX).
-        target = current + (max - remainder);
         return true;
     }
 
@@ -4434,7 +4473,9 @@ public sealed partial class MainWindowViewModel(
                                     new PathStep((uint)f, (uint)bagIdx),
                                     new PathStep((uint)g, (uint)itemIdx),
                                 };
-                                if (TryBuildSingleCandidate(items[itemIdx], itemPath, out var c))
+                                // Fill ALL is a bulk path — cap huge-cap
+                                // items at BulkFillCap (capLarge: true).
+                                if (TryBuildSingleCandidate(items[itemIdx], itemPath, capLarge: true, out var c))
                                 {
                                     ops.Add(new ScalarBatchOp(b.Index, c.Path, c.FieldIndex, c.Bytes));
                                 }
@@ -4455,9 +4496,11 @@ public sealed partial class MainWindowViewModel(
 
         var msg = $"Fill _stackCount to max for {allOps.Count} item(s) "
                   + $"across {containerCount} container(s) (every InventorySaveData block)?\n\n"
-                  + "Items with max_stack_count > 100 fill to max.\n"
+                  + "Items with max_stack_count > 100 fill to max (capped at 9,999,999 — "
+                  + "huge-cap items like currency stop there; stacks already larger are left alone).\n"
                   + "Items with max_stack_count ≤ 100 round up to the next full stack "
                   + "(e.g. count 120, max 50 → 150). Items already at a stack-boundary are skipped.\n\n"
+                  + "Tip: the single-item \"Fill stack\" button fills to the true max, uncapped.\n\n"
                   + "Reversible by reloading the save without writing.";
         var ok = await ask("Fill ALL stacks across every inventory?", msg);
         if (!ok)
@@ -5425,6 +5468,8 @@ public sealed partial class MainWindowViewModel(
         // Block-action visibility — depends on current frame's class +
         // resolved field values, so re-check on every nav change.
         NotifyMarkChallengeStateChanged();
+        // Add-Item picker target depends on the current frame + selection.
+        RecomputeAddItemTarget();
     }
 
     /// <summary>

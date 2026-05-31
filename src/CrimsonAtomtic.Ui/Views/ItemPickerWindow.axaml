@@ -14,20 +14,45 @@
         Width="1080" Height="600"
         MinWidth="600" MinHeight="320">
 
-  <Grid RowDefinitions="Auto,Auto,*"
+  <Grid RowDefinitions="Auto,Auto,Auto,*"
         Margin="12">
 
-    <TextBox Grid.Row="0"
+    <!-- Top action bar (unified Add-Item flow). Names the picked item
+         and where it lands; the "from X" half is pushed live from the
+         main window as the user reselects inventory rows. Hidden in
+         per-row mode (e.g. the Sockets gem-picker). -->
+    <Border Grid.Row="0"
+            IsVisible="{Binding ShowTopActionBar}"
+            Background="#22FFFFFF"
+            CornerRadius="4"
+            Padding="8"
+            Margin="0,0,0,8">
+      <StackPanel Spacing="4">
+        <Button Content="{Binding AddActionText}"
+                Command="{Binding AddSelectedCommand}"
+                HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Center"
+                Padding="8,6"
+                FontWeight="SemiBold" />
+        <TextBlock Text="{Binding TopActionHint}"
+                   Opacity="0.6"
+                   TextWrapping="Wrap"
+                   IsVisible="{Binding TopActionHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </StackPanel>
+    </Border>
+
+    <TextBox Grid.Row="1"
              Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
              PlaceholderText="{DynamicResource ItemPickerSearchPlaceholder}" />
 
-    <TextBlock Grid.Row="1"
+    <TextBlock Grid.Row="2"
                Text="{Binding ResultsCountText}"
                Opacity="0.6"
                Margin="2,6,0,8" />
 
-    <DataGrid Grid.Row="2"
+    <DataGrid Grid.Row="3"
               ItemsSource="{Binding Results}"
+              SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
               IsReadOnly="True"
               CanUserResizeColumns="True"
               CanUserSortColumns="True"
@@ -117,6 +142,7 @@
                 <Button Content="{Binding $parent[Window].((vm:ItemPickerViewModel)DataContext).ActionButtonLabel, FallbackValue='+ Bag'}"
                         ToolTip.Tip="{Binding $parent[Window].((vm:ItemPickerViewModel)DataContext).ActionButtonTooltip,
                                               FallbackValue={DynamicResource ItemPickerAddToBagTip}}"
+                        IsVisible="{Binding $parent[Window].((vm:ItemPickerViewModel)DataContext).ShowPerRowAction}"
                         Padding="6,2"
                         MinHeight="0"
                         Tag="{Binding ItemKey}"

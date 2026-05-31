@@ -1,0 +1,114 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        mc:Ignorable="d"
+        d:DesignWidth="980"
+        d:DesignHeight="620"
+        x:Class="CrimsonAtomtic.Ui.Views.SealedArtifactChallengeWindow"
+        x:DataType="vm:SealedArtifactChallengeViewModel"
+        Title="{DynamicResource SealedArtifactWindowTitle}"
+        Icon="/Assets/MainIcon.ico"
+        Width="980" Height="620"
+        MinWidth="720" MinHeight="380"
+        FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
+
+  <DockPanel LastChildFill="True" Margin="12">
+    <TextBlock DockPanel.Dock="Top"
+               Text="{DynamicResource SealedArtifactHeader}"
+               TextWrapping="Wrap"
+               Opacity="0.7"
+               Margin="0,0,0,8" />
+
+    <!-- Filter toolbar -->
+    <Grid DockPanel.Dock="Top"
+          ColumnDefinitions="*"
+          Margin="0,0,0,8"
+          VerticalAlignment="Center">
+      <TextBox Grid.Column="0"
+               Text="{Binding SearchText}"
+               PlaceholderText="{DynamicResource SealedArtifactSearchHint}" />
+    </Grid>
+
+    <!-- Selection toolbar (acts on the current filtered view) -->
+    <Grid DockPanel.Dock="Top"
+          ColumnDefinitions="Auto,Auto,Auto,*"
+          ColumnSpacing="8"
+          Margin="0,0,0,8">
+      <Button Grid.Column="0"
+              Content="{DynamicResource SealedArtifactSelectAll}"
+              Command="{Binding SelectAllCommand}"
+              Padding="8,2" />
+      <Button Grid.Column="1"
+              Content="{DynamicResource SealedArtifactUnselectAll}"
+              Command="{Binding UnselectAllCommand}"
+              Padding="8,2" />
+      <Button Grid.Column="2"
+              Content="{DynamicResource SealedArtifactInvert}"
+              Command="{Binding InvertSelectionCommand}"
+              Padding="8,2" />
+      <TextBlock Grid.Column="3"
+                 Text="{Binding FilterSummary}"
+                 Opacity="0.55"
+                 VerticalAlignment="Center"
+                 HorizontalAlignment="Right" />
+    </Grid>
+
+    <!-- Status footer + actions -->
+    <Grid DockPanel.Dock="Bottom"
+          ColumnDefinitions="*,Auto,Auto"
+          ColumnSpacing="8"
+          Margin="0,8,0,0">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding StatusMessage}"
+                 Opacity="0.75"
+                 VerticalAlignment="Center"
+                 TextWrapping="Wrap" />
+      <Button Grid.Column="1"
+              Content="{DynamicResource SealedArtifactCompleteSelected}"
+              Command="{Binding CompleteSelectedCommand}"
+              MinWidth="150" />
+      <Button Grid.Column="2"
+              Content="{DynamicResource SealedArtifactClose}"
+              Click="OnCloseClick"
+              MinWidth="80" />
+    </Grid>
+
+    <DataGrid ItemsSource="{Binding Rows}"
+              CanUserResizeColumns="True"
+              CanUserSortColumns="True"
+              GridLinesVisibility="Horizontal"
+              HeadersVisibility="Column"
+              AutoGenerateColumns="False">
+      <DataGrid.Columns>
+        <DataGridTemplateColumn Width="44" CanUserSort="False">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate DataType="vm:SealedArtifactRow">
+              <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTextColumn Header="{DynamicResource SealedArtifactColKey}"
+                            Binding="{Binding KeyText}"
+                            IsReadOnly="True"
+                            Width="120"
+                            FontFamily="Consolas, Menlo, monospace" />
+        <DataGridTextColumn Header="{DynamicResource SealedArtifactColName}"
+                            Binding="{Binding DisplayName}"
+                            IsReadOnly="True"
+                            Width="300" />
+        <DataGridTextColumn Header="{DynamicResource SealedArtifactColInternal}"
+                            Binding="{Binding InternalName}"
+                            IsReadOnly="True"
+                            Width="*" />
+        <DataGridTextColumn Header="{DynamicResource SealedArtifactColFollowUp}"
+                            Binding="{Binding FollowUpName}"
+                            IsReadOnly="True"
+                            Width="240" />
+      </DataGrid.Columns>
+    </DataGrid>
+  </DockPanel>
+</Window>

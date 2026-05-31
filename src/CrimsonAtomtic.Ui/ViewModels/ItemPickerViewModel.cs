@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using CrimsonAtomtic.Ui.Services;
 
 namespace CrimsonAtomtic.Ui.ViewModels;
@@ -127,6 +128,73 @@ public sealed partial class ItemPickerViewModel : ObservableObject
     public string SecondaryNameHeader =>
         HasSecondary ? $"Name ({SecondaryLanguage})" : "Name (secondary)";
 
+    /// <summary>
+    /// When true the picker shows a single prominent top action bar
+    /// (driven by <see cref="SelectedRow"/> + <see cref="TargetDescription"/>)
+    /// and hides the per-row "+ Bag" action button. This is the unified
+    /// Add-Item flow used by Tools → Browse Items and the per-row
+    /// "Add Item…" button. The Sockets gem-picker leaves this at the
+    /// default <c>false</c> so it keeps its per-row "Pick" button.
+    /// </summary>
+    public bool ShowTopActionBar { get; init; }
+
+    /// <summary>Inverse of <see cref="ShowTopActionBar"/> — drives the
+    /// per-row action button's visibility from XAML.</summary>
+    public bool ShowPerRowAction => !ShowTopActionBar;
+
+    /// <summary>
+    /// The DataGrid's selected row in top-action-bar mode — the item the
+    /// "Add" button will add. Two-way bound from the view.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AddActionText))]
+    [NotifyCanExecuteChangedFor(nameof(AddSelectedCommand))]
+    private ItemPickerRow? _selectedRow;
+
+    /// <summary>
+    /// Live "where this lands" phrase pushed in by the main window, e.g.
+    /// <c>from "Bullet / 子彈"</c>. Updates as the user reselects rows in
+    /// the inventory grid while the picker is open.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AddActionText))]
+    private string? _targetDescription;
+
+    /// <summary>
+    /// Whether the current main-window context can accept an added item
+    /// (the nav top is an <c>_itemList</c>). Pushed in by the main window;
+    /// gates <see cref="AddSelectedCommand"/>.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AddActionText))]
+    [NotifyPropertyChangedFor(nameof(TopActionHint))]
+    [NotifyCanExecuteChangedFor(nameof(AddSelectedCommand))]
+    private bool _canAddToTarget;
+
+    /// <summary>
+    /// Composed label for the top action button: names the picked item
+    /// and (when there's a valid target) where it goes. English-composed
+    /// like the app's other VM-side status text; the item label itself
+    /// carries the secondary-language name.
+    /// </summary>
+    public string AddActionText
+    {
+        get
+        {
+            if (SelectedRow is not { } row)
+            {
+                return "Select an item below, then Add";
+            }
+            return CanAddToTarget && !string.IsNullOrEmpty(TargetDescription)
+                ? $"+ Add \"{row.DisplayLabel}\" {TargetDescription}"
+                : $"+ Add \"{row.DisplayLabel}\"";
+        }
+    }
+
+    /// <summary>Hint shown under the bar when adding is currently blocked.</summary>
+    public string? TopActionHint =>
+        CanAddToTarget ? null : "Open a bag (drill into an item list) and pick a row to clone from.";
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ResultsCountText))]
     private string? _searchText;
@@ -176,6 +244,22 @@ public sealed partial class ItemPickerViewModel : ObservableObject
     /// </summary>
     public void RequestAddItem(uint itemKey) => AddItemRequested?.Invoke(itemKey);
 
+    private bool CanAddSelected => SelectedRow is not null && CanAddToTarget;
+
+    /// <summary>
+    /// Top-action-bar "Add" command: fires <see cref="AddItemRequested"/>
+    /// for the currently-selected row. Enabled only when a row is picked
+    /// and the main window reports a valid target.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanAddSelected))]
+    private void AddSelected()
+    {
+        if (SelectedRow is { } row)
+        {
+            RequestAddItem(row.ItemKey);
+        }
+    }
+
     private void Refresh()
     {
         Results.Clear();
@@ -218,4 +302,14 @@ public sealed record ItemPickerRow(
     string ItemKeyText,
     string StringKey,
     string NameEnglish,
-    string? NameSecondary);
+    string? NameSecondary)
+{
+    /// <summary>
+    /// Combined human label for the top action bar:
+    /// <c>"English / Secondary"</c> when a secondary name is loaded, else
+    /// just the English name. Mirrors the "Bullet / 子彈" shape the
+    /// inventory grid's ResolvedName uses.
+    /// </summary>
+    public string DisplayLabel =>
+        string.IsNullOrEmpty(NameSecondary) ? NameEnglish : $"{NameEnglish} / {NameSecondary}";
+}

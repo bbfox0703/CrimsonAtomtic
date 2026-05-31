@@ -1,0 +1,255 @@
+using System.Collections.ObjectModel;
+using System.Linq;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+
+namespace CrimsonAtomtic.Ui.ViewModels;
+
+/// <summary>
+/// VM for the Tools → Complete Sealed Abyss Artifact Challenges dialog.
+/// Replaces the former one-shot bulk command with a preview: every
+/// eligible challenge is listed as a checkbox row (all ticked by
+/// default) with a keyword filter and Select all / Unselect all / Invert,
+/// so the user picks exactly which to mark complete. The scan + apply
+/// both delegate to <see cref="MainWindowViewModel"/>
+/// (<see cref="MainWindowViewModel.ScanSealedArtifactCandidates"/> +
+/// <see cref="MainWindowViewModel.ApplySealedArtifactChallengesAsync"/>),
+/// so the Pattern B v1 mechanics stay in one place. Mirrors the shape of
+/// <see cref="KnowledgeEditorViewModel"/>.
+/// </summary>
+public sealed partial class SealedArtifactChallengeViewModel : ObservableObject
+{
+    private readonly MainWindowViewModel _main;
+    private List<SealedArtifactRow> _allRows = [];
+    private MainWindowViewModel.BulkSaPreview _preview;
+
+    /// <summary>Wired by the window code-behind to a yes/no confirm dialog.</summary>
+    public Func<string, string, Task<bool>>? ConfirmRequested { get; set; }
+
+    public ObservableCollection<SealedArtifactRow> Rows { get; } = [];
+
+    [ObservableProperty]
+    private string? _searchText;
+
+    [ObservableProperty]
+    private string? _statusMessage;
+
+    [ObservableProperty]
+    private string? _filterSummary;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CompleteSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SelectAllCommand))]
+    [NotifyCanExecuteChangedFor(nameof(UnselectAllCommand))]
+    [NotifyCanExecuteChangedFor(nameof(InvertSelectionCommand))]
+    private bool _isBusy;
+
+    /// <summary>True when the scan found at least one eligible challenge.
+    /// The code-behind only shows the dialog in that case.</summary>
+    public bool HasCandidates => _allRows.Count > 0;
+
+    private SealedArtifactChallengeViewModel(MainWindowViewModel main) => _main = main;
+
+    /// <summary>
+    /// Build the VM: scan the loaded save for eligible SA challenges on a
+    /// background thread, resolve each row's display name, default every
+    /// row to ticked.
+    /// </summary>
+    public static async Task<SealedArtifactChallengeViewModel> CreateAsync(MainWindowViewModel main)
+    {
+        ArgumentNullException.ThrowIfNull(main);
+
+        var vm = new SealedArtifactChallengeViewModel(main);
+        var loc = main.Localization;
+        var preview = await Task.Run(main.ScanSealedArtifactCandidates).ConfigureAwait(true);
+        vm._preview = preview;
+
+        var candidates = preview.Candidates ?? [];
+        var rows = new List<SealedArtifactRow>(candidates.Count);
+        foreach (var c in candidates)
+        {
+            var display = loc.ResolveByFieldTypeName("MissionKey", c.CatalogKey);
+            if (string.IsNullOrEmpty(display))
+            {
+                display = c.InternalName;
+            }
+            rows.Add(new SealedArtifactRow(c, display));
+        }
+        rows.Sort((a, b) => string.CompareOrdinal(a.DisplayName, b.DisplayName));
+        vm._allRows = rows;
+        vm.ApplyFilter();
+        vm.StatusMessage = rows.Count == 0
+            ? vm.NoCandidatesSummary
+            : $"{rows.Count:N0} eligible challenge(s). Tick the ones to complete, then Complete selected. "
+              + "(Catalog row + twin are left untouched — the engine fills them at reward pickup; "
+              + "achievements still require in-game completion.)";
+        return vm;
+    }
+
+    /// <summary>
+    /// Human-readable "why nothing to do" text, reusing the old bulk
+    /// command's breakdown. Surfaced by the code-behind when the scan
+    /// found no eligible challenges (so the empty dialog never opens).
+    /// </summary>
+    public string NoCandidatesSummary =>
+        _preview.KnownArtifactCount == 0
+            ? "Nothing to do — no Sealed_Abyss_Artifact_* entries in iteminfo.pabgb. "
+              + "Is the game install configured?"
+            : $"Nothing to apply — iteminfo lists {_preview.KnownArtifactCount} SA artifact(s) but none has an "
+              + "eligible challenge in this save: either no FAR tracker exists yet (artifact never picked up), "
+              + "the catalog row is already at state=5, or the X_2 sub-mission key isn't in iteminfo. "
+              + $"({_preview.SkippedNoMission} no-mission, {_preview.SkippedNoFar} no-FAR, "
+              + $"{_preview.SkippedAlreadyDone} already done, {_preview.SkippedOther} other.)";
+
+    partial void OnSearchTextChanged(string? value) => ApplyFilter();
+
+    private void ApplyFilter()
+    {
+        var search = SearchText?.Trim();
+        var hasSearch = !string.IsNullOrEmpty(search);
+
+        Rows.Clear();
+        foreach (var r in _allRows)
+        {
+            if (hasSearch
+                && !r.DisplayName.Contains(search!, StringComparison.OrdinalIgnoreCase)
+                && !r.InternalName.Contains(search!, StringComparison.OrdinalIgnoreCase)
+                && !r.FollowUpName.Contains(search!, StringComparison.OrdinalIgnoreCase)
+                && !r.KeyText.Contains(search!, StringComparison.OrdinalIgnoreCase)
+                && !r.CatalogKey.ToString(System.Globalization.CultureInfo.InvariantCulture).Contains(search!))
+            {
+                continue;
+            }
+            Rows.Add(r);
+        }
+        FilterSummary = $"Showing {Rows.Count:N0} of {_allRows.Count:N0}";
+    }
+
+    private bool CanAct => !IsBusy;
+
+    /// <summary>Tick every row in the current filtered view.</summary>
+    [RelayCommand(CanExecute = nameof(CanAct))]
+    private void SelectAll()
+    {
+        foreach (var r in Rows)
+        {
+            r.IsChecked = true;
+        }
+    }
+
+    /// <summary>Clear every tick (across all rows, not just the visible ones).</summary>
+    [RelayCommand(CanExecute = nameof(CanAct))]
+    private void UnselectAll()
+    {
+        foreach (var r in _allRows)
+        {
+            r.IsChecked = false;
+        }
+    }
+
+    /// <summary>Invert the tick of every row in the current filtered view.</summary>
+    [RelayCommand(CanExecute = nameof(CanAct))]
+    private void InvertSelection()
+    {
+        foreach (var r in Rows)
+        {
+            r.IsChecked = !r.IsChecked;
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanAct))]
+    private async Task CompleteSelected()
+    {
+        var picked = _allRows.Where(r => r.IsChecked).Select(r => r.Context).ToList();
+        if (picked.Count == 0)
+        {
+            StatusMessage = "No challenges are ticked.";
+            return;
+        }
+
+        if (ConfirmRequested is { } ask)
+        {
+            var ok = await ask(
+                "Complete selected Sealed Abyss Artifact challenges?",
+                $"Mark {picked.Count} challenge(s) complete using Pattern B v1?\n\n"
+                + "Per-challenge writes: FAR tracker _state ← 5 + _completedTime stamped + visible tag added; "
+                + "X_2 sub-mission entry cloned from FAR (when missing). Catalog row + adjacent twin: UNTOUCHED "
+                + "— the engine fills those at reward pickup.\n\n"
+                + "Achievements still require in-game completion. Backed up at "
+                + "%LOCALAPPDATA%\\CrimsonAtomtic\\Backups\\ before write; File → Restore from Backup… rolls back.\n\n"
+                + "Proceed?").ConfigureAwait(true);
+            if (!ok)
+            {
+                StatusMessage = "Cancelled.";
+                return;
+            }
+        }
+
+        IsBusy = true;
+        StatusMessage = $"Applying Pattern B v1 to {picked.Count} challenge(s)…";
+        try
+        {
+            var (applied, err, errKey) = await _main
+                .ApplySealedArtifactChallengesAsync(picked).ConfigureAwait(true);
+            StatusMessage = err is null
+                ? $"Done: completed {applied} of {picked.Count} challenge(s) via Pattern B v1."
+                : $"Failed at 0x{errKey:X8} after {applied}/{picked.Count}: {err.Message}. "
+                  + "Save state is partial — reload without writing to revert.";
+
+            // Re-scan so completed (now state=5) challenges drop off the
+            // list and a re-run can't double-apply. Accurate even on
+            // partial failure.
+            if (applied > 0)
+            {
+                await RescanAsync().ConfigureAwait(true);
+            }
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task RescanAsync()
+    {
+        var loc = _main.Localization;
+        var preview = await Task.Run(_main.ScanSealedArtifactCandidates).ConfigureAwait(true);
+        _preview = preview;
+        var candidates = preview.Candidates ?? [];
+        var rows = new List<SealedArtifactRow>(candidates.Count);
+        foreach (var c in candidates)
+        {
+            var display = loc.ResolveByFieldTypeName("MissionKey", c.CatalogKey);
+            if (string.IsNullOrEmpty(display))
+            {
+                display = c.InternalName;
+            }
+            rows.Add(new SealedArtifactRow(c, display));
+        }
+        rows.Sort((a, b) => string.CompareOrdinal(a.DisplayName, b.DisplayName));
+        _allRows = rows;
+        ApplyFilter();
+    }
+}
+
+/// <summary>One eligible Sealed Abyss challenge + its per-row tick state.</summary>
+public sealed partial class SealedArtifactRow : ObservableObject
+{
+    internal SealedArtifactRow(MainWindowViewModel.CurrentChallengeContext context, string displayName)
+    {
+        Context = context;
+        DisplayName = displayName;
+        _isChecked = true;
+    }
+
+    internal MainWindowViewModel.CurrentChallengeContext Context { get; }
+    public string DisplayName { get; }
+
+    public uint CatalogKey => Context.CatalogKey;
+    public string KeyText => $"0x{Context.CatalogKey:X8}";
+    public string InternalName => Context.InternalName;
+    public string FollowUpName => Context.FollowUpInternalName;
+
+    [ObservableProperty]
+    private bool _isChecked;
+}
