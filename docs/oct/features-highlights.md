@@ -1,6 +1,6 @@
 # CrimsonAtomtic — Crimson Desert Save Editor
 
-A free save editor for **Crimson Desert** — works with game patches **1.05 / 1.06 / 1.07** and finds your save file automatically whether you bought the game on Steam, Epic, or Game Pass.
+A free save editor for **Crimson Desert** — works with game patches **1.05 / 1.06 / 1.08 / 1.09** and finds your save file automatically whether you bought the game on Steam, Epic, or Game Pass.
 
 Just download one `.exe`, double-click it, no installer.
 
@@ -14,6 +14,7 @@ Just download one `.exe`, double-click it, no installer.
 - **Rename mounts, mercenaries, and pets** — give your horse a better name; full Unicode support
 - **Recover sold items** — accidentally sold something to a vendor? Vendor Buyback lists every item sitting in a store's queue, one click to bring it back
 - **Abyss Gates** — unlock individual gates or all of them at once
+- **Unlock mounts** — get the six special sigil mounts (White Bear, Silver Fang, Snowwhite Deer, Alpine Ibex, Rock Tusk Warthog, Phoenix) and the **Dragon (Blackstar)** without grinding the quest chains
 - **Sealed Abyss Artifact challenges** — mark a challenge as complete after picking up the artifact in-game; a bulk version completes every eligible challenge in one click
 - **Find anything** — search all items by name in any of the 14 game languages; browse all 600+ characters with portraits
 
@@ -42,6 +43,13 @@ The **Apply Set** dropdown lets you take a saved gem layout and apply it to a wh
 ### Mounts and Mercenaries
 
 Rename any of them — your horses, your wagon, your balloon, any tamed animal, any human follower. Full Unicode names supported.
+
+**Unlock Mounts** (`Tools → Unlock Mounts`) adds the special mounts you'd otherwise have to grind long quest chains for:
+
+- The six **sigil mounts** — White Bear, Silver Fang, Snowwhite Deer, Alpine Ibex, Rock Tusk Warthog and the Phoenix pet — are unlocked the clean, game-legitimate way: the editor drops the matching *Sigil of Solidarity* into your Quest Artifacts, and you **use it in-game** to finish. The game itself does the unlock, so the mount summons and rides exactly as if you'd earned it.
+- The **Dragon (Blackstar)** is unlocked entirely in the editor — it's added straight to your stable at full HP, ready to summon. No in-game step needed.
+
+Everything is reversible: if you don't save, nothing is written.
 
 ### Vendor Buyback
 

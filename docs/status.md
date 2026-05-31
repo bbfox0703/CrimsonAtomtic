@@ -81,7 +81,7 @@
 > | Auto-backup + restore | ✅ (+ pristine reference) | ✅ |
 > | Change review / undo | ✅ | ✅ |
 > | Equipment enchant level | ✅ | 🔸 field edit |
-> | Mount / character unlock | ✅ (hardcoded hex) | ❌ → planned (game-data-driven) |
+> | Mount unlock (sigil mounts + dragon) | ✅ (hardcoded hex) | ✅ (Tools → Unlock Mounts: sigil-grant + dragon bytes-insert/remap + 187-key knowledge + HP fill) |
 > | Quest state / stage editing | ✅ (Quest Editor + Quest DB) | 🔸 field edit |
 > | Knowledge / codex learn–unlearn | ✅ (all categories) | 🔸 Abyss Gates only |
 > | Faction nodes (discover / set state) | ✅ | 🔸 field edit |

@@ -7,11 +7,11 @@
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
 [![Avalonia](https://img.shields.io/badge/Avalonia-UI-8B5CF6)](https://avaloniaui.net/)
 [![Built with Claude Code](https://img.shields.io/badge/Built%20with-Claude%20Code-CC785C?logo=claude)](https://claude.ai/code)
-[![Game Version](https://img.shields.io/badge/Game-Crimson%20Desert%201.05%20%2F%201.07-D63B3B)](https://www.playcrimsondesert.com/)
+[![Game Version](https://img.shields.io/badge/Game-Crimson%20Desert%201.05%E2%80%931.09-D63B3B)](https://www.playcrimsondesert.com/)
 
 A clean, fast save editor + game-data toolchain for **Crimson Desert** (Pearl
-Abyss). Tracks the live game install (currently **1.07**) and remains
-compatible with 1.05 / 1.06 saves via schema auto-detection. Cross-platform
+Abyss). Tracks the live game install (currently **1.09**) and remains
+compatible with 1.05 / 1.06 / 1.08 saves via schema auto-detection. Cross-platform
 goal: Windows (primary), Linux, macOS.
 
 ## Layout
@@ -79,6 +79,15 @@ set of Tools-menu bulk operations. Highlights:
 - **Abyss Gates** — bulk **Unlock All Abyss Gates (Map Discovery)** for
   the knowledge layer plus a per-gate Lock/Unlock dialog for the gate-state
   layer.
+- **Mount Unlock** — Tools → **Unlock Mounts** dialog. The six sigil-gated
+  special mounts (White Bear, Silver Fang, Snowwhite Deer, Alpine Ibex,
+  Rock Tusk Warthog, Phoenix) are unlocked the game-legitimate way: the
+  matching *Sigil of Solidarity* is granted into Quest Artifacts; you use
+  it in-game and the engine does the rest. The **Dragon (Blackstar)** is
+  unlocked fully in-editor — its real mercenary element (a 212-byte captured
+  blob whose schema type-indices are remapped onto your save by class name)
+  is inserted, its 187-key riding knowledge injected, and its HP filled — no
+  whole-save donor required.
 - **Vendor Buyback** — list every item the player has sold to vendors
   (StoreKey resolved live via `storeinfo.pabgb`), per-row Remove to
   free a buyback slot, per-row **Jump…** to open the item in the main

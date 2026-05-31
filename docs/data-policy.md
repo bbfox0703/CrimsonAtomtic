@@ -54,7 +54,7 @@ If you're tempted to add `if value == "weird_legacy_thing": handle specially` in
 
 ## 7. Game version is metadata, not a build-time constant
 
-- The current game install is **1.07**, but the project must work against historical versions in `F:\Crimson Desert\` and `X:\Crimson Desert\` for diffing.
+- The current game install is **1.09**, but the project must work against historical versions in `F:\Crimson Desert\` and `X:\Crimson Desert\` for diffing.
 - Code that parses a binary format should accept a version hint when ambiguous, and otherwise rely on auto-detection (`crimson-rs` already does this for skill format flags).
 - See [game-versions.md](game-versions.md) for the exact layout.
 
