@@ -1491,6 +1491,100 @@ internal sealed class CrimsonSubLevelInfoHandle : SafeHandle
 //  for the resolved-name column; no enumerator UX consumes them today.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── FactionNodeInfo ───────────────────────────────────────────────────────────
+
+/// <summary>
+/// <c>FactionNodeKey (u32)</c> → row internal name
+/// (e.g. <c>"Node_Her_HernandCastle"</c>). 1,158 rows in 1.09. Name-only
+/// (no PALOC display name — the place name a player sees comes through a
+/// different gamedata path). Used to label faction-stronghold rows in the
+/// Faction-node editor; the save stores this key in
+/// <c>FactionNodeElementSaveData._ownerFactionKey</c> (TypeName
+/// <c>FactionNodeKey</c>).
+/// </summary>
+public sealed class NativeFactionNodeInfoCatalog : IDisposable
+{
+    private readonly CrimsonFactionNodeInfoHandle _handle;
+    private readonly int _entryCount;
+    private bool _disposed;
+
+    private NativeFactionNodeInfoCatalog(CrimsonFactionNodeInfoHandle handle, int entryCount)
+    {
+        _handle = handle;
+        _entryCount = entryCount;
+    }
+
+    public int EntryCount
+    {
+        get { ObjectDisposedException.ThrowIf(_disposed, this); return _entryCount; }
+    }
+
+    public static NativeFactionNodeInfoCatalog LoadFromBytes(
+        ReadOnlySpan<byte> pabgb, ReadOnlySpan<byte> pabgh)
+    {
+        unsafe
+        {
+            fixed (byte* pb = pabgb)
+            fixed (byte* ph = pabgh)
+            {
+                var rc = NativeMethods.FactionNodeInfoLoadFromBytes(
+                    pb, (nuint)pabgb.Length, ph, (nuint)pabgh.Length, out var raw);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_factionnode_load_from_bytes(pabgb={pabgb.Length},pabgh={pabgh.Length}) " +
+                        $"failed: {NameBuffer.ErrorName(rc)}");
+                }
+                var handle = CrimsonFactionNodeInfoHandle.FromOwnedPointer(raw);
+                var rcCount = NativeMethods.FactionNodeInfoEntryCount(handle, out var count);
+                if (rcCount != NativeMethods.OK)
+                {
+                    handle.Dispose();
+                    throw new CrimsonSaveException(rcCount,
+                        $"crimson_factionnode_entry_count failed: {NameBuffer.ErrorName(rcCount)}");
+                }
+                return new NativeFactionNodeInfoCatalog(handle, (int)count);
+            }
+        }
+    }
+
+    public string? LookupStringKey(uint factionNodeKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        unsafe
+        {
+            return NameBuffer.ReadString(
+                (byte* buf, nuint bufLen, out nuint required) =>
+                    NativeMethods.FactionNodeInfoLookupStringKey(_handle, factionNodeKey, buf, bufLen, out required),
+                $"crimson_factionnode_lookup_string_key({factionNodeKey})");
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _handle.Dispose();
+    }
+}
+
+internal sealed class CrimsonFactionNodeInfoHandle : SafeHandle
+{
+    public CrimsonFactionNodeInfoHandle() : base(IntPtr.Zero, ownsHandle: true) { }
+    public static CrimsonFactionNodeInfoHandle FromOwnedPointer(IntPtr ptr)
+    {
+        var h = new CrimsonFactionNodeInfoHandle();
+        h.SetHandle(ptr);
+        return h;
+    }
+    public override bool IsInvalid => handle == IntPtr.Zero;
+    protected override bool ReleaseHandle()
+    {
+        NativeMethods.FactionNodeInfoFree(handle);
+        return true;
+    }
+}
+
 // ── HouseInfo ───────────────────────────────────────────────────────────────
 
 /// <summary>

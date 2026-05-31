@@ -2476,6 +2476,178 @@ public sealed partial class MainWindowViewModel(
     //     scan via loader.ListInventoryItems (one FFI call now).
 
     /// <summary>
+    /// One faction-stronghold node addressable for a state edit. Captured
+    /// by <see cref="ScanFactionNodes"/>; consumed by
+    /// <see cref="SetFactionNodeStatesAsync"/>. <see cref="Path"/> descends
+    /// from the <c>FactionSaveData</c> block to the element;
+    /// <see cref="StateFieldIndex"/> is the <c>_factionState</c> scalar
+    /// within it. <see cref="OwnerKey"/> is a <c>FactionNodeKey</c>
+    /// (resolve via the factionnode bridge); <see cref="ConquerorKey"/> is
+    /// a <c>FactionKey</c> (PALOC).
+    /// </summary>
+    internal readonly record struct FactionNodeTarget(
+        int BlockIndex,
+        PathStep[] Path,
+        int StateFieldIndex,
+        byte CurrentState,
+        uint OwnerKey,
+        uint ConquerorKey,
+        bool IsCapital);
+
+    /// <summary>
+    /// The five <c>_factionState</c> (<c>FactionNodeStateType</c>, u8)
+    /// values + labels. 2 = Active is the "discovered" state the in-game
+    /// pickup writes. Mirrors the reference editor's STATE_LABELS.
+    /// </summary>
+    internal static class FactionNodeStates
+    {
+        public static readonly IReadOnlyList<(byte Value, string Label)> All =
+        [
+            (0, "Undiscovered"),
+            (1, "Discovered"),
+            (2, "Active"),
+            (3, "Conquered"),
+            (4, "Lost"),
+        ];
+
+        public static string Label(byte state) => state switch
+        {
+            0 => "Undiscovered",
+            1 => "Discovered",
+            2 => "Active",
+            3 => "Conquered",
+            4 => "Lost",
+            _ => state.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        };
+    }
+
+    /// <summary>
+    /// Walk every <c>FactionSaveData</c> block and enumerate the
+    /// <c>_factionNodeElementSaveDataList</c> elements as editable
+    /// <see cref="FactionNodeTarget"/>s. Pure read — safe under
+    /// <c>Task.Run</c> (the dialog calls it that way). Skips elements with
+    /// no present <c>_factionState</c> (nothing to write).
+    /// </summary>
+    internal IReadOnlyList<FactionNodeTarget> ScanFactionNodes()
+    {
+        var result = new List<FactionNodeTarget>();
+        if (_loadedPath is null || Summary is not { Blocks: { } blocks })
+        {
+            return result;
+        }
+        foreach (var b in blocks)
+        {
+            if (!string.Equals(b.ClassName, "FactionSaveData", StringComparison.Ordinal))
+            {
+                continue;
+            }
+            BlockDetails top;
+            try { top = loader.LoadBlockDetails(_loadedPath, b.Index); }
+            catch (CrimsonSaveException) { continue; }
+            for (var fi = 0; fi < top.Fields.Count; fi++)
+            {
+                var listField = top.Fields[fi];
+                if (!string.Equals(listField.Name, "_factionNodeElementSaveDataList", StringComparison.Ordinal)
+                    || listField.Elements is not { Count: > 0 } nodes)
+                {
+                    continue;
+                }
+                for (var ei = 0; ei < nodes.Count; ei++)
+                {
+                    var stateFieldIdx = -1;
+                    byte currentState = 0;
+                    uint ownerKey = 0;
+                    uint conquerorKey = 0;
+                    var isCapital = false;
+                    foreach (var f in nodes[ei].Fields)
+                    {
+                        if (!f.Present)
+                        {
+                            continue;
+                        }
+                        switch (f.Name)
+                        {
+                            case "_factionState":
+                                stateFieldIdx = f.FieldIndex;
+                                if (TryParseScalarUInt(f.Value, out var sv)) currentState = (byte)sv;
+                                break;
+                            case "_ownerFactionKey":
+                                if (TryParseScalarUInt(f.Value, out var ov)) ownerKey = (uint)ov;
+                                break;
+                            case "_conquerorFactionKey":
+                                if (TryParseScalarUInt(f.Value, out var cv)) conquerorKey = (uint)cv;
+                                break;
+                            case "_isCapital":
+                                if (TryParseScalarUInt(f.Value, out var capv)) isCapital = capv != 0;
+                                break;
+                        }
+                    }
+                    if (stateFieldIdx < 0)
+                    {
+                        continue;
+                    }
+                    result.Add(new FactionNodeTarget(
+                        b.Index,
+                        [new PathStep((uint)fi, (uint)ei)],
+                        stateFieldIdx,
+                        currentState,
+                        ownerKey,
+                        conquerorKey,
+                        isCapital));
+                }
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Set <c>_factionState</c> on the given nodes via a single in-place
+    /// <see cref="ISaveLoader.SetScalarFieldsBatch"/> (no list growth).
+    /// Skips no-op changes (new == current). Returns (applied, error).
+    /// </summary>
+    internal async Task<(int Applied, CrimsonSaveException? Err)> SetFactionNodeStatesAsync(
+        IReadOnlyList<(FactionNodeTarget Target, byte NewState)> changes)
+    {
+        if (_loadedPath is null || changes.Count == 0)
+        {
+            return (0, null);
+        }
+        var ops = new List<ScalarBatchOp>(changes.Count);
+        foreach (var (t, ns) in changes)
+        {
+            if (ns != t.CurrentState)
+            {
+                ops.Add(new ScalarBatchOp(t.BlockIndex, t.Path, t.StateFieldIndex, new[] { ns }));
+            }
+        }
+        if (ops.Count == 0)
+        {
+            return (0, null);
+        }
+        var (applied, err) = await Task.Run<(int, CrimsonSaveException?)>(() =>
+        {
+            try
+            {
+                loader.SetScalarFieldsBatch(ops);
+                return (ops.Count, null);
+            }
+            catch (CrimsonSaveException ex)
+            {
+                return (0, ex);
+            }
+        });
+
+        RefreshSelectedBlockSilently();
+        if (applied > 0)
+        {
+            IsDirty = true;
+            Journal.Log("Faction nodes", $"Set _factionState on {applied} node(s)");
+            OnPropertyChanged(nameof(WindowTitle));
+        }
+        return (applied, err);
+    }
+
+    /// <summary>
     /// Pre-flight result for the bulk SA challenge sweep.
     /// <see cref="KnownArtifactCount"/> is the total number of
     /// <c>Sealed_Abyss_Artifact_*</c> rows iteminfo carries (typically

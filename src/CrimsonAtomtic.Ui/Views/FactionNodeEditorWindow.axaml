@@ -1,0 +1,129 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        mc:Ignorable="d"
+        d:DesignWidth="1000"
+        d:DesignHeight="640"
+        x:Class="CrimsonAtomtic.Ui.Views.FactionNodeEditorWindow"
+        x:DataType="vm:FactionNodeEditorViewModel"
+        Title="{DynamicResource FactionNodeWindowTitle}"
+        Icon="/Assets/MainIcon.ico"
+        Width="1000" Height="640"
+        MinWidth="720" MinHeight="400"
+        FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
+
+  <DockPanel LastChildFill="True" Margin="12">
+    <TextBlock DockPanel.Dock="Top"
+               Text="{DynamicResource FactionNodeHeader}"
+               TextWrapping="Wrap"
+               Opacity="0.7"
+               Margin="0,0,0,8" />
+
+    <!-- Filter toolbar -->
+    <Grid DockPanel.Dock="Top"
+          ColumnDefinitions="*"
+          Margin="0,0,0,8"
+          VerticalAlignment="Center">
+      <TextBox Grid.Column="0"
+               Text="{Binding SearchText}"
+               PlaceholderText="{DynamicResource FactionNodeSearchHint}" />
+    </Grid>
+
+    <!-- Selection toolbar (acts on the current filtered view) -->
+    <Grid DockPanel.Dock="Top"
+          ColumnDefinitions="Auto,Auto,Auto,*"
+          ColumnSpacing="8"
+          Margin="0,0,0,8">
+      <Button Grid.Column="0"
+              Content="{DynamicResource FactionNodeSelectAll}"
+              Command="{Binding SelectAllCommand}"
+              Padding="8,2" />
+      <Button Grid.Column="1"
+              Content="{DynamicResource FactionNodeUnselectAll}"
+              Command="{Binding UnselectAllCommand}"
+              Padding="8,2" />
+      <Button Grid.Column="2"
+              Content="{DynamicResource FactionNodeInvert}"
+              Command="{Binding InvertSelectionCommand}"
+              Padding="8,2" />
+      <TextBlock Grid.Column="3"
+                 Text="{Binding FilterSummary}"
+                 Opacity="0.55"
+                 VerticalAlignment="Center"
+                 HorizontalAlignment="Right" />
+    </Grid>
+
+    <!-- Status footer + actions -->
+    <Grid DockPanel.Dock="Bottom"
+          ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto"
+          ColumnSpacing="8"
+          Margin="0,8,0,0">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding StatusMessage}"
+                 Opacity="0.75"
+                 VerticalAlignment="Center"
+                 TextWrapping="Wrap" />
+      <TextBlock Grid.Column="1"
+                 Text="{DynamicResource FactionNodeTargetStateLabel}"
+                 VerticalAlignment="Center" />
+      <ComboBox Grid.Column="2"
+                MinWidth="130"
+                ItemsSource="{Binding TargetStates}"
+                SelectedItem="{Binding SelectedTargetState}" />
+      <Button Grid.Column="3"
+              Content="{DynamicResource FactionNodeSetSelected}"
+              Command="{Binding SetSelectedCommand}"
+              MinWidth="120" />
+      <Button Grid.Column="4"
+              Content="{DynamicResource FactionNodeDiscoverAll}"
+              Command="{Binding DiscoverAllCommand}"
+              MinWidth="110" />
+      <Button Grid.Column="5"
+              Content="{DynamicResource FactionNodeClose}"
+              Click="OnCloseClick"
+              MinWidth="80" />
+    </Grid>
+
+    <DataGrid ItemsSource="{Binding Rows}"
+              CanUserResizeColumns="True"
+              CanUserSortColumns="True"
+              GridLinesVisibility="Horizontal"
+              HeadersVisibility="Column"
+              AutoGenerateColumns="False">
+      <DataGrid.Columns>
+        <DataGridTemplateColumn Width="44" CanUserSort="False">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate DataType="vm:FactionNodeRow">
+              <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTextColumn Header="{DynamicResource FactionNodeColOwner}"
+                            Binding="{Binding OwnerName}"
+                            IsReadOnly="True"
+                            Width="*" />
+        <DataGridTextColumn Header="{DynamicResource FactionNodeColKey}"
+                            Binding="{Binding OwnerKeyText}"
+                            IsReadOnly="True"
+                            Width="110"
+                            FontFamily="Consolas, Menlo, monospace" />
+        <DataGridTextColumn Header="{DynamicResource FactionNodeColState}"
+                            Binding="{Binding StateLabel}"
+                            IsReadOnly="True"
+                            Width="130" />
+        <DataGridTextColumn Header="{DynamicResource FactionNodeColConqueror}"
+                            Binding="{Binding ConquerorName}"
+                            IsReadOnly="True"
+                            Width="200" />
+        <DataGridTextColumn Header="{DynamicResource FactionNodeColCapital}"
+                            Binding="{Binding CapitalText}"
+                            IsReadOnly="True"
+                            Width="70" />
+      </DataGrid.Columns>
+    </DataGrid>
+  </DockPanel>
+</Window>

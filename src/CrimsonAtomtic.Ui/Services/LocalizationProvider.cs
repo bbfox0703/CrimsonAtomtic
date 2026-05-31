@@ -65,6 +65,8 @@ public sealed class LocalizationProvider : IDisposable
     // Order matches the new-session brief table. Five filenames drop the
     // "info" suffix (royalsupply, globalgameevent, globalgameeventgroup,
     // reserveslot) — copy literally.
+    private const string FactionNodePabgbFileName            = "factionnode.pabgb";
+    private const string FactionNodePabghFileName            = "factionnode.pabgh";
     private const string HouseInfoPabgbFileName              = "houseinfo.pabgb";
     private const string HouseInfoPabghFileName              = "houseinfo.pabgh";
     private const string RoyalSupplyPabgbFileName            = "royalsupply.pabgb";
@@ -284,6 +286,7 @@ public sealed class LocalizationProvider : IDisposable
         "ReserveSlotKey",            // 27 rows; PALOC chain deferred
         "RegionKey",                 // 1,004 rows
         "ItemGroupKey",              // 1,500 rows
+        "FactionNodeKey",            // 1,158 rows — faction-stronghold node names
     };
 
     /// <summary>
@@ -336,6 +339,7 @@ public sealed class LocalizationProvider : IDisposable
     private NativeItemPartPrefabCatalog? _itemPartPrefab;
     private NativeStoreInfoCatalog? _storeInfo;
     // 13 niche name-only bridges, group 0008 (impl_name_only_bridge!).
+    private NativeFactionNodeInfoCatalog? _factionNodeInfo;
     private NativeHouseInfoCatalog? _houseInfo;
     private NativeRoyalSupplyInfoCatalog? _royalSupplyInfo;
     private NativeCraftToolInfoCatalog? _craftToolInfo;
@@ -777,6 +781,8 @@ public sealed class LocalizationProvider : IDisposable
         {
             return;
         }
+        TryLoadNicheBridge(pamt, FactionNodePabgbFileName, FactionNodePabghFileName,
+            NativeFactionNodeInfoCatalog.LoadFromBytes, ref _factionNodeInfo);
         TryLoadNicheBridge(pamt, HouseInfoPabgbFileName, HouseInfoPabghFileName,
             NativeHouseInfoCatalog.LoadFromBytes, ref _houseInfo);
         TryLoadNicheBridge(pamt, RoyalSupplyPabgbFileName, RoyalSupplyPabghFileName,
@@ -1713,6 +1719,7 @@ public sealed class LocalizationProvider : IDisposable
             // 13 niche bridges — internal name only (no PALOC chain).
             // Same convention as Store / QuestGauge / Skill: secondary
             // language intentionally echoes the English column.
+            "FactionNodeKey"          => _factionNodeInfo?.LookupStringKey(key),
             "HouseKey"                => _houseInfo?.LookupStringKey(key),
             "RoyalSupplyKey"          => _royalSupplyInfo?.LookupStringKey(key),
             "CraftToolKey"            => _craftToolInfo?.LookupStringKey(key),
@@ -1823,6 +1830,7 @@ public sealed class LocalizationProvider : IDisposable
         _storeInfo?.Dispose();
         _storeInfo = null;
         // 13 niche bridges.
+        _factionNodeInfo?.Dispose(); _factionNodeInfo = null;
         _houseInfo?.Dispose(); _houseInfo = null;
         _royalSupplyInfo?.Dispose(); _royalSupplyInfo = null;
         _craftToolInfo?.Dispose(); _craftToolInfo = null;
