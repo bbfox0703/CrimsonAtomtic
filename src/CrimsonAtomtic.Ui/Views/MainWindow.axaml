@@ -211,6 +211,10 @@
       <TextBlock Text="{DynamicResource EmptyHint}"
                  Opacity="0.6"
                  HorizontalAlignment="Center" />
+      <TextBlock Text="{Binding AppVersion}"
+                 Opacity="0.4"
+                 FontSize="12"
+                 HorizontalAlignment="Center" />
     </StackPanel>
 
     <!-- Loaded state. Summary column width binds to the VM so the

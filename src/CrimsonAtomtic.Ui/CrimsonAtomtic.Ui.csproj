@@ -19,6 +19,25 @@
     <TrimMode>full</TrimMode>
     <InvariantGlobalization>true</InvariantGlobalization>
 
+    <!-- ============================================================ -->
+    <!-- Version: major.minor.patch is the app's own semantic version. -->
+    <!-- Build number (4th digit) is read from the shared             -->
+    <!-- build_number.txt at the repo root; build.ps1 increments it    -->
+    <!-- once per build invocation (MSBuild only READS it). The same   -->
+    <!-- single-source-of-truth pattern UE5CEDumper uses.              -->
+    <!-- ============================================================ -->
+    <VerMajor>1</VerMajor>
+    <VerMinor>0</VerMinor>
+    <VerPatch>0</VerPatch>
+    <BuildNumberFile>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\build_number.txt'))</BuildNumberFile>
+    <VerBuild Condition="Exists('$(BuildNumberFile)')">$([System.IO.File]::ReadAllText('$(BuildNumberFile)').Trim())</VerBuild>
+    <VerBuild Condition="'$(VerBuild)' == ''">0</VerBuild>
+
+    <Version>$(VerMajor).$(VerMinor).$(VerPatch).$(VerBuild)</Version>
+    <AssemblyVersion>$(VerMajor).$(VerMinor).$(VerPatch).$(VerBuild)</AssemblyVersion>
+    <FileVersion>$(VerMajor).$(VerMinor).$(VerPatch).$(VerBuild)</FileVersion>
+    <InformationalVersion>$(VerMajor).$(VerMinor).$(VerPatch).$(VerBuild)</InformationalVersion>
+
     <!-- Avalonia.Controls.DataGrid 12.0.0 ships internal reflection that
          the ilc analyzer (microsoft.dotnet.ilcompiler 10.0.7+) flags via
          IL2104 / IL3053 rolled-up assembly warnings. TreatWarningsAsErrors

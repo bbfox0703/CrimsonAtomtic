@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CrimsonAtomtic.Core;
@@ -1048,12 +1049,27 @@ public sealed partial class MainWindowViewModel(
             const string app = "CrimsonAtomtic";
             if (_loadedPath is null)
             {
-                return app;
+                return $"{app} {AppVersion}";
             }
             var name = Path.GetFileName(_loadedPath);
             var prefix = IsDirty ? "*" : "";
-            return $"{prefix}{name} — {app}";
+            return $"{prefix}{name} — {app} {AppVersion}";
         }
+    }
+
+    /// <summary>
+    /// Application version string from assembly metadata, e.g. "v1.0.0.42".
+    /// The 4th digit is the build number baked in from build_number.txt at
+    /// compile time (see CrimsonAtomtic.Ui.csproj). Uses GetEntryAssembly
+    /// rather than GetExecutingAssembly because Native AOT single-file
+    /// publish trims the latter to a versionless name.
+    /// </summary>
+    public static string AppVersion { get; } = GetAppVersion();
+
+    private static string GetAppVersion()
+    {
+        var ver = Assembly.GetEntryAssembly()?.GetName().Version;
+        return ver is not null ? $"v{ver.Major}.{ver.Minor}.{ver.Build}.{ver.Revision}" : "";
     }
 
     // ── Navigation ──────────────────────────────────────────────────────────
