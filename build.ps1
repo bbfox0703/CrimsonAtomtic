@@ -81,6 +81,20 @@ function Invoke-Step([string]$Name, [scriptblock]$Block) {
     }
 }
 
+# ── Build-number bump ────────────────────────────────────────────────────────
+# build_number.txt is the single source of truth for the version's 4th digit.
+# This entry point INCREMENTS it once per invocation; the .csproj only READS it
+# (so a plain `dotnet build` doesn't churn the counter). Same scheme as
+# UE5CEDumper. Written with an LF newline to match the committed file and avoid
+# a git CRLF round-trip warning.
+$BuildNumberFile = Join-Path $ProjectRoot "build_number.txt"
+$buildNum = if (Test-Path $BuildNumberFile) {
+    [int]((Get-Content $BuildNumberFile -Raw).Trim())
+} else { 0 }
+$buildNum++
+[System.IO.File]::WriteAllText($BuildNumberFile, "$buildNum`n")
+Write-Banner "Build #$buildNum"
+
 # ── Clean step ──────────────────────────────────────────────────────────────
 if ($Clean) {
     Write-Banner "Clean"
