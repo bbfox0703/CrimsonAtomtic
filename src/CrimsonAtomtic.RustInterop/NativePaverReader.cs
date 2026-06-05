@@ -14,8 +14,8 @@ namespace CrimsonAtomtic.RustInterop;
 /// <param name="Minor">Minor — the **schema-compatibility key**.
 /// Iteminfo / save-body parsers target a specific minor; running them
 /// against a mismatched minor either crashes or silently corrupts.
-/// Currently <see cref="ParserTargetMinor"/> = 9.</param>
-/// <param name="Patch">Sub-version (e.g. <c>1.09</c> → 0, <c>1.09.01</c> → 1).
+/// Currently <see cref="ParserTargetMinor"/> = 10.</param>
+/// <param name="Patch">Sub-version (e.g. <c>1.10</c> → 0, <c>1.10.01</c> → 1).
 /// Compatible within the same minor.</param>
 /// <param name="Build">Opaque build identifier. Bumps every PA hotfix
 /// — informational only.</param>
@@ -30,27 +30,31 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     /// </summary>
     /// <remarks>
     /// Bumped together with the vendor refresh that lands a new
-    /// patch's parser. Latest: 1.08 → 1.09 in vendor commit
-    /// <c>0619789</c>, which validated the full toolkit against the
-    /// live 1.09 install — a content-only delta over 1.08 with no
-    /// schema drift (iteminfo byte-identical, all 30 gamedata tables
-    /// parse, save roundtrip clean). Keep this in sync with the Rust
+    /// patch's parser. Latest: 1.09 → 1.10 in vendor commit
+    /// <c>fc5be9d</c> (iteminfo change <c>dd2ed2e</c>). Unlike the
+    /// content-only 1.06→1.09 jumps, 1.10 DRIFTED the iteminfo schema
+    /// (dropped <c>money_icon_path</c>, added <c>UnitData.unk_post_icon_path</c>),
+    /// so the parser now targets the 1.10 layout exclusively and 1.09
+    /// iteminfo no longer round-trips against it. crimson-rs also
+    /// widened the ContentsMiscSaveData object-list leading-pad scan to
+    /// 4 (commit <c>f1513b8</c>) — without that fix the editor silently
+    /// corrupted any 1.10 save it wrote. Keep this in sync with the Rust
     /// side; bump both at the same time on the next patch.
     /// </remarks>
-    public const ushort ParserTargetMinor = 9;
+    public const ushort ParserTargetMinor = 10;
 
     /// <summary>
     /// Every game-data minor whose iteminfo / save-body schema this
     /// build can load without mis-decoding — not just the single
-    /// latest target. 1.08 and 1.09 share a byte-identical iteminfo
-    /// schema (verified in crimson-rs <c>0619789</c>: "item key list
-    /// byte-identical to 1.08"), so both are accepted and a user who
-    /// hasn't yet updated from 1.08 isn't warned. 1.07 and earlier
-    /// used a different iteminfo layout (item-name resolution fails
-    /// against this parser), so they are deliberately excluded.
+    /// latest target. 1.10 changed the iteminfo layout vs 1.09 (see
+    /// <see cref="ParserTargetMinor"/> remarks), so unlike the
+    /// 1.08/1.09 pair the older minors are NOT byte-compatible with
+    /// this parser and item-name resolution would fail against them.
+    /// The allow-list is therefore just <c>{10}</c>; a user still on
+    /// 1.09 or earlier is warned to update.
     /// <see cref="ParserTargetMinor"/> is always present here.
     /// </summary>
-    public static readonly ushort[] CompatibleMinors = [8, 9];
+    public static readonly ushort[] CompatibleMinors = [10];
 
     /// <summary>
     /// True when this install's schema is one this parser build can
@@ -62,14 +66,14 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     public bool IsCompatibleWithParser => Array.IndexOf(CompatibleMinors, Minor) >= 0;
 
     /// <summary>
-    /// Human-readable version (e.g. <c>"1.09.00 build 0xbbf34824"</c>).
+    /// Human-readable version (e.g. <c>"1.10.00 build 0xcf84b2ac"</c>).
     /// Suitable for an About / Settings dialog or a status-bar field.
     /// </summary>
     public string DisplayString =>
         $"{Major}.{Minor:D2}.{Patch:D2} build 0x{Build:x8}";
 
     /// <summary>
-    /// Short version string without the build id (e.g. <c>"1.09.00"</c>).
+    /// Short version string without the build id (e.g. <c>"1.10.00"</c>).
     /// Suitable for inline log lines / warning dialogs where the build
     /// number is noise.
     /// </summary>
