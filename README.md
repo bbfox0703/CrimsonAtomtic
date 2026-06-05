@@ -7,12 +7,12 @@
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
 [![Avalonia](https://img.shields.io/badge/Avalonia-UI-8B5CF6)](https://avaloniaui.net/)
 [![Built with Claude Code](https://img.shields.io/badge/Built%20with-Claude%20Code-CC785C?logo=claude)](https://claude.ai/code)
-[![Game Version](https://img.shields.io/badge/Game-Crimson%20Desert%201.05%E2%80%931.09-D63B3B)](https://www.playcrimsondesert.com/)
+[![Game Version](https://img.shields.io/badge/Game-Crimson%20Desert%201.05%E2%80%931.10-D63B3B)](https://www.playcrimsondesert.com/)
 
 A clean, fast save editor + game-data toolchain for **Crimson Desert** (Pearl
-Abyss). It targets the live game install (currently **1.09**) for game-data /
+Abyss). It targets the live game install (currently **1.10**) for game-data /
 name resolution. Save parsing itself is **version-agnostic** — each save embeds
-its own schema, so the editor reads and **re-saves any patch's save (1.05–1.09)
+its own schema, so the editor reads and **re-saves any patch's save (1.05–1.10)
 in that save's own format**, with no version conversion (and no need to
 downgrade your install to open an older save). Cross-platform goal: Windows
 (primary), Linux, macOS.
