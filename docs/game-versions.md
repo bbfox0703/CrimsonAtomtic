@@ -2,7 +2,7 @@
 
 ## Current install
 
-`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 1.09**
+`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 1.10**
 
 Top-level layout:
 
@@ -23,14 +23,18 @@ Crimson Desert/
   is fully decoded (see `crimson-rs` `src/binary/paver.rs`, exposed via
   `crimson_paver_read_from_*`): three little-endian u16s `(major, minor,
   patch)` followed by a little-endian u32 `build`. The **minor** is the
-  schema-compatibility key. Live 1.09.00 install:
-  `01 00 09 00 00 00 24 48 f3 bb` → major 1, minor 9, patch 0,
-  build `0xbbf34824`. (1.08.00 was `01 00 08 00 00 00 3e b0 39 dc`,
+  schema-compatibility key. Live 1.10.00 install:
+  `01 00 0a 00 00 00 ac b2 84 cf` → major 1, minor 10, patch 0,
+  build `0xcf84b2ac`. (1.09.00 was `01 00 09 00 00 00 24 48 f3 bb`,
+  build `0xbbf34824`; 1.08.00 was `01 00 08 00 00 00 3e b0 39 dc`,
   build `0xdc39b03e`.) The editor reads this at startup and warns when
   the install's minor isn't one the parser can load
-  (`GameDataVersion.CompatibleMinors`, currently `{8, 9}` — 1.08 and
-  1.09 share a byte-identical iteminfo schema; `ParserTargetMinor = 9`
-  is the latest of that set and the version the dialog displays).
+  (`GameDataVersion.CompatibleMinors`, now `{10}` — unlike the
+  content-only 1.06→1.09 jumps, **1.10 drifted the iteminfo schema**
+  (crimson-rs `dd2ed2e`: dropped `money_icon_path`, added
+  `UnitData.unk_post_icon_path`), so 1.09 and earlier no longer
+  round-trip against this parser; `ParserTargetMinor = 10` is the latest
+  of that set and the version the dialog displays).
 
 ## Historical versions
 
@@ -80,3 +84,5 @@ When a new patch lands and a parser fails:
 4. If a binary format's bytes shifted, narrow the field range with `crimson-rs`'s `BinaryReadTracked` trait, then patch the parser. Add a fixture + regression test.
 
 The 1.05 → 1.06 jump turned out to be **zero schema changes** (only +17 items), so the parser stayed the same. The 1.06 → 1.07, 1.07 → 1.08, and 1.08 → 1.09 jumps similarly stayed data-only — the editor loads them all through one schema path. 1.08 → 1.09 in particular was content-only with **no schema drift** (`crimson-rs` commit `0619789`): iteminfo byte-identical to 1.08, all 30 gamedata tables parse, save read/decode/mutate/write-reseal roundtrip clean; per-table key deltas vs 1.08 were character +6, skill +5, knowledge +5, factionspawn +1, gimmick −8, the other 25 tables unchanged. We expect most patches to be data-only; structural changes are the exception (e.g. the slot104 / 1.05-era 23-field `ItemSaveData` vs 1.06+'s 25-field shape — see [status.md](status.md)), and our pipeline is built to make those exceptions detectable.
+
+**1.09 → 1.10 was the first iteminfo schema drift since the 1.05/1.06-era ItemSaveData change** — the data-only streak ended. Two iteminfo layout changes (`crimson-rs` commit `dd2ed2e`, byte-perfect on all 6,325 items): (1) **removed** `money_icon_path: StringInfoKey` (the 4-byte `0x73e1c5ea` "no money icon" stub between `map_icon_path` and `use_map_icon_alert`), and (2) **added** `UnitData.unk_post_icon_path: u32` between `icon_path` and `item_name` (populated on `MoneyTypeDefine` — camp/contribution currencies, pinball coin). Separately, the save body changed too: 1.10 widened the `ContentsMiscSaveData` ReflectObject-list leading-pad from 3 to 4 bytes (`crimson-rs` `f1513b8`) — the decoder's leading-pad scan was extended 0..=3 → 0..=4; **without that fix the editor silently corrupted any 1.10 save it wrote** (107 KB undecoded → dropped on re-encode). The furthest-reach tiebreak keeps 1.09 and older saves byte-identical, so old-save load/round-trip is unaffected. The parser now targets 1.10 exclusively (`CompatibleMinors = {10}`).
