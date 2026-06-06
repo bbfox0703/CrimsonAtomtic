@@ -61,6 +61,21 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
     // otherwise falsely cache-hit against the new handle.
     private readonly Dictionary<int, (ulong Version, BlockDetails Details)> _detailsCache = new();
 
+    // Set by any length-changing / structural mutation (list insert /
+    // clone / remove / transplant, present-toggle, dynamic-array grow).
+    // Reset on Load / Dispose. Surfaced via HasStructuralEdit so the UI
+    // can warn before writing such a save — see the interface remarks.
+    // volatile: written on the (background) mutation thread, read on the
+    // UI thread at save time; a torn read is impossible for a bool and a
+    // stale read only costs/skips one warning, so no lock is needed.
+    private volatile bool _structuralEditMade;
+
+    public bool HasStructuralEdit => _structuralEditMade;
+
+    // Flag the current save as having a length-changing edit. Called from
+    // every structural mutation entry point after the FFI call succeeds.
+    private void MarkStructuralEdit() => _structuralEditMade = true;
+
     public SaveSummary Load(string savePath, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(savePath);
@@ -90,6 +105,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
             _cachedHandle = newHandle;
             _cachedPath = savePath;
             _detailsCache.Clear();
+            _structuralEditMade = false;
         }
         previous?.Dispose();
 
@@ -640,6 +656,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                 }
             }
         }
+        MarkStructuralEdit();
     }
 
     public void ListRemoveElementsBatch(IReadOnlyList<ListRemoveBatchOp> ops)
@@ -728,6 +745,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                 }
             }
         }
+        MarkStructuralEdit();
     }
 
     public void DynamicArraySetU32Elements(
@@ -762,6 +780,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                 }
             }
         }
+        MarkStructuralEdit();
     }
 
     public void SetInlineBytesField(
@@ -796,6 +815,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                 }
             }
         }
+        MarkStructuralEdit();
     }
 
     public byte[] GetInlineBytesField(
@@ -953,6 +973,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                 }
             }
         }
+        MarkStructuralEdit();
     }
 
     public void ListCloneElement(
@@ -988,6 +1009,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                 }
             }
         }
+        MarkStructuralEdit();
     }
 
     /// <summary>
@@ -1055,6 +1077,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                 }
             }
         }
+        MarkStructuralEdit();
     }
 
     public void SetScalarFieldPresent(
@@ -1091,6 +1114,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                 }
             }
         }
+        MarkStructuralEdit();
     }
 
     /// <summary>
@@ -1157,6 +1181,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                 }
             }
         }
+        MarkStructuralEdit();
     }
 
     public byte[] MakeEmptyElementBytes(int classIndex)
@@ -1234,6 +1259,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                 }
             }
         }
+        MarkStructuralEdit();
     }
 
     /// <summary>
@@ -1289,6 +1315,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
             _cachedHandle = null;
             _cachedPath = null;
             _detailsCache.Clear();
+            _structuralEditMade = false;
         }
         toDispose?.Dispose();
     }

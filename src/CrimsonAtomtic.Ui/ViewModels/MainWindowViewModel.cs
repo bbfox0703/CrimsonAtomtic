@@ -5293,9 +5293,13 @@ public sealed partial class MainWindowViewModel(
     /// to write.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanSave))]
-    private void Save()
+    private async Task SaveAsync()
     {
         if (_loadedPath is null)
+        {
+            return;
+        }
+        if (!await ConfirmStructuralEditOrAbortAsync())
         {
             return;
         }
@@ -5313,6 +5317,56 @@ public sealed partial class MainWindowViewModel(
 
     private bool CanSave() => HasSave && IsDirty && _loadedPath is not null;
 
+    // One-shot (per loaded document) acknowledgement of the structural-
+    // edit warning. Reset whenever the loader reports no structural edit
+    // pending — i.e. after a fresh Load (HasStructuralEdit goes back to
+    // false), so each document re-warns once.
+    private bool _structuralWarningAcknowledged;
+
+    /// <summary>
+    /// Gate a write when the pending edits include length-changing /
+    /// structural mutations (completing a sealed-abyss-artifact challenge,
+    /// adding/removing list items, growing arrays, toggling fields present).
+    /// crimson-rs writes these correctly and they round-trip byte-perfectly,
+    /// but Crimson Desert's own save loader has a latent fixed-buffer
+    /// overflow that can make some heavily-progressed saves fail to load
+    /// after a length change (the body shifts → the game's deserializer
+    /// memcpy's a record into an undersized stack buffer → access
+    /// violation). In-place scalar edits (item counts, states, hashes) are
+    /// unaffected. Returns <c>true</c> to proceed with the write, or
+    /// <c>false</c> if the user chooses not to save. Headless / no-UI hosts
+    /// (no <see cref="ConfirmRequested"/>) never block.
+    /// </summary>
+    private async Task<bool> ConfirmStructuralEditOrAbortAsync()
+    {
+        if (!loader.HasStructuralEdit)
+        {
+            _structuralWarningAcknowledged = false;
+            return true;
+        }
+        if (_structuralWarningAcknowledged)
+        {
+            return true;
+        }
+        if (ConfirmRequested is not { } ask)
+        {
+            return true;
+        }
+        var proceed = await ask(
+            "Structural edit — may not load",
+            "This save has length-changing (structural) edits, such as completing a "
+            + "sealed abyss artifact challenge or adding/removing list items.\n\n"
+            + "The data is written correctly, but Crimson Desert's own save loader has a "
+            + "bug that can make some heavily-progressed saves crash on load after such an "
+            + "edit. In-place edits (item counts, states, gate/flag toggles) are safe.\n\n"
+            + "A backup of the original is kept. Save anyway?");
+        if (proceed)
+        {
+            _structuralWarningAcknowledged = true;
+        }
+        return proceed;
+    }
+
     /// <summary>
     /// Save to a user-chosen path. The View invokes this after running
     /// the SaveFilePicker. Re-anchors the working document to the new
@@ -5320,9 +5374,13 @@ public sealed partial class MainWindowViewModel(
     /// semantics.
     /// </summary>
     [RelayCommand(CanExecute = nameof(HasSave))]
-    private void SaveAs(string? destinationPath)
+    private async Task SaveAsAsync(string? destinationPath)
     {
         if (string.IsNullOrWhiteSpace(destinationPath) || _loadedPath is null)
+        {
+            return;
+        }
+        if (!await ConfirmStructuralEditOrAbortAsync())
         {
             return;
         }
