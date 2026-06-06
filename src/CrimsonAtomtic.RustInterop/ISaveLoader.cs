@@ -90,6 +90,25 @@ public interface ISaveLoader
     bool IsDeferredRedecodeOpen();
 
     /// <summary>
+    /// True iff at least one <b>length-changing / structural</b> mutation
+    /// has been applied to the currently-loaded save since it was opened
+    /// — i.e. anything that resizes the body: list insert / clone / remove
+    /// / transplant, toggling a scalar or object-list field to present, or
+    /// growing a dynamic array. Pure in-place scalar writes
+    /// (<see cref="SetScalarField"/> / <see cref="SetScalarFieldsBatch"/>)
+    /// do <b>not</b> set this.
+    /// <para>
+    /// The bytes such edits produce are correct and round-trip cleanly,
+    /// but Crimson Desert's own save loader has a latent fixed-buffer
+    /// overflow that can reject some heavily-progressed saves after a
+    /// length change. The UI uses this flag to warn before writing such a
+    /// save; in-place edits are unaffected. Reset to false on
+    /// <see cref="Load"/>.
+    /// </para>
+    /// </summary>
+    bool HasStructuralEdit { get; }
+
+    /// <summary>
     /// Convenience wrapper around begin / end / abort:
     /// <list type="bullet">
     ///   <item>Calls <see cref="BeginDeferredRedecode"/>.</item>
