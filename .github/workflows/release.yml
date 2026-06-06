@@ -51,6 +51,12 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Setup Rust (stable, MSVC)
+        # Defensive: GitHub windows images ship Rust, but pin stable-msvc so the
+        # crimson_rs.lib staticlib build (cargo build --features c_abi) is not at
+        # the mercy of the runner image's preinstalled toolchain.
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Vendor crimson-rs (clone; gitignored, not a submodule)
         shell: pwsh
         run: |
