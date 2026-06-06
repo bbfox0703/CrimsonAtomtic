@@ -1,0 +1,153 @@
+# Windows release workflow for the CrimsonAtomtic save editor.
+#
+# Builds the self-contained Native-AOT single-file Avalonia UI
+# (CrimsonAtomtic.exe — crimson_rs.lib folded in, no .NET runtime needed),
+# packages dist/ into a .zip + sha256, and attaches it to a **DRAFT**
+# GitHub Release.
+#
+# Trigger: a pushed `v*` tag ONLY. Normal pushes / PR merges do NOT release.
+# (workflow_dispatch = build + artifact only, for testing the pipeline.)
+#
+# Verify-then-publish: the release is created as a DRAFT (not public). Pull
+# the .zip from the draft (or the run artifact), verify it loads, then click
+# "Publish release" in the GitHub UI — or delete the draft + tag and re-tag.
+#
+# NOTE on vendor/crimson-rs: per CLAUDE.md rule 8 the Rust core is a *vendored
+# clone*, gitignored (NOT a submodule, NOT committed). So unlike a submodule
+# repo, CI must fetch it explicitly — the "Vendor crimson-rs" step below clones
+# it from GitHub and checks out CRIMSON_RS_REF. Pin that to a tag/commit for a
+# fully reproducible release; the default tracks `main` (which carries the
+# bool round-trip fix).
+name: Release (Windows)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:        # manual run = build + artifact only (no release)
+
+permissions:
+  contents: write
+
+env:
+  # crimson-rs source the AOT build links against. Branch, tag, or commit SHA.
+  # Bump to a pinned tag/SHA for a reproducible release.
+  CRIMSON_RS_REPO: https://github.com/bbfox0703/crimson-rs.git
+  CRIMSON_RS_REF: main
+
+jobs:
+  build:
+    name: Build + package dist (AOT)
+    # windows-2025-vs2026 is the stable redirect target for windows-latest /
+    # windows-2025; ships MSVC (for the crimson_rs.lib staticlib + the AOT
+    # linker) and Rust (rustup stable-msvc) with no extra installs.
+    runs-on: windows-2025-vs2026
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5   # v5 runs on Node 24 (v4 = deprecated Node 20)
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Vendor crimson-rs (clone; gitignored, not a submodule)
+        shell: pwsh
+        run: |
+          if (Test-Path vendor/crimson-rs) { Remove-Item -Recurse -Force vendor/crimson-rs }
+          git clone "$env:CRIMSON_RS_REPO" vendor/crimson-rs
+          git -C vendor/crimson-rs checkout "$env:CRIMSON_RS_REF"
+          $sha = (git -C vendor/crimson-rs rev-parse --short HEAD).Trim()
+          Write-Host "vendor/crimson-rs @ $env:CRIMSON_RS_REF ($sha)"
+
+      - name: Toolchain versions
+        shell: pwsh
+        run: |
+          dotnet --version
+          cargo --version
+          rustc --version
+
+      - name: Pin build number to the tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        # For a numeric `vNNN` tag, write NNN into build_number.txt so the
+        # embedded build number (VerBuild in the Ui csproj) == the release
+        # tag. package_aot.ps1 / dotnet publish only READ this file (the +1
+        # bump lives in build.ps1, which CI does not call), so no drift.
+        # Non-numeric tags (e.g. v1.2.3) leave the committed value as-is.
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          if ($tag -match '^v(\d+)$') {
+            [System.IO.File]::WriteAllText("$PWD/build_number.txt", "$($Matches[1])`n")
+            Write-Host "Pinned build_number.txt = $($Matches[1]) (from tag $tag)"
+          } else {
+            Write-Host "Tag $tag is not vNNN — using committed build_number.txt as-is."
+          }
+
+      - name: Build + publish single-file AOT (win-x64)
+        shell: pwsh
+        # package_aot.ps1: cargo build --features c_abi (-> crimson_rs.lib) then
+        # dotnet publish -c Release -r win-x64 -p:PublishAot=true on the Ui
+        # project, staged under dist/win-x64. It verifies the single-file shape
+        # and throws on regression.
+        run: ./scripts/package_aot.ps1 -Runtime win-x64
+
+      - name: Package dist into a zip + sha256
+        shell: pwsh
+        run: |
+          $tag = if ($env:GITHUB_REF_NAME) { $env:GITHUB_REF_NAME } else { 'manual' }
+          $zip = "CrimsonAtomtic-$tag-win-x64.zip"
+          if (-not (Test-Path 'dist/win-x64')) { throw 'dist/win-x64 not found — build failed?' }
+          Compress-Archive -Path dist/win-x64/* -DestinationPath $zip -Force
+          $h = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          "$h  $zip" | Set-Content "$zip.sha256" -Encoding ascii
+          "ZIP=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Packaged $zip (sha256 $h)"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: CrimsonAtomtic-windows-x64
+          path: |
+            ${{ env.ZIP }}
+            ${{ env.ZIP }}.sha256
+          if-no-files-found: error
+
+      - name: Create DRAFT GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $notes = @(
+            'CrimsonAtomtic — Crimson Desert save editor (Avalonia, Native AOT).',
+            '',
+            'Self-contained Windows x64 build — no .NET runtime install required.',
+            'Unzip and run CrimsonAtomtic.exe.',
+            '',
+            '## Notes',
+            '- In-place edits (item counts, states, gate/flag toggles) are safe on every save.',
+            '- Length-changing edits (completing challenges, adding/removing list items) are',
+            '  written correctly but can trip a latent bug in the game''s own save loader on',
+            '  some heavily-progressed saves; the editor warns before saving such an edit and',
+            '  always keeps a backup.',
+            '',
+            '> The exe is unsigned — Windows SmartScreen / antivirus may warn on first run.',
+            '> Verify the download with the included .sha256.'
+          )
+          Set-Content -Path release-notes.md -Value $notes -Encoding utf8
+          # Upsert: works whether the tag was pushed via `git push` (no release
+          # yet -> create a DRAFT) or created in the web UI (release exists ->
+          # just attach the assets).
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag "$env:ZIP" "$env:ZIP.sha256" --clobber
+            Write-Host "Release $tag already existed — uploaded assets to it."
+          } else {
+            gh release create $tag "$env:ZIP" "$env:ZIP.sha256" `
+              --draft `
+              --title "CrimsonAtomtic $tag" `
+              --notes-file release-notes.md
+            Write-Host "Created DRAFT release $tag — review the assets, then Publish."
+          }
