@@ -57,9 +57,16 @@ public sealed partial class SealedArtifactChallengeViewModel : ObservableObject
     // Guards the re-entrant revert when the user declines the broad-scan warning.
     private bool _suppressScopeToggle;
 
-    /// <summary>True when the scan found at least one eligible challenge.
-    /// The code-behind only shows the dialog in that case.</summary>
-    public bool HasCandidates => _allRows.Count > 0;
+    /// <summary>
+    /// True when iteminfo carries at least one <c>Sealed_Abyss_Artifact_*</c>
+    /// row, so there is relevant data to act on — the broad scan can surface
+    /// missions even when the strict scan found nothing. The code-behind opens
+    /// the dialog whenever this is true (so the user can opt into the broad scan
+    /// from an otherwise-empty strict list) and only suppresses it — surfacing
+    /// <see cref="NoCandidatesSummary"/> in the footer — when this is false,
+    /// i.e. no SA artifacts exist at all (game install not configured).
+    /// </summary>
+    public bool HasRelevantData => _preview.KnownArtifactCount > 0;
 
     private SealedArtifactChallengeViewModel(MainWindowViewModel main) => _main = main;
 
@@ -89,7 +96,10 @@ public sealed partial class SealedArtifactChallengeViewModel : ObservableObject
         {
             await RescanAsync();
             StatusMessage = _allRows.Count == 0
-                ? NoCandidatesSummary
+                ? (IncludeNonSealedArtifact
+                    ? NoCandidatesSummary
+                    : NoCandidatesSummary
+                      + " Tick \"Broad scan\" above to also list other mission types a sealed artifact points at.")
                 : $"{_allRows.Count:N0} eligible challenge(s). Tick the ones to complete, then Complete selected. "
                   + "(Catalog row + twin are left untouched — the engine fills them at reward pickup; "
                   + "achievements still require in-game completion.)";
@@ -280,7 +290,7 @@ public sealed partial class SealedArtifactChallengeViewModel : ObservableObject
         rows.Sort((a, b) => string.CompareOrdinal(a.DisplayName, b.DisplayName));
         _allRows = rows;
         ApplyFilter();
-        OnPropertyChanged(nameof(HasCandidates));
+        OnPropertyChanged(nameof(HasRelevantData));
     }
 }
 
