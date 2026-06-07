@@ -1019,8 +1019,12 @@ public sealed partial class MainWindow : Window
     /// Tools → Complete Sealed Abyss Artifact Challenges. Scans for
     /// eligible challenges, then opens a checkbox preview so the user
     /// picks which to mark complete (replaces the former one-shot bulk
-    /// command). When nothing is eligible, surfaces the breakdown in the
-    /// status footer instead of opening an empty dialog.
+    /// command). The dialog opens whenever iteminfo carries any
+    /// <c>Sealed_Abyss_Artifact_*</c> row — even if the strict scan found
+    /// no candidates — so the user can still opt into the broad scan from
+    /// there. Only when there's no relevant data at all (no SA artifacts in
+    /// iteminfo) does it skip the dialog and surface the breakdown in the
+    /// status footer.
     /// </summary>
     private async void OnCompleteSealedArtifactChallengesClick(object? sender, RoutedEventArgs e)
     {
@@ -1031,8 +1035,11 @@ public sealed partial class MainWindow : Window
             return;
         }
         var dialogVm = await SealedArtifactChallengeViewModel.CreateAsync(vm);
-        if (!dialogVm.HasCandidates)
+        if (!dialogVm.HasRelevantData)
         {
+            // No Sealed_Abyss_Artifact_* rows in iteminfo at all — the broad
+            // scan couldn't surface anything either, so there's nothing to open
+            // the dialog for. Surface the breakdown in the status footer.
             vm.BulkOpStatus = dialogVm.NoCandidatesSummary;
             return;
         }
