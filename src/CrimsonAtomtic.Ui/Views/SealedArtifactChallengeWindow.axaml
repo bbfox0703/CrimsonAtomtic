@@ -21,6 +21,22 @@
                Opacity="0.7"
                Margin="0,0,0,8" />
 
+    <!-- Scan scope. OFF (default) = strict: only Challenge_SealedArtifact_*.
+         ON = broad: any mission a sealed artifact points at. Toggling ON warns
+         (handled in the VM) then re-scans; disabled while a scan runs. -->
+    <CheckBox DockPanel.Dock="Top"
+              IsChecked="{Binding IncludeNonSealedArtifact}"
+              IsEnabled="{Binding !IsBusy}"
+              Content="Broad scan — include non-SealedArtifact missions (advanced, risky)"
+              Margin="0,0,0,8">
+      <ToolTip.Tip>
+        Off (default): only true Sealed Abyss Artifact challenges (Challenge_SealedArtifact_*).
+        On: also lists abyss-gate / node / knowledge-discovery / generic missions a sealed
+        artifact happens to point at — unsupported by this tool and more likely to make the
+        save fail to load.
+      </ToolTip.Tip>
+    </CheckBox>
+
     <!-- Filter toolbar -->
     <Grid DockPanel.Dock="Top"
           ColumnDefinitions="*"

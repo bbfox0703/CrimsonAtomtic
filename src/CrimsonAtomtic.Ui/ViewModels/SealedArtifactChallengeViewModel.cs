@@ -44,6 +44,19 @@ public sealed partial class SealedArtifactChallengeViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(InvertSelectionCommand))]
     private bool _isBusy;
 
+    /// <summary>
+    /// Scan scope. false (default, strict): only true
+    /// <c>Challenge_SealedArtifact_*</c> challenges. true (broad): also lists
+    /// other missions a sealed artifact points at (abyss gates, node /
+    /// territory, knowledge / discovery, generic missions) — unsupported by
+    /// Pattern B v1. Toggling it on warns, then re-scans.
+    /// </summary>
+    [ObservableProperty]
+    private bool _includeNonSealedArtifact;
+
+    // Guards the re-entrant revert when the user declines the broad-scan warning.
+    private bool _suppressScopeToggle;
+
     /// <summary>True when the scan found at least one eligible challenge.
     /// The code-behind only shows the dialog in that case.</summary>
     public bool HasCandidates => _allRows.Count > 0;
@@ -60,30 +73,67 @@ public sealed partial class SealedArtifactChallengeViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(main);
 
         var vm = new SealedArtifactChallengeViewModel(main);
-        var loc = main.Localization;
-        var preview = await Task.Run(main.ScanSealedArtifactCandidates).ConfigureAwait(true);
-        vm._preview = preview;
-
-        var candidates = preview.Candidates ?? [];
-        var rows = new List<SealedArtifactRow>(candidates.Count);
-        foreach (var c in candidates)
-        {
-            var display = loc.ResolveByFieldTypeName("MissionKey", c.CatalogKey);
-            if (string.IsNullOrEmpty(display))
-            {
-                display = c.InternalName;
-            }
-            rows.Add(new SealedArtifactRow(c, display));
-        }
-        rows.Sort((a, b) => string.CompareOrdinal(a.DisplayName, b.DisplayName));
-        vm._allRows = rows;
-        vm.ApplyFilter();
-        vm.StatusMessage = rows.Count == 0
-            ? vm.NoCandidatesSummary
-            : $"{rows.Count:N0} eligible challenge(s). Tick the ones to complete, then Complete selected. "
-              + "(Catalog row + twin are left untouched — the engine fills them at reward pickup; "
-              + "achievements still require in-game completion.)";
+        await vm.PopulateAsync();
         return vm;
+    }
+
+    /// <summary>
+    /// (Re)scan the loaded save for eligible SA challenges using the current
+    /// <see cref="IncludeNonSealedArtifact"/> scope on a background thread, then
+    /// rebuild the row list. Called at construction and on every scope toggle.
+    /// </summary>
+    private async Task PopulateAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            await RescanAsync();
+            StatusMessage = _allRows.Count == 0
+                ? NoCandidatesSummary
+                : $"{_allRows.Count:N0} eligible challenge(s). Tick the ones to complete, then Complete selected. "
+                  + "(Catalog row + twin are left untouched — the engine fills them at reward pickup; "
+                  + "achievements still require in-game completion.)";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    partial void OnIncludeNonSealedArtifactChanged(bool value)
+    {
+        if (_suppressScopeToggle)
+        {
+            return;
+        }
+        _ = OnScopeToggledAsync(value);
+    }
+
+    private async Task OnScopeToggledAsync(bool value)
+    {
+        if (value)
+        {
+            // Opting into the broad scan — warn. These extra mission types are
+            // not the linear SA challenges Pattern B v1 is verified on, and any
+            // length-changing edit can fail to load on some saves anyway.
+            var ask = ConfirmRequested;
+            var ok = ask is null || await ask(
+                "Broad scan — not recommended",
+                "Strict scan (default) lists only true Sealed Abyss Artifact challenges "
+                + "(Challenge_SealedArtifact_*).\n\nBroad scan also lists other missions a "
+                + "sealed artifact happens to point at — abyss gates, node/territory, "
+                + "knowledge/discovery, generic missions. Completing those with this tool is "
+                + "unsupported and more likely to produce a save the game cannot load.\n\n"
+                + "Enable broad scan and re-scan?");
+            if (!ok)
+            {
+                _suppressScopeToggle = true;
+                IncludeNonSealedArtifact = false;
+                _suppressScopeToggle = false;
+                return;
+            }
+        }
+        await PopulateAsync();
     }
 
     /// <summary>
@@ -213,7 +263,8 @@ public sealed partial class SealedArtifactChallengeViewModel : ObservableObject
     private async Task RescanAsync()
     {
         var loc = _main.Localization;
-        var preview = await Task.Run(_main.ScanSealedArtifactCandidates).ConfigureAwait(true);
+        var include = IncludeNonSealedArtifact;
+        var preview = await Task.Run(() => _main.ScanSealedArtifactCandidates(include)).ConfigureAwait(true);
         _preview = preview;
         var candidates = preview.Candidates ?? [];
         var rows = new List<SealedArtifactRow>(candidates.Count);
@@ -229,6 +280,7 @@ public sealed partial class SealedArtifactChallengeViewModel : ObservableObject
         rows.Sort((a, b) => string.CompareOrdinal(a.DisplayName, b.DisplayName));
         _allRows = rows;
         ApplyFilter();
+        OnPropertyChanged(nameof(HasCandidates));
     }
 }
 
