@@ -2162,7 +2162,14 @@ public sealed partial class MainWindowViewModel(
     /// thread (the dialog wraps it in <c>Task.Run</c>). Returns an empty
     /// preview when no save / iteminfo is loaded.
     /// </summary>
-    internal BulkSaPreview ScanSealedArtifactCandidates()
+    /// <param name="includeNonSealedArtifact">
+    /// false (default, strict): only true <c>Challenge_SealedArtifact_*</c>
+    /// missions are candidates. true (broad): also include any other mission a
+    /// Sealed_Abyss_Artifact item happens to point at (abyss gates, node /
+    /// territory, knowledge / discovery, generic missions) — unsupported for
+    /// Pattern B v1; the dialog warns before enabling it.
+    /// </param>
+    internal BulkSaPreview ScanSealedArtifactCandidates(bool includeNonSealedArtifact = false)
     {
         if (_loadedPath is null
             || Summary is not { Blocks: { } blocks }
@@ -2172,7 +2179,7 @@ public sealed partial class MainWindowViewModel(
                 0, Array.Empty<CurrentChallengeContext>(), 0, 0, 0, 0,
                 Array.Empty<(uint, string?, string)>());
         }
-        return ScanBulkSealedArtifactCandidates(blocks);
+        return ScanBulkSealedArtifactCandidates(blocks, includeNonSealedArtifact);
     }
 
     /// <summary>
@@ -2342,7 +2349,7 @@ public sealed partial class MainWindowViewModel(
     /// track why each row was skipped so the confirm dialog can show
     /// the breakdown.
     /// </summary>
-    private BulkSaPreview ScanBulkSealedArtifactCandidates(IReadOnlyList<BlockSummary> blocks)
+    private BulkSaPreview ScanBulkSealedArtifactCandidates(IReadOnlyList<BlockSummary> blocks, bool includeNonSealedArtifact = false)
     {
         if (_loadedPath is null)
         {
@@ -2377,6 +2384,22 @@ public sealed partial class MainWindowViewModel(
             {
                 skippedNoMission++;
                 continue;
+            }
+            if (!includeNonSealedArtifact)
+            {
+                // Strict (default): only true Challenge_SealedArtifact_*
+                // missions. In 1.10 a Sealed_Abyss_Artifact item can also point
+                // at abyss-gate / node / knowledge-discovery / generic missions,
+                // which Pattern B v1 must not touch (e.g. Challenge_Discover_*
+                // needs KnowledgeSaveData the recipe never writes). The broad
+                // scan opts back into the old behaviour, behind a dialog warning.
+                var name = localization.MissionInfoStringKey(mk.Value);
+                if (name is null
+                    || !name.StartsWith("Challenge_SealedArtifact_", StringComparison.Ordinal))
+                {
+                    skippedNoMission++;
+                    continue;
+                }
             }
             // 1:1 invariant (verified upstream) — collisions shouldn't
             // happen but defend just in case: keep first wins.
