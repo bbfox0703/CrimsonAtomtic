@@ -181,8 +181,12 @@ jobs:
           # so each release carries its own notes — no stale committed file.
           # Lightweight tags have no annotation; the section is then omitted.
           if ((& git cat-file -t $tag) -eq 'tag') {
-            $ann = (& git tag -l --format='%(contents)' $tag)
-            if ($ann -and $ann.Trim()) { [void]$md.AppendLine($ann.TrimEnd()); [void]$md.AppendLine() }
+            # git emits the annotation as multiple lines; PowerShell captures that
+            # as a string[]. Join with newlines so the markdown bullets/headers keep
+            # their line breaks (without the join they'd be space-collapsed into one
+            # paragraph by the array->string coercion in AppendLine).
+            $ann = ((& git tag -l --format='%(contents)' $tag) -join "`n").TrimEnd()
+            if ($ann) { [void]$md.AppendLine($ann); [void]$md.AppendLine() }
           } else {
             Write-Host "::warning::$tag is a lightweight tag — no annotated message, so the bilingual highlights are omitted. Use 'git tag -a' to include them."
           }
