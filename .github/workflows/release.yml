@@ -18,6 +18,24 @@
 # it from GitHub and checks out CRIMSON_RS_REF. Pin that to a tag/commit for a
 # fully reproducible release; the default tracks `main` (which carries the
 # bool round-trip fix).
+#
+# RELEASE NOTES (bilingual): the "Create DRAFT GitHub Release" step builds the
+# notes automatically — an English changelog grouped by conventional-commit type
+# (feat/fix/other) over the PREVIOUS-tag → THIS-tag commit range — and prepends
+# whatever you wrote in the ANNOTATED tag's message verbatim. So for bilingual
+# (English + 繁體中文) notes, create an annotated tag and put both languages in
+# its message; e.g.
+#     git tag -a v9
+#   then in the editor:
+#     ## Highlights
+#     - English point …
+#
+#     ## 重點
+#     - 繁體中文重點 …
+#   then: git push origin v9
+# The hand-written part lives in the tag object (not a committed file), so it can
+# never go stale — each tag carries its own notes. A LIGHTWEIGHT tag (git tag v9)
+# has no message → only the auto English changelog is produced (CI logs a warning).
 name: Release (Windows)
 
 on:
@@ -45,6 +63,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # Full history + all tags so the release step can compute the
+          # previous-tag → this-tag commit range and read annotated tag
+          # messages (a shallow checkout has neither).
+          fetch-depth: 0
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v5   # v5 runs on Node 24 (v4 = deprecated Node 20)
@@ -126,23 +149,64 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = $env:GITHUB_REF_NAME
-          $notes = @(
-            'CrimsonAtomtic — Crimson Desert save editor (Avalonia, Native AOT).',
-            '',
-            'Self-contained Windows x64 build — no .NET runtime install required.',
-            'Unzip and run CrimsonAtomtic.exe.',
-            '',
-            '## Notes',
-            '- In-place edits (item counts, states, gate/flag toggles) are safe on every save.',
-            '- Length-changing edits (completing challenges, adding/removing list items) are',
-            '  written correctly but can trip a latent bug in the game''s own save loader on',
-            '  some heavily-progressed saves; the editor warns before saving such an edit and',
-            '  always keeps a backup.',
-            '',
-            '> The exe is unsigned — Windows SmartScreen / antivirus may warn on first run.',
-            '> Verify the download with the included .sha256.'
-          )
-          Set-Content -Path release-notes.md -Value $notes -Encoding utf8
+          $repo = $env:GITHUB_REPOSITORY
+
+          # ── Previous release tag ────────────────────────────────────────
+          # Nearest tag reachable from this tag's parent commit. Empty on the
+          # very first tagged release (git describe exits non-zero -> no range).
+          $prev = (& git describe --tags --abbrev=0 "$tag^" 2>$null)
+          if ($LASTEXITCODE -ne 0 -or -not $prev) { $prev = '' } else { $prev = $prev.Trim() }
+          $range = if ($prev) { "$prev..$tag" } else { $tag }
+
+          # ── Auto English changelog from the commit range ────────────────
+          # Grouped by conventional-commit type; merge commits skipped so the
+          # PR-merge noise drops and the underlying feat/fix commits show.
+          $feat  = [System.Collections.Generic.List[string]]::new()
+          $fix   = [System.Collections.Generic.List[string]]::new()
+          $other = [System.Collections.Generic.List[string]]::new()
+          foreach ($l in (& git log $range --no-merges --pretty=format:'%h %s')) {
+            if (-not $l) { continue }
+            $sp = $l -split ' ', 2
+            $subj = if ($sp.Count -gt 1) { $sp[1] } else { '' }
+            $entry = "* $subj ($($sp[0]))"
+            if     ($subj -match '^feat([(!:])') { $feat.Add($entry) }
+            elseif ($subj -match '^fix([(!:])')  { $fix.Add($entry) }
+            else                                  { $other.Add($entry) }
+          }
+
+          $md = [System.Text.StringBuilder]::new()
+
+          # ── Curated bilingual highlights from the ANNOTATED tag message ──
+          # You write these at `git tag -a <tag>` time (English + 繁體中文),
+          # so each release carries its own notes — no stale committed file.
+          # Lightweight tags have no annotation; the section is then omitted.
+          if ((& git cat-file -t $tag) -eq 'tag') {
+            $ann = (& git tag -l --format='%(contents)' $tag)
+            if ($ann -and $ann.Trim()) { [void]$md.AppendLine($ann.TrimEnd()); [void]$md.AppendLine() }
+          } else {
+            Write-Host "::warning::$tag is a lightweight tag — no annotated message, so the bilingual highlights are omitted. Use 'git tag -a' to include them."
+          }
+
+          # ── Auto changelog body ─────────────────────────────────────────
+          [void]$md.AppendLine('## What''s changed')
+          [void]$md.AppendLine($(if ($prev) { "**$prev → $tag**" } else { '**Initial release**' }))
+          [void]$md.AppendLine()
+          if ($feat.Count)  { [void]$md.AppendLine('### Features');  $feat  | ForEach-Object { [void]$md.AppendLine($_) }; [void]$md.AppendLine() }
+          if ($fix.Count)   { [void]$md.AppendLine('### Fixes');     $fix   | ForEach-Object { [void]$md.AppendLine($_) }; [void]$md.AppendLine() }
+          if ($other.Count) { [void]$md.AppendLine('### Other');     $other | ForEach-Object { [void]$md.AppendLine($_) }; [void]$md.AppendLine() }
+          if ($prev) { [void]$md.AppendLine("**Full changelog:** https://github.com/$repo/compare/$prev...$tag"); [void]$md.AppendLine() }
+
+          # ── Standing footer (boilerplate; bilingual highlights go in the tag) ──
+          [void]$md.AppendLine('---')
+          [void]$md.AppendLine('Self-contained Windows x64 build — no .NET runtime install required. Unzip and run CrimsonAtomtic.exe.')
+          [void]$md.AppendLine()
+          [void]$md.AppendLine('- In-place edits (item counts, states, gate/flag toggles) are safe on every save.')
+          [void]$md.AppendLine('- Length-changing edits (completing challenges, adding/removing list items) are written correctly but can trip a latent bug in the game''s own save loader on some heavily-progressed saves; the editor warns before saving such an edit and always keeps a backup.')
+          [void]$md.AppendLine()
+          [void]$md.AppendLine('> The exe is unsigned — Windows SmartScreen / antivirus may warn on first run. Verify the download with the included .sha256.')
+
+          Set-Content -Path release-notes.md -Value $md.ToString() -Encoding utf8
+          Write-Host "Generated release notes ($tag; previous tag: $(if ($prev) { $prev } else { '(none — first release)' }))"
           # Upsert: works whether the tag was pushed via `git push` (no release
           # yet -> create a DRAFT) or created in the web UI (release exists ->
           # just attach the assets).
