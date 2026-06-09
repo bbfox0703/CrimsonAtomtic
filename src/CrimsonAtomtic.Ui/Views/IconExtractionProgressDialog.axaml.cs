@@ -75,7 +75,7 @@ public sealed partial class IconExtractionProgressDialog : Window
             || _gameRoot is null || _cacheDirectory is null)
         {
             // Misconfigured — shouldn't happen through RunAsync.
-            StatusText.Text = "Dialog opened without extraction arguments.";
+            StatusText.Text = UiText.Get("IconExtractNoArgs", "Dialog opened without extraction arguments.");
             ShowFinishedUi();
             return;
         }
@@ -113,8 +113,9 @@ public sealed partial class IconExtractionProgressDialog : Window
         }
         Progress.Maximum = p.Total;
         Progress.Value = p.Processed;
-        StatusText.Text =
-            $"Processed {p.Processed:N0} of {p.Total:N0} • written: {p.Written:N0} • failed: {p.Failed:N0}";
+        StatusText.Text = UiText.Format("IconExtractProgress",
+            "Processed {0:N0} of {1:N0} • written: {2:N0} • failed: {3:N0}",
+            p.Processed, p.Total, p.Written, p.Failed);
     }
 
     private void ShowFinishedUi()
@@ -122,31 +123,31 @@ public sealed partial class IconExtractionProgressDialog : Window
         _completed = true;
         if (_failure is not null)
         {
-            HeaderText.Text = "Extraction failed";
+            HeaderText.Text = UiText.Get("IconExtractFailedHeader", "Extraction failed");
             StatusText.Text = $"{_failure.GetType().Name}: {_failure.Message}";
         }
         else if (_result is null)
         {
-            HeaderText.Text = "Extraction cancelled";
-            StatusText.Text =
+            HeaderText.Text = UiText.Get("IconExtractCancelledHeader", "Extraction cancelled");
+            StatusText.Text = UiText.Get("IconExtractCancelledBody",
                 "The cache was not fully populated. Run the action again to resume; "
-                + "previously-written icons are kept.";
+                + "previously-written icons are kept.");
         }
         else
         {
             var r = _result;
-            HeaderText.Text = "Extraction complete";
+            HeaderText.Text = UiText.Get("IconExtractCompleteHeader", "Extraction complete");
             Progress.Maximum = r.Total;
             Progress.Value = r.Total;
-            StatusText.Text =
-                $"Wrote {r.Written:N0} of {r.Total:N0} icons.\n"
-                + $"Skipped — already cached: {r.SkippedAlreadyCached:N0}, "
-                + $"no icon entry: {r.SkippedNoIcon:N0}, "
-                + $"name unresolved: {r.SkippedNoString:N0}, "
-                + $"DDS missing: {r.SkippedNotInArchive:N0}.\n"
-                + $"Failed: {r.Failed:N0}.";
+            StatusText.Text = UiText.Format("IconExtractCompleteBody",
+                "Wrote {0:N0} of {1:N0} icons.\n"
+                + "Skipped — already cached: {2:N0}, no icon entry: {3:N0}, "
+                + "name unresolved: {4:N0}, DDS missing: {5:N0}.\n"
+                + "Failed: {6:N0}.",
+                r.Written, r.Total, r.SkippedAlreadyCached, r.SkippedNoIcon,
+                r.SkippedNoString, r.SkippedNotInArchive, r.Failed);
         }
-        ActionButton.Content = "Close";
+        ActionButton.Content = UiText.Get("IconExtractClose", "Close");
     }
 
     private void OnActionClick(object? sender, RoutedEventArgs e)
@@ -163,7 +164,7 @@ public sealed partial class IconExtractionProgressDialog : Window
         {
             _cts.Cancel();
             ActionButton.IsEnabled = false;
-            StatusText.Text = "Cancelling…";
+            StatusText.Text = UiText.Get("IconExtractCancelling", "Cancelling…");
         }
     }
 
@@ -178,7 +179,7 @@ public sealed partial class IconExtractionProgressDialog : Window
             // Close again.
             e.Cancel = true;
             ActionButton.IsEnabled = false;
-            StatusText.Text = "Cancelling…";
+            StatusText.Text = UiText.Get("IconExtractCancelling", "Cancelling…");
         }
     }
 }

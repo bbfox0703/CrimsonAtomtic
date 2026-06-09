@@ -203,7 +203,7 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
             // access and the UI binding fills in as each one lands.
             row.StartPortraitLoad(vm.Portraits);
         }
-        vm.StatusMessage = $"{elements.Count} mercenary entries loaded.";
+        vm.StatusMessage = UiText.Format("RenameMercLoaded", "{0} mercenary entries loaded.", elements.Count);
         return vm;
     }
 
@@ -315,25 +315,26 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
         }
         catch (CrimsonSaveException ex)
         {
-            StatusMessage = $"Rename failed for index {row.Index}: {ex.Message}";
+            StatusMessage = UiText.Format("RenameMercFailed", "Rename failed for index {0}: {1}",
+                row.Index, ex.Message);
             row.LastError = ex.Message;
             return;
         }
         row.AppliedName = newName;
         row.LastError = null;
-        StatusMessage =
-            $"Renamed idx {row.Index} (MercNo {row.MercNo}) → "
-            + (string.IsNullOrEmpty(newName)
-                ? "(empty)"
-                : $"\"{newName}\" ({bytes.Length} bytes UTF-8)");
+        var nameDesc = string.IsNullOrEmpty(newName)
+            ? UiText.Get("RenameMercEmpty", "(empty)")
+            : UiText.Format("RenameMercNameBytes", "\"{0}\" ({1} bytes UTF-8)", newName, bytes.Length);
+        StatusMessage = UiText.Format("RenameMercDone", "Renamed idx {0} (MercNo {1}) → {2}",
+            row.Index, row.MercNo, nameDesc);
         IsDirty = true;
         var identity = string.IsNullOrEmpty(row.ResolvedCharacterName)
-            ? $"MercNo {row.MercNo}"
+            ? UiText.Format("RenameMercIdentityNo", "MercNo {0}", row.MercNo)
             : row.ResolvedCharacterName;
-        _journal.Log("Rename Mercenary",
+        _journal.Log(UiText.Get("JournalCatRenameMercenary", "Rename Mercenary"),
             string.IsNullOrEmpty(newName)
-                ? $"Cleared custom name on {identity}"
-                : $"Renamed {identity} → \"{newName}\"");
+                ? UiText.Format("JournalRenameCleared", "Cleared custom name on {0}", identity)
+                : UiText.Format("JournalRenameSet", "Renamed {0} → \"{1}\"", identity, newName));
     }
 
     /// <summary>

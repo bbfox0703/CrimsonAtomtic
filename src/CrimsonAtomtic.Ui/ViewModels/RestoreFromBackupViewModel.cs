@@ -43,9 +43,9 @@ public sealed partial class RestoreFromBackupViewModel : ObservableObject
 
     public string Subtitle => Backups.Count switch
     {
-        0 => $"No backups yet under {BackupRoot}.",
-        1 => $"1 backup under {BackupRoot}.",
-        _ => $"{Backups.Count} backups under {BackupRoot}.",
+        0 => UiText.Format("RestoreSubtitleNone", "No backups yet under {0}.", BackupRoot),
+        1 => UiText.Format("RestoreSubtitleOne", "1 backup under {0}.", BackupRoot),
+        _ => UiText.Format("RestoreSubtitleMany", "{0} backups under {1}.", Backups.Count, BackupRoot),
     };
 
     /// <summary>

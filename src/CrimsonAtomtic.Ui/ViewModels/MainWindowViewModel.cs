@@ -140,7 +140,8 @@ public sealed partial class MainWindowViewModel(
         }
         if (blockSummary is null)
         {
-            DetailsError = $"Block #{rec.BlockIndex} not found in current save.";
+            DetailsError = UiText.Format("DetailsErrorBlockNotFound",
+                "Block #{0} not found in current save.", rec.BlockIndex);
             return;
         }
 
@@ -208,6 +209,52 @@ public sealed partial class MainWindowViewModel(
     }
 
     /// <summary>
+    /// Drives the Browse Items dialog's "Go to item in save" button:
+    /// scans the loaded save's inventory for the FIRST slot whose
+    /// <c>_itemKey</c> matches <paramref name="itemKey"/> and navigates
+    /// to it via <see cref="NavigateToInventoryItemAsync"/>. Browse Items
+    /// lists the whole iteminfo catalog (not just owned items), so an
+    /// item the player doesn't hold has no slot to jump to — that case
+    /// reports through <see cref="BulkOpStatus"/> and leaves the current
+    /// view untouched. Best-effort silent if no save is loaded or the
+    /// inventory listing FFI throws.
+    /// </summary>
+    public async Task NavigateToItemByKeyAsync(uint itemKey)
+    {
+        if (_loadedPath is null)
+        {
+            return;
+        }
+        InventoryItemRecord? match = null;
+        try
+        {
+            foreach (var rec in loader.ListInventoryItems(out _))
+            {
+                if (rec.ItemKey == itemKey)
+                {
+                    match = rec;
+                    break;
+                }
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // Save unloaded under us — nothing to navigate to.
+            return;
+        }
+        if (match is not { } found)
+        {
+            BulkOpStatus = string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                LookupUiResourceString("ItemPickerGotoNotFound")
+                    ?? "Item {0} isn't in the loaded save.",
+                itemKey);
+            return;
+        }
+        await NavigateToInventoryItemAsync(found);
+    }
+
+    /// <summary>
     /// Drives the Vendor Buyback dialog's per-row "Jump" button:
     /// builds the nav stack down through
     /// <c>StoreSaveData → _storeDataList[storeIdx] → _storeSoldItemDataList[itemIdx]</c>
@@ -242,7 +289,8 @@ public sealed partial class MainWindowViewModel(
         }
         if (blockSummary is null)
         {
-            DetailsError = $"Block #{blockIndex} not found in current save.";
+            DetailsError = UiText.Format("DetailsErrorBlockNotFound",
+                "Block #{0} not found in current save.", blockIndex);
             return;
         }
 
@@ -337,7 +385,8 @@ public sealed partial class MainWindowViewModel(
         }
         if (blockSummary is null)
         {
-            DetailsError = $"Block #{blockIndex} not found in current save.";
+            DetailsError = UiText.Format("DetailsErrorBlockNotFound",
+                "Block #{0} not found in current save.", blockIndex);
             return;
         }
 
@@ -1058,18 +1107,24 @@ public sealed partial class MainWindowViewModel(
     }
 
     /// <summary>
-    /// Application version string from assembly metadata, e.g. "v1.0.0.42".
-    /// The 4th digit is the build number baked in from build_number.txt at
-    /// compile time (see CrimsonAtomtic.Ui.csproj). Uses GetEntryAssembly
-    /// rather than GetExecutingAssembly because Native AOT single-file
-    /// publish trims the latter to a versionless name.
+    /// Application version string from assembly metadata, e.g. "v1.10.01.42".
+    /// Minor + patch are zero-padded to two digits so the displayed version
+    /// mirrors the game data version format ("1.10.xx") — major.minor track
+    /// the game (see CrimsonAtomtic.Ui.csproj sync convention), patch is the
+    /// editor's own release counter. The 4th digit is the build number baked
+    /// in from build_number.txt at compile time. Uses GetEntryAssembly rather
+    /// than GetExecutingAssembly because Native AOT single-file publish trims
+    /// the latter to a versionless name.
     /// </summary>
     public static string AppVersion { get; } = GetAppVersion();
 
     private static string GetAppVersion()
     {
         var ver = Assembly.GetEntryAssembly()?.GetName().Version;
-        return ver is not null ? $"v{ver.Major}.{ver.Minor}.{ver.Build}.{ver.Revision}" : "";
+        return ver is not null
+            ? string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"v{ver.Major}.{ver.Minor:D2}.{ver.Build:D2}.{ver.Revision}")
+            : "";
     }
 
     // ── Navigation ──────────────────────────────────────────────────────────
@@ -1648,10 +1703,12 @@ public sealed partial class MainWindowViewModel(
         var freshTop = loader.LoadBlockDetails(_loadedPath, block.Index);
         RefreshNavStack(freshTop);
         IsDirty = true;
-        Journal.Log("Field edit",
-            row.Present
-                ? $"{block.ClassName}.{row.Name}: {preEditValue} → {row.RawText} <{row.TypeTag}>"
-                : $"{block.ClassName}.{row.Name}: absent → {row.RawText} <{row.TypeTag}>");
+        var fieldEditFrom = row.Present
+            ? preEditValue
+            : UiText.Get("JournalFieldEditAbsentWord", "absent");
+        Journal.Log(UiText.Get("JournalCatFieldEdit", "Field edit"),
+            UiText.Format("JournalFieldEdit", "{0}.{1}: {2} → {3} <{4}>",
+                block.ClassName, row.Name, fieldEditFrom, row.RawText, row.TypeTag));
         OnPropertyChanged(nameof(WindowTitle));
         // The "(absent — Apply makes present)" suffix on SelectedFieldTypeHint
         // depends on SelectedField.Present, which may have just flipped from
@@ -1699,8 +1756,8 @@ public sealed partial class MainWindowViewModel(
         var freshTop = loader.LoadBlockDetails(_loadedPath, block.Index);
         RefreshNavStack(freshTop);
         IsDirty = true;
-        Journal.Log("Field edit",
-            $"{block.ClassName}.{row.Name}: made absent");
+        Journal.Log(UiText.Get("JournalCatFieldEdit", "Field edit"),
+            UiText.Format("JournalFieldMadeAbsent", "{0}.{1}: made absent", block.ClassName, row.Name));
         OnPropertyChanged(nameof(WindowTitle));
         OnPropertyChanged(nameof(SelectedFieldTypeHint));
     }
@@ -1909,54 +1966,76 @@ public sealed partial class MainWindowViewModel(
         }
 
         var farTagsAfter = MergeTags(ctx.FarUsedTagList, VisibleTagHash).Length;
-        var msg =
-            $"Mark this challenge as completed using the Pattern B v1 recipe?\n\n" +
-            $"  Challenge key: {ctx.CatalogKey}\n" +
-            $"  Internal name: {ctx.InternalName}\n" +
-            $"  Adjacent visibility twin key: {ctx.TwinKey}\n" +
-            $"  FAR tracker: idx {ctx.FarElementIdx}, key {ctx.TwinKey - 1u}\n" +
-            $"  X_2 sub-mission to {(ctx.FollowUpAlreadyExists ? "update" : "create")}: " +
-            $"key {ctx.FollowUpKey} ({ctx.FollowUpInternalName})\n\n" +
-            "What this writes:\n" +
-            "  • FAR tracker _state ← 5 + _completedTime stamped.\n" +
-            $"  • FAR tracker _usedTagList: {ctx.FarUsedTagList.Count} → {farTagsAfter} entries " +
-            "(adds visible magic tag).\n" +
-            (ctx.FollowUpAlreadyExists
+
+        // Localized confirm. The detail block is a format string ({0}..{10})
+        // so each language controls its own wording while the placeholders
+        // carry the run-time values; the warning block is static. Inline
+        // English fallbacks keep this working even if a resource key is
+        // missing (the `?? "..."` shape also keeps CA1863/CompositeFormat
+        // from firing on string.Format). {10} = the conditional follow-up
+        // bullet, itself a localized line that already ends with a newline.
+        var updateOrCreate = LookupUiResourceString(
+                ctx.FollowUpAlreadyExists ? "MarkChallengeWordUpdate" : "MarkChallengeWordCreate")
+            ?? (ctx.FollowUpAlreadyExists ? "update" : "create");
+        var followUpLine = LookupUiResourceString(
+                ctx.FollowUpAlreadyExists ? "MarkChallengeFollowUpExists" : "MarkChallengeFollowUpNew")
+            ?? (ctx.FollowUpAlreadyExists
                 ? "  • X_2 sub-mission entry already exists; skipped insert.\n"
-                : "  • NEW MissionStateData entry appended (cloned from FAR tracker, " +
-                  "_key + _branchedTime patched to the X_2 sub-mission shape).\n") +
-            "  • Catalog row + adjacent twin: UNTOUCHED. Engine handles those at reward pickup.\n\n" +
-            "[!! HOLD THE MATCHING ARTIFACT] Confirm that the Sealed Abyss Artifact for THIS " +
-            "specific challenge is currently in your inventory. The button only enables when " +
-            "you hold at least one SA artifact (any variant), but the in-game reward-claim " +
-            "flow on next reload only completes if the matching artifact for this challenge " +
-            "is in your bag. Pattern B v1 on its own is not enough — the artifact pickup is " +
-            "the engine's gating signal.\n\n" +
-            "[!! VERIFIED ON Shield II / Spear I / Hooves II / Slash III IN SLOT102] " +
-            "Pattern B v1 is reverse-engineered from the engine's natural Hooves II " +
-            "completion (slot102 → live slot103 transition). The recipe writes the " +
-            "pre-claim state and lets the engine finish bookkeeping on next load. " +
-            "Earlier patterns that tried to write the post-claim state directly all " +
-            "corrupted the in-game UI. CONFIRM YOUR SAVE IS BACKED UP before proceeding " +
-            "(auto-backup at %LOCALAPPDATA%\\CrimsonAtomtic\\Backups\\ — File → " +
-            "Restore from Backup… can roll back).\n\n" +
-            "[!! WILL AFFECT GAME PROGRESSION] Forcing the FAR tracker to state=5 tells the " +
-            "engine the challenge is complete; downstream content / NPC dialogues that " +
-            "depend on this challenge being done will trigger.\n\n" +
-            "[!! ACHIEVEMENTS WILL NOT UNLOCK] Steam / platform achievements only fire on " +
-            "a real in-game completion. Marking via file edit will not trigger the " +
-            "achievement, and once the challenge is in this state the engine won't re-fire " +
-            "it on subsequent legitimate completion. Do not use this for challenges you " +
-            "intend to complete legitimately later.\n\n" +
-            "Proceed?";
-        var ok = await ask("Mark challenge complete (Pattern B v1)?", msg);
+                : "  • NEW MissionStateData entry appended (cloned from FAR tracker, "
+                  + "_key + _branchedTime patched to the X_2 sub-mission shape).\n");
+        var detailFmt = LookupUiResourceString("MarkChallengeConfirmDetail")
+            ?? ("Mark this challenge as completed using the Pattern B v1 recipe?\n\n"
+                + "  Challenge key: {0}\n"
+                + "  Internal name: {1}\n"
+                + "  Adjacent visibility twin key: {2}\n"
+                + "  FAR tracker: idx {3}, key {4}\n"
+                + "  X_2 sub-mission to {5}: key {6} ({7})\n\n"
+                + "What this writes:\n"
+                + "  • FAR tracker _state ← 5 + _completedTime stamped.\n"
+                + "  • FAR tracker _usedTagList: {8} → {9} entries (adds visible magic tag).\n"
+                + "{10}"
+                + "  • Catalog row + adjacent twin: UNTOUCHED. Engine handles those at reward pickup.\n\n");
+        var warnings = LookupUiResourceString("MarkChallengeConfirmWarnings")
+            ?? ("[!! HOLD THE MATCHING ARTIFACT] Confirm that the Sealed Abyss Artifact for THIS "
+                + "specific challenge is currently in your inventory. The button only enables when "
+                + "you hold at least one SA artifact (any variant), but the in-game reward-claim "
+                + "flow on next reload only completes if the matching artifact for this challenge "
+                + "is in your bag. Pattern B v1 on its own is not enough — the artifact pickup is "
+                + "the engine's gating signal.\n\n"
+                + "[!! VERIFIED ON Shield II / Spear I / Hooves II / Slash III IN SLOT102] "
+                + "Pattern B v1 is reverse-engineered from the engine's natural Hooves II "
+                + "completion (slot102 → live slot103 transition). The recipe writes the "
+                + "pre-claim state and lets the engine finish bookkeeping on next load. "
+                + "Earlier patterns that tried to write the post-claim state directly all "
+                + "corrupted the in-game UI. CONFIRM YOUR SAVE IS BACKED UP before proceeding "
+                + "(auto-backup at %LOCALAPPDATA%\\CrimsonAtomtic\\Backups\\ — File → "
+                + "Restore from Backup… can roll back).\n\n"
+                + "[!! WILL AFFECT GAME PROGRESSION] Forcing the FAR tracker to state=5 tells the "
+                + "engine the challenge is complete; downstream content / NPC dialogues that "
+                + "depend on this challenge being done will trigger.\n\n"
+                + "[!! ACHIEVEMENTS WILL NOT UNLOCK] Steam / platform achievements only fire on "
+                + "a real in-game completion. Marking via file edit will not trigger the "
+                + "achievement, and once the challenge is in this state the engine won't re-fire "
+                + "it on subsequent legitimate completion. Do not use this for challenges you "
+                + "intend to complete legitimately later.\n\n"
+                + "Proceed?");
+        var msg = string.Format(
+            System.Globalization.CultureInfo.CurrentCulture,
+            detailFmt,
+            ctx.CatalogKey, ctx.InternalName, ctx.TwinKey, ctx.FarElementIdx, ctx.TwinKey - 1u,
+            updateOrCreate, ctx.FollowUpKey, ctx.FollowUpInternalName,
+            ctx.FarUsedTagList.Count, farTagsAfter, followUpLine) + warnings;
+        var ok = await ask(
+            LookupUiResourceString("MarkChallengeConfirmTitle")
+                ?? "Mark challenge complete (Pattern B v1)?",
+            msg);
         if (!ok)
         {
-            BulkOpStatus = "Mark cancelled.";
+            BulkOpStatus = LookupUiResourceString("MarkChallengeCancelled") ?? "Mark cancelled.";
             return;
         }
 
-        BulkOpStatus = $"Applying Pattern B v1 (FAR tracker + X_2 sub-mission)…";
+        BulkOpStatus = UiText.Get("MarkApplying", "Applying Pattern B v1 (FAR tracker + X_2 sub-mission)…");
         // Compute timestamp watermark — engine-natural completions
         // always sort after older ones.
         var maxCt = await Task.Run(() => ScanMaxMissionCompletedTime());
@@ -1966,12 +2045,14 @@ public sealed partial class MainWindowViewModel(
         var lookup = TryReadFarKeyFieldIdx(ctx);
         if (lookup.Error is { } lookupErr)
         {
-            BulkOpStatus = $"Mark failed (could not re-read FAR tracker): {lookupErr.Message}";
+            BulkOpStatus = UiText.Format("MarkFailedReadFar",
+                "Mark failed (could not re-read FAR tracker): {0}", lookupErr.Message);
             return;
         }
         if (lookup.FarKeyFieldIdx < 0)
         {
-            BulkOpStatus = "Mark failed: FAR tracker lacks a _key field — recipe can't continue.";
+            BulkOpStatus = UiText.Get("MarkFailedNoKey",
+                "Mark failed: FAR tracker lacks a _key field — recipe can't continue.");
             return;
         }
 
@@ -1983,20 +2064,25 @@ public sealed partial class MainWindowViewModel(
         if (error is null)
         {
             IsDirty = true;
-            Journal.Log("Mark Challenge",
-                $"Marked challenge {ctx.CatalogKey} ({ctx.InternalName}) complete (Pattern B v1)");
+            Journal.Log(UiText.Get("JournalCatMarkChallenge", "Mark Challenge"),
+                UiText.Format("JournalMarkOne",
+                    "Marked challenge {0} ({1}) complete (Pattern B v1)", ctx.CatalogKey, ctx.InternalName));
             OnPropertyChanged(nameof(WindowTitle));
             BulkOpStatus = ctx.FollowUpAlreadyExists
-                ? $"Marked {ctx.CatalogKey} ({ctx.InternalName}) complete via Pattern B v1 — "
-                  + $"FAR tracker idx {ctx.FarElementIdx} flipped (X_2 sub-mission already existed)."
-                : $"Marked {ctx.CatalogKey} ({ctx.InternalName}) complete via Pattern B v1 — "
-                  + $"FAR tracker idx {ctx.FarElementIdx} flipped, "
-                  + $"X_2 sub-mission entry created at idx {newElementIdx}.";
+                ? UiText.Format("MarkDoneExisting",
+                    "Marked {0} ({1}) complete via Pattern B v1 — FAR tracker idx {2} flipped "
+                    + "(X_2 sub-mission already existed).",
+                    ctx.CatalogKey, ctx.InternalName, ctx.FarElementIdx)
+                : UiText.Format("MarkDoneNew",
+                    "Marked {0} ({1}) complete via Pattern B v1 — FAR tracker idx {2} flipped, "
+                    + "X_2 sub-mission entry created at idx {3}.",
+                    ctx.CatalogKey, ctx.InternalName, ctx.FarElementIdx, newElementIdx);
         }
         else
         {
-            BulkOpStatus = $"Mark failed: {error.Message}. "
-                           + "Save state may be partial — reload without writing to revert.";
+            BulkOpStatus = UiText.Format("MarkFailedGeneric",
+                "Mark failed: {0}. Save state may be partial — reload without writing to revert.",
+                error.Message);
         }
         NotifyMarkChallengeStateChanged();
     }
@@ -2209,7 +2295,7 @@ public sealed partial class MainWindowViewModel(
         // ticks back to the UI thread so the status footer animates
         // instead of looking frozen.
         var totalCandidates = contexts.Count;
-        BulkOpStatus = $"Applying Pattern B v1: 0 / {totalCandidates}…";
+        BulkOpStatus = UiText.Format("BulkMarkProgress", "Applying Pattern B v1: {0} / {1}…", 0, totalCandidates);
         var baseCt = await Task.Run(() => ScanMaxMissionCompletedTime());
         var newCt = baseCt == 0UL ? 1UL : baseCt + 1UL;
         // Per-block running append index — different QuestSaveData
@@ -2230,8 +2316,9 @@ public sealed partial class MainWindowViewModel(
         var progress = new Progress<(int Done, int Total, uint CurrentKey)>(p =>
         {
             BulkOpStatus = p.CurrentKey == 0
-                ? $"Applying Pattern B v1: {p.Done} / {p.Total}…"
-                : $"Applying Pattern B v1: {p.Done} / {p.Total} — challenge 0x{p.CurrentKey:X8}";
+                ? UiText.Format("BulkMarkProgress", "Applying Pattern B v1: {0} / {1}…", p.Done, p.Total)
+                : UiText.Format("BulkMarkProgressKey", "Applying Pattern B v1: {0} / {1} — challenge 0x{2}",
+                    p.Done, p.Total, p.CurrentKey.ToString("X8", System.Globalization.CultureInfo.InvariantCulture));
         });
         var reporter = (IProgress<(int Done, int Total, uint CurrentKey)>)progress;
 
@@ -2311,26 +2398,29 @@ public sealed partial class MainWindowViewModel(
         if (firstError is null)
         {
             IsDirty = true;
-            Journal.Log("Mark Challenge",
-                $"Bulk-completed {applied} Sealed Abyss Artifact challenge(s) (Pattern B v1)");
+            Journal.Log(UiText.Get("JournalCatMarkChallenge", "Mark Challenge"),
+                UiText.Format("JournalBulkMark",
+                    "Bulk-completed {0} Sealed Abyss Artifact challenge(s) (Pattern B v1)", applied));
             OnPropertyChanged(nameof(WindowTitle));
-            BulkOpStatus =
-                $"Done: bulk-completed {applied} of {contexts.Count} eligible "
-                + $"Sealed Abyss Artifact challenge(s) via Pattern B v1.";
+            BulkOpStatus = UiText.Format("BulkMarkDone",
+                "Done: bulk-completed {0} of {1} eligible Sealed Abyss Artifact challenge(s) via Pattern B v1.",
+                applied, contexts.Count);
         }
         else
         {
-            BulkOpStatus =
-                $"Bulk Mark failed at challenge {firstErrorKey} after {applied}/{contexts.Count} "
-                + $"applied: {firstError.Message}. Save state is partial — reload without writing to revert.";
+            BulkOpStatus = UiText.Format("BulkMarkFailed",
+                "Bulk Mark failed at challenge {0} after {1}/{2} applied: {3}. "
+                + "Save state is partial — reload without writing to revert.",
+                firstErrorKey, applied, contexts.Count, firstError.Message);
             // Even partial success counts as dirty so the user sees
             // the title-bar warning + can still Save what landed.
             if (applied > 0)
             {
                 IsDirty = true;
-                Journal.Log("Mark Challenge",
-                    $"Bulk-completed {applied} Sealed Abyss Artifact challenge(s) (Pattern B v1, "
-                    + $"partial — failed at {firstErrorKey})");
+                Journal.Log(UiText.Get("JournalCatMarkChallenge", "Mark Challenge"),
+                    UiText.Format("JournalBulkMarkPartial",
+                        "Bulk-completed {0} Sealed Abyss Artifact challenge(s) (Pattern B v1, partial — failed at {1})",
+                        applied, firstErrorKey));
                 OnPropertyChanged(nameof(WindowTitle));
             }
         }
@@ -2682,7 +2772,8 @@ public sealed partial class MainWindowViewModel(
         if (applied > 0)
         {
             IsDirty = true;
-            Journal.Log("Faction nodes", $"Set _factionState on {applied} node(s)");
+            Journal.Log(UiText.Get("JournalCatFactionNodes", "Faction nodes"),
+                UiText.Format("JournalFactionSet", "Set _factionState on {0} node(s)", applied));
             OnPropertyChanged(nameof(WindowTitle));
         }
         return (applied, err);
@@ -3239,7 +3330,7 @@ public sealed partial class MainWindowViewModel(
 
         if (candidates.Count == 0)
         {
-            BulkOpStatus = "Nothing to fill — already at target, or no max_stack data.";
+            BulkOpStatus = UiText.Get("FillNothing", "Nothing to fill — already at target, or no max_stack data.");
             return;
         }
 
@@ -3253,22 +3344,24 @@ public sealed partial class MainWindowViewModel(
             {
                 return;
             }
-            var msg = $"Set _stackCount for {candidates.Count} item(s) in this container?\n\n"
-                      + "Items with max_stack_count > 100 fill to max (capped at 9,999,999 — "
-                      + "huge-cap items like currency stop there; stacks already larger are left alone).\n"
-                      + "Items with max_stack_count ≤ 100 round up to the next full stack "
-                      + "(e.g. count 120, max 50 → 150). Items already at a stack-boundary are skipped.\n\n"
-                      + "Tip: the single-item \"Fill stack\" button fills to the true max, uncapped.\n\n"
-                      + "Reversible by reloading the save without writing.";
-            var ok = await ask("Fill stacks?", msg);
+            var msg = UiText.Format("FillConfirmBody",
+                "Set _stackCount for {0} item(s) in this container?\n\n"
+                + "Items with max_stack_count > 100 fill to max (capped at 9,999,999 — "
+                + "huge-cap items like currency stop there; stacks already larger are left alone).\n"
+                + "Items with max_stack_count ≤ 100 round up to the next full stack "
+                + "(e.g. count 120, max 50 → 150). Items already at a stack-boundary are skipped.\n\n"
+                + "Tip: the single-item \"Fill stack\" button fills to the true max, uncapped.\n\n"
+                + "Reversible by reloading the save without writing.",
+                candidates.Count);
+            var ok = await ask(UiText.Get("FillConfirmTitle", "Fill stacks?"), msg);
             if (!ok)
             {
-                BulkOpStatus = "Fill cancelled.";
+                BulkOpStatus = UiText.Get("FillCancelled", "Fill cancelled.");
                 return;
             }
         }
 
-        BulkOpStatus = $"Filling {candidates.Count} stack(s)…";
+        BulkOpStatus = UiText.Format("FillProgress", "Filling {0} stack(s)…", candidates.Count);
         var blockIdx = topBlock.Index;
 
         // One batch FFI call: the Rust side validates every op first
@@ -3318,15 +3411,15 @@ public sealed partial class MainWindowViewModel(
         if (applied > 0)
         {
             IsDirty = true;
-            Journal.Log("Bulk fill",
+            Journal.Log(UiText.Get("JournalCatBulkFill", "Bulk fill"),
                 row.IsSingleFillCandidate
-                    ? $"Filled stack of {row.ResolvedName}"
-                    : $"Filled {applied} stack(s) in {row.ResolvedName}");
+                    ? UiText.Format("JournalFillOne", "Filled stack of {0}", row.ResolvedName)
+                    : UiText.Format("JournalFillMany", "Filled {0} stack(s) in {1}", applied, row.ResolvedName));
             OnPropertyChanged(nameof(WindowTitle));
         }
         BulkOpStatus = firstError is null
-            ? $"Filled {applied} stack(s)."
-            : $"Failed after {applied}/{candidates.Count}: {firstError.Message}";
+            ? UiText.Format("FillDone", "Filled {0} stack(s).", applied)
+            : UiText.Format("FillFailed", "Failed after {0}/{1}: {2}", applied, candidates.Count, firstError.Message);
     }
 
     /// <summary>
@@ -3376,18 +3469,20 @@ public sealed partial class MainWindowViewModel(
             return;
         }
         var displayName = string.IsNullOrEmpty(row.ResolvedName) ? row.ClassName : row.ResolvedName;
-        var msg = $"Remove this element from the list?\n\n"
-                  + $"Element: [{elementIdx}] {displayName}\n"
-                  + $"List size: {parent.Elements.Count} → {parent.Elements.Count - 1}\n\n"
-                  + "Reversible by reloading the save without writing.";
-        var ok = await ask("Remove element?", msg);
+        var msg = UiText.Format("RemoveConfirmBody",
+            "Remove this element from the list?\n\n"
+            + "Element: [{0}] {1}\n"
+            + "List size: {2} → {3}\n\n"
+            + "Reversible by reloading the save without writing.",
+            elementIdx, displayName, parent.Elements.Count, parent.Elements.Count - 1);
+        var ok = await ask(UiText.Get("RemoveConfirmTitle", "Remove element?"), msg);
         if (!ok)
         {
-            BulkOpStatus = "Remove cancelled.";
+            BulkOpStatus = UiText.Get("RemoveCancelled", "Remove cancelled.");
             return;
         }
 
-        BulkOpStatus = "Removing element…";
+        BulkOpStatus = UiText.Get("RemoveProgress", "Removing element…");
         var blockIdx = topBlock.Index;
         var pathArr = parent.PathToList is PathStep[] a ? a : parent.PathToList.ToArray();
         var listFieldIdxRemove = (int)parent.ListFieldIndex;
@@ -3418,14 +3513,15 @@ public sealed partial class MainWindowViewModel(
         if (error is null)
         {
             IsDirty = true;
-            Journal.Log("Remove element",
-                $"Removed {displayName} from {topBlock.ClassName} (index [{elementIdx}])");
+            Journal.Log(UiText.Get("JournalCatRemoveElement", "Remove element"),
+                UiText.Format("JournalRemove", "Removed {0} from {1} (index [{2}])",
+                    displayName, topBlock.ClassName, elementIdx));
             OnPropertyChanged(nameof(WindowTitle));
-            BulkOpStatus = $"Removed element [{elementIdx}].";
+            BulkOpStatus = UiText.Format("RemoveDone", "Removed element [{0}].", elementIdx);
         }
         else
         {
-            BulkOpStatus = $"Remove failed: {error.Message}";
+            BulkOpStatus = UiText.Format("RemoveFailed", "Remove failed: {0}", error.Message);
         }
     }
 
@@ -3700,8 +3796,9 @@ public sealed partial class MainWindowViewModel(
             var addedName = localization.LookupItemName(itemKey, LocalizationProvider.DefaultLanguage)
                             ?? localization.ItemInfoStringKey(itemKey)
                             ?? itemKey.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            Journal.Log("Add item",
-                $"Added {addedName} (ItemKey {itemKey}, qty {newStackCount}) to inventory");
+            Journal.Log(UiText.Get("JournalCatAddItem", "Add item"),
+                UiText.Format("JournalAddItem", "Added {0} (ItemKey {1}, qty {2}) to inventory",
+                    addedName, itemKey, newStackCount));
             OnPropertyChanged(nameof(WindowTitle));
             BulkOpStatus = string.Format(
                 System.Globalization.CultureInfo.CurrentCulture,
@@ -3892,11 +3989,12 @@ public sealed partial class MainWindowViewModel(
         var name = localization.LookupItemName(itemKey, LocalizationProvider.DefaultLanguage)
                    ?? localization.ItemInfoStringKey(itemKey)
                    ?? itemKey.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        Journal.Log("Mount unlock",
-            $"Granted {name} (ItemKey {itemKey}) into container _inventoryKey={inventoryKey}");
+        Journal.Log(UiText.Get("JournalCatMountUnlock", "Mount unlock"),
+            UiText.Format("JournalMountGrant", "Granted {0} (ItemKey {1}) into container _inventoryKey={2}",
+                name, itemKey, inventoryKey));
         OnPropertyChanged(nameof(WindowTitle));
         return (true,
-            $"Granted {name} (slot {newSlotNo}, itemNo {newItemNo}).");
+            UiText.Format("MountGrantDone", "Granted {0} (slot {1}, itemNo {2}).", name, newSlotNo, newItemNo));
     }
 
     /// <summary>
@@ -3946,7 +4044,7 @@ public sealed partial class MainWindowViewModel(
         var tgt = LoadMercList(loader, _loadedPath, blocks);
         if (tgt is null)
         {
-            return (false, "No MercenaryClanSaveData._mercenaryDataList in this save.");
+            return (false, UiText.Get("MountNoMercList", "No MercenaryClanSaveData._mercenaryDataList in this save."));
         }
         // If the dragon element is already present (e.g. an earlier run added
         // the element but with an incomplete knowledge set), skip the
@@ -3989,7 +4087,7 @@ public sealed partial class MainWindowViewModel(
         var ctx = ResolveKnowledgeList(blocks, out var kErr);
         if (ctx is null)
         {
-            knowledgeNote = $" Knowledge inject skipped: {kErr}";
+            knowledgeNote = " " + UiText.Format("DragonKnowSkipped", "Knowledge inject skipped: {0}", kErr);
         }
         else
         {
@@ -3998,15 +4096,15 @@ public sealed partial class MainWindowViewModel(
                 .ToList();
             if (toAdd.Count == 0)
             {
-                knowledgeNote = " Knowledge already present.";
+                knowledgeNote = " " + UiText.Get("DragonKnowPresent", "Knowledge already present.");
             }
             else
             {
                 var (applied, injectErr, _) = await ApplyKnowledgeInjectAsync(ctx, toAdd);
                 kApplied = applied;
-                knowledgeNote = injectErr is null
-                    ? $" + {applied} knowledge key(s)."
-                    : $" Knowledge inject failed: {injectErr.Message}.";
+                knowledgeNote = " " + (injectErr is null
+                    ? UiText.Format("DragonKnowAdded", "+ {0} knowledge key(s).", applied)
+                    : UiText.Format("DragonKnowFailed", "Knowledge inject failed: {0}.", injectErr.Message));
             }
         }
 
@@ -4023,23 +4121,26 @@ public sealed partial class MainWindowViewModel(
         if (changed)
         {
             IsDirty = true;
-            Journal.Log("Mount unlock", dragonAlreadyPresent
-                ? $"Dragon already present — injected {kApplied} knowledge key(s){hpNote}"
-                : $"Transplanted dragon (charKey {MountCatalog.DragonCharacterKey}) "
-                    + $"+ {kApplied} knowledge key(s){hpNote}");
+            Journal.Log(UiText.Get("JournalCatMountUnlock", "Mount unlock"), dragonAlreadyPresent
+                ? UiText.Format("JournalDragonPresent",
+                    "Dragon already present — injected {0} knowledge key(s){1}", kApplied, hpNote)
+                : UiText.Format("JournalDragonTransplant",
+                    "Transplanted dragon (charKey {0}) + {1} knowledge key(s){2}",
+                    MountCatalog.DragonCharacterKey, kApplied, hpNote));
             OnPropertyChanged(nameof(WindowTitle));
         }
 
         if (dragonAlreadyPresent && kApplied == 0 && !hpChanged)
         {
-            return (true, "Dragon already fully unlocked (element + all knowledge + full HP). "
-                + "If it still won't summon, the issue is outside the save.");
+            return (true, UiText.Get("DragonAlreadyFull",
+                "Dragon already fully unlocked (element + all knowledge + full HP). "
+                + "If it still won't summon, the issue is outside the save."));
         }
         return (true,
             (dragonAlreadyPresent
-                ? "Dragon element was already present — injected the missing knowledge."
-                : "Dragon unlocked: real element transplanted.")
-            + knowledgeNote + hpNote + " Load in-game to summon.");
+                ? UiText.Get("DragonWasPresent", "Dragon element was already present — injected the missing knowledge.")
+                : UiText.Get("DragonUnlocked", "Dragon unlocked: real element transplanted."))
+            + knowledgeNote + hpNote + " " + UiText.Get("DragonLoadInGame", "Load in-game to summon."));
     }
 
     /// <summary>
@@ -4114,7 +4215,7 @@ public sealed partial class MainWindowViewModel(
         var current = (ushort)(hp[5] | (hp[6] << 8));
         if (current >= MountCatalog.DragonFullHp)
         {
-            return (false, " HP already full.");
+            return (false, " " + UiText.Get("DragonHpAlreadyFull", "HP already full."));
         }
 
         var full = BitConverter.GetBytes(MountCatalog.DragonFullHp);
@@ -4131,8 +4232,8 @@ public sealed partial class MainWindowViewModel(
             catch (CrimsonSaveException ex) { error = ex; }
         });
         return error is not null
-            ? (false, $" HP fill failed: {error.Message}.")
-            : (true, $" HP filled to {MountCatalog.DragonFullHp}.");
+            ? (false, " " + UiText.Format("DragonHpFillFailed", "HP fill failed: {0}.", error.Message))
+            : (true, " " + UiText.Format("DragonHpFilled", "HP filled to {0}.", MountCatalog.DragonFullHp));
     }
 
     /// <summary>
@@ -4656,7 +4757,7 @@ public sealed partial class MainWindowViewModel(
         // Phase 1: walk every InventorySaveData block, collect every
         // (item, target stackCount) pair. Heavy reads → Task.Run keeps
         // the UI responsive even on 1112-block saves.
-        BulkOpStatus = "Scanning inventories…";
+        BulkOpStatus = UiText.Get("ScanningInventories", "Scanning inventories…");
         var savePath = _loadedPath;
         var (allOps, containerCount) = await Task.Run(() =>
         {
@@ -4720,27 +4821,29 @@ public sealed partial class MainWindowViewModel(
 
         if (allOps.Count == 0)
         {
-            BulkOpStatus = $"Nothing to fill — every stack across {containerCount} container(s) "
-                           + "is already at target.";
+            BulkOpStatus = UiText.Format("FillAllNothing",
+                "Nothing to fill — every stack across {0} container(s) is already at target.", containerCount);
             return;
         }
 
-        var msg = $"Fill _stackCount to max for {allOps.Count} item(s) "
-                  + $"across {containerCount} container(s) (every InventorySaveData block)?\n\n"
-                  + "Items with max_stack_count > 100 fill to max (capped at 9,999,999 — "
-                  + "huge-cap items like currency stop there; stacks already larger are left alone).\n"
-                  + "Items with max_stack_count ≤ 100 round up to the next full stack "
-                  + "(e.g. count 120, max 50 → 150). Items already at a stack-boundary are skipped.\n\n"
-                  + "Tip: the single-item \"Fill stack\" button fills to the true max, uncapped.\n\n"
-                  + "Reversible by reloading the save without writing.";
-        var ok = await ask("Fill ALL stacks across every inventory?", msg);
+        var msg = UiText.Format("FillAllConfirmBody",
+            "Fill _stackCount to max for {0} item(s) across {1} container(s) (every InventorySaveData block)?\n\n"
+            + "Items with max_stack_count > 100 fill to max (capped at 9,999,999 — "
+            + "huge-cap items like currency stop there; stacks already larger are left alone).\n"
+            + "Items with max_stack_count ≤ 100 round up to the next full stack "
+            + "(e.g. count 120, max 50 → 150). Items already at a stack-boundary are skipped.\n\n"
+            + "Tip: the single-item \"Fill stack\" button fills to the true max, uncapped.\n\n"
+            + "Reversible by reloading the save without writing.",
+            allOps.Count, containerCount);
+        var ok = await ask(UiText.Get("FillAllConfirmTitle", "Fill ALL stacks across every inventory?"), msg);
         if (!ok)
         {
-            BulkOpStatus = "Fill cancelled.";
+            BulkOpStatus = UiText.Get("FillCancelled", "Fill cancelled.");
             return;
         }
 
-        BulkOpStatus = $"Filling {allOps.Count} stack(s) across {containerCount} container(s)…";
+        BulkOpStatus = UiText.Format("FillAllProgress",
+            "Filling {0} stack(s) across {1} container(s)…", allOps.Count, containerCount);
         var (applied, firstError) = await Task.Run<(int, CrimsonSaveException?)>(() =>
         {
             try
@@ -4761,13 +4864,14 @@ public sealed partial class MainWindowViewModel(
         if (applied > 0)
         {
             IsDirty = true;
-            Journal.Log("Bulk fill",
-                $"Filled {applied} stack(s) across {containerCount} container(s) (all inventories)");
+            Journal.Log(UiText.Get("JournalCatBulkFill", "Bulk fill"),
+                UiText.Format("JournalFillAll",
+                    "Filled {0} stack(s) across {1} container(s) (all inventories)", applied, containerCount));
             OnPropertyChanged(nameof(WindowTitle));
         }
         BulkOpStatus = firstError is null
-            ? $"Filled {applied} stack(s) across {containerCount} container(s)."
-            : $"Failed after {applied}/{allOps.Count}: {firstError.Message}";
+            ? UiText.Format("FillAllDone", "Filled {0} stack(s) across {1} container(s).", applied, containerCount)
+            : UiText.Format("FillFailed", "Failed after {0}/{1}: {2}", applied, allOps.Count, firstError.Message);
     }
 
     /// <summary>
@@ -4862,7 +4966,8 @@ public sealed partial class MainWindowViewModel(
         }
         if (localization.KnowledgeCount == 0)
         {
-            BulkOpStatus = "Nothing to do — knowledgeinfo.pabgb not loaded (no game install configured).";
+            BulkOpStatus = UiText.Get("AbyssNoKnowledgeInfo",
+                "Nothing to do — knowledgeinfo.pabgb not loaded (no game install configured).");
             return;
         }
 
@@ -4897,38 +5002,39 @@ public sealed partial class MainWindowViewModel(
 
         if (preview.Harvested == 0)
         {
-            BulkOpStatus = "Nothing to do — no abyss-gate knowledge entries found in knowledgeinfo.pabgb.";
+            BulkOpStatus = UiText.Get("AbyssNoEntries",
+                "Nothing to do — no abyss-gate knowledge entries found in knowledgeinfo.pabgb.");
             return;
         }
         if (preview.ToAdd.Count == 0)
         {
-            BulkOpStatus =
-                $"Nothing to do — all {preview.Harvested} abyss-gate knowledge entries already discovered.";
+            BulkOpStatus = UiText.Format("AbyssAllDiscovered",
+                "Nothing to do — all {0} abyss-gate knowledge entries already discovered.", preview.Harvested);
             return;
         }
 
-        var msg =
-            $"Inject {preview.ToAdd.Count} abyss-gate knowledge key(s) into "
-            + $"{KnowledgeSaveDataClass}._list?\n\n"
-            + $"Harvested {preview.Harvested} matching keys from knowledgeinfo.pabgb "
-            + $"({AbyssGateKnowledgePrefixes.Length} name prefixes).\n"
-            + $"{preview.AlreadyHave} already present in your save — left alone.\n"
-            + $"{preview.ToAdd.Count} will be appended.\n\n"
+        var msg = UiText.Format("AbyssConfirmBody",
+            "Inject {0} abyss-gate knowledge key(s) into {1}._list?\n\n"
+            + "Harvested {2} matching keys from knowledgeinfo.pabgb ({3} name prefixes).\n"
+            + "{4} already present in your save — left alone.\n"
+            + "{0} will be appended.\n\n"
             + "This is the **discovery flag** layer only — abyss gates "
             + "show up on the map after this. To actually unlock gates "
             + "for crossing, use Tools → Edit Abyss Gates… for per-gate "
             + "state changes.\n\n"
-            + "Reversible by reloading the save without writing.";
-        var ok = await ask("Unlock all abyss gates (map discovery)?", msg);
+            + "Reversible by reloading the save without writing.",
+            preview.ToAdd.Count, KnowledgeSaveDataClass, preview.Harvested,
+            AbyssGateKnowledgePrefixes.Length, preview.AlreadyHave);
+        var ok = await ask(UiText.Get("AbyssConfirmTitle", "Unlock all abyss gates (map discovery)?"), msg);
         if (!ok)
         {
-            BulkOpStatus = "Cancelled.";
+            BulkOpStatus = UiText.Get("DialogCancelled", "Cancelled.");
             return;
         }
 
         var keysToAdd = preview.ToAdd;
         var baselineCount = ctx.BaselineCount;
-        BulkOpStatus = $"Injecting {keysToAdd.Count} knowledge key(s)…";
+        BulkOpStatus = UiText.Format("KnowledgeInjecting", "Injecting {0} knowledge key(s)…", keysToAdd.Count);
         var (applied, firstError, firstFailedKey) =
             await ApplyKnowledgeInjectAsync(ctx, keysToAdd);
 
@@ -4937,12 +5043,14 @@ public sealed partial class MainWindowViewModel(
         if (firstError is null)
         {
             IsDirty = true;
-            Journal.Log("Abyss gates",
-                $"Bulk-added {applied} abyss-gate knowledge key(s) "
-                + $"to {KnowledgeSaveDataClass}._list (map discovery)");
+            Journal.Log(UiText.Get("JournalCatAbyssGates", "Abyss gates"),
+                UiText.Format("JournalAbyssAdded",
+                    "Bulk-added {0} abyss-gate knowledge key(s) to {1}._list (map discovery)",
+                    applied, KnowledgeSaveDataClass));
             OnPropertyChanged(nameof(WindowTitle));
-            BulkOpStatus = $"Done: added {applied} abyss-gate knowledge key(s) "
-                + $"({baselineCount + applied} total in {KnowledgeSaveDataClass}._list).";
+            BulkOpStatus = UiText.Format("AbyssDone",
+                "Done: added {0} abyss-gate knowledge key(s) ({1} total in {2}._list).",
+                applied, baselineCount + applied, KnowledgeSaveDataClass);
         }
         else
         {
@@ -4953,16 +5061,19 @@ public sealed partial class MainWindowViewModel(
                 // user needs to decide whether to keep the partial
                 // progress or reload.
                 IsDirty = true;
-                Journal.Log("Abyss gates",
-                    $"Bulk-added {applied} of {keysToAdd.Count} abyss-gate knowledge key(s) "
-                    + $"before failure at key 0x{firstFailedKey:X8}");
+                Journal.Log(UiText.Get("JournalCatAbyssGates", "Abyss gates"),
+                    UiText.Format("JournalAbyssAddedPartial",
+                        "Bulk-added {0} of {1} abyss-gate knowledge key(s) before failure at key 0x{2}",
+                        applied, keysToAdd.Count,
+                        (firstFailedKey ?? 0u).ToString("X8", System.Globalization.CultureInfo.InvariantCulture)));
                 OnPropertyChanged(nameof(WindowTitle));
             }
-            BulkOpStatus = $"Failed after {applied}/{keysToAdd.Count}: "
-                + $"{firstError.Message} (code {firstError.ErrorCode}). "
-                + (applied > 0
-                    ? "Reload the save without writing to revert the partial progress."
-                    : "No changes written.");
+            BulkOpStatus = UiText.Format("KnowledgeInjectFailed",
+                "Failed after {0}/{1}: {2} (code {3}). {4}",
+                applied, keysToAdd.Count, firstError.Message, firstError.ErrorCode,
+                applied > 0
+                    ? UiText.Get("KnowledgeInjectFailedPartial", "Reload the save without writing to revert the partial progress.")
+                    : UiText.Get("KnowledgeInjectFailedNone", "No changes written."));
         }
     }
 
@@ -4997,13 +5108,14 @@ public sealed partial class MainWindowViewModel(
         error = null;
         if (_loadedPath is null)
         {
-            error = "No save loaded.";
+            error = UiText.Get("DialogNoSaveLoaded", "No save loaded.");
             return null;
         }
         var blockSummary = FindFirstBlockByClassName(blocks, KnowledgeSaveDataClass);
         if (blockSummary is null)
         {
-            error = $"Nothing to do — no {KnowledgeSaveDataClass} block in this save.";
+            error = UiText.Format("KnowledgeErrNoBlock",
+                "Nothing to do — no {0} block in this save.", KnowledgeSaveDataClass);
             return null;
         }
         BlockDetails details;
@@ -5013,14 +5125,16 @@ public sealed partial class MainWindowViewModel(
         }
         catch (CrimsonSaveException ex)
         {
-            error = $"Could not read {KnowledgeSaveDataClass}: {ex.Message}";
+            error = UiText.Format("KnowledgeErrReadFail", "Could not read {0}: {1}",
+                KnowledgeSaveDataClass, ex.Message);
             return null;
         }
         var listField = FindFieldByName(details, KnowledgeListFieldName);
         if (listField is null)
         {
-            error = $"Schema drift: {KnowledgeSaveDataClass} has no {KnowledgeListFieldName} field. "
-                + "Bridge needs a new schema baseline.";
+            error = UiText.Format("KnowledgeErrNoField",
+                "Schema drift: {0} has no {1} field. Bridge needs a new schema baseline.",
+                KnowledgeSaveDataClass, KnowledgeListFieldName);
             return null;
         }
         // Reject the legacy dynamic_array shape — would mean a fresh
@@ -5029,17 +5143,17 @@ public sealed partial class MainWindowViewModel(
         if (!string.Equals(listField.Kind, "object_list", StringComparison.Ordinal)
             || listField.Elements is not { } existingElements)
         {
-            error =
-                $"Schema drift: {KnowledgeSaveDataClass}.{KnowledgeListFieldName} "
-                + $"is '{listField.Kind}', expected object_list. "
-                + "Bridge needs an update.";
+            error = UiText.Format("KnowledgeErrBadKind",
+                "Schema drift: {0}.{1} is '{2}', expected object_list. Bridge needs an update.",
+                KnowledgeSaveDataClass, KnowledgeListFieldName, listField.Kind);
             return null;
         }
         if (existingElements.Count == 0)
         {
-            error = $"Refusing to bulk-append into an empty {KnowledgeSaveDataClass}._list "
+            error = UiText.Format("KnowledgeErrEmptyList",
+                "Refusing to bulk-append into an empty {0}._list "
                 + "(need at least one template element to clone). "
-                + "Discover any knowledge in-game first.";
+                + "Discover any knowledge in-game first.", KnowledgeSaveDataClass);
             return null;
         }
 
@@ -5057,9 +5171,9 @@ public sealed partial class MainWindowViewModel(
         }
         if (keyFieldIdx < 0)
         {
-            error =
-                $"Schema drift: KnowledgeElementSaveData has no '{KnowledgeElemKeyField}' field. "
-                + "Bridge needs an update.";
+            error = UiText.Format("KnowledgeErrNoKeyField",
+                "Schema drift: KnowledgeElementSaveData has no '{0}' field. Bridge needs an update.",
+                KnowledgeElemKeyField);
             return null;
         }
 
@@ -5223,12 +5337,12 @@ public sealed partial class MainWindowViewModel(
         var ctx = ResolveKnowledgeList(blocks, out var error);
         if (ctx is null)
         {
-            return (false, 0, error ?? "Knowledge list unavailable.");
+            return (false, 0, error ?? UiText.Get("KnowledgeListUnavailable", "Knowledge list unavailable."));
         }
         var toAdd = keys.Where(k => !ctx.ExistingKeys.Contains(k)).Distinct().ToList();
         if (toAdd.Count == 0)
         {
-            return (true, 0, "All selected knowledge is already learned.");
+            return (true, 0, UiText.Get("KnowledgeAllLearned", "All selected knowledge is already learned."));
         }
         toAdd.Sort();
 
@@ -5240,20 +5354,23 @@ public sealed partial class MainWindowViewModel(
             if (applied > 0)
             {
                 IsDirty = true;
-                Journal.Log("Knowledge",
-                    $"Learned {applied} of {toAdd.Count} knowledge key(s) before failure "
-                    + $"at 0x{failedKey:X8}");
+                Journal.Log(UiText.Get("JournalCatKnowledge", "Knowledge"),
+                    UiText.Format("JournalKnowledgePartial",
+                        "Learned {0} of {1} knowledge key(s) before failure at 0x{2}",
+                        applied, toAdd.Count,
+                        (failedKey ?? 0u).ToString("X8", System.Globalization.CultureInfo.InvariantCulture)));
                 OnPropertyChanged(nameof(WindowTitle));
             }
             return (false, applied,
-                $"Failed after {applied}/{toAdd.Count}: {injectError.Message} "
-                + $"(code {injectError.ErrorCode}).");
+                UiText.Format("KnowledgeLearnFailed", "Failed after {0}/{1}: {2} (code {3}).",
+                    applied, toAdd.Count, injectError.Message, injectError.ErrorCode));
         }
 
         IsDirty = true;
-        Journal.Log("Knowledge", $"Learned {applied} knowledge key(s)");
+        Journal.Log(UiText.Get("JournalCatKnowledge", "Knowledge"),
+            UiText.Format("JournalKnowledgeLearned", "Learned {0} knowledge key(s)", applied));
         OnPropertyChanged(nameof(WindowTitle));
-        return (true, applied, $"Learned {applied} knowledge key(s).");
+        return (true, applied, UiText.Format("KnowledgeLearnDone", "Learned {0} knowledge key(s).", applied));
     }
 
     /// <summary>
@@ -5376,13 +5493,15 @@ public sealed partial class MainWindowViewModel(
             return true;
         }
         var proceed = await ask(
-            "Structural edit — may not load",
-            "This save has length-changing (structural) edits, such as completing a "
-            + "sealed abyss artifact challenge or adding/removing list items.\n\n"
-            + "The data is written correctly, but Crimson Desert's own save loader has a "
-            + "bug that can make some heavily-progressed saves crash on load after such an "
-            + "edit. In-place edits (item counts, states, gate/flag toggles) are safe.\n\n"
-            + "A backup of the original is kept. Save anyway?");
+            LookupUiResourceString("StructuralEditWarningTitle")
+                ?? "Structural edit — may not load",
+            LookupUiResourceString("StructuralEditWarningBody")
+                ?? "This save has length-changing (structural) edits, such as completing a "
+                + "sealed abyss artifact challenge or adding/removing list items.\n\n"
+                + "The data is written correctly, but Crimson Desert's own save loader has a "
+                + "bug that can make some heavily-progressed saves crash on load after such an "
+                + "edit. In-place edits (item counts, states, gate/flag toggles) are safe.\n\n"
+                + "A backup of the original is kept. Save anyway?");
         if (proceed)
         {
             _structuralWarningAcknowledged = true;
@@ -5444,14 +5563,17 @@ public sealed partial class MainWindowViewModel(
         if (outcome.IsSuccess && outcome.Entry is { } entry)
         {
             BulkOpStatus = outcome.VersionsPruned > 0
-                ? $"Backup: {entry.SlotName} @ {SaveBackupService.FormatTimestamp(entry.Timestamp)} ({entry.TotalBytes:N0} B, pruned {outcome.VersionsPruned})."
-                : $"Backup: {entry.SlotName} @ {SaveBackupService.FormatTimestamp(entry.Timestamp)} ({entry.TotalBytes:N0} B).";
+                ? UiText.Format("BackupOkPruned", "Backup: {0} @ {1} ({2:N0} B, pruned {3}).",
+                    entry.SlotName, SaveBackupService.FormatTimestamp(entry.Timestamp),
+                    entry.TotalBytes, outcome.VersionsPruned)
+                : UiText.Format("BackupOk", "Backup: {0} @ {1} ({2:N0} B).",
+                    entry.SlotName, SaveBackupService.FormatTimestamp(entry.Timestamp), entry.TotalBytes);
         }
         else if (outcome.Kind == BackupOutcomeKind.Failed)
         {
             // Show the failure prominently so the user knows the safety
             // net's down; their Save still works.
-            BulkOpStatus = $"⚠ Backup failed (save still wrote): {outcome.Message}";
+            BulkOpStatus = UiText.Format("BackupFailed", "⚠ Backup failed (save still wrote): {0}", outcome.Message);
         }
         // Skipped (no source / bad path) is silent — common for first
         // Save As to a fresh path, or for paths outside the canonical
@@ -5460,9 +5582,12 @@ public sealed partial class MainWindowViewModel(
 
     /// <summary>
     /// Restore a backup snapshot back to the user's live save folder.
-    /// Snapshots the current state first (so undo is itself undoable),
-    /// copies the backup files, then re-loads the restored save so the
-    /// UI reflects the new state.
+    /// Copies the backup files over the slot's current contents, then
+    /// re-loads the restored save so the UI reflects the new state.
+    /// The current state is deliberately NOT snapshotted first — the
+    /// user explicitly asked to roll back, and an extra "undo of the
+    /// undo" backup only clutters the history and risks evicting an
+    /// older wanted snapshot. Backups are taken only on an editor Save.
     ///
     /// <para>
     /// The View opens a picker dialog that resolves the user's choice
@@ -5477,7 +5602,8 @@ public sealed partial class MainWindowViewModel(
         ArgumentNullException.ThrowIfNull(entry);
         if (ConfirmRequested is not { } ask)
         {
-            BulkOpStatus = "Restore needs a confirm dialog hook — UI bug, file an issue.";
+            BulkOpStatus = UiText.Get("RestoreNoHook",
+                "Restore needs a confirm dialog hook — UI bug, file an issue.");
             return;
         }
 
@@ -5488,31 +5614,36 @@ public sealed partial class MainWindowViewModel(
         var gameSaveRoot = ResolveSaveRootForBackup(entry);
         if (gameSaveRoot is null)
         {
-            BulkOpStatus =
-                $"Restore failed: no {entry.Platform} save root is detected on this machine. "
-                + "The launcher that wrote the original save may not be installed here.";
+            BulkOpStatus = UiText.Format("RestoreNoRoot",
+                "Restore failed: no {0} save root is detected on this machine. "
+                + "The launcher that wrote the original save may not be installed here.",
+                entry.Platform);
             return;
         }
         var targetSlotDir = Path.Combine(gameSaveRoot, entry.UserId, entry.SlotName);
         var targetSavePath = Path.Combine(targetSlotDir, "save.save");
 
-        var msg = $"Restore {entry.SlotName} from backup taken at "
-                  + $"{SaveBackupService.FormatTimestamp(entry.Timestamp)}?\n\n"
-                  + $"Platform: {entry.Platform}\n"
-                  + $"Files: {string.Join(", ", entry.FileNames)} ({entry.TotalBytes:N0} bytes)\n"
-                  + $"Target: {targetSlotDir}\n\n"
-                  + "The current contents of the slot folder will be backed up first.";
-        var ok = await ask("Restore from backup?", msg);
+        var msg = UiText.Format("RestoreConfirmBody",
+            "Restore {0} from backup taken at {1}?\n\n"
+            + "Platform: {2}\n"
+            + "Files: {3} ({4:N0} bytes)\n"
+            + "Target: {5}\n\n"
+            + "This overwrites the current save in that slot. The current state is NOT "
+            + "backed up — backups are only taken when you Save in the editor.",
+            entry.SlotName, SaveBackupService.FormatTimestamp(entry.Timestamp), entry.Platform,
+            string.Join(", ", entry.FileNames), entry.TotalBytes, targetSlotDir);
+        var ok = await ask(UiText.Get("RestoreConfirmTitle", "Restore from backup?"), msg);
         if (!ok)
         {
-            BulkOpStatus = "Restore cancelled.";
+            BulkOpStatus = UiText.Get("RestoreCancelled", "Restore cancelled.");
             return;
         }
 
-        // Snapshot the about-to-be-overwritten state. If the slot folder
-        // doesn't exist (rare — restoring into an empty user dir), the
-        // pre-restore backup is just a no-op.
-        BackupBeforeWriteSilent(targetSavePath);
+        // No pre-restore backup: the user explicitly chose to roll back to
+        // an earlier snapshot, so snapshotting the about-to-be-discarded
+        // current state would just clutter the history and (worse) could
+        // evict an older wanted backup via the retention cap. Backups are
+        // created only on an editor Save (see SaveAsync / SaveAsAsync).
 
         try
         {
@@ -5520,7 +5651,7 @@ public sealed partial class MainWindowViewModel(
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            BulkOpStatus = $"Restore failed: {ex.Message}";
+            BulkOpStatus = UiText.Format("RestoreFailed", "Restore failed: {0}", ex.Message);
             return;
         }
 
@@ -5530,12 +5661,12 @@ public sealed partial class MainWindowViewModel(
         try
         {
             LoadSave(targetSavePath);
-            BulkOpStatus = $"Restored {entry.SlotName} from "
-                           + $"{SaveBackupService.FormatTimestamp(entry.Timestamp)}.";
+            BulkOpStatus = UiText.Format("RestoreDone", "Restored {0} from {1}.",
+                entry.SlotName, SaveBackupService.FormatTimestamp(entry.Timestamp));
         }
         catch (CrimsonSaveException ex)
         {
-            BulkOpStatus = $"Restored, but reload failed: {ex.Message}";
+            BulkOpStatus = UiText.Format("RestoreReloadFailed", "Restored, but reload failed: {0}", ex.Message);
         }
     }
 

@@ -6,18 +6,27 @@
         d:DesignWidth="440"
         d:DesignHeight="200"
         x:Class="CrimsonAtomtic.Ui.Views.ConfirmDialog"
-        Width="440" Height="200"
+        Width="440"
         MinWidth="320" MinHeight="140"
-        CanResize="False"
+        MaxHeight="640"
+        SizeToContent="Height"
+        CanResize="True"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner"
         Icon="/Assets/MainIcon.ico">
 
+  <!-- Auto-grows to fit the message (SizeToContent="Height") up to
+       MaxHeight; longer prose (e.g. the localized sealed-artifact
+       confirm) scrolls inside the ScrollViewer. The button row stays
+       pinned below the scrolling region, so it's always reachable. -->
   <Grid Margin="16" RowDefinitions="*,Auto">
-    <TextBlock Grid.Row="0"
-               Name="MessageText"
-               TextWrapping="Wrap"
-               VerticalAlignment="Center" />
+    <ScrollViewer Grid.Row="0"
+                  VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+      <TextBlock Name="MessageText"
+                 TextWrapping="Wrap"
+                 Margin="0,0,8,0" />
+    </ScrollViewer>
 
     <StackPanel Grid.Row="1"
                 Orientation="Horizontal"

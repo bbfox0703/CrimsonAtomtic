@@ -55,7 +55,7 @@
                          VerticalAlignment="Center" />
               <TextBox Grid.Column="1"
                        Text="{Binding Label, Mode=TwoWay}"
-                       PlaceholderText="Label"
+                       PlaceholderText="{DynamicResource GemSetsLabelPlaceholder}"
                        VerticalAlignment="Center" />
               <TextBox Grid.Column="2"
                        Text="{Binding Cells[0].KeyText, Mode=TwoWay}"

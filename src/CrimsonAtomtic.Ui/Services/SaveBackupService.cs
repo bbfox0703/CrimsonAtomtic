@@ -11,10 +11,13 @@ namespace CrimsonAtomtic.Ui.Services;
 /// Wired into <see cref="ViewModels.MainWindowViewModel"/>'s Save and
 /// Save As commands: before each on-disk write, the existing target
 /// file is copied into <see cref="BackupRoot"/> under
-/// <c>{platform}/{userId}/{slotName}/{timestamp}/</c>. Restore reverses
-/// the pairing — picks a backup folder, copies it back to the original
-/// slot folder, and (transitively) re-backs up the about-to-be-
-/// overwritten current state so undo is itself undoable.
+/// <c>{platform}/{userId}/{slotName}/{timestamp}/</c>. A backup is
+/// therefore created ONLY when the user Saves from the editor. Restore
+/// reverses the pairing — it picks a backup folder and copies it back
+/// to the original slot folder. Restore does NOT snapshot the current
+/// state first: the user explicitly chose to roll back, so an extra
+/// backup of the about-to-be-discarded state would only clutter the
+/// history (and could evict an older wanted snapshot via the cap).
 /// </para>
 ///
 /// <para>
@@ -54,12 +57,11 @@ namespace CrimsonAtomtic.Ui.Services;
 public sealed class SaveBackupService
 {
     /// <summary>
-    /// Hard cap on per-slot backup versions kept on disk. A Restore From
-    /// Backup… picks an existing snapshot and immediately writes the
-    /// loaded save, which itself triggers a fresh pre-write backup —
-    /// so 5 distinct user-visible save edits already consume 6 slots
-    /// once a restore happens. 6 gives the user breathing room for a
-    /// restore-then-keep-editing flow without losing the original.
+    /// Hard cap on per-slot backup versions kept on disk. Restore no
+    /// longer takes its own pre-restore snapshot, so the cap is consumed
+    /// purely by editor Saves — 6 distinct Saves keep the six most-recent
+    /// states. 6 gives the user breathing room for a restore-then-keep-
+    /// editing flow without losing the original.
     /// </summary>
     public const int MaxVersionsPerSlot = 6;
 
@@ -304,9 +306,9 @@ public sealed class SaveBackupService
     /// <see cref="File.Copy(string, string, bool)"/>. We don't take a
     /// transactional lock — if a copy fails partway, the slot folder
     /// may have one file from the new backup + one from the old
-    /// state. The caller (MainWindowViewModel) snapshots the current
-    /// state into a fresh backup BEFORE calling Restore so even that
-    /// half-failed state is recoverable.
+    /// state. The user is restoring from a snapshot they can re-pick,
+    /// and the prior editor-Save backups remain on disk, so a
+    /// half-failed restore is still recoverable by restoring again.
     /// </para>
     /// </summary>
     public static string Restore(BackupEntry entry, string gameSaveRoot)

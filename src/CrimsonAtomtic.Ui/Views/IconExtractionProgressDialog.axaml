@@ -6,7 +6,7 @@
         d:DesignWidth="480"
         d:DesignHeight="220"
         x:Class="CrimsonAtomtic.Ui.Views.IconExtractionProgressDialog"
-        Title="Extract icons from game data"
+        Title="{DynamicResource IconExtractTitle}"
         Width="480" Height="220"
         MinWidth="380" MinHeight="180"
         CanResize="False"
@@ -18,7 +18,7 @@
     <TextBlock Grid.Row="0"
                Name="HeaderText"
                FontWeight="Bold"
-               Text="Extracting item icons from game data…"
+               Text="{DynamicResource IconExtractHeader}"
                Margin="0,0,0,12" />
 
     <ProgressBar Grid.Row="1"
@@ -30,7 +30,7 @@
 
     <TextBlock Grid.Row="2"
                Name="StatusText"
-               Text="Initializing…"
+               Text="{DynamicResource IconExtractInitializing}"
                TextWrapping="Wrap"
                Margin="0,12,0,0"
                VerticalAlignment="Top" />
@@ -41,7 +41,7 @@
                 Spacing="8"
                 Margin="0,12,0,0">
       <Button Name="ActionButton"
-              Content="Cancel"
+              Content="{DynamicResource IconExtractCancel}"
               Click="OnActionClick"
               MinWidth="96"
               IsDefault="True" />

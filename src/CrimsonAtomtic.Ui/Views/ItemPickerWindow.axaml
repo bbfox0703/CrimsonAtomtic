@@ -34,6 +34,17 @@
                 HorizontalContentAlignment="Center"
                 Padding="8,6"
                 FontWeight="SemiBold" />
+        <!-- "Go to item in save": jump the main window to the selected
+             item's slot in the loaded save (catalog-browse counterpart
+             of Find Items' per-row "Go"). Routed through the picker VM's
+             GotoItemRequested event so this window stays decoupled from
+             MainWindowViewModel. -->
+        <Button Content="{DynamicResource ItemPickerGotoButton}"
+                ToolTip.Tip="{DynamicResource ItemPickerGotoTip}"
+                Command="{Binding GotoSelectedCommand}"
+                HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Center"
+                Padding="8,4" />
         <TextBlock Text="{Binding TopActionHint}"
                    Opacity="0.6"
                    TextWrapping="Wrap"

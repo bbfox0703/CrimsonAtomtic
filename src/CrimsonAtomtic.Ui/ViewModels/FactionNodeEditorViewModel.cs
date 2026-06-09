@@ -53,9 +53,10 @@ public sealed partial class FactionNodeEditorViewModel : ObservableObject
     public bool HasNodes => _allRows.Count > 0;
 
     /// <summary>"No FactionSaveData / faction nodes" message for the empty case.</summary>
-    public const string NoNodesSummary =
-        "No faction nodes found — this save has no FactionSaveData._factionNodeElementSaveDataList "
-        + "(or the game install isn't configured for name resolution).";
+    public static string NoNodesSummary =>
+        UiText.Get("FactionNoNodes",
+            "No faction nodes found — this save has no FactionSaveData._factionNodeElementSaveDataList "
+            + "(or the game install isn't configured for name resolution).");
 
     private FactionNodeEditorViewModel(MainWindowViewModel main)
     {
@@ -93,8 +94,10 @@ public sealed partial class FactionNodeEditorViewModel : ObservableObject
         vm.ApplyFilter();
         vm.StatusMessage = rows.Count == 0
             ? NoNodesSummary
-            : $"{rows.Count:N0} faction node(s). Filter / tick rows, pick a target state, then Set selected. "
-              + "\"Discover all\" sets every Undiscovered/Discovered node to Active.";
+            : UiText.Format("FactionNodeHeaderStatus",
+                "{0:N0} faction node(s). Filter / tick rows, pick a target state, then Set selected. "
+                + "\"Discover all\" sets every Undiscovered/Discovered node to Active.",
+                rows.Count);
         return vm;
     }
 
@@ -118,7 +121,8 @@ public sealed partial class FactionNodeEditorViewModel : ObservableObject
             }
             Rows.Add(r);
         }
-        FilterSummary = $"Showing {Rows.Count:N0} of {_allRows.Count:N0}";
+        FilterSummary = UiText.Format("DialogFilterSummary", "Showing {0:N0} of {1:N0}",
+            Rows.Count, _allRows.Count);
     }
 
     private bool CanAct => !IsBusy;
@@ -155,17 +159,18 @@ public sealed partial class FactionNodeEditorViewModel : ObservableObject
     {
         if (SelectedTargetState is not { } target)
         {
-            StatusMessage = "Pick a target state first.";
+            StatusMessage = UiText.Get("FactionPickState", "Pick a target state first.");
             return;
         }
         var picked = _allRows.Where(r => r.IsChecked).ToList();
         if (picked.Count == 0)
         {
-            StatusMessage = "No nodes are ticked.";
+            StatusMessage = UiText.Get("FactionNoneTicked", "No nodes are ticked.");
             return;
         }
-        await ApplyAsync(picked, target.Value,
-            $"Set {picked.Count} faction node(s) to \"{target.Label}\"?").ConfigureAwait(true);
+        await ApplyAsync(picked, target.Value, UiText.Format("FactionSetConfirm",
+            "Set {0} faction node(s) to \"{1}\"?\n\nReversible by reloading the save without writing.",
+            picked.Count, target.Label)).ConfigureAwait(true);
     }
 
     /// <summary>
@@ -178,11 +183,14 @@ public sealed partial class FactionNodeEditorViewModel : ObservableObject
         var picked = _allRows.Where(r => r.Target.CurrentState < 2).ToList();
         if (picked.Count == 0)
         {
-            StatusMessage = "Nothing to discover — every node is already Active or beyond.";
+            StatusMessage = UiText.Get("FactionNothingToDiscover",
+                "Nothing to discover — every node is already Active or beyond.");
             return;
         }
-        await ApplyAsync(picked, 2,
-            $"Discover all {picked.Count} undiscovered faction node(s) (set to Active)?").ConfigureAwait(true);
+        await ApplyAsync(picked, 2, UiText.Format("FactionDiscoverConfirm",
+            "Discover all {0} undiscovered faction node(s) (set to Active)?\n\n"
+            + "Reversible by reloading the save without writing.",
+            picked.Count)).ConfigureAwait(true);
     }
 
     private async Task ApplyAsync(List<FactionNodeRow> picked, byte newState, string confirmBody)
@@ -190,24 +198,27 @@ public sealed partial class FactionNodeEditorViewModel : ObservableObject
         if (ConfirmRequested is { } ask)
         {
             var ok = await ask(
-                "Set faction node state?",
-                confirmBody + "\n\nReversible by reloading the save without writing.").ConfigureAwait(true);
+                UiText.Get("FactionConfirmTitle", "Set faction node state?"),
+                confirmBody).ConfigureAwait(true);
             if (!ok)
             {
-                StatusMessage = "Cancelled.";
+                StatusMessage = UiText.Get("DialogCancelled", "Cancelled.");
                 return;
             }
         }
 
         IsBusy = true;
-        StatusMessage = $"Setting {picked.Count} node(s)…";
+        StatusMessage = UiText.Format("FactionSetting", "Setting {0} node(s)…", picked.Count);
         try
         {
             var changes = picked.Select(r => (r.Target, newState)).ToList();
             var (applied, err) = await _main.SetFactionNodeStatesAsync(changes).ConfigureAwait(true);
             StatusMessage = err is null
-                ? $"Done: set {applied} node(s)" + (applied < picked.Count ? $" ({picked.Count - applied} already at target)." : ".")
-                : $"Failed: {err.Message}. Reload without writing to revert.";
+                ? (applied < picked.Count
+                    ? UiText.Format("FactionDonePartial", "Done: set {0} node(s) ({1} already at target).",
+                        applied, picked.Count - applied)
+                    : UiText.Format("FactionDoneAll", "Done: set {0} node(s).", applied))
+                : UiText.Format("FactionFailed", "Failed: {0}. Reload without writing to revert.", err.Message);
 
             if (applied > 0)
             {

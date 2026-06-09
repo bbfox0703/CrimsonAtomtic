@@ -286,9 +286,9 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         vm.BuildApplySetState(customSets);
         var filledCount = 0;
         foreach (var r in vm.Sockets) if (r.IsFilled) filledCount++;
-        vm.StatusMessage =
-            $"{vm.Sockets.Count} slot(s) across {CountDistinctItems(vm.Sockets)} item(s) "
-            + $"({filledCount} filled).";
+        vm.StatusMessage = UiText.Format("SocketHeaderStatus",
+            "{0} slot(s) across {1} item(s) ({2} filled).",
+            vm.Sockets.Count, CountDistinctItems(vm.Sockets), filledCount);
         // Publish the initial filter-count text now that _allSockets
         // is populated. ApplyFilter normally raises this when
         // SearchText changes, but we never went through that path
@@ -368,8 +368,8 @@ public sealed partial class SocketEditorViewModel : ObservableObject
                     new GemSet(label, cs.GemKeys), _localization));
             }
         }
-        StatusMessage =
-            $"Custom gem sets refreshed — {AvailableGemSets.Count} set(s) available in the Apply-Set dropdown.";
+        StatusMessage = UiText.Format("SocketGemSetsRefreshed",
+            "Custom gem sets refreshed — {0} set(s) available in the Apply-Set dropdown.", AvailableGemSets.Count);
     }
 
     /// <summary>
@@ -434,20 +434,23 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         }
         catch (CrimsonSaveException commitEx)
         {
-            StatusMessage = $"Apply Set: {set.Label} — commit failed after {changed} slot(s): "
-                + $"{commitEx.Message} (code {commitEx.ErrorCode}). "
-                + "Reload the save without writing to revert.";
+            StatusMessage = UiText.Format("SocketApplySetFailed",
+                "Apply Set: {0} — commit failed after {1} slot(s): {2} (code {3}). "
+                + "Reload the save without writing to revert.",
+                set.Label, changed, commitEx.Message, commitEx.ErrorCode);
             return;
         }
         if (changed == 0)
         {
-            StatusMessage = $"Apply Set: {set.Label} — no changes (every targeted slot already matches).";
+            StatusMessage = UiText.Format("SocketApplySetNoChange",
+                "Apply Set: {0} — no changes (every targeted slot already matches).", set.Label);
             return;
         }
-        _journal.Log("Sockets",
-            $"Applied set \"{set.Label}\" to {target.DisplayName} — {changed} slot(s) changed");
-        StatusMessage =
-            $"Applied set \"{set.Label}\" to {target.DisplayName}: {changed} slot(s) changed.";
+        _journal.Log(UiText.Get("JournalCatSockets", "Sockets"),
+            UiText.Format("JournalSocketApplySet", "Applied set \"{0}\" to {1} — {2} slot(s) changed",
+                set.Label, target.DisplayName, changed));
+        StatusMessage = UiText.Format("SocketApplySetDone",
+            "Applied set \"{0}\" to {1}: {2} slot(s) changed.", set.Label, target.DisplayName, changed);
     }
 
     private bool CanApplyGemSet =>
@@ -695,7 +698,7 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     {
         if (row.IsFilled && newGemKey == row.CurrentGemKey)
         {
-            StatusMessage = "Same gem as current — no write performed.";
+            StatusMessage = UiText.Get("SocketSameGem", "Same gem as current — no write performed.");
             return;
         }
         var pathToSocket = new[]
@@ -740,8 +743,9 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         }
         catch (CrimsonSaveException ex)
         {
-            StatusMessage = $"Apply failed ({row.BagLabel}, item {row.ItemIndex}, "
-                + $"socket {row.SocketIndex}): {ex.Message}";
+            StatusMessage = UiText.Format("SocketApplyFailed",
+                "Apply failed ({0}, item {1}, socket {2}): {3}",
+                row.BagLabel, row.ItemIndex, row.SocketIndex, ex.Message);
             row.LastError = ex.Message;
             return;
         }
@@ -749,16 +753,23 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         // edit of the same slot routes through the "filled" branch
         // without a reload.
         var newGemName = FormatItemDisplay(_localization, newGemKey);
-        var verb = row.IsFilled ? "Set" : "Filled";
+        var wasFilled = row.IsFilled;
         row.AppliedGemKey = newGemKey;
         row.AppliedGemName = newGemName;
         row.SetFilled(newGemKey, newGemName);
         row.LastError = null;
         IsDirty = true;
-        _journal.Log("Sockets",
-            $"{verb} gem in {row.ItemName} socket {row.SocketIndex} → {newGemName}");
-        StatusMessage = $"{verb} gem in {row.ItemName} socket {row.SocketIndex}: "
-            + $"→ {newGemName}.";
+        _journal.Log(UiText.Get("JournalCatSockets", "Sockets"),
+            wasFilled
+                ? UiText.Format("JournalSocketSet", "Set gem in {0} socket {1} → {2}",
+                    row.ItemName, row.SocketIndex, newGemName)
+                : UiText.Format("JournalSocketFilled", "Filled gem in {0} socket {1} → {2}",
+                    row.ItemName, row.SocketIndex, newGemName));
+        StatusMessage = wasFilled
+            ? UiText.Format("SocketSetDone", "Set gem in {0} socket {1}: → {2}.",
+                row.ItemName, row.SocketIndex, newGemName)
+            : UiText.Format("SocketFilledDone", "Filled gem in {0} socket {1}: → {2}.",
+                row.ItemName, row.SocketIndex, newGemName);
     }
 
     /// <summary>
@@ -794,8 +805,9 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         }
         catch (CrimsonSaveException ex)
         {
-            StatusMessage = $"Clear failed ({row.BagLabel}, item {row.ItemIndex}, "
-                + $"socket {row.SocketIndex}): {ex.Message}";
+            StatusMessage = UiText.Format("SocketClearFailed",
+                "Clear failed ({0}, item {1}, socket {2}): {3}",
+                row.BagLabel, row.ItemIndex, row.SocketIndex, ex.Message);
             row.LastError = ex.Message;
             return;
         }
@@ -803,10 +815,11 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         row.SetEmpty();
         row.LastError = null;
         IsDirty = true;
-        _journal.Log("Sockets",
-            $"Cleared gem in {row.ItemName} socket {row.SocketIndex} (was {prevName})");
-        StatusMessage = $"Cleared gem in {row.ItemName} socket {row.SocketIndex} "
-            + $"(was {prevName}).";
+        _journal.Log(UiText.Get("JournalCatSockets", "Sockets"),
+            UiText.Format("JournalSocketCleared", "Cleared gem in {0} socket {1} (was {2})",
+                row.ItemName, row.SocketIndex, prevName));
+        StatusMessage = UiText.Format("SocketClearDone", "Cleared gem in {0} socket {1} (was {2}).",
+            row.ItemName, row.SocketIndex, prevName);
     }
 
     /// <summary>

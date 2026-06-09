@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CrimsonAtomtic.Ui.Services;
 
 namespace CrimsonAtomtic.Ui.ViewModels;
 
@@ -98,11 +99,14 @@ public sealed partial class SealedArtifactChallengeViewModel : ObservableObject
             StatusMessage = _allRows.Count == 0
                 ? (IncludeNonSealedArtifact
                     ? NoCandidatesSummary
-                    : NoCandidatesSummary
-                      + " Tick \"Broad scan\" above to also list other mission types a sealed artifact points at.")
-                : $"{_allRows.Count:N0} eligible challenge(s). Tick the ones to complete, then Complete selected. "
-                  + "(Catalog row + twin are left untouched — the engine fills them at reward pickup; "
-                  + "achievements still require in-game completion.)";
+                    : NoCandidatesSummary + " "
+                      + UiText.Get("SaBroadScanHint",
+                          "Tick \"Broad scan\" above to also list other mission types a sealed artifact points at."))
+                : UiText.Format("SaStatusEligible",
+                    "{0:N0} eligible challenge(s). Tick the ones to complete, then Complete selected. "
+                    + "(Catalog row + twin are left untouched — the engine fills them at reward pickup; "
+                    + "achievements still require in-game completion.)",
+                    _allRows.Count);
         }
         finally
         {
@@ -128,13 +132,14 @@ public sealed partial class SealedArtifactChallengeViewModel : ObservableObject
             // length-changing edit can fail to load on some saves anyway.
             var ask = ConfirmRequested;
             var ok = ask is null || await ask(
-                "Broad scan — not recommended",
-                "Strict scan (default) lists only true Sealed Abyss Artifact challenges "
-                + "(Challenge_SealedArtifact_*).\n\nBroad scan also lists other missions a "
-                + "sealed artifact happens to point at — abyss gates, node/territory, "
-                + "knowledge/discovery, generic missions. Completing those with this tool is "
-                + "unsupported and more likely to produce a save the game cannot load.\n\n"
-                + "Enable broad scan and re-scan?");
+                UiText.Get("SaBroadWarnTitle", "Broad scan — not recommended"),
+                UiText.Get("SaBroadWarnBody",
+                    "Strict scan (default) lists only true Sealed Abyss Artifact challenges "
+                    + "(Challenge_SealedArtifact_*).\n\nBroad scan also lists other missions a "
+                    + "sealed artifact happens to point at — abyss gates, node/territory, "
+                    + "knowledge/discovery, generic missions. Completing those with this tool is "
+                    + "unsupported and more likely to produce a save the game cannot load.\n\n"
+                    + "Enable broad scan and re-scan?"));
             if (!ok)
             {
                 _suppressScopeToggle = true;
@@ -153,13 +158,16 @@ public sealed partial class SealedArtifactChallengeViewModel : ObservableObject
     /// </summary>
     public string NoCandidatesSummary =>
         _preview.KnownArtifactCount == 0
-            ? "Nothing to do — no Sealed_Abyss_Artifact_* entries in iteminfo.pabgb. "
-              + "Is the game install configured?"
-            : $"Nothing to apply — iteminfo lists {_preview.KnownArtifactCount} SA artifact(s) but none has an "
-              + "eligible challenge in this save: either no FAR tracker exists yet (artifact never picked up), "
-              + "the catalog row is already at state=5, or the X_2 sub-mission key isn't in iteminfo. "
-              + $"({_preview.SkippedNoMission} no-mission, {_preview.SkippedNoFar} no-FAR, "
-              + $"{_preview.SkippedAlreadyDone} already done, {_preview.SkippedOther} other.)";
+            ? UiText.Get("SaNoCandidatesNoArtifacts",
+                "Nothing to do — no Sealed_Abyss_Artifact_* entries in iteminfo.pabgb. "
+                + "Is the game install configured?")
+            : UiText.Format("SaNoCandidatesNoneEligible",
+                "Nothing to apply — iteminfo lists {0} SA artifact(s) but none has an "
+                + "eligible challenge in this save: either no FAR tracker exists yet (artifact never picked up), "
+                + "the catalog row is already at state=5, or the X_2 sub-mission key isn't in iteminfo. "
+                + "({1} no-mission, {2} no-FAR, {3} already done, {4} other.)",
+                _preview.KnownArtifactCount, _preview.SkippedNoMission, _preview.SkippedNoFar,
+                _preview.SkippedAlreadyDone, _preview.SkippedOther);
 
     partial void OnSearchTextChanged(string? value) => ApplyFilter();
 
@@ -182,7 +190,8 @@ public sealed partial class SealedArtifactChallengeViewModel : ObservableObject
             }
             Rows.Add(r);
         }
-        FilterSummary = $"Showing {Rows.Count:N0} of {_allRows.Count:N0}";
+        FilterSummary = UiText.Format("DialogFilterSummary", "Showing {0:N0} of {1:N0}",
+            Rows.Count, _allRows.Count);
     }
 
     private bool CanAct => !IsBusy;
@@ -223,38 +232,43 @@ public sealed partial class SealedArtifactChallengeViewModel : ObservableObject
         var picked = _allRows.Where(r => r.IsChecked).Select(r => r.Context).ToList();
         if (picked.Count == 0)
         {
-            StatusMessage = "No challenges are ticked.";
+            StatusMessage = UiText.Get("SaNoneTicked", "No challenges are ticked.");
             return;
         }
 
         if (ConfirmRequested is { } ask)
         {
             var ok = await ask(
-                "Complete selected Sealed Abyss Artifact challenges?",
-                $"Mark {picked.Count} challenge(s) complete using Pattern B v1?\n\n"
-                + "Per-challenge writes: FAR tracker _state ← 5 + _completedTime stamped + visible tag added; "
-                + "X_2 sub-mission entry cloned from FAR (when missing). Catalog row + adjacent twin: UNTOUCHED "
-                + "— the engine fills those at reward pickup.\n\n"
-                + "Achievements still require in-game completion. Backed up at "
-                + "%LOCALAPPDATA%\\CrimsonAtomtic\\Backups\\ before write; File → Restore from Backup… rolls back.\n\n"
-                + "Proceed?").ConfigureAwait(true);
+                UiText.Get("SaConfirmTitle", "Complete selected Sealed Abyss Artifact challenges?"),
+                UiText.Format("SaConfirmBody",
+                    "Mark {0} challenge(s) complete using Pattern B v1?\n\n"
+                    + "Per-challenge writes: FAR tracker _state ← 5 + _completedTime stamped + visible tag added; "
+                    + "X_2 sub-mission entry cloned from FAR (when missing). Catalog row + adjacent twin: UNTOUCHED "
+                    + "— the engine fills those at reward pickup.\n\n"
+                    + "Achievements still require in-game completion. Backed up at "
+                    + "%LOCALAPPDATA%\\CrimsonAtomtic\\Backups\\ before write; File → Restore from Backup… rolls back.\n\n"
+                    + "Proceed?",
+                    picked.Count)).ConfigureAwait(true);
             if (!ok)
             {
-                StatusMessage = "Cancelled.";
+                StatusMessage = UiText.Get("DialogCancelled", "Cancelled.");
                 return;
             }
         }
 
         IsBusy = true;
-        StatusMessage = $"Applying Pattern B v1 to {picked.Count} challenge(s)…";
+        StatusMessage = UiText.Format("SaApplying", "Applying Pattern B v1 to {0} challenge(s)…", picked.Count);
         try
         {
             var (applied, err, errKey) = await _main
                 .ApplySealedArtifactChallengesAsync(picked).ConfigureAwait(true);
             StatusMessage = err is null
-                ? $"Done: completed {applied} of {picked.Count} challenge(s) via Pattern B v1."
-                : $"Failed at 0x{errKey:X8} after {applied}/{picked.Count}: {err.Message}. "
-                  + "Save state is partial — reload without writing to revert.";
+                ? UiText.Format("SaDone", "Done: completed {0} of {1} challenge(s) via Pattern B v1.",
+                    applied, picked.Count)
+                : UiText.Format("SaFailed",
+                    "Failed at 0x{0} after {1}/{2}: {3}. Save state is partial — reload without writing to revert.",
+                    errKey.ToString("X8", System.Globalization.CultureInfo.InvariantCulture),
+                    applied, picked.Count, err.Message);
 
             // Re-scan so completed (now state=5) challenges drop off the
             // list and a re-run can't double-apply. Accurate even on

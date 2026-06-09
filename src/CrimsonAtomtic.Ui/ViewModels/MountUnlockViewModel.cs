@@ -53,9 +53,10 @@ public sealed partial class MountUnlockViewModel : ObservableObject
             Rows.Add(new MountUnlockRow(this, entry, label));
         }
 
-        StatusMessage = $"{Rows.Count} unlockable mount(s). Sigil mounts grant the "
-            + "sigil into Quest Artifacts — use it in-game to finish; the dragon "
-            + "is unlocked directly.";
+        StatusMessage = UiText.Format("MountStatus",
+            "{0} unlockable mount(s). Sigil mounts grant the sigil into Quest Artifacts — "
+            + "use it in-game to finish; the dragon is unlocked directly.",
+            Rows.Count);
     }
 
     /// <summary>
@@ -70,7 +71,7 @@ public sealed partial class MountUnlockViewModel : ObservableObject
             return;
         }
         row.IsBusy = true;
-        row.StatusText = "Working…";
+        row.StatusText = UiText.Get("MountWorking", "Working…");
         try
         {
             var (ok, msg) = await _main.UnlockMountAsync(row.Entry);
@@ -81,7 +82,7 @@ public sealed partial class MountUnlockViewModel : ObservableObject
         catch (Exception ex)
         {
             row.Succeeded = false;
-            row.StatusText = $"Error: {ex.Message}";
+            row.StatusText = UiText.Format("MountError", "Error: {0}", ex.Message);
             StatusMessage = row.StatusText;
         }
         finally
@@ -101,10 +102,12 @@ public sealed partial class MountUnlockRow : ObservableObject
         _parent = parent;
         Entry = entry;
         DisplayName = displayName;
-        KindLabel = entry.IsPet ? "Pet" : "Special mount";
+        KindLabel = entry.IsPet
+            ? UiText.Get("MountKindPet", "Pet")
+            : UiText.Get("MountKindSpecial", "Special mount");
         MethodLabel = entry.Kind == MountUnlockKind.SigilGrant
-            ? "Grant Sigil → use in-game"
-            : "Transplant element + knowledge";
+            ? UiText.Get("MountMethodSigil", "Grant Sigil → use in-game")
+            : UiText.Get("MountMethodTransplant", "Transplant element + knowledge");
     }
 
     public MountEntry Entry { get; }

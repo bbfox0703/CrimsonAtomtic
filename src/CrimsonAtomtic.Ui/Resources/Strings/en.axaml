@@ -221,6 +221,24 @@
   <sys:String x:Key="SealedArtifactColName">Name</sys:String>
   <sys:String x:Key="SealedArtifactColInternal">Internal name</sys:String>
   <sys:String x:Key="SealedArtifactColFollowUp">Follow-up (X_2)</sys:String>
+  <!-- Shared dialog status snippets (faction-node / knowledge / sealed-artifact). -->
+  <sys:String x:Key="DialogFilterSummary">Showing {0:N0} of {1:N0}</sys:String>
+  <sys:String x:Key="DialogCancelled">Cancelled.</sys:String>
+  <!-- Sealed-artifact dialog: broad-scan toggle + status/confirm strings built in the VM. -->
+  <sys:String x:Key="SealedArtifactBroadScan">Broad scan — include non-SealedArtifact missions (advanced, risky)</sys:String>
+  <sys:String x:Key="SealedArtifactBroadScanTip">Off (default): only true Sealed Abyss Artifact challenges (Challenge_SealedArtifact_*). On: also lists abyss-gate / node / knowledge-discovery / generic missions a sealed artifact happens to point at — unsupported by this tool and more likely to make the save fail to load.</sys:String>
+  <sys:String x:Key="SaBroadScanHint">Tick "Broad scan" above to also list other mission types a sealed artifact points at.</sys:String>
+  <sys:String x:Key="SaStatusEligible">{0:N0} eligible challenge(s). Tick the ones to complete, then Complete selected. (Catalog row + twin are left untouched — the engine fills them at reward pickup; achievements still require in-game completion.)</sys:String>
+  <sys:String x:Key="SaBroadWarnTitle">Broad scan — not recommended</sys:String>
+  <sys:String x:Key="SaBroadWarnBody" xml:space="preserve">Strict scan (default) lists only true Sealed Abyss Artifact challenges (Challenge_SealedArtifact_*).&#10;&#10;Broad scan also lists other missions a sealed artifact happens to point at — abyss gates, node/territory, knowledge/discovery, generic missions. Completing those with this tool is unsupported and more likely to produce a save the game cannot load.&#10;&#10;Enable broad scan and re-scan?</sys:String>
+  <sys:String x:Key="SaNoCandidatesNoArtifacts">Nothing to do — no Sealed_Abyss_Artifact_* entries in iteminfo.pabgb. Is the game install configured?</sys:String>
+  <sys:String x:Key="SaNoCandidatesNoneEligible">Nothing to apply — iteminfo lists {0} SA artifact(s) but none has an eligible challenge in this save: either no FAR tracker exists yet (artifact never picked up), the catalog row is already at state=5, or the X_2 sub-mission key isn't in iteminfo. ({1} no-mission, {2} no-FAR, {3} already done, {4} other.)</sys:String>
+  <sys:String x:Key="SaNoneTicked">No challenges are ticked.</sys:String>
+  <sys:String x:Key="SaConfirmTitle">Complete selected Sealed Abyss Artifact challenges?</sys:String>
+  <sys:String x:Key="SaConfirmBody" xml:space="preserve">Mark {0} challenge(s) complete using Pattern B v1?&#10;&#10;Per-challenge writes: FAR tracker _state ← 5 + _completedTime stamped + visible tag added; X_2 sub-mission entry cloned from FAR (when missing). Catalog row + adjacent twin: UNTOUCHED — the engine fills those at reward pickup.&#10;&#10;Achievements still require in-game completion. Backed up at %LOCALAPPDATA%\CrimsonAtomtic\Backups\ before write; File → Restore from Backup… rolls back.&#10;&#10;Proceed?</sys:String>
+  <sys:String x:Key="SaApplying">Applying Pattern B v1 to {0} challenge(s)…</sys:String>
+  <sys:String x:Key="SaDone">Done: completed {0} of {1} challenge(s) via Pattern B v1.</sys:String>
+  <sys:String x:Key="SaFailed">Failed at 0x{0} after {1}/{2}: {3}. Save state is partial — reload without writing to revert.</sys:String>
   <sys:String x:Key="FactionNodeWindowTitle">Edit Faction Nodes</sys:String>
   <sys:String x:Key="FactionNodeHeader">Discover or set the state of faction strongholds. Tick rows, pick a target state, then Set selected — or use Discover all to set every undiscovered node to Active. State only; the catalog/world reconciles other fields. Saves to the file on next File → Save.</sys:String>
   <sys:String x:Key="FactionNodeSearchHint">Filter by name, key, or state…</sys:String>
@@ -258,6 +276,10 @@
   <sys:String x:Key="ItemPickerAddWithSource">+ Add "{0}" from "{1}"</sys:String>
   <sys:String x:Key="ItemPickerAddNoSource">+ Add "{0}"</sys:String>
   <sys:String x:Key="ItemPickerOpenBagHint">Open a bag (drill into an item list) and pick a row to clone from.</sys:String>
+  <!-- "Go to item in save" top-bar button + its "not present" status. -->
+  <sys:String x:Key="ItemPickerGotoButton">↪ Go to item in save</sys:String>
+  <sys:String x:Key="ItemPickerGotoTip">Jump the main window to the selected item's slot in the loaded save (drills InventorySaveData → _inventorylist[N] → _itemList[M]). Works only if the save actually contains this item; otherwise the status bar says so. This dialog stays open.</sys:String>
+  <sys:String x:Key="ItemPickerGotoNotFound">Item {0} isn't in the loaded save.</sys:String>
   <!-- Add-Item status messages. -->
   <sys:String x:Key="AddItemStatusOpenBag">Open a bag first (drill into _inventorylist[N]._itemList).</sys:String>
   <sys:String x:Key="AddItemStatusWrongList">This list holds {0}, not ItemSaveData. Add unsupported here.</sys:String>
@@ -500,6 +522,26 @@
   <sys:String x:Key="MarkChallengeCompleteButton">✓ Mark Challenge Complete (Pattern B v1)</sys:String>
   <sys:String x:Key="MarkChallengeCompleteTip">Engine-faithful single-challenge completion (Pattern B v1). Only enables when the game has already detected this challenge as available (you've picked up the sealed artifact in-game). Writes the relevant entries — exactly what the game itself writes for a completed-but-unclaimed state. Living-type challenges may not apply. NOT FULLY TESTED — back up your save first.</sys:String>
   <sys:String x:Key="MarkChallengeSkipReasonPrefix">Disabled — reason:</sys:String>
+
+  <!-- Structural-edit (length-changing) save warning. Shown before a Save
+       when the pending edits change the body length. -->
+  <sys:String x:Key="StructuralEditWarningTitle">Structural edit — may not load</sys:String>
+  <sys:String x:Key="StructuralEditWarningBody" xml:space="preserve">This save has length-changing (structural) edits, such as completing a sealed abyss artifact challenge or adding/removing list items.&#10;&#10;The data is written correctly, but Crimson Desert's own save loader has a bug that can make some heavily-progressed saves crash on load after such an edit. In-place edits (item counts, states, gate/flag toggles) are safe.&#10;&#10;A backup of the original is kept. Save anyway?</sys:String>
+
+  <!-- Sealed-artifact "Mark Challenge Complete" confirm dialog. Detail is a
+       format string: {0}=challenge key, {1}=internal name, {2}=twin key,
+       {3}=FAR idx, {4}=FAR key, {5}=update/create word, {6}=follow-up key,
+       {7}=follow-up internal name, {8}=tags before, {9}=tags after,
+       {10}=the follow-up bullet line (already newline-terminated). -->
+  <sys:String x:Key="MarkChallengeConfirmTitle">Mark challenge complete (Pattern B v1)?</sys:String>
+  <sys:String x:Key="MarkChallengeWordUpdate">update</sys:String>
+  <sys:String x:Key="MarkChallengeWordCreate">create</sys:String>
+  <sys:String x:Key="MarkChallengeFollowUpExists" xml:space="preserve">  • X_2 sub-mission entry already exists; skipped insert.&#10;</sys:String>
+  <sys:String x:Key="MarkChallengeFollowUpNew" xml:space="preserve">  • NEW MissionStateData entry appended (cloned from FAR tracker, _key + _branchedTime patched to the X_2 sub-mission shape).&#10;</sys:String>
+  <sys:String x:Key="MarkChallengeConfirmDetail" xml:space="preserve">Mark this challenge as completed using the Pattern B v1 recipe?&#10;&#10;  Challenge key: {0}&#10;  Internal name: {1}&#10;  Adjacent visibility twin key: {2}&#10;  FAR tracker: idx {3}, key {4}&#10;  X_2 sub-mission to {5}: key {6} ({7})&#10;&#10;What this writes:&#10;  • FAR tracker _state ← 5 + _completedTime stamped.&#10;  • FAR tracker _usedTagList: {8} → {9} entries (adds visible magic tag).&#10;{10}  • Catalog row + adjacent twin: UNTOUCHED. Engine handles those at reward pickup.&#10;&#10;</sys:String>
+  <sys:String x:Key="MarkChallengeConfirmWarnings" xml:space="preserve">[!! HOLD THE MATCHING ARTIFACT] Confirm that the Sealed Abyss Artifact for THIS specific challenge is currently in your inventory. The button only enables when you hold at least one SA artifact (any variant), but the in-game reward-claim flow on next reload only completes if the matching artifact for this challenge is in your bag. Pattern B v1 on its own is not enough — the artifact pickup is the engine's gating signal.&#10;&#10;[!! VERIFIED ON Shield II / Spear I / Hooves II / Slash III IN SLOT102] Pattern B v1 is reverse-engineered from the engine's natural Hooves II completion (slot102 → live slot103 transition). The recipe writes the pre-claim state and lets the engine finish bookkeeping on next load. Earlier patterns that tried to write the post-claim state directly all corrupted the in-game UI. CONFIRM YOUR SAVE IS BACKED UP before proceeding (auto-backup at %LOCALAPPDATA%\CrimsonAtomtic\Backups\ — File → Restore from Backup… can roll back).&#10;&#10;[!! WILL AFFECT GAME PROGRESSION] Forcing the FAR tracker to state=5 tells the engine the challenge is complete; downstream content / NPC dialogues that depend on this challenge being done will trigger.&#10;&#10;[!! ACHIEVEMENTS WILL NOT UNLOCK] Steam / platform achievements only fire on a real in-game completion. Marking via file edit will not trigger the achievement, and once the challenge is in this state the engine won't re-fire it on subsequent legitimate completion. Do not use this for challenges you intend to complete legitimately later.&#10;&#10;Proceed?</sys:String>
+  <sys:String x:Key="MarkChallengeCancelled">Mark cancelled.</sys:String>
+
   <sys:String x:Key="ConfirmDialogYes">Yes</sys:String>
   <sys:String x:Key="ConfirmDialogNo">No</sys:String>
   <sys:String x:Key="ElementsColBulkFill">Bulk</sys:String>
@@ -515,14 +557,14 @@
   <sys:String x:Key="ItemPickerAddToBagTip">Add this item to the inventory list the main window is currently showing. Open a bag (drill into _inventorylist[N]._itemList) first; otherwise the click reports the requirement in the status bar.</sys:String>
   <sys:String x:Key="MenuRestoreFromBackup">Restore from Backup…</sys:String>
   <sys:String x:Key="RestoreFromBackupTitle">Restore from Backup</sys:String>
-  <sys:String x:Key="RestoreFromBackupColumnHint">Click "Restore" on a row to overwrite the live save with that snapshot. The current contents are backed up first.</sys:String>
+  <sys:String x:Key="RestoreFromBackupColumnHint">Click "Restore" on a row to overwrite the live save with that snapshot. The current state is NOT backed up — backups are only taken when you Save in the editor.</sys:String>
   <sys:String x:Key="RestoreColSlot">Slot (user / name)</sys:String>
   <sys:String x:Key="RestoreColTimestamp">Backup taken</sys:String>
   <sys:String x:Key="RestoreColFiles">Files</sys:String>
   <sys:String x:Key="RestoreColSize">Size</sys:String>
   <sys:String x:Key="RestoreColAction">Action</sys:String>
   <sys:String x:Key="RestoreButton">⤺ Restore</sys:String>
-  <sys:String x:Key="RestoreButtonTip">Overwrite the live save with this backup. The current state is backed up first, so this restore is itself undoable.</sys:String>
+  <sys:String x:Key="RestoreButtonTip">Overwrite the live save with this backup. The current state is NOT backed up first — Save it in the editor beforehand if you want to keep it.</sys:String>
   <sys:String x:Key="EditPanelNestedReadOnly">Editing nested fields is not yet supported. Use Back to return to the top-level block.</sys:String>
   <sys:String x:Key="ElementsColIcon">Icon</sys:String>
   <sys:String x:Key="ElementsColIndex">#</sys:String>
@@ -549,5 +591,265 @@
   <sys:String x:Key="WorldMapClose">Close</sys:String>
   <sys:String x:Key="WorldMapNoSaveTitle">No save loaded</sys:String>
   <sys:String x:Key="WorldMapNoSaveBody">Open a save file (File → Open Save) before opening the World Map.</sys:String>
+
+  <!-- ========================================================================
+       Code-built status / confirm / journal strings (Tools-menu dialog flows).
+       These are produced in view-models via UiText.Get/Format (not XAML
+       bindings); the English value here mirrors each call's inline fallback.
+       Multi-line confirm bodies use &#10; + xml:space="preserve".
+       ======================================================================== -->
+
+  <!-- Journal (Change Summary) category labels (區塊 column). -->
+  <sys:String x:Key="JournalCatMarkChallenge">Mark Challenge</sys:String>
+  <sys:String x:Key="JournalCatFieldEdit">Field edit</sys:String>
+  <sys:String x:Key="JournalCatBulkFill">Bulk fill</sys:String>
+  <sys:String x:Key="JournalCatRemoveElement">Remove element</sys:String>
+  <sys:String x:Key="JournalCatAbyssGates">Abyss gates</sys:String>
+  <sys:String x:Key="JournalCatKnowledge">Knowledge</sys:String>
+  <sys:String x:Key="JournalCatFactionNodes">Faction nodes</sys:String>
+  <sys:String x:Key="JournalCatAddItem">Add item</sys:String>
+  <sys:String x:Key="JournalCatMountUnlock">Mount unlock</sys:String>
+
+  <!-- Per-row + bulk Mark Challenge (Pattern B v1). -->
+  <sys:String x:Key="MarkApplying">Applying Pattern B v1 (FAR tracker + X_2 sub-mission)…</sys:String>
+  <sys:String x:Key="MarkFailedReadFar">Mark failed (could not re-read FAR tracker): {0}</sys:String>
+  <sys:String x:Key="MarkFailedNoKey">Mark failed: FAR tracker lacks a _key field — recipe can't continue.</sys:String>
+  <sys:String x:Key="JournalMarkOne">Marked challenge {0} ({1}) complete (Pattern B v1)</sys:String>
+  <sys:String x:Key="MarkDoneExisting">Marked {0} ({1}) complete via Pattern B v1 — FAR tracker idx {2} flipped (X_2 sub-mission already existed).</sys:String>
+  <sys:String x:Key="MarkDoneNew">Marked {0} ({1}) complete via Pattern B v1 — FAR tracker idx {2} flipped, X_2 sub-mission entry created at idx {3}.</sys:String>
+  <sys:String x:Key="MarkFailedGeneric">Mark failed: {0}. Save state may be partial — reload without writing to revert.</sys:String>
+  <sys:String x:Key="BulkMarkProgress">Applying Pattern B v1: {0} / {1}…</sys:String>
+  <sys:String x:Key="BulkMarkProgressKey">Applying Pattern B v1: {0} / {1} — challenge 0x{2}</sys:String>
+  <sys:String x:Key="JournalBulkMark">Bulk-completed {0} Sealed Abyss Artifact challenge(s) (Pattern B v1)</sys:String>
+  <sys:String x:Key="BulkMarkDone">Done: bulk-completed {0} of {1} eligible Sealed Abyss Artifact challenge(s) via Pattern B v1.</sys:String>
+  <sys:String x:Key="BulkMarkFailed">Bulk Mark failed at challenge {0} after {1}/{2} applied: {3}. Save state is partial — reload without writing to revert.</sys:String>
+  <sys:String x:Key="JournalBulkMarkPartial">Bulk-completed {0} Sealed Abyss Artifact challenge(s) (Pattern B v1, partial — failed at {1})</sys:String>
+
+  <!-- Field edit journal. -->
+  <sys:String x:Key="JournalFieldEditAbsentWord">absent</sys:String>
+  <sys:String x:Key="JournalFieldEdit">{0}.{1}: {2} → {3} &lt;{4}&gt;</sys:String>
+  <sys:String x:Key="JournalFieldMadeAbsent">{0}.{1}: made absent</sys:String>
+
+  <!-- Stack fill (single container + all inventories). -->
+  <sys:String x:Key="FillNothing">Nothing to fill — already at target, or no max_stack data.</sys:String>
+  <sys:String x:Key="FillConfirmTitle">Fill stacks?</sys:String>
+  <sys:String x:Key="FillConfirmBody" xml:space="preserve">Set _stackCount for {0} item(s) in this container?&#10;&#10;Items with max_stack_count &gt; 100 fill to max (capped at 9,999,999 — huge-cap items like currency stop there; stacks already larger are left alone).&#10;Items with max_stack_count ≤ 100 round up to the next full stack (e.g. count 120, max 50 → 150). Items already at a stack-boundary are skipped.&#10;&#10;Tip: the single-item "Fill stack" button fills to the true max, uncapped.&#10;&#10;Reversible by reloading the save without writing.</sys:String>
+  <sys:String x:Key="FillCancelled">Fill cancelled.</sys:String>
+  <sys:String x:Key="FillProgress">Filling {0} stack(s)…</sys:String>
+  <sys:String x:Key="JournalFillOne">Filled stack of {0}</sys:String>
+  <sys:String x:Key="JournalFillMany">Filled {0} stack(s) in {1}</sys:String>
+  <sys:String x:Key="FillDone">Filled {0} stack(s).</sys:String>
+  <sys:String x:Key="FillFailed">Failed after {0}/{1}: {2}</sys:String>
+  <sys:String x:Key="ScanningInventories">Scanning inventories…</sys:String>
+  <sys:String x:Key="FillAllNothing">Nothing to fill — every stack across {0} container(s) is already at target.</sys:String>
+  <sys:String x:Key="FillAllConfirmTitle">Fill ALL stacks across every inventory?</sys:String>
+  <sys:String x:Key="FillAllConfirmBody" xml:space="preserve">Fill _stackCount to max for {0} item(s) across {1} container(s) (every InventorySaveData block)?&#10;&#10;Items with max_stack_count &gt; 100 fill to max (capped at 9,999,999 — huge-cap items like currency stop there; stacks already larger are left alone).&#10;Items with max_stack_count ≤ 100 round up to the next full stack (e.g. count 120, max 50 → 150). Items already at a stack-boundary are skipped.&#10;&#10;Tip: the single-item "Fill stack" button fills to the true max, uncapped.&#10;&#10;Reversible by reloading the save without writing.</sys:String>
+  <sys:String x:Key="FillAllProgress">Filling {0} stack(s) across {1} container(s)…</sys:String>
+  <sys:String x:Key="JournalFillAll">Filled {0} stack(s) across {1} container(s) (all inventories)</sys:String>
+  <sys:String x:Key="FillAllDone">Filled {0} stack(s) across {1} container(s).</sys:String>
+
+  <!-- Remove element. -->
+  <sys:String x:Key="RemoveConfirmTitle">Remove element?</sys:String>
+  <sys:String x:Key="RemoveConfirmBody" xml:space="preserve">Remove this element from the list?&#10;&#10;Element: [{0}] {1}&#10;List size: {2} → {3}&#10;&#10;Reversible by reloading the save without writing.</sys:String>
+  <sys:String x:Key="RemoveCancelled">Remove cancelled.</sys:String>
+  <sys:String x:Key="RemoveProgress">Removing element…</sys:String>
+  <sys:String x:Key="JournalRemove">Removed {0} from {1} (index [{2}])</sys:String>
+  <sys:String x:Key="RemoveDone">Removed element [{0}].</sys:String>
+  <sys:String x:Key="RemoveFailed">Remove failed: {0}</sys:String>
+
+  <!-- Unlock all abyss gates (map discovery) + knowledge inject. -->
+  <sys:String x:Key="AbyssNoKnowledgeInfo">Nothing to do — knowledgeinfo.pabgb not loaded (no game install configured).</sys:String>
+  <sys:String x:Key="AbyssNoEntries">Nothing to do — no abyss-gate knowledge entries found in knowledgeinfo.pabgb.</sys:String>
+  <sys:String x:Key="AbyssAllDiscovered">Nothing to do — all {0} abyss-gate knowledge entries already discovered.</sys:String>
+  <sys:String x:Key="AbyssConfirmTitle">Unlock all abyss gates (map discovery)?</sys:String>
+  <sys:String x:Key="AbyssConfirmBody" xml:space="preserve">Inject {0} abyss-gate knowledge key(s) into {1}._list?&#10;&#10;Harvested {2} matching keys from knowledgeinfo.pabgb ({3} name prefixes).&#10;{4} already present in your save — left alone.&#10;{0} will be appended.&#10;&#10;This is the **discovery flag** layer only — abyss gates show up on the map after this. To actually unlock gates for crossing, use Tools → Edit Abyss Gates… for per-gate state changes.&#10;&#10;Reversible by reloading the save without writing.</sys:String>
+  <sys:String x:Key="KnowledgeInjecting">Injecting {0} knowledge key(s)…</sys:String>
+  <sys:String x:Key="JournalAbyssAdded">Bulk-added {0} abyss-gate knowledge key(s) to {1}._list (map discovery)</sys:String>
+  <sys:String x:Key="AbyssDone">Done: added {0} abyss-gate knowledge key(s) ({1} total in {2}._list).</sys:String>
+  <sys:String x:Key="JournalAbyssAddedPartial">Bulk-added {0} of {1} abyss-gate knowledge key(s) before failure at key 0x{2}</sys:String>
+  <sys:String x:Key="KnowledgeInjectFailed">Failed after {0}/{1}: {2} (code {3}). {4}</sys:String>
+  <sys:String x:Key="KnowledgeInjectFailedPartial">Reload the save without writing to revert the partial progress.</sys:String>
+  <sys:String x:Key="KnowledgeInjectFailedNone">No changes written.</sys:String>
+
+  <!-- Knowledge list resolution errors + learn flow. -->
+  <sys:String x:Key="DialogNoSaveLoaded">No save loaded.</sys:String>
+  <sys:String x:Key="KnowledgeErrNoBlock">Nothing to do — no {0} block in this save.</sys:String>
+  <sys:String x:Key="KnowledgeErrReadFail">Could not read {0}: {1}</sys:String>
+  <sys:String x:Key="KnowledgeErrNoField">Schema drift: {0} has no {1} field. Bridge needs a new schema baseline.</sys:String>
+  <sys:String x:Key="KnowledgeErrBadKind">Schema drift: {0}.{1} is '{2}', expected object_list. Bridge needs an update.</sys:String>
+  <sys:String x:Key="KnowledgeErrEmptyList">Refusing to bulk-append into an empty {0}._list (need at least one template element to clone). Discover any knowledge in-game first.</sys:String>
+  <sys:String x:Key="KnowledgeErrNoKeyField">Schema drift: KnowledgeElementSaveData has no '{0}' field. Bridge needs an update.</sys:String>
+  <sys:String x:Key="KnowledgeListUnavailable">Knowledge list unavailable.</sys:String>
+  <sys:String x:Key="KnowledgeAllLearned">All selected knowledge is already learned.</sys:String>
+  <sys:String x:Key="JournalKnowledgePartial">Learned {0} of {1} knowledge key(s) before failure at 0x{2}</sys:String>
+  <sys:String x:Key="KnowledgeLearnFailed">Failed after {0}/{1}: {2} (code {3}).</sys:String>
+  <sys:String x:Key="JournalKnowledgeLearned">Learned {0} knowledge key(s)</sys:String>
+  <sys:String x:Key="KnowledgeLearnDone">Learned {0} knowledge key(s).</sys:String>
+
+  <!-- Knowledge editor dialog. -->
+  <sys:String x:Key="KnowledgeNoneTicked">No unlearned rows are ticked.</sys:String>
+  <sys:String x:Key="KnowledgeLearningTicked">Learning {0} ticked…</sys:String>
+  <sys:String x:Key="KnowledgeNothingUnlearned">Nothing unlearned in the current view.</sys:String>
+  <sys:String x:Key="KnowledgeNoteNode">Node entries are map locations — learning them reveals those places on your map.</sys:String>
+  <sys:String x:Key="KnowledgeNoteCollection">Collection entries feed codex completion and may affect achievements.</sys:String>
+  <sys:String x:Key="KnowledgeCategoryConfirmTitle">Learn all in this category?</sys:String>
+  <sys:String x:Key="KnowledgeCategoryConfirmBody" xml:space="preserve">Learn {0:N0} knowledge entries in '{1}'?&#10;&#10;{2}Reversible by reloading the save without writing.</sys:String>
+  <sys:String x:Key="KnowledgeLearningCategory">Learning all {0} in '{1}'…</sys:String>
+
+  <!-- Faction-node editor dialog. -->
+  <sys:String x:Key="JournalFactionSet">Set _factionState on {0} node(s)</sys:String>
+  <sys:String x:Key="FactionPickState">Pick a target state first.</sys:String>
+  <sys:String x:Key="FactionNoneTicked">No nodes are ticked.</sys:String>
+  <sys:String x:Key="FactionSetConfirm" xml:space="preserve">Set {0} faction node(s) to "{1}"?&#10;&#10;Reversible by reloading the save without writing.</sys:String>
+  <sys:String x:Key="FactionNothingToDiscover">Nothing to discover — every node is already Active or beyond.</sys:String>
+  <sys:String x:Key="FactionDiscoverConfirm" xml:space="preserve">Discover all {0} undiscovered faction node(s) (set to Active)?&#10;&#10;Reversible by reloading the save without writing.</sys:String>
+  <sys:String x:Key="FactionConfirmTitle">Set faction node state?</sys:String>
+  <sys:String x:Key="FactionSetting">Setting {0} node(s)…</sys:String>
+  <sys:String x:Key="FactionDonePartial">Done: set {0} node(s) ({1} already at target).</sys:String>
+  <sys:String x:Key="FactionDoneAll">Done: set {0} node(s).</sys:String>
+  <sys:String x:Key="FactionFailed">Failed: {0}. Reload without writing to revert.</sys:String>
+
+  <!-- Add item + mount unlock journal/returns. -->
+  <sys:String x:Key="JournalAddItem">Added {0} (ItemKey {1}, qty {2}) to inventory</sys:String>
+  <sys:String x:Key="JournalMountGrant">Granted {0} (ItemKey {1}) into container _inventoryKey={2}</sys:String>
+  <sys:String x:Key="MountGrantDone">Granted {0} (slot {1}, itemNo {2}).</sys:String>
+  <sys:String x:Key="JournalDragonPresent">Dragon already present — injected {0} knowledge key(s){1}</sys:String>
+  <sys:String x:Key="JournalDragonTransplant">Transplanted dragon (charKey {0}) + {1} knowledge key(s){2}</sys:String>
+  <sys:String x:Key="DragonKnowSkipped">Knowledge inject skipped: {0}</sys:String>
+  <sys:String x:Key="DragonKnowPresent">Knowledge already present.</sys:String>
+  <sys:String x:Key="DragonKnowAdded">+ {0} knowledge key(s).</sys:String>
+  <sys:String x:Key="DragonKnowFailed">Knowledge inject failed: {0}.</sys:String>
+  <sys:String x:Key="DragonHpAlreadyFull">HP already full.</sys:String>
+  <sys:String x:Key="DragonHpFillFailed">HP fill failed: {0}.</sys:String>
+  <sys:String x:Key="DragonHpFilled">HP filled to {0}.</sys:String>
+  <sys:String x:Key="MountNoMercList">No MercenaryClanSaveData._mercenaryDataList in this save.</sys:String>
+  <sys:String x:Key="DragonAlreadyFull">Dragon already fully unlocked (element + all knowledge + full HP). If it still won't summon, the issue is outside the save.</sys:String>
+  <sys:String x:Key="DragonWasPresent">Dragon element was already present — injected the missing knowledge.</sys:String>
+  <sys:String x:Key="DragonUnlocked">Dragon unlocked: real element transplanted.</sys:String>
+  <sys:String x:Key="DragonLoadInGame">Load in-game to summon.</sys:String>
+
+  <!-- Mount-unlock dialog. -->
+  <sys:String x:Key="MountStatus">{0} unlockable mount(s). Sigil mounts grant the sigil into Quest Artifacts — use it in-game to finish; the dragon is unlocked directly.</sys:String>
+  <sys:String x:Key="MountWorking">Working…</sys:String>
+  <sys:String x:Key="MountError">Error: {0}</sys:String>
+  <sys:String x:Key="MountKindPet">Pet</sys:String>
+  <sys:String x:Key="MountKindSpecial">Special mount</sys:String>
+  <sys:String x:Key="MountMethodSigil">Grant Sigil → use in-game</sys:String>
+  <sys:String x:Key="MountMethodTransplant">Transplant element + knowledge</sys:String>
+
+  <!-- Edit Abyss Gates dialog. -->
+  <sys:String x:Key="AbyssGateNoEntries">No abyss / hyperspace entries in gimmickinfo.pabgb (game install not configured?). The dialog is empty.</sys:String>
+  <sys:String x:Key="AbyssGateNoneMatched">Scanned {0} nested gimmick element(s) across {1} {2} root(s) — no abyss-gate gimmicks matched the allowlist.</sys:String>
+  <sys:String x:Key="AbyssGateLoaded">Loaded {0} abyss-gate row(s) from {1} nested gimmick element(s) across {2} {3} root(s). Toggle the Lock state to flip _initStateNameHash; reload the save to revert.</sys:String>
+  <sys:String x:Key="AbyssGateToggleFailed">Toggle failed on {0} / {1}: {2}</sys:String>
+  <sys:String x:Key="JournalAbyssToggle">Set {0} / {1} → {2}</sys:String>
+  <sys:String x:Key="AbyssGateToggleDone">Set {0} / {1} → {2}.</sys:String>
+
+  <!-- Backup / restore status. -->
+  <sys:String x:Key="BackupOk">Backup: {0} @ {1} ({2:N0} B).</sys:String>
+  <sys:String x:Key="BackupOkPruned">Backup: {0} @ {1} ({2:N0} B, pruned {3}).</sys:String>
+  <sys:String x:Key="BackupFailed">⚠ Backup failed (save still wrote): {0}</sys:String>
+  <sys:String x:Key="RestoreNoHook">Restore needs a confirm dialog hook — UI bug, file an issue.</sys:String>
+  <sys:String x:Key="RestoreNoRoot">Restore failed: no {0} save root is detected on this machine. The launcher that wrote the original save may not be installed here.</sys:String>
+  <sys:String x:Key="RestoreConfirmTitle">Restore from backup?</sys:String>
+  <sys:String x:Key="RestoreConfirmBody" xml:space="preserve">Restore {0} from backup taken at {1}?&#10;&#10;Platform: {2}&#10;Files: {3} ({4:N0} bytes)&#10;Target: {5}&#10;&#10;This overwrites the current save in that slot. The current state is NOT backed up — backups are only taken when you Save in the editor.</sys:String>
+  <sys:String x:Key="RestoreCancelled">Restore cancelled.</sys:String>
+  <sys:String x:Key="RestoreFailed">Restore failed: {0}</sys:String>
+  <sys:String x:Key="RestoreDone">Restored {0} from {1}.</sys:String>
+  <sys:String x:Key="RestoreReloadFailed">Restored, but reload failed: {0}</sys:String>
+
+  <!-- Field-detail navigation error. -->
+  <sys:String x:Key="DetailsErrorBlockNotFound">Block #{0} not found in current save.</sys:String>
+
+  <!-- MainWindow alert dialogs (hard-coded literals; the rest resolve via FindResource). -->
+  <sys:String x:Key="SaveFailedTitle">Save failed</sys:String>
+  <sys:String x:Key="SaveFailedBody">Could not write save: {0}. The app stayed open so you can retry or use Discard.</sys:String>
+  <sys:String x:Key="DyeScanFailedTitle">Could not scan dyed items</sys:String>
+  <sys:String x:Key="DyeSlotOpenFailedTitle">Could not open slot editor</sys:String>
+  <sys:String x:Key="AbyssGatesLoadFailedTitle">Could not load abyss gates</sys:String>
+  <sys:String x:Key="AbyssGatesLoadFailedBody">Failed to scan save: {0} (code {1})</sys:String>
+
+  <!-- Dye-slot editor dialog. -->
+  <sys:String x:Key="DyeReadFailed">Failed to read item: {0}</sys:String>
+  <sys:String x:Key="DyeItemNotFound">Item not found (schema drift?).</sys:String>
+  <sys:String x:Key="DyeNoSlots">This item has no dye slots.</sys:String>
+  <sys:String x:Key="DyeUnexpectedClass">Unexpected dye element class: {0}</sys:String>
+  <sys:String x:Key="DyeSlotsLoaded">{0} dye slot(s) loaded.</sys:String>
+  <sys:String x:Key="JournalCatDye">Dye</sys:String>
+  <sys:String x:Key="JournalDyeEdited">Edited dye on {0} slot {1} ({2})</sys:String>
+
+  <!-- Socket editor dialog. -->
+  <sys:String x:Key="JournalCatSockets">Sockets</sys:String>
+  <sys:String x:Key="SocketApplySetFailed">Apply Set: {0} — commit failed after {1} slot(s): {2} (code {3}). Reload the save without writing to revert.</sys:String>
+  <sys:String x:Key="SocketApplySetNoChange">Apply Set: {0} — no changes (every targeted slot already matches).</sys:String>
+  <sys:String x:Key="JournalSocketApplySet">Applied set "{0}" to {1} — {2} slot(s) changed</sys:String>
+  <sys:String x:Key="SocketApplySetDone">Applied set "{0}" to {1}: {2} slot(s) changed.</sys:String>
+  <sys:String x:Key="SocketSameGem">Same gem as current — no write performed.</sys:String>
+  <sys:String x:Key="SocketApplyFailed">Apply failed ({0}, item {1}, socket {2}): {3}</sys:String>
+  <sys:String x:Key="JournalSocketSet">Set gem in {0} socket {1} → {2}</sys:String>
+  <sys:String x:Key="JournalSocketFilled">Filled gem in {0} socket {1} → {2}</sys:String>
+  <sys:String x:Key="SocketSetDone">Set gem in {0} socket {1}: → {2}.</sys:String>
+  <sys:String x:Key="SocketFilledDone">Filled gem in {0} socket {1}: → {2}.</sys:String>
+  <sys:String x:Key="SocketClearFailed">Clear failed ({0}, item {1}, socket {2}): {3}</sys:String>
+  <sys:String x:Key="JournalSocketCleared">Cleared gem in {0} socket {1} (was {2})</sys:String>
+  <sys:String x:Key="SocketClearDone">Cleared gem in {0} socket {1} (was {2}).</sys:String>
+
+  <!-- Custom gem-sets editor dialog. -->
+  <sys:String x:Key="GemSetsHeader">Up to 3 custom sets, each with up to 5 gems. Empty key cells are skipped at Save.</sys:String>
+  <sys:String x:Key="GemSetsInvalidKey">Set {0}: "{1}" isn't a valid ItemKey (decimal u32). Save aborted.</sys:String>
+  <sys:String x:Key="GemSetsSaveFailed">Save failed (couldn't write settings.json). Custom sets not persisted.</sys:String>
+  <sys:String x:Key="GemSetsSaved">Saved {0} custom set definition(s). Close and reopen the Sockets editor to use them in the Apply Set toolbar.</sys:String>
+
+  <!-- Rename-mercenary dialog. -->
+  <sys:String x:Key="JournalCatRenameMercenary">Rename Mercenary</sys:String>
+  <sys:String x:Key="RenameMercLoaded">{0} mercenary entries loaded.</sys:String>
+  <sys:String x:Key="RenameMercFailed">Rename failed for index {0}: {1}</sys:String>
+  <sys:String x:Key="RenameMercEmpty">(empty)</sys:String>
+  <sys:String x:Key="RenameMercNameBytes">"{0}" ({1} bytes UTF-8)</sys:String>
+  <sys:String x:Key="RenameMercDone">Renamed idx {0} (MercNo {1}) → {2}</sys:String>
+  <sys:String x:Key="RenameMercIdentityNo">MercNo {0}</sys:String>
+  <sys:String x:Key="JournalRenameCleared">Cleared custom name on {0}</sys:String>
+  <sys:String x:Key="JournalRenameSet">Renamed {0} → "{1}"</sys:String>
+
+  <!-- Vendor-buyback + character-refs dialogs. -->
+  <sys:String x:Key="BuybackRemoveFailed">Remove failed: {0}</sys:String>
+  <sys:String x:Key="CharRefsEnumFailed">Failed to enumerate CharacterKey refs: {0} (code {1})</sys:String>
+
+  <!-- Restore-from-backup dialog subtitle. -->
+  <sys:String x:Key="RestoreSubtitleNone">No backups yet under {0}.</sys:String>
+  <sys:String x:Key="RestoreSubtitleOne">1 backup under {0}.</sys:String>
+  <sys:String x:Key="RestoreSubtitleMany">{0} backups under {1}.</sys:String>
+
+  <!-- Custom gem-sets editor: label placeholder. -->
+  <sys:String x:Key="GemSetsLabelPlaceholder">Label</sys:String>
+
+  <!-- Icon-extraction progress dialog (Tools → Extract Icons). -->
+  <sys:String x:Key="IconExtractTitle">Extract icons from game data</sys:String>
+  <sys:String x:Key="IconExtractHeader">Extracting item icons from game data…</sys:String>
+  <sys:String x:Key="IconExtractInitializing">Initializing…</sys:String>
+  <sys:String x:Key="IconExtractCancel">Cancel</sys:String>
+  <sys:String x:Key="IconExtractClose">Close</sys:String>
+  <sys:String x:Key="IconExtractCancelling">Cancelling…</sys:String>
+  <sys:String x:Key="IconExtractNoArgs">Dialog opened without extraction arguments.</sys:String>
+  <sys:String x:Key="IconExtractProgress">Processed {0:N0} of {1:N0} • written: {2:N0} • failed: {3:N0}</sys:String>
+  <sys:String x:Key="IconExtractFailedHeader">Extraction failed</sys:String>
+  <sys:String x:Key="IconExtractCancelledHeader">Extraction cancelled</sys:String>
+  <sys:String x:Key="IconExtractCancelledBody">The cache was not fully populated. Run the action again to resume; previously-written icons are kept.</sys:String>
+  <sys:String x:Key="IconExtractCompleteHeader">Extraction complete</sys:String>
+  <sys:String x:Key="IconExtractCompleteBody" xml:space="preserve">Wrote {0:N0} of {1:N0} icons.&#10;Skipped — already cached: {2:N0}, no icon entry: {3:N0}, name unresolved: {4:N0}, DDS missing: {5:N0}.&#10;Failed: {6:N0}.</sys:String>
+
+  <!-- Dialog header / count status lines (set on load; were multi-line ternaries). -->
+  <sys:String x:Key="FactionNoNodes">No faction nodes found — this save has no FactionSaveData._factionNodeElementSaveDataList (or the game install isn't configured for name resolution).</sys:String>
+  <sys:String x:Key="FactionNodeHeaderStatus">{0:N0} faction node(s). Filter / tick rows, pick a target state, then Set selected. "Discover all" sets every Undiscovered/Discovered node to Active.</sys:String>
+  <sys:String x:Key="KnowledgeNotLoaded">knowledgeinfo.pabgb not loaded (no game install configured).</sys:String>
+  <sys:String x:Key="KnowledgeHeaderStatus">{0:N0} knowledge entries · {1:N0} already learned. Pick a category or search, tick rows, then Learn selected.</sys:String>
+  <sys:String x:Key="BuybackHeaderStatus">{0} sold item(s) across {1} store(s).</sys:String>
+  <sys:String x:Key="BuybackCountAll">{0} sold item(s).</sys:String>
+  <sys:String x:Key="BuybackCountFiltered">{0} of {1} sold item(s) match.</sys:String>
+  <sys:String x:Key="JournalCatVendorBuyback">Vendor Buyback</sys:String>
+  <sys:String x:Key="JournalBuybackRemoved">Removed {0} ×{1} from {2} buyback</sys:String>
+  <sys:String x:Key="BuybackRemoveDone">Removed {0} ×{1} from {2} buyback.</sys:String>
+  <sys:String x:Key="SocketHeaderStatus">{0} slot(s) across {1} item(s) ({2} filled).</sys:String>
+  <sys:String x:Key="SocketGemSetsRefreshed">Custom gem sets refreshed — {0} set(s) available in the Apply-Set dropdown.</sys:String>
 
 </ResourceDictionary>

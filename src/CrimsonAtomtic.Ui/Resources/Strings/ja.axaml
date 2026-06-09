@@ -228,6 +228,24 @@
   <sys:String x:Key="SealedArtifactColName">名前</sys:String>
   <sys:String x:Key="SealedArtifactColInternal">内部名</sys:String>
   <sys:String x:Key="SealedArtifactColFollowUp">後続 (X_2)</sys:String>
+  <!-- 各ダイアログ共通のステータス断片 (勢力拠点 / 知識 / 封印遺物) -->
+  <sys:String x:Key="DialogFilterSummary">{1:N0} 件中 {0:N0} 件を表示</sys:String>
+  <sys:String x:Key="DialogCancelled">キャンセルしました。</sys:String>
+  <!-- 封印遺物ダイアログ:広域スキャンの切り替え + VM 内で構築するステータス/確認文。 -->
+  <sys:String x:Key="SealedArtifactBroadScan">広域スキャン — 封印遺物以外のミッションも含める (上級・リスクあり)</sys:String>
+  <sys:String x:Key="SealedArtifactBroadScanTip">オフ (既定):真の封印アビス遺物チャレンジ (Challenge_SealedArtifact_*) のみ。オン:封印遺物がたまたま指すアビスゲート / 拠点 / 知識・発見 / 汎用ミッションも一覧します — 本ツールでは未サポートで、セーブが読み込めなくなる可能性が高くなります。</sys:String>
+  <sys:String x:Key="SaBroadScanHint">上の「広域スキャン」をチェックすると、封印遺物が指す他のミッション種別も一覧します。</sys:String>
+  <sys:String x:Key="SaStatusEligible">対象チャレンジ {0:N0} 件。完了するものをチェックし、「選択を完了」を押してください。(カタログ行とツインは変更しません — 報酬受領時にエンジンが補完;実績はゲーム内完了が必要です。)</sys:String>
+  <sys:String x:Key="SaBroadWarnTitle">広域スキャン — 非推奨</sys:String>
+  <sys:String x:Key="SaBroadWarnBody" xml:space="preserve">厳格スキャン (既定) は真の封印アビス遺物チャレンジ (Challenge_SealedArtifact_*) のみを一覧します。&#10;&#10;広域スキャンは、封印遺物がたまたま指す他のミッション — アビスゲート、拠点/領地、知識/発見、汎用ミッション — も一覧します。本ツールでこれらを完了するのは未サポートで、ゲームが読み込めないセーブを生成する可能性が高くなります。&#10;&#10;広域スキャンを有効にして再スキャンしますか？</sys:String>
+  <sys:String x:Key="SaNoCandidatesNoArtifacts">処理対象なし — iteminfo.pabgb に Sealed_Abyss_Artifact_* エントリがありません。ゲームのインストールは設定済みですか？</sys:String>
+  <sys:String x:Key="SaNoCandidatesNoneEligible">適用できるものがありません — iteminfo は SA 遺物を {0} 件列挙していますが、このセーブには対象チャレンジが1つもありません:FAR トラッカーがまだ存在しない (遺物を未取得)、カタログ行が既に state=5、または X_2 サブミッションキーが iteminfo にない、のいずれかです。({1} ミッションなし、{2} FAR なし、{3} 完了済み、{4} その他。)</sys:String>
+  <sys:String x:Key="SaNoneTicked">チェックされたチャレンジがありません。</sys:String>
+  <sys:String x:Key="SaConfirmTitle">選択した封印アビス遺物チャレンジを完了しますか？</sys:String>
+  <sys:String x:Key="SaConfirmBody" xml:space="preserve">Pattern B v1 で {0} 件のチャレンジを完了としてマークしますか？&#10;&#10;チャレンジごとの書き込み:FAR トラッカー _state ← 5 + _completedTime を記録 + 可視性タグを追加;X_2 サブミッション項目を FAR から複製 (欠落時)。カタログ行と隣接ツイン:変更なし — 報酬受領時にエンジンが補完します。&#10;&#10;実績はゲーム内完了が必要です。書き込み前に %LOCALAPPDATA%\CrimsonAtomtic\Backups\ へバックアップ済み;ファイル → バックアップから復元… で元に戻せます。&#10;&#10;続行しますか？</sys:String>
+  <sys:String x:Key="SaApplying">{0} 件のチャレンジに Pattern B v1 を適用中…</sys:String>
+  <sys:String x:Key="SaDone">完了:{1} 件中 {0} 件のチャレンジを Pattern B v1 で完了しました。</sys:String>
+  <sys:String x:Key="SaFailed">0x{0} で失敗 ({1}/{2} 適用後):{3}。セーブ状態は部分適用です — 書き込まずに再読み込みすると元に戻せます。</sys:String>
   <sys:String x:Key="FactionNodeWindowTitle">勢力拠点を編集</sys:String>
   <sys:String x:Key="FactionNodeHeader">勢力拠点を発見したり状態を設定します。行をチェックし、対象の状態を選んで「選択を設定」を押します。または「すべて発見」で未発見の拠点をすべてアクティブにします。状態のみを変更します（その他のフィールドはカタログ/ワールド側で整合）。次回のファイル → 保存で書き込まれます。</sys:String>
   <sys:String x:Key="FactionNodeSearchHint">名前・キー・状態で絞り込み…</sys:String>
@@ -265,6 +283,10 @@
   <sys:String x:Key="ItemPickerAddWithSource">+「{1}」から「{0}」を追加</sys:String>
   <sys:String x:Key="ItemPickerAddNoSource">+「{0}」を追加</sys:String>
   <sys:String x:Key="ItemPickerOpenBagHint">バッグを開き (アイテムリストへ展開し)、コピー元の行を選んでください。</sys:String>
+  <!-- 「セーブ内のこのアイテムへ移動」上部ボタン + 見つからない場合のステータス。 -->
+  <sys:String x:Key="ItemPickerGotoButton">↪ セーブ内のこのアイテムへ移動</sys:String>
+  <sys:String x:Key="ItemPickerGotoTip">選択中のアイテムの、読み込み中のセーブ内のスロットへメインウィンドウをジャンプします (InventorySaveData → _inventorylist[N] → _itemList[M] へ展開)。セーブに実際にこのアイテムがある場合のみ機能します。ない場合はステータスバーに表示されます。このダイアログは開いたままです。</sys:String>
+  <sys:String x:Key="ItemPickerGotoNotFound">アイテム {0} は読み込み中のセーブにありません。</sys:String>
   <!-- アイテム追加ステータス。 -->
   <sys:String x:Key="AddItemStatusOpenBag">先にバッグを開いてください (_inventorylist[N]._itemList へ展開)。</sys:String>
   <sys:String x:Key="AddItemStatusWrongList">このリストは {0} を保持しており、ItemSaveData ではありません。ここへの追加は未対応です。</sys:String>
@@ -507,6 +529,24 @@
   <sys:String x:Key="MarkChallengeCompleteButton">✓ チャレンジ完了をマーク (Pattern B v1)</sys:String>
   <sys:String x:Key="MarkChallengeCompleteTip">エンジン忠実な単一チャレンジ完了 (Pattern B v1)。ゲームが既にこのチャレンジを検出し、利用可能と表示している (ゲーム内で封印遺物を入手済み) 場合のみ有効化されます。関連エントリを書き込みます — 完了済みだが未受領の状態でゲーム自身が書き込む内容と完全に同じです。生活系のチャレンジには適用されない場合があります。完全テスト未済 — まず必ずセーブをバックアップしてください。</sys:String>
   <sys:String x:Key="MarkChallengeSkipReasonPrefix">無効 — 理由:</sys:String>
+
+  <!-- 構造的（長さが変わる）保存の警告 -->
+  <sys:String x:Key="StructuralEditWarningTitle">構造的な変更 — 読み込めない可能性</sys:String>
+  <sys:String x:Key="StructuralEditWarningBody" xml:space="preserve">このセーブには長さが変わる（構造的な）変更が含まれています。封印アビス遺物チャレンジの完了や、リスト項目の追加／削除などです。&#10;&#10;データ自体は正しく書き込まれますが、Crimson Desert 本体のセーブローダーにはバグがあり、一部の高進行度セーブはこうした変更後の読み込みでクラッシュすることがあります。その場での変更（アイテム数・状態・ゲート/フラグの切り替え）は安全です。&#10;&#10;元ファイルのバックアップは保持されます。それでも保存しますか？</sys:String>
+
+  <!-- 封印遺物「チャレンジ完了をマーク」確認ダイアログ。Detail は書式文字列：
+       {0}=チャレンジキー、{1}=内部名、{2}=ツインキー、{3}=FAR idx、{4}=FAR key、
+       {5}=更新/作成、{6}=後続キー、{7}=後続内部名、{8}=タグ数(前)、{9}=タグ数(後)、
+       {10}=後続項目の行（既に改行終端済み）。 -->
+  <sys:String x:Key="MarkChallengeConfirmTitle">チャレンジ完了をマーク (Pattern B v1)？</sys:String>
+  <sys:String x:Key="MarkChallengeWordUpdate">更新</sys:String>
+  <sys:String x:Key="MarkChallengeWordCreate">作成</sys:String>
+  <sys:String x:Key="MarkChallengeFollowUpExists" xml:space="preserve">  • X_2 サブミッション項目は既に存在します。挿入をスキップしました。&#10;</sys:String>
+  <sys:String x:Key="MarkChallengeFollowUpNew" xml:space="preserve">  • 新しい MissionStateData 項目を追加しました（FAR トラッカーから複製し、_key と _branchedTime を X_2 サブミッションの形に修正）。&#10;</sys:String>
+  <sys:String x:Key="MarkChallengeConfirmDetail" xml:space="preserve">Pattern B v1 のレシピでこのチャレンジを完了としてマークしますか？&#10;&#10;  チャレンジキー: {0}&#10;  内部名: {1}&#10;  隣接する可視性ツインキー: {2}&#10;  FAR トラッカー: idx {3}, key {4}&#10;  {5}する X_2 サブミッション: key {6} ({7})&#10;&#10;書き込まれる内容:&#10;  • FAR トラッカー _state ← 5 + _completedTime を記録。&#10;  • FAR トラッカー _usedTagList: {8} → {9} 件（可視性 magic tag を追加）。&#10;{10}  • カタログ行と隣接ツイン: 変更なし。報酬受領時にエンジンが処理します。&#10;&#10;</sys:String>
+  <sys:String x:Key="MarkChallengeConfirmWarnings" xml:space="preserve">[!! 対応する遺物を所持していること] 「この」特定のチャレンジに対応する封印アビス遺物が現在インベントリにあることを確認してください。このボタンは SA 遺物（任意の種類）を1つ以上所持しているときのみ有効になりますが、次回読み込み時のゲーム内報酬受領フローは、このチャレンジに対応する遺物がバッグにある場合のみ完了します。Pattern B v1 単体では不十分です — 遺物の取得こそがエンジンのゲート判定シグナルです。&#10;&#10;[!! SLOT102 の Shield II / Spear I / Hooves II / Slash III で検証済み] Pattern B v1 は、エンジンによる Hooves II の自然な完了（slot102 → 実機 slot103 への遷移）からリバースエンジニアリングしたものです。このレシピは受領前の状態を書き込み、次回読み込み時にエンジンが残りの記帳を補完します。受領後の状態を直接書き込もうとした以前のパターンはいずれもゲーム内 UI を壊しました。操作前にセーブをバックアップしてあることを確認してください（自動バックアップは %LOCALAPPDATA%\CrimsonAtomtic\Backups\ — ファイル → バックアップから復元… で元に戻せます）。&#10;&#10;[!! ゲーム進行に影響します] FAR トラッカーを強制的に state=5 にすると、エンジンにこのチャレンジが完了したと伝えることになります。このチャレンジの完了に依存する後続コンテンツ／NPC 会話がトリガーされます。&#10;&#10;[!! 実績は解除されません] Steam／プラットフォーム実績は実際のゲーム内完了でのみ発火します。ファイル編集によるマークでは実績はトリガーされず、いったんこの状態になるとエンジンはその後の正規完了でも再発火しません。後で正規に完了する予定のチャレンジにはこの機能を使わないでください。&#10;&#10;続行しますか？</sys:String>
+  <sys:String x:Key="MarkChallengeCancelled">マークをキャンセルしました。</sys:String>
+
   <sys:String x:Key="ConfirmDialogYes">はい</sys:String>
   <sys:String x:Key="ConfirmDialogNo">いいえ</sys:String>
   <sys:String x:Key="ElementsColBulkFill">一括</sys:String>
@@ -522,14 +562,14 @@
   <sys:String x:Key="ItemPickerAddToBagTip">このアイテムを、メインウィンドウが現在表示しているインベントリリストに追加します。先にバッグを開いて (_inventorylist[N]._itemList へドリルダウン) ください。さもないとクリック時に必要条件がステータスバーに表示されます。</sys:String>
   <sys:String x:Key="MenuRestoreFromBackup">バックアップから復元…</sys:String>
   <sys:String x:Key="RestoreFromBackupTitle">バックアップから復元</sys:String>
-  <sys:String x:Key="RestoreFromBackupColumnHint">行の「復元」をクリックすると、そのスナップショットで現セーブを上書きします。現在の内容は先にバックアップされます。</sys:String>
+  <sys:String x:Key="RestoreFromBackupColumnHint">行の「復元」をクリックすると、そのスナップショットで現セーブを上書きします。現在の状態はバックアップされません — バックアップはエディタで保存したときのみ作成されます。</sys:String>
   <sys:String x:Key="RestoreColSlot">Slot (ユーザー / 名前)</sys:String>
   <sys:String x:Key="RestoreColTimestamp">バックアップ取得時刻</sys:String>
   <sys:String x:Key="RestoreColFiles">ファイル</sys:String>
   <sys:String x:Key="RestoreColSize">サイズ</sys:String>
   <sys:String x:Key="RestoreColAction">操作</sys:String>
   <sys:String x:Key="RestoreButton">⤺ 復元</sys:String>
-  <sys:String x:Key="RestoreButtonTip">このバックアップで現セーブを上書きします。現状態が先にバックアップされるので、本復元操作自体も取り消し可能です。</sys:String>
+  <sys:String x:Key="RestoreButtonTip">このバックアップで現セーブを上書きします。現在の状態は事前にバックアップされません — 残したい場合はエディタで先に保存してください。</sys:String>
   <sys:String x:Key="EditPanelNestedReadOnly">ネストされたフィールドの編集はまだサポートされていません。Back でトップレベル block に戻ってください。</sys:String>
   <sys:String x:Key="ElementsColIcon">アイコン</sys:String>
   <sys:String x:Key="ElementsColIndex">#</sys:String>
@@ -556,5 +596,263 @@
   <sys:String x:Key="WorldMapClose">閉じる</sys:String>
   <sys:String x:Key="WorldMapNoSaveTitle">セーブが読み込まれていません</sys:String>
   <sys:String x:Key="WorldMapNoSaveBody">先に File → Open Save でセーブを開いてからワールドマップを開いてください。</sys:String>
+
+  <!-- ========================================================================
+       VM で UiText.Get/Format により生成するステータス/確認/journal 文字列
+       (Tools メニューのダイアログフロー)。複数行の確認文は &#10; + xml:space="preserve"。
+       ======================================================================== -->
+
+  <!-- Journal (変更サマリー) カテゴリラベル (区塊カラム) -->
+  <sys:String x:Key="JournalCatMarkChallenge">チャレンジ完了</sys:String>
+  <sys:String x:Key="JournalCatFieldEdit">フィールド編集</sys:String>
+  <sys:String x:Key="JournalCatBulkFill">一括フィル</sys:String>
+  <sys:String x:Key="JournalCatRemoveElement">要素削除</sys:String>
+  <sys:String x:Key="JournalCatAbyssGates">アビスゲート</sys:String>
+  <sys:String x:Key="JournalCatKnowledge">知識</sys:String>
+  <sys:String x:Key="JournalCatFactionNodes">勢力拠点</sys:String>
+  <sys:String x:Key="JournalCatAddItem">アイテム追加</sys:String>
+  <sys:String x:Key="JournalCatMountUnlock">マウント解放</sys:String>
+
+  <!-- 単一/一括チャレンジ完了 (Pattern B v1) -->
+  <sys:String x:Key="MarkApplying">Pattern B v1 を適用中（FAR トラッカー + X_2 サブミッション）…</sys:String>
+  <sys:String x:Key="MarkFailedReadFar">マーク失敗（FAR トラッカーを再読み込みできません）：{0}</sys:String>
+  <sys:String x:Key="MarkFailedNoKey">マーク失敗：FAR トラッカーに _key フィールドがありません — レシピを続行できません。</sys:String>
+  <sys:String x:Key="JournalMarkOne">チャレンジ {0}（{1}）を完了としてマーク（Pattern B v1）</sys:String>
+  <sys:String x:Key="MarkDoneExisting">{0}（{1}）を Pattern B v1 で完了としてマーク — FAR トラッカー idx {2} を反転（X_2 サブミッションは既存）。</sys:String>
+  <sys:String x:Key="MarkDoneNew">{0}（{1}）を Pattern B v1 で完了としてマーク — FAR トラッカー idx {2} を反転、X_2 サブミッション項目を idx {3} に作成。</sys:String>
+  <sys:String x:Key="MarkFailedGeneric">マーク失敗：{0}。セーブ状態は部分的かもしれません — 書き込まずに再読み込みすると元に戻せます。</sys:String>
+  <sys:String x:Key="BulkMarkProgress">Pattern B v1 を適用中：{0} / {1}…</sys:String>
+  <sys:String x:Key="BulkMarkProgressKey">Pattern B v1 を適用中：{0} / {1} — チャレンジ 0x{2}</sys:String>
+  <sys:String x:Key="JournalBulkMark">封印アビス遺物チャレンジ {0} 件を一括完了（Pattern B v1）</sys:String>
+  <sys:String x:Key="BulkMarkDone">完了：対象の封印アビス遺物チャレンジ {1} 件中 {0} 件を Pattern B v1 で一括完了しました。</sys:String>
+  <sys:String x:Key="BulkMarkFailed">一括マークがチャレンジ {0} で失敗（{1}/{2} 適用後）：{3}。セーブ状態は部分適用です — 書き込まずに再読み込みすると元に戻せます。</sys:String>
+  <sys:String x:Key="JournalBulkMarkPartial">封印アビス遺物チャレンジ {0} 件を一括完了（Pattern B v1、部分 — {1} で失敗）</sys:String>
+
+  <!-- フィールド編集 journal -->
+  <sys:String x:Key="JournalFieldEditAbsentWord">なし</sys:String>
+  <sys:String x:Key="JournalFieldEdit">{0}.{1}：{2} → {3} &lt;{4}&gt;</sys:String>
+  <sys:String x:Key="JournalFieldMadeAbsent">{0}.{1}：なしに設定</sys:String>
+
+  <!-- スタックフィル (単一コンテナ + 全所持品) -->
+  <sys:String x:Key="FillNothing">フィルするものがありません — 既に目標値、または max_stack データなし。</sys:String>
+  <sys:String x:Key="FillConfirmTitle">スタックをフィルしますか？</sys:String>
+  <sys:String x:Key="FillConfirmBody" xml:space="preserve">このコンテナ内の {0} 個のアイテムの _stackCount をフィルしますか？&#10;&#10;max_stack_count &gt; 100 のアイテムは最大までフィル（上限 9,999,999 — 通貨など大上限のアイテムはそこで止まり、既にそれより多いスタックはそのまま）。&#10;max_stack_count ≤ 100 のアイテムは次の満杯スタックに切り上げ（例：数量 120、上限 50 → 150）。既にスタック境界のアイテムはスキップ。&#10;&#10;ヒント：単一アイテムの「スタックをフィル」ボタンは上限なしで真の最大までフィルします。&#10;&#10;書き込まずに再読み込みすると元に戻せます。</sys:String>
+  <sys:String x:Key="FillCancelled">フィルをキャンセルしました。</sys:String>
+  <sys:String x:Key="FillProgress">{0} 個のスタックをフィル中…</sys:String>
+  <sys:String x:Key="JournalFillOne">{0} のスタックをフィルしました</sys:String>
+  <sys:String x:Key="JournalFillMany">{1} の {0} 個のスタックをフィルしました</sys:String>
+  <sys:String x:Key="FillDone">{0} 個のスタックをフィルしました。</sys:String>
+  <sys:String x:Key="FillFailed">{0}/{1} 後に失敗：{2}</sys:String>
+  <sys:String x:Key="ScanningInventories">所持品をスキャン中…</sys:String>
+  <sys:String x:Key="FillAllNothing">フィルするものがありません — {0} 個のコンテナの全スタックが既に目標値です。</sys:String>
+  <sys:String x:Key="FillAllConfirmTitle">すべての所持品の全スタックをフィルしますか？</sys:String>
+  <sys:String x:Key="FillAllConfirmBody" xml:space="preserve">{1} 個のコンテナ（すべての InventorySaveData ブロック）の {0} 個のアイテムの _stackCount を最大までフィルしますか？&#10;&#10;max_stack_count &gt; 100 のアイテムは最大までフィル（上限 9,999,999 — 通貨など大上限のアイテムはそこで止まり、既にそれより多いスタックはそのまま）。&#10;max_stack_count ≤ 100 のアイテムは次の満杯スタックに切り上げ（例：数量 120、上限 50 → 150）。既にスタック境界のアイテムはスキップ。&#10;&#10;ヒント：単一アイテムの「スタックをフィル」ボタンは上限なしで真の最大までフィルします。&#10;&#10;書き込まずに再読み込みすると元に戻せます。</sys:String>
+  <sys:String x:Key="FillAllProgress">{1} 個のコンテナの {0} 個のスタックをフィル中…</sys:String>
+  <sys:String x:Key="JournalFillAll">{1} 個のコンテナ（全所持品）で {0} 個のスタックをフィルしました</sys:String>
+  <sys:String x:Key="FillAllDone">{1} 個のコンテナで {0} 個のスタックをフィルしました。</sys:String>
+
+  <!-- 要素削除 -->
+  <sys:String x:Key="RemoveConfirmTitle">要素を削除しますか？</sys:String>
+  <sys:String x:Key="RemoveConfirmBody" xml:space="preserve">この要素をリストから削除しますか？&#10;&#10;要素：[{0}] {1}&#10;リストサイズ：{2} → {3}&#10;&#10;書き込まずに再読み込みすると元に戻せます。</sys:String>
+  <sys:String x:Key="RemoveCancelled">削除をキャンセルしました。</sys:String>
+  <sys:String x:Key="RemoveProgress">要素を削除中…</sys:String>
+  <sys:String x:Key="JournalRemove">{1} から {0} を削除（インデックス [{2}]）</sys:String>
+  <sys:String x:Key="RemoveDone">要素 [{0}] を削除しました。</sys:String>
+  <sys:String x:Key="RemoveFailed">削除に失敗：{0}</sys:String>
+
+  <!-- すべてのアビスゲートを解放 (マップ発見) + 知識注入 -->
+  <sys:String x:Key="AbyssNoKnowledgeInfo">処理対象なし — knowledgeinfo.pabgb が未ロード（ゲームインストール未設定）。</sys:String>
+  <sys:String x:Key="AbyssNoEntries">処理対象なし — knowledgeinfo.pabgb にアビスゲート知識エントリが見つかりません。</sys:String>
+  <sys:String x:Key="AbyssAllDiscovered">処理対象なし — {0} 件のアビスゲート知識エントリはすべて発見済みです。</sys:String>
+  <sys:String x:Key="AbyssConfirmTitle">すべてのアビスゲートを解放しますか（マップ発見）？</sys:String>
+  <sys:String x:Key="AbyssConfirmBody" xml:space="preserve">{0} 件のアビスゲート知識キーを {1}._list に注入しますか？&#10;&#10;knowledgeinfo.pabgb から {2} 件の一致キーを収集（{3} 個の名前プレフィックス）。&#10;{4} 件は既にセーブに存在 — そのまま。&#10;{0} 件を追加します。&#10;&#10;これは **発見フラグ** のレイヤーのみ — これでアビスゲートがマップに表示されます。実際にゲートを通行可能にするには、ツール → アビスゲートを編集… でゲートごとの状態を変更してください。&#10;&#10;書き込まずに再読み込みすると元に戻せます。</sys:String>
+  <sys:String x:Key="KnowledgeInjecting">{0} 件の知識キーを注入中…</sys:String>
+  <sys:String x:Key="JournalAbyssAdded">{0} 件のアビスゲート知識キーを {1}._list に一括追加（マップ発見）</sys:String>
+  <sys:String x:Key="AbyssDone">完了：{0} 件のアビスゲート知識キーを追加（{2}._list 内で計 {1} 件）。</sys:String>
+  <sys:String x:Key="JournalAbyssAddedPartial">{0}/{1} 件のアビスゲート知識キーを一括追加、キー 0x{2} の前で失敗</sys:String>
+  <sys:String x:Key="KnowledgeInjectFailed">{0}/{1} 後に失敗：{2}（コード {3}）。{4}</sys:String>
+  <sys:String x:Key="KnowledgeInjectFailedPartial">部分的な進行を元に戻すには、書き込まずに再読み込みしてください。</sys:String>
+  <sys:String x:Key="KnowledgeInjectFailedNone">変更は書き込まれていません。</sys:String>
+
+  <!-- 知識リスト解決エラー + 習得フロー -->
+  <sys:String x:Key="DialogNoSaveLoaded">セーブが読み込まれていません。</sys:String>
+  <sys:String x:Key="KnowledgeErrNoBlock">処理対象なし — このセーブに {0} ブロックがありません。</sys:String>
+  <sys:String x:Key="KnowledgeErrReadFail">{0} を読み取れません：{1}</sys:String>
+  <sys:String x:Key="KnowledgeErrNoField">スキーマドリフト：{0} に {1} フィールドがありません。ブリッジに新しいスキーマ基準が必要です。</sys:String>
+  <sys:String x:Key="KnowledgeErrBadKind">スキーマドリフト：{0}.{1} は '{2}' で、object_list が期待されます。ブリッジの更新が必要です。</sys:String>
+  <sys:String x:Key="KnowledgeErrEmptyList">空の {0}._list への一括追加を拒否しました（複製する雛形要素が少なくとも1つ必要）。先にゲーム内で何か知識を発見してください。</sys:String>
+  <sys:String x:Key="KnowledgeErrNoKeyField">スキーマドリフト：KnowledgeElementSaveData に '{0}' フィールドがありません。ブリッジの更新が必要です。</sys:String>
+  <sys:String x:Key="KnowledgeListUnavailable">知識リストを利用できません。</sys:String>
+  <sys:String x:Key="KnowledgeAllLearned">選択した知識はすべて習得済みです。</sys:String>
+  <sys:String x:Key="JournalKnowledgePartial">{0}/{1} 件の知識キーを習得、0x{2} の前で失敗</sys:String>
+  <sys:String x:Key="KnowledgeLearnFailed">{0}/{1} 後に失敗：{2}（コード {3}）。</sys:String>
+  <sys:String x:Key="JournalKnowledgeLearned">{0} 件の知識キーを習得</sys:String>
+  <sys:String x:Key="KnowledgeLearnDone">{0} 件の知識キーを習得しました。</sys:String>
+
+  <!-- 知識編集ダイアログ -->
+  <sys:String x:Key="KnowledgeNoneTicked">チェックされた未習得の行がありません。</sys:String>
+  <sys:String x:Key="KnowledgeLearningTicked">チェック済み {0} 件を習得中…</sys:String>
+  <sys:String x:Key="KnowledgeNothingUnlearned">現在の表示に未習得の項目がありません。</sys:String>
+  <sys:String x:Key="KnowledgeNoteNode">Node エントリはマップ上の位置です — 習得するとそれらの場所がマップに表示されます。</sys:String>
+  <sys:String x:Key="KnowledgeNoteCollection">Collection エントリは図鑑の達成度に関わり、実績に影響する場合があります。</sys:String>
+  <sys:String x:Key="KnowledgeCategoryConfirmTitle">このカテゴリをすべて習得しますか？</sys:String>
+  <sys:String x:Key="KnowledgeCategoryConfirmBody" xml:space="preserve">'{1}' 内の {0:N0} 件の知識エントリを習得しますか？&#10;&#10;{2}書き込まずに再読み込みすると元に戻せます。</sys:String>
+  <sys:String x:Key="KnowledgeLearningCategory">'{1}' 内のすべて {0} 件を習得中…</sys:String>
+
+  <!-- 勢力拠点編集ダイアログ -->
+  <sys:String x:Key="JournalFactionSet">{0} 件の拠点に _factionState を設定</sys:String>
+  <sys:String x:Key="FactionPickState">先に対象の状態を選んでください。</sys:String>
+  <sys:String x:Key="FactionNoneTicked">チェックされた拠点がありません。</sys:String>
+  <sys:String x:Key="FactionSetConfirm" xml:space="preserve">{0} 件の勢力拠点を「{1}」に設定しますか？&#10;&#10;書き込まずに再読み込みすると元に戻せます。</sys:String>
+  <sys:String x:Key="FactionNothingToDiscover">発見するものがありません — すべての拠点が既にアクティブ以降です。</sys:String>
+  <sys:String x:Key="FactionDiscoverConfirm" xml:space="preserve">未発見の勢力拠点 {0} 件をすべて発見（アクティブに設定）しますか？&#10;&#10;書き込まずに再読み込みすると元に戻せます。</sys:String>
+  <sys:String x:Key="FactionConfirmTitle">勢力拠点の状態を設定しますか？</sys:String>
+  <sys:String x:Key="FactionSetting">{0} 件の拠点を設定中…</sys:String>
+  <sys:String x:Key="FactionDonePartial">完了：{0} 件の拠点を設定（{1} 件は既に目標状態）。</sys:String>
+  <sys:String x:Key="FactionDoneAll">完了：{0} 件の拠点を設定しました。</sys:String>
+  <sys:String x:Key="FactionFailed">失敗：{0}。書き込まずに再読み込みすると元に戻せます。</sys:String>
+
+  <!-- アイテム追加 + マウント解放 journal/戻り値 -->
+  <sys:String x:Key="JournalAddItem">{0}（ItemKey {1}、数量 {2}）を所持品に追加</sys:String>
+  <sys:String x:Key="JournalMountGrant">{0}（ItemKey {1}）をコンテナ _inventoryKey={2} に付与</sys:String>
+  <sys:String x:Key="MountGrantDone">{0}（slot {1}、itemNo {2}）を付与しました。</sys:String>
+  <sys:String x:Key="JournalDragonPresent">ドラゴンは既に存在 — {0} 件の知識キーを注入{1}</sys:String>
+  <sys:String x:Key="JournalDragonTransplant">ドラゴンを移植（charKey {0}）+ {1} 件の知識キー{2}</sys:String>
+  <sys:String x:Key="DragonKnowSkipped">知識の注入をスキップ：{0}</sys:String>
+  <sys:String x:Key="DragonKnowPresent">知識は既に存在します。</sys:String>
+  <sys:String x:Key="DragonKnowAdded">+ {0} 件の知識キー。</sys:String>
+  <sys:String x:Key="DragonKnowFailed">知識の注入に失敗：{0}。</sys:String>
+  <sys:String x:Key="DragonHpAlreadyFull">HP は既に満タンです。</sys:String>
+  <sys:String x:Key="DragonHpFillFailed">HP フィルに失敗：{0}。</sys:String>
+  <sys:String x:Key="DragonHpFilled">HP を {0} までフィルしました。</sys:String>
+  <sys:String x:Key="MountNoMercList">このセーブに MercenaryClanSaveData._mercenaryDataList がありません。</sys:String>
+  <sys:String x:Key="DragonAlreadyFull">ドラゴンは既に完全解放（要素 + 全知識 + 満タン HP）。それでも召喚できない場合、問題はセーブの外側にあります。</sys:String>
+  <sys:String x:Key="DragonWasPresent">ドラゴンの要素は既に存在 — 不足していた知識を注入しました。</sys:String>
+  <sys:String x:Key="DragonUnlocked">ドラゴンを解放：実要素を移植しました。</sys:String>
+  <sys:String x:Key="DragonLoadInGame">ゲーム内で読み込むと召喚できます。</sys:String>
+
+  <!-- マウント解放ダイアログ -->
+  <sys:String x:Key="MountStatus">解放可能なマウント {0} 件。印璽マウントは印璽をクエスト遺物に付与します — ゲーム内で使用して完了;ドラゴンは直接解放されます。</sys:String>
+  <sys:String x:Key="MountWorking">処理中…</sys:String>
+  <sys:String x:Key="MountError">エラー：{0}</sys:String>
+  <sys:String x:Key="MountKindPet">ペット</sys:String>
+  <sys:String x:Key="MountKindSpecial">特殊マウント</sys:String>
+  <sys:String x:Key="MountMethodSigil">印璽を付与 → ゲーム内で使用</sys:String>
+  <sys:String x:Key="MountMethodTransplant">要素 + 知識を移植</sys:String>
+
+  <!-- アビスゲート編集ダイアログ -->
+  <sys:String x:Key="AbyssGateNoEntries">gimmickinfo.pabgb にアビス／ハイパースペース項目がありません（ゲームインストール未設定？）。ダイアログは空です。</sys:String>
+  <sys:String x:Key="AbyssGateNoneMatched">{1} 個の {2} ルート配下の {0} 個のネストされた gimmick 要素をスキャン — アビスゲート gimmick は許可リストに一致しませんでした。</sys:String>
+  <sys:String x:Key="AbyssGateLoaded">{2} 個の {3} ルート配下の {1} 個のネストされた gimmick 要素から {0} 件のアビスゲート行を読み込みました。Lock 状態を切り替えると _initStateNameHash が反転;セーブを再読み込みすると元に戻ります。</sys:String>
+  <sys:String x:Key="AbyssGateToggleFailed">{0} / {1} の切り替えに失敗：{2}</sys:String>
+  <sys:String x:Key="JournalAbyssToggle">{0} / {1} を {2} に設定</sys:String>
+  <sys:String x:Key="AbyssGateToggleDone">{0} / {1} を {2} に設定しました。</sys:String>
+
+  <!-- バックアップ/復元ステータス -->
+  <sys:String x:Key="BackupOk">バックアップ：{0} @ {1}（{2:N0} B）。</sys:String>
+  <sys:String x:Key="BackupOkPruned">バックアップ：{0} @ {1}（{2:N0} B、{3} 件削除）。</sys:String>
+  <sys:String x:Key="BackupFailed">⚠ バックアップ失敗（セーブは書き込み済み）：{0}</sys:String>
+  <sys:String x:Key="RestoreNoHook">復元には確認ダイアログのフックが必要です — UI のバグです。報告してください。</sys:String>
+  <sys:String x:Key="RestoreNoRoot">復元失敗：このマシンで {0} のセーブルートが検出されません。元のセーブを書いたランチャーがここにインストールされていない可能性があります。</sys:String>
+  <sys:String x:Key="RestoreConfirmTitle">バックアップから復元しますか？</sys:String>
+  <sys:String x:Key="RestoreConfirmBody" xml:space="preserve">{1} に取得したバックアップから {0} を復元しますか？&#10;&#10;プラットフォーム：{2}&#10;ファイル：{3}（{4:N0} bytes）&#10;対象：{5}&#10;&#10;これはそのスロットの現在のセーブを上書きします。現在の状態はバックアップされません — バックアップはエディタで保存したときのみ取得されます。</sys:String>
+  <sys:String x:Key="RestoreCancelled">復元をキャンセルしました。</sys:String>
+  <sys:String x:Key="RestoreFailed">復元失敗：{0}</sys:String>
+  <sys:String x:Key="RestoreDone">{1} から {0} を復元しました。</sys:String>
+  <sys:String x:Key="RestoreReloadFailed">復元しましたが、再読み込みに失敗：{0}</sys:String>
+
+  <!-- フィールド詳細のナビゲーションエラー -->
+  <sys:String x:Key="DetailsErrorBlockNotFound">現在のセーブにブロック #{0} が見つかりません。</sys:String>
+
+  <!-- MainWindow アラートダイアログ（ハードコード文字列;他は FindResource で解決） -->
+  <sys:String x:Key="SaveFailedTitle">保存に失敗</sys:String>
+  <sys:String x:Key="SaveFailedBody">セーブを書き込めませんでした：{0}。アプリは開いたままなので、再試行するか破棄を選べます。</sys:String>
+  <sys:String x:Key="DyeScanFailedTitle">染色アイテムをスキャンできません</sys:String>
+  <sys:String x:Key="DyeSlotOpenFailedTitle">スロットエディタを開けません</sys:String>
+  <sys:String x:Key="AbyssGatesLoadFailedTitle">アビスゲートを読み込めません</sys:String>
+  <sys:String x:Key="AbyssGatesLoadFailedBody">セーブのスキャンに失敗：{0}（コード {1}）</sys:String>
+
+  <!-- 染色スロット編集ダイアログ -->
+  <sys:String x:Key="DyeReadFailed">アイテムの読み取りに失敗：{0}</sys:String>
+  <sys:String x:Key="DyeItemNotFound">アイテムが見つかりません（スキーマドリフト？）。</sys:String>
+  <sys:String x:Key="DyeNoSlots">このアイテムには染色スロットがありません。</sys:String>
+  <sys:String x:Key="DyeUnexpectedClass">予期しない染色要素クラス：{0}</sys:String>
+  <sys:String x:Key="DyeSlotsLoaded">{0} 個の染色スロットを読み込みました。</sys:String>
+  <sys:String x:Key="JournalCatDye">染色</sys:String>
+  <sys:String x:Key="JournalDyeEdited">{0} のスロット {1} の染色を編集（{2}）</sys:String>
+
+  <!-- ソケット編集ダイアログ -->
+  <sys:String x:Key="JournalCatSockets">ソケット</sys:String>
+  <sys:String x:Key="SocketApplySetFailed">セット適用：{0} — {1} スロット後にコミット失敗：{2}（コード {3}）。書き込まずに再読み込みすると元に戻せます。</sys:String>
+  <sys:String x:Key="SocketApplySetNoChange">セット適用：{0} — 変更なし（対象の全スロットが既に一致）。</sys:String>
+  <sys:String x:Key="JournalSocketApplySet">セット「{0}」を {1} に適用 — {2} スロット変更</sys:String>
+  <sys:String x:Key="SocketApplySetDone">セット「{0}」を {1} に適用：{2} スロット変更。</sys:String>
+  <sys:String x:Key="SocketSameGem">現在の宝石と同じ — 書き込みは行われませんでした。</sys:String>
+  <sys:String x:Key="SocketApplyFailed">適用に失敗（{0}、アイテム {1}、ソケット {2}）：{3}</sys:String>
+  <sys:String x:Key="JournalSocketSet">{0} のソケット {1} に宝石を設定 → {2}</sys:String>
+  <sys:String x:Key="JournalSocketFilled">{0} のソケット {1} に宝石を充填 → {2}</sys:String>
+  <sys:String x:Key="SocketSetDone">{0} のソケット {1} に宝石を設定：→ {2}。</sys:String>
+  <sys:String x:Key="SocketFilledDone">{0} のソケット {1} に宝石を充填：→ {2}。</sys:String>
+  <sys:String x:Key="SocketClearFailed">クリアに失敗（{0}、アイテム {1}、ソケット {2}）：{3}</sys:String>
+  <sys:String x:Key="JournalSocketCleared">{0} のソケット {1} の宝石をクリア（元は {2}）</sys:String>
+  <sys:String x:Key="SocketClearDone">{0} のソケット {1} の宝石をクリアしました（元は {2}）。</sys:String>
+
+  <!-- カスタム宝石セット編集ダイアログ -->
+  <sys:String x:Key="GemSetsHeader">最大 3 つのカスタムセット、各最大 5 個の宝石。空のキーセルは保存時にスキップされます。</sys:String>
+  <sys:String x:Key="GemSetsInvalidKey">セット {0}：「{1}」は有効な ItemKey（10進 u32）ではありません。保存を中止しました。</sys:String>
+  <sys:String x:Key="GemSetsSaveFailed">保存に失敗（settings.json を書き込めません）。カスタムセットは保存されていません。</sys:String>
+  <sys:String x:Key="GemSetsSaved">{0} 個のカスタムセット定義を保存しました。ソケットエディタを閉じて再度開くと「セット適用」ツールバーで使用できます。</sys:String>
+
+  <!-- 傭兵の名前変更ダイアログ -->
+  <sys:String x:Key="JournalCatRenameMercenary">傭兵の名前変更</sys:String>
+  <sys:String x:Key="RenameMercLoaded">{0} 件の傭兵エントリを読み込みました。</sys:String>
+  <sys:String x:Key="RenameMercFailed">インデックス {0} の名前変更に失敗：{1}</sys:String>
+  <sys:String x:Key="RenameMercEmpty">（空）</sys:String>
+  <sys:String x:Key="RenameMercNameBytes">「{0}」（{1} bytes UTF-8）</sys:String>
+  <sys:String x:Key="RenameMercDone">idx {0}（MercNo {1}）を名前変更 → {2}</sys:String>
+  <sys:String x:Key="RenameMercIdentityNo">MercNo {0}</sys:String>
+  <sys:String x:Key="JournalRenameCleared">{0} のカスタム名をクリア</sys:String>
+  <sys:String x:Key="JournalRenameSet">{0} を「{1}」に名前変更</sys:String>
+
+  <!-- 店買い戻し + キャラクター参照ダイアログ -->
+  <sys:String x:Key="BuybackRemoveFailed">削除に失敗：{0}</sys:String>
+  <sys:String x:Key="CharRefsEnumFailed">CharacterKey 参照の列挙に失敗：{0}（コード {1}）</sys:String>
+
+  <!-- バックアップから復元ダイアログのサブタイトル -->
+  <sys:String x:Key="RestoreSubtitleNone">{0} の下にまだバックアップがありません。</sys:String>
+  <sys:String x:Key="RestoreSubtitleOne">{0} の下にバックアップが 1 件。</sys:String>
+  <sys:String x:Key="RestoreSubtitleMany">{1} の下にバックアップが {0} 件。</sys:String>
+
+  <!-- カスタム宝石セット編集：ラベルのプレースホルダ -->
+  <sys:String x:Key="GemSetsLabelPlaceholder">ラベル</sys:String>
+
+  <!-- アイコン抽出の進捗ダイアログ (ツール → ゲームデータからアイコンを抽出) -->
+  <sys:String x:Key="IconExtractTitle">ゲームデータからアイコンを抽出</sys:String>
+  <sys:String x:Key="IconExtractHeader">ゲームデータからアイテムアイコンを抽出中…</sys:String>
+  <sys:String x:Key="IconExtractInitializing">初期化中…</sys:String>
+  <sys:String x:Key="IconExtractCancel">キャンセル</sys:String>
+  <sys:String x:Key="IconExtractClose">閉じる</sys:String>
+  <sys:String x:Key="IconExtractCancelling">キャンセル中…</sys:String>
+  <sys:String x:Key="IconExtractNoArgs">抽出引数なしでダイアログが開かれました。</sys:String>
+  <sys:String x:Key="IconExtractProgress">処理済み {0:N0} / {1:N0} • 書き込み：{2:N0} • 失敗：{3:N0}</sys:String>
+  <sys:String x:Key="IconExtractFailedHeader">抽出に失敗</sys:String>
+  <sys:String x:Key="IconExtractCancelledHeader">抽出をキャンセルしました</sys:String>
+  <sys:String x:Key="IconExtractCancelledBody">キャッシュは完全には作成されませんでした。もう一度実行すると再開できます;書き込み済みのアイコンは保持されます。</sys:String>
+  <sys:String x:Key="IconExtractCompleteHeader">抽出完了</sys:String>
+  <sys:String x:Key="IconExtractCompleteBody" xml:space="preserve">{1:N0} 個中 {0:N0} 個のアイコンを書き込みました。&#10;スキップ — キャッシュ済み：{2:N0}、アイコン項目なし：{3:N0}、名前未解決：{4:N0}、DDS なし：{5:N0}。&#10;失敗：{6:N0}。</sys:String>
+
+  <!-- ダイアログ見出し/件数ステータス（読み込み時に設定;元は複数行の三項式） -->
+  <sys:String x:Key="FactionNoNodes">勢力拠点が見つかりません — このセーブに FactionSaveData._factionNodeElementSaveDataList がありません（または名前解決用のゲームインストールが未設定）。</sys:String>
+  <sys:String x:Key="FactionNodeHeaderStatus">勢力拠点 {0:N0} 件。絞り込み/行をチェックし、対象の状態を選んで「選択を設定」を押します。「すべて発見」は未発見/発見済みの全拠点をアクティブにします。</sys:String>
+  <sys:String x:Key="KnowledgeNotLoaded">knowledgeinfo.pabgb が未ロード（ゲームインストール未設定）。</sys:String>
+  <sys:String x:Key="KnowledgeHeaderStatus">知識エントリ {0:N0} 件 · 習得済み {1:N0} 件。カテゴリ選択または検索し、行をチェックして「選択を習得」を押します。</sys:String>
+  <sys:String x:Key="BuybackHeaderStatus">{1} 店舗で売却アイテム {0} 件。</sys:String>
+  <sys:String x:Key="BuybackCountAll">売却アイテム {0} 件。</sys:String>
+  <sys:String x:Key="BuybackCountFiltered">{1} 件中 {0} 件の売却アイテムが一致。</sys:String>
+  <sys:String x:Key="JournalCatVendorBuyback">店買い戻し</sys:String>
+  <sys:String x:Key="JournalBuybackRemoved">{2} の買い戻しから {0} ×{1} を削除</sys:String>
+  <sys:String x:Key="BuybackRemoveDone">{2} の買い戻しから {0} ×{1} を削除しました。</sys:String>
+  <sys:String x:Key="SocketHeaderStatus">{1} 個のアイテムで {0} スロット（{2} 個充填済み）。</sys:String>
+  <sys:String x:Key="SocketGemSetsRefreshed">カスタム宝石セットを更新 — 「セット適用」ドロップダウンで {0} セット利用可能。</sys:String>
 
 </ResourceDictionary>

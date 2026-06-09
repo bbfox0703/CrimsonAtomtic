@@ -21,14 +21,24 @@
 
     <!-- ============================================================ -->
     <!-- Version: major.minor.patch is the app's own semantic version. -->
-    <!-- Build number (4th digit) is read from the shared             -->
-    <!-- build_number.txt at the repo root; build.ps1 increments it    -->
-    <!-- once per build invocation (MSBuild only READS it). The same   -->
-    <!-- single-source-of-truth pattern UE5CEDumper uses.              -->
+    <!--                                                               -->
+    <!-- Sync convention (from 1.10.01 on): the FIRST TWO components    -->
+    <!-- track the live game data version the editor parses against —   -->
+    <!--   VerMajor = game major (always 1 for Crimson Desert)          -->
+    <!--   VerMinor = game minor   == NativePaverReader.ParserTargetMinor -->
+    <!-- so a game patch to 1.11 means VerMinor 10 → 11 AT THE SAME     -->
+    <!-- TIME ParserTargetMinor bumps (keep them in lock-step).         -->
+    <!-- VerPatch is the editor's OWN release counter within that game  -->
+    <!-- version: reset to 1 whenever VerMinor changes, then increment  -->
+    <!-- per editor release (1.10.01 → 1.10.02 → …). Build number (4th  -->
+    <!-- digit) is read from the shared build_number.txt at the repo    -->
+    <!-- root; build.ps1 increments it once per build invocation        -->
+    <!-- (MSBuild only READS it). Same single-source-of-truth pattern   -->
+    <!-- UE5CEDumper uses.                                              -->
     <!-- ============================================================ -->
     <VerMajor>1</VerMajor>
-    <VerMinor>0</VerMinor>
-    <VerPatch>0</VerPatch>
+    <VerMinor>10</VerMinor>
+    <VerPatch>1</VerPatch>
     <BuildNumberFile>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\build_number.txt'))</BuildNumberFile>
     <VerBuild Condition="Exists('$(BuildNumberFile)')">$([System.IO.File]::ReadAllText('$(BuildNumberFile)').Trim())</VerBuild>
     <VerBuild Condition="'$(VerBuild)' == ''">0</VerBuild>
