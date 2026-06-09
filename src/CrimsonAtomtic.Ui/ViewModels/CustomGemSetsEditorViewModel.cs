@@ -49,7 +49,8 @@ public sealed partial class CustomGemSetsEditorViewModel : ObservableObject
             var src = (existing is { } e && i < e.Count) ? e[i] : null;
             Rows.Add(CustomGemSetEditorRow.From(src, i));
         }
-        StatusMessage = "Up to 3 custom sets, each with up to 5 gems. Empty key cells are skipped at Save.";
+        StatusMessage = UiText.Get("GemSetsHeader",
+            "Up to 3 custom sets, each with up to 5 gems. Empty key cells are skipped at Save.");
     }
 
     [RelayCommand]
@@ -66,8 +67,9 @@ public sealed partial class CustomGemSetsEditorViewModel : ObservableObject
                 if (string.IsNullOrEmpty(text)) continue;
                 if (!uint.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var k))
                 {
-                    StatusMessage =
-                        $"Set {row.Index + 1}: \"{text}\" isn't a valid ItemKey (decimal u32). Save aborted.";
+                    StatusMessage = UiText.Format("GemSetsInvalidKey",
+                        "Set {0}: \"{1}\" isn't a valid ItemKey (decimal u32). Save aborted.",
+                        row.Index + 1, text);
                     return;
                 }
                 if (k == 0) continue;
@@ -84,13 +86,14 @@ public sealed partial class CustomGemSetsEditorViewModel : ObservableObject
         var updated = existing with { CustomGemSets = built.ToArray() };
         if (!AppSettingsStore.TrySave(_paths.LocalAppDataDirectory, updated))
         {
-            StatusMessage = "Save failed (couldn't write settings.json). Custom sets not persisted.";
+            StatusMessage = UiText.Get("GemSetsSaveFailed",
+                "Save failed (couldn't write settings.json). Custom sets not persisted.");
             return;
         }
         Saved = true;
-        StatusMessage =
-            $"Saved {built.Count} custom set definition(s). "
-            + "Close and reopen the Sockets editor to use them in the Apply Set toolbar.";
+        StatusMessage = UiText.Format("GemSetsSaved",
+            "Saved {0} custom set definition(s). Close and reopen the Sockets editor to use them in the Apply Set toolbar.",
+            built.Count);
     }
 
     /// <summary>

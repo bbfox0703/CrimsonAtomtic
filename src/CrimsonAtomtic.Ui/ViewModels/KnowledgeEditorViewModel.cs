@@ -123,9 +123,11 @@ public sealed partial class KnowledgeEditorViewModel : ObservableObject
         vm._allRows = rows;
         vm.ApplyFilter();
         vm.StatusMessage = rows.Count == 0
-            ? "knowledgeinfo.pabgb not loaded (no game install configured)."
-            : $"{rows.Count:N0} knowledge entries · {rows.Count(r => r.IsLearned):N0} already learned. "
-              + "Pick a category or search, tick rows, then Learn selected.";
+            ? UiText.Get("KnowledgeNotLoaded", "knowledgeinfo.pabgb not loaded (no game install configured).")
+            : UiText.Format("KnowledgeHeaderStatus",
+                "{0:N0} knowledge entries · {1:N0} already learned. "
+                + "Pick a category or search, tick rows, then Learn selected.",
+                rows.Count, rows.Count(r => r.IsLearned));
         return vm;
     }
 
@@ -191,7 +193,8 @@ public sealed partial class KnowledgeEditorViewModel : ObservableObject
             }
             Rows.Add(r);
         }
-        FilterSummary = $"Showing {Rows.Count:N0} of {_allRows.Count:N0}";
+        FilterSummary = UiText.Format("DialogFilterSummary", "Showing {0:N0} of {1:N0}",
+            Rows.Count, _allRows.Count);
     }
 
     private bool CanLearn => !IsBusy;
@@ -237,10 +240,11 @@ public sealed partial class KnowledgeEditorViewModel : ObservableObject
                            .Select(r => r.Key).ToList();
         if (keys.Count == 0)
         {
-            StatusMessage = "No unlearned rows are ticked.";
+            StatusMessage = UiText.Get("KnowledgeNoneTicked", "No unlearned rows are ticked.");
             return;
         }
-        await LearnAsync(keys, $"{keys.Count} ticked").ConfigureAwait(true);
+        await LearnAsync(keys, UiText.Format("KnowledgeLearningTicked", "Learning {0} ticked…", keys.Count))
+            .ConfigureAwait(true);
     }
 
     [RelayCommand(CanExecute = nameof(CanLearnCategory))]
@@ -250,7 +254,7 @@ public sealed partial class KnowledgeEditorViewModel : ObservableObject
         var keys = Rows.Where(r => !r.IsLearned).Select(r => r.Key).ToList();
         if (keys.Count == 0)
         {
-            StatusMessage = "Nothing unlearned in the current view.";
+            StatusMessage = UiText.Get("KnowledgeNothingUnlearned", "Nothing unlearned in the current view.");
             return;
         }
 
@@ -260,26 +264,30 @@ public sealed partial class KnowledgeEditorViewModel : ObservableObject
         {
             var note = SelectedCategory switch
             {
-                "Node" => "Node entries are map locations — learning them reveals those places on your map.\n\n",
-                "Collection" => "Collection entries feed codex completion and may affect achievements.\n\n",
+                "Node" => UiText.Get("KnowledgeNoteNode",
+                    "Node entries are map locations — learning them reveals those places on your map.") + "\n\n",
+                "Collection" => UiText.Get("KnowledgeNoteCollection",
+                    "Collection entries feed codex completion and may affect achievements.") + "\n\n",
                 _ => string.Empty,
             };
-            var ok = await ask("Learn all in this category?",
-                $"Learn {keys.Count:N0} knowledge entries in '{SelectedCategory}'?\n\n"
-                + note + "Reversible by reloading the save without writing.").ConfigureAwait(true);
+            var ok = await ask(UiText.Get("KnowledgeCategoryConfirmTitle", "Learn all in this category?"),
+                UiText.Format("KnowledgeCategoryConfirmBody",
+                    "Learn {0:N0} knowledge entries in '{1}'?\n\n{2}Reversible by reloading the save without writing.",
+                    keys.Count, SelectedCategory, note)).ConfigureAwait(true);
             if (!ok)
             {
-                StatusMessage = "Cancelled.";
+                StatusMessage = UiText.Get("DialogCancelled", "Cancelled.");
                 return;
             }
         }
-        await LearnAsync(keys, $"all {keys.Count} in '{SelectedCategory}'").ConfigureAwait(true);
+        await LearnAsync(keys, UiText.Format("KnowledgeLearningCategory", "Learning all {0} in '{1}'…",
+            keys.Count, SelectedCategory)).ConfigureAwait(true);
     }
 
-    private async Task LearnAsync(List<uint> keys, string label)
+    private async Task LearnAsync(List<uint> keys, string learningStatus)
     {
         IsBusy = true;
-        StatusMessage = $"Learning {label}…";
+        StatusMessage = learningStatus;
         try
         {
             var (_, applied, message) = await _main.LearnKnowledgeAsync(keys).ConfigureAwait(true);

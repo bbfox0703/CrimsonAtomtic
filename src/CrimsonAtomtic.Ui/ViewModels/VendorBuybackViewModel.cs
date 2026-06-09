@@ -82,8 +82,9 @@ public sealed partial class VendorBuybackViewModel : ObservableObject
         {
             var total = _allItems.Count;
             if (total == 0) return string.Empty;
-            if (string.IsNullOrWhiteSpace(SearchText)) return $"{total} sold item(s).";
-            return $"{Items.Count} of {total} sold item(s) match.";
+            if (string.IsNullOrWhiteSpace(SearchText))
+                return UiText.Format("BuybackCountAll", "{0} sold item(s).", total);
+            return UiText.Format("BuybackCountFiltered", "{0} of {1} sold item(s) match.", Items.Count, total);
         }
     }
 
@@ -169,8 +170,8 @@ public sealed partial class VendorBuybackViewModel : ObservableObject
         vm.ApplyFilter();
         var distinctStores = new HashSet<uint>();
         foreach (var r in vm._allItems) distinctStores.Add(r.StoreKey);
-        vm.StatusMessage =
-            $"{vm._allItems.Count} sold item(s) across {distinctStores.Count} store(s).";
+        vm.StatusMessage = UiText.Format("BuybackHeaderStatus",
+            "{0} sold item(s) across {1} store(s).", vm._allItems.Count, distinctStores.Count);
         return vm;
     }
 
@@ -347,7 +348,7 @@ public sealed partial class VendorBuybackViewModel : ObservableObject
         catch (CrimsonSaveException ex)
         {
             row.LastError = $"{ex.Message} (code {ex.ErrorCode})";
-            StatusMessage = $"Remove failed: {ex.Message}";
+            StatusMessage = UiText.Format("BuybackRemoveFailed", "Remove failed: {0}", ex.Message);
             return;
         }
         // Shift down every sibling at index > removed.
@@ -372,10 +373,11 @@ public sealed partial class VendorBuybackViewModel : ObservableObject
         Items.Remove(row);
 
         IsDirty = true;
-        _journal.Log("Vendor Buyback",
-            $"Removed {row.ItemNameEnglish} ×{row.StackCount} from {row.StoreName} buyback");
-        StatusMessage =
-            $"Removed {row.ItemNameEnglish} ×{row.StackCount} from {row.StoreName} buyback.";
+        _journal.Log(UiText.Get("JournalCatVendorBuyback", "Vendor Buyback"),
+            UiText.Format("JournalBuybackRemoved", "Removed {0} ×{1} from {2} buyback",
+                row.ItemNameEnglish, row.StackCount, row.StoreName));
+        StatusMessage = UiText.Format("BuybackRemoveDone", "Removed {0} ×{1} from {2} buyback.",
+            row.ItemNameEnglish, row.StackCount, row.StoreName);
         OnPropertyChanged(nameof(FilterCountText));
     }
 

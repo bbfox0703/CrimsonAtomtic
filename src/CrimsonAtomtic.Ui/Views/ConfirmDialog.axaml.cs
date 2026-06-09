@@ -25,8 +25,9 @@ public sealed partial class ConfirmDialog : Window
     /// <summary>
     /// Show a modal Yes/No dialog over <paramref name="owner"/>.
     /// Returns <c>true</c> for Yes, <c>false</c> for No (or any other
-    /// close path). The dialog is sized for short messages — long
-    /// prose wraps but the window doesn't auto-grow.
+    /// close path). The window auto-grows to fit the message up to
+    /// <c>MaxHeight</c>; longer prose scrolls and the window is
+    /// user-resizable.
     /// </summary>
     public static Task<bool> ShowAsync(Window owner, string title, string message)
     {

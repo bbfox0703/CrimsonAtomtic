@@ -113,7 +113,8 @@ public sealed partial class CharacterRefsBrowserViewModel : ObservableObject
         }
         catch (CrimsonSaveException ex)
         {
-            StatusMessage = $"Failed to enumerate CharacterKey refs: {ex.Message} (code {ex.ErrorCode})";
+            StatusMessage = UiText.Format("CharRefsEnumFailed",
+                "Failed to enumerate CharacterKey refs: {0} (code {1})", ex.Message, ex.ErrorCode);
             return;
         }
 

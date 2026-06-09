@@ -115,7 +115,7 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
         }
         catch (CrimsonSaveException ex)
         {
-            StatusMessage = $"Failed to read item: {ex.Message}";
+            StatusMessage = UiText.Format("DyeReadFailed", "Failed to read item: {0}", ex.Message);
             return;
         }
 
@@ -126,20 +126,20 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
         if (!TryDescend(details, _itemRow.FirstStepFieldIndex,
                         _itemRow.FirstStepElementIndex, out var afterStep1))
         {
-            StatusMessage = "Item not found (schema drift?).";
+            StatusMessage = UiText.Get("DyeItemNotFound", "Item not found (schema drift?).");
             return;
         }
         if (!TryDescend(afterStep1, _itemRow.SecondStepFieldIndex,
                         _itemRow.SecondStepElementIndex, out var item))
         {
-            StatusMessage = "Item not found (schema drift?).";
+            StatusMessage = UiText.Get("DyeItemNotFound", "Item not found (schema drift?).");
             return;
         }
         var dyeListField = item.Fields.FirstOrDefault(f =>
             string.Equals(f.Name, DyeEditorViewModel.DyeListFieldName, StringComparison.Ordinal));
         if (dyeListField?.Elements is not { Count: > 0 } dyeSlots)
         {
-            StatusMessage = "This item has no dye slots.";
+            StatusMessage = UiText.Get("DyeNoSlots", "This item has no dye slots.");
             return;
         }
 
@@ -149,7 +149,7 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
         var first = dyeSlots[0];
         if (!string.Equals(first.ClassName, DyeElementClass, StringComparison.Ordinal))
         {
-            StatusMessage = $"Unexpected dye element class: {first.ClassName}";
+            StatusMessage = UiText.Format("DyeUnexpectedClass", "Unexpected dye element class: {0}", first.ClassName);
             return;
         }
         var fieldIdx = ResolveFieldIndices(first.Fields);
@@ -160,7 +160,7 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
                 this, i, dyeSlots[i], fieldIdx,
                 _localization, _itemRow));
         }
-        StatusMessage = $"{Slots.Count} dye slot(s) loaded.";
+        StatusMessage = UiText.Format("DyeSlotsLoaded", "{0} dye slot(s) loaded.", Slots.Count);
     }
 
     private static DyeFieldIndices ResolveFieldIndices(IReadOnlyList<DecodedFieldRow> fields)
@@ -240,9 +240,9 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
     internal void LogSlotApplied(DyeSlotRow row, IReadOnlyList<string> changedLabels)
     {
         if (changedLabels.Count == 0) return;
-        _journal.Log("Dye",
-            $"Edited dye on {_itemRow.ItemNameEnglish} slot {row.SlotIndex} "
-            + $"({string.Join(", ", changedLabels)})");
+        _journal.Log(UiText.Get("JournalCatDye", "Dye"),
+            UiText.Format("JournalDyeEdited", "Edited dye on {0} slot {1} ({2})",
+                _itemRow.ItemNameEnglish, row.SlotIndex, string.Join(", ", changedLabels)));
     }
 
     /// <summary>

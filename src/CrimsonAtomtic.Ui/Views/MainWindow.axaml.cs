@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using CrimsonAtomtic.RustInterop;
 using CrimsonAtomtic.SaveModel;
+using CrimsonAtomtic.Ui.Services;
 using CrimsonAtomtic.Ui.ViewModels;
 
 namespace CrimsonAtomtic.Ui.Views;
@@ -100,8 +101,10 @@ public sealed partial class MainWindow : Window
                 catch (System.Exception ex)
                 {
                     await ConfirmDialog.ShowAlertAsync(this,
-                        "Save failed",
-                        $"Could not write save: {ex.Message}. The app stayed open so you can retry or use Discard.");
+                        UiText.Get("SaveFailedTitle", "Save failed"),
+                        UiText.Format("SaveFailedBody",
+                            "Could not write save: {0}. The app stayed open so you can retry or use Discard.",
+                            ex.Message));
                     return;
                 }
                 _allowCloseWithoutPrompt = true;
@@ -661,7 +664,7 @@ public sealed partial class MainWindow : Window
         catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex)
         {
             _ = ConfirmDialog.ShowAlertAsync(this,
-                "Could not scan dyed items",
+                UiText.Get("DyeScanFailedTitle", "Could not scan dyed items"),
                 $"{ex.Message} (code {ex.ErrorCode})");
             return;
         }
@@ -683,7 +686,7 @@ public sealed partial class MainWindow : Window
             catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex)
             {
                 _ = ConfirmDialog.ShowAlertAsync(this,
-                    "Could not open slot editor",
+                    UiText.Get("DyeSlotOpenFailedTitle", "Could not open slot editor"),
                     $"{ex.Message} (code {ex.ErrorCode})");
                 return;
             }
@@ -946,8 +949,9 @@ public sealed partial class MainWindow : Window
         catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex)
         {
             await ConfirmDialog.ShowAlertAsync(this,
-                "Could not load abyss gates",
-                $"Failed to scan save: {ex.Message} (code {ex.ErrorCode})");
+                UiText.Get("AbyssGatesLoadFailedTitle", "Could not load abyss gates"),
+                UiText.Format("AbyssGatesLoadFailedBody", "Failed to scan save: {0} (code {1})",
+                    ex.Message, ex.ErrorCode));
             return;
         }
 
@@ -1269,6 +1273,13 @@ public sealed partial class MainWindow : Window
         {
             _ = vm.AddItemToCurrentListAsync(itemKey);
         };
+        // "Go to item in save": jump the main window to the item's slot
+        // in the loaded save (or report "not in this save"). Mirrors the
+        // Find Items "Go" routing.
+        pickerVm.GotoItemRequested += itemKey =>
+        {
+            _ = NavigateToBrowseItemAsync(vm, itemKey);
+        };
 
         // Live-sync the picker's target bar to the main VM as the user
         // reselects rows / navigates. Unsubscribed on close.
@@ -1288,6 +1299,19 @@ public sealed partial class MainWindow : Window
         var child = new ItemPickerWindow { DataContext = pickerVm };
         child.Closed += (_, _) => vm.PropertyChanged -= handler;
         child.Show(this);
+    }
+
+    /// <summary>
+    /// Routes the Browse Items "Go to item in save" button: navigates the
+    /// main window to the item's slot in the loaded save (or reports "not
+    /// in this save" via the status bar), then surfaces the main window
+    /// above the still-open picker — same pattern as
+    /// <see cref="NavigateToFindItemsRowAsync"/>.
+    /// </summary>
+    private async Task NavigateToBrowseItemAsync(MainWindowViewModel vm, uint itemKey)
+    {
+        await vm.NavigateToItemByKeyAsync(itemKey);
+        Activate();
     }
 
     /// <summary>

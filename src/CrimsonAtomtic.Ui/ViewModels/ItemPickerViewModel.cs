@@ -149,6 +149,7 @@ public sealed partial class ItemPickerViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AddActionText))]
     [NotifyCanExecuteChangedFor(nameof(AddSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(GotoSelectedCommand))]
     private ItemPickerRow? _selectedRow;
 
     /// <summary>
@@ -265,7 +266,33 @@ public sealed partial class ItemPickerViewModel : ObservableObject
     /// </summary>
     public void RequestAddItem(uint itemKey) => AddItemRequested?.Invoke(itemKey);
 
+    /// <summary>
+    /// Raised when the user clicks the top action bar's "Go to item in
+    /// save" button. Asks the main window to navigate to the first
+    /// inventory slot in the loaded save whose <c>_itemKey</c> matches —
+    /// the catalog-browse counterpart of Find Items' per-row "Go". The
+    /// main window subscribes when it opens the picker (see
+    /// <c>MainWindow.OpenAddItemPicker</c>) and routes the request to
+    /// <c>MainWindowViewModel.NavigateToItemByKeyAsync</c>; unlike Add,
+    /// this works regardless of whether the current nav top is a bag.
+    /// </summary>
+    public event Action<uint>? GotoItemRequested;
+
+    /// <summary>
+    /// Invoked from the <see cref="GotoSelectedCommand"/>. Public so the
+    /// AXAML.cs in this assembly can also reach it directly if needed.
+    /// </summary>
+    public void RequestGotoItem(uint itemKey) => GotoItemRequested?.Invoke(itemKey);
+
     private bool CanAddSelected => SelectedRow is not null && CanAddToTarget;
+
+    /// <summary>
+    /// "Go to item in save" is enabled whenever a row is selected —
+    /// navigation doesn't require the current nav top to be a bag (the
+    /// way Add does). The main window reports "not in this save" if the
+    /// picked item isn't present.
+    /// </summary>
+    private bool CanGotoSelected => SelectedRow is not null;
 
     /// <summary>
     /// Top-action-bar "Add" command: fires <see cref="AddItemRequested"/>
@@ -278,6 +305,20 @@ public sealed partial class ItemPickerViewModel : ObservableObject
         if (SelectedRow is { } row)
         {
             RequestAddItem(row.ItemKey);
+        }
+    }
+
+    /// <summary>
+    /// Top-action-bar "Go to item in save" command: fires
+    /// <see cref="GotoItemRequested"/> for the currently-selected row so
+    /// the main window jumps to that item's slot in the loaded save.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanGotoSelected))]
+    private void GotoSelected()
+    {
+        if (SelectedRow is { } row)
+        {
+            RequestGotoItem(row.ItemKey);
         }
     }
 

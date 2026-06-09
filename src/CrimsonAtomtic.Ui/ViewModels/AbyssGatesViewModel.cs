@@ -129,8 +129,9 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
                         .Select(g => g.GimmickInfoKey));
         if (allowlist.Count == 0)
         {
-            vm.StatusMessage = "No abyss / hyperspace entries in gimmickinfo.pabgb "
-                + "(game install not configured?). The dialog is empty.";
+            vm.StatusMessage = UiText.Get("AbyssGateNoEntries",
+                "No abyss / hyperspace entries in gimmickinfo.pabgb "
+                + "(game install not configured?). The dialog is empty.");
             return vm;
         }
 
@@ -211,13 +212,14 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
             vm.Rows.Add(r);
         }
         vm.StatusMessage = built.Count == 0
-            ? $"Scanned {scannedElements} nested gimmick element(s) across "
-              + $"{roots.Count} {FieldSaveDataClass} root(s) — "
-              + "no abyss-gate gimmicks matched the allowlist."
-            : $"Loaded {built.Count} abyss-gate row(s) from {scannedElements} "
-              + $"nested gimmick element(s) across {roots.Count} {FieldSaveDataClass} "
-              + "root(s). Toggle the Lock state to flip _initStateNameHash; "
-              + "reload the save to revert.";
+            ? UiText.Format("AbyssGateNoneMatched",
+                "Scanned {0} nested gimmick element(s) across {1} {2} root(s) — "
+                + "no abyss-gate gimmicks matched the allowlist.",
+                scannedElements, roots.Count, FieldSaveDataClass)
+            : UiText.Format("AbyssGateLoaded",
+                "Loaded {0} abyss-gate row(s) from {1} nested gimmick element(s) across {2} {3} "
+                + "root(s). Toggle the Lock state to flip _initStateNameHash; reload the save to revert.",
+                built.Count, scannedElements, roots.Count, FieldSaveDataClass);
         return vm;
     }
 
@@ -316,17 +318,18 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
         catch (CrimsonSaveException ex)
         {
             row.LastError = $"{ex.Message} (code {ex.ErrorCode})";
-            StatusMessage = $"Toggle failed on {row.OwnerLevelName} / {row.GimmickName}: {ex.Message}";
+            StatusMessage = UiText.Format("AbyssGateToggleFailed", "Toggle failed on {0} / {1}: {2}",
+                row.OwnerLevelName, row.GimmickName, ex.Message);
             return;
         }
         row.LastError = null;
         row.CurrentStateHash = targetHash;
         IsDirty = true;
-        _journal.Log("Abyss gates",
-            $"Set {row.OwnerLevelName} / {row.GimmickName} → "
-            + AbyssGateRow.LabelForHash(targetHash));
-        StatusMessage =
-            $"Set {row.OwnerLevelName} / {row.GimmickName} → {AbyssGateRow.LabelForHash(targetHash)}.";
+        _journal.Log(UiText.Get("JournalCatAbyssGates", "Abyss gates"),
+            UiText.Format("JournalAbyssToggle", "Set {0} / {1} → {2}",
+                row.OwnerLevelName, row.GimmickName, AbyssGateRow.LabelForHash(targetHash)));
+        StatusMessage = UiText.Format("AbyssGateToggleDone", "Set {0} / {1} → {2}.",
+            row.OwnerLevelName, row.GimmickName, AbyssGateRow.LabelForHash(targetHash));
     }
 
     /// <summary>
