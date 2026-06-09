@@ -15,6 +15,7 @@
 - **paz-containers.md** — asset archives: `.paz`, `.pamt`, `.papgt`, `.paloc`, trie buffers
 - **ui-design.md** — UI/UX principles for the editor, with the design constraints they derive from
 - **crimsonforge-coverage-gaps.md** — what NattKh's CrimsonForge modding tool can decode that we can't (yet); the canonical "look here when you don't know how to parse format X" pointer
+- **release-process.md** — how to cut a release: annotated bilingual `v*` tags, what the CI workflow does, the crimson-rs-from-`main` gotcha, draft-then-publish
 
 ## How to extend
 
