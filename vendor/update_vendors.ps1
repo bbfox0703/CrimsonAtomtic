@@ -44,8 +44,8 @@ $ErrorActionPreference = "Stop"
 $Vendors = @(
     @{
         Name   = "crimson-rs"
-        Source = "D:\Github\crimson-rs"
-        Branch = "dev"
+        Source = "https://github.com/bbfox0703/crimson-rs.git"
+        Branch = "main"
     }
 )
 
@@ -64,7 +64,10 @@ foreach ($v in $Vendors) {
     Write-Host "    branch: $branch"
     Write-Host "    target: $target"
 
-    if (-not (Test-Path $source)) {
+    # Source may be a local path or a remote URL (https/ssh/git). Only the
+    # local-path form can be existence-checked on disk.
+    $isUrl = $source -match '^(https?|git|ssh)://' -or $source -match '^[^/\\]+@[^/\\]+:'
+    if (-not $isUrl -and -not (Test-Path $source)) {
         Write-Warning "Source path does not exist; skipping."
         $failed += $name
         continue
@@ -96,6 +99,12 @@ foreach ($v in $Vendors) {
                 $failed += $name
                 continue
             }
+
+            # Re-point the remote in case Source changed (e.g. a local-path
+            # clone now tracks the GitHub URL). Idempotent — always matches the
+            # table's Source so a fresh checkout and an updated one converge.
+            git -C "$target" remote set-url origin "$source"
+            if ($LASTEXITCODE -ne 0) { throw "git remote set-url failed (exit $LASTEXITCODE)" }
 
             Write-Host "    fetching..."
             git -C "$target" fetch origin --prune
