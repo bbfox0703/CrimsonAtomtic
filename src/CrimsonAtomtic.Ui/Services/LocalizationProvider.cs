@@ -393,9 +393,18 @@ public sealed class LocalizationProvider : IDisposable
     /// dropped and the FileCount snapshot refreshes against the
     /// freshly-written .webp files.
     /// </summary>
-    public void ConfigureIconProvider(string rootDirectory)
+    /// <returns>
+    /// The provider that was displaced (the previous <see cref="Icons"/>),
+    /// or <c>null</c> when nothing changed. The caller owns disposing it —
+    /// it must NOT be disposed until any UI bound to its cached Bitmaps has
+    /// rebuilt against the new provider, or live Image elements would
+    /// reference a disposed Bitmap.
+    /// </returns>
+    public IconProvider? ConfigureIconProvider(string rootDirectory)
     {
+        var previous = Icons;
         Icons = new IconProvider(rootDirectory);
+        return ReferenceEquals(previous, Icons) ? null : previous;
     }
 
     /// <summary>
@@ -408,9 +417,16 @@ public sealed class LocalizationProvider : IDisposable
     /// stay valid across the swap (filename keys on CharacterKey, not
     /// install path).
     /// </summary>
-    public void ConfigurePortraitProvider(string cacheRootDirectory)
+    /// <returns>
+    /// The displaced portrait provider (previous <see cref="Portraits"/>),
+    /// or <c>null</c> when nothing changed. The caller owns disposing it,
+    /// and must defer that until no UI is bound to its cached Bitmaps.
+    /// </returns>
+    public PortraitProvider? ConfigurePortraitProvider(string cacheRootDirectory)
     {
+        var previous = Portraits;
         Portraits = new PortraitProvider(cacheRootDirectory, _paz, this, _gameRoot);
+        return ReferenceEquals(previous, Portraits) ? null : previous;
     }
 
     /// <summary>True when the iteminfo bridge AND the English PALOC are loaded.</summary>
@@ -1849,5 +1865,11 @@ public sealed class LocalizationProvider : IDisposable
             cat.Dispose();
         }
         _catalogs.Clear();
+        // Release the decoded icon / portrait Bitmap caches (native Skia
+        // memory). Safe to dispose eagerly here: Dispose runs at app exit
+        // when the UI is already torn down, so no Image is still bound to
+        // a cached Bitmap.
+        Icons.Dispose();
+        Portraits.Dispose();
     }
 }

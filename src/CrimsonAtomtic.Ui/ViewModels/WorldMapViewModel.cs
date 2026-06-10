@@ -69,11 +69,12 @@ public sealed record EntityChoice(
 /// in-world location regardless of the file's pixel dimensions.
 /// </para>
 /// </summary>
-public sealed partial class WorldMapViewModel : ObservableObject
+public sealed partial class WorldMapViewModel : ObservableObject, IDisposable
 {
     private readonly IPlatformPaths _paths;
     private readonly WorldMapAffine _affine = WorldMapAffine.Canonical;
     private readonly List<EntityChoice> _allObjects;
+    private bool _disposed;
 
     /// <summary>Loaded basemap bitmap. <c>null</c> when no map has been picked yet.</summary>
     [ObservableProperty]
@@ -331,6 +332,23 @@ public sealed partial class WorldMapViewModel : ObservableObject
         BasemapPath = path;
         RecomputeMarkerPosition();
         PersistPathToSettings(path);
+    }
+
+    /// <summary>
+    /// Dispose the loaded basemap. The canonical map decodes to ~108 MB
+    /// of native Skia memory, so leaving it to the finalizer means several
+    /// open/close cycles can stack that much unreclaimed native memory.
+    /// Invoked from <c>WorldMapWindow.Closed</c>; idempotent.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+        _disposed = true;
+        Basemap?.Dispose();
+        Basemap = null;
     }
 
     private void PersistPathToSettings(string path)

@@ -538,7 +538,7 @@ public sealed partial class MainWindowViewModel(
         // the new install's PAZ. Disk-cached portraits from the
         // previous install stay valid (keyed on CharacterKey, not
         // install path).
-        localization.ConfigurePortraitProvider(
+        var displacedPortraits = localization.ConfigurePortraitProvider(
             PortraitProvider.ResolveRoot(paths.LocalAppDataDirectory));
         OnPropertyChanged(nameof(LocalizationStatus));
         OnPropertyChanged(nameof(IconStatus));
@@ -548,12 +548,21 @@ public sealed partial class MainWindowViewModel(
         {
             RebuildFromTop();
         }
+        // Reclaim the displaced portrait cache's native memory after the
+        // UI has caught up (Background runs after render), so no open
+        // character/mercenary dialog is bound to a disposed Bitmap.
+        if (displacedPortraits is not null)
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                displacedPortraits.Dispose,
+                Avalonia.Threading.DispatcherPriority.Background);
+        }
         return true;
     }
 
     public void RefreshIconCache()
     {
-        localization.ConfigureIconProvider(
+        var displaced = localization.ConfigureIconProvider(
             IconProvider.ResolveRoot(paths.LocalAppDataDirectory));
         ItemKeyToIconConverter.Provider = localization.Icons;
 
@@ -566,6 +575,18 @@ public sealed partial class MainWindowViewModel(
             RebuildFromTop();
         }
         OnPropertyChanged(nameof(IconStatus));
+
+        // Dispose the displaced provider's Bitmap cache to reclaim its
+        // native Skia memory — but only once the rebuilt grid has rendered
+        // against the new provider. Background priority runs after the
+        // pending layout/render pass, so no live Image is still bound to a
+        // Bitmap from the old cache when it's disposed.
+        if (displaced is not null)
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                displaced.Dispose,
+                Avalonia.Threading.DispatcherPriority.Background);
+        }
     }
 
     public void SetSecondaryLanguage(string? langCode)
@@ -1424,9 +1445,10 @@ public sealed partial class MainWindowViewModel(
         // deserializes it back. Running it on the UI thread freezes
         // the window; a Task.Run worker keeps clicks responsive. Cache
         // hits return in microseconds so the Task.Run overhead is
-        // negligible there too. `_ =` discards the Task — the
-        // continuation handles its own completion + error path.
-        _ = LoadSelectedBlockAsync(value, _loadedPath);
+        // negligible there too. SafeFireAndForget observes the task so a
+        // fault is traced instead of crashing the process; the method's
+        // own try/catch remains the primary error path.
+        LoadSelectedBlockAsync(value, _loadedPath).SafeFireAndForget();
     }
 
     /// <summary>
