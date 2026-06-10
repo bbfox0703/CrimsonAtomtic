@@ -766,6 +766,8 @@
   <!-- MainWindow alert 對話框（寫死字串;其餘由 FindResource 解析） -->
   <sys:String x:Key="SaveFailedTitle">儲存失敗</sys:String>
   <sys:String x:Key="SaveFailedBody">無法寫入存檔：{0}。應用程式保持開啟,你可以重試或選擇捨棄。</sys:String>
+  <sys:String x:Key="OpenSaveFailedTitle">無法開啟存檔</sys:String>
+  <sys:String x:Key="OpenSaveFailedBody">載入存檔失敗：{0}。檔案可能已損毀、正被執行中的遊戲鎖定,或來自不支援的版本。</sys:String>
   <sys:String x:Key="DyeScanFailedTitle">無法掃描已染色的道具</sys:String>
   <sys:String x:Key="DyeSlotOpenFailedTitle">無法開啟染色槽編輯器</sys:String>
   <sys:String x:Key="AbyssGatesLoadFailedTitle">無法載入深淵之門</sys:String>

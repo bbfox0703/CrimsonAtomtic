@@ -767,6 +767,8 @@
   <!-- MainWindow アラートダイアログ（ハードコード文字列;他は FindResource で解決） -->
   <sys:String x:Key="SaveFailedTitle">保存に失敗</sys:String>
   <sys:String x:Key="SaveFailedBody">セーブを書き込めませんでした：{0}。アプリは開いたままなので、再試行するか破棄を選べます。</sys:String>
+  <sys:String x:Key="OpenSaveFailedTitle">セーブを開けません</sys:String>
+  <sys:String x:Key="OpenSaveFailedBody">セーブファイルの読み込みに失敗しました：{0}。ファイルが破損しているか、実行中のゲームにロックされているか、非対応バージョンの可能性があります。</sys:String>
   <sys:String x:Key="DyeScanFailedTitle">染色アイテムをスキャンできません</sys:String>
   <sys:String x:Key="DyeSlotOpenFailedTitle">スロットエディタを開けません</sys:String>
   <sys:String x:Key="AbyssGatesLoadFailedTitle">アビスゲートを読み込めません</sys:String>
