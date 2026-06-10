@@ -1041,6 +1041,19 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                 + $"got {source.GetType().Name}.",
                 nameof(source));
         }
+        // The native side takes `&mut *target_handle` and `&*source_handle`
+        // from the two pointers; if they alias the same handle that's a
+        // simultaneous mutable + shared borrow — undefined behaviour in
+        // Rust. Reject same-instance transplant at the boundary. Duplicating
+        // an element within one save is ListCloneElement's job, not this.
+        if (ReferenceEquals(sourceNative, this))
+        {
+            throw new ArgumentException(
+                "TransplantListElement source and target must be different "
+                + "NativeSaveLoader instances; use ListCloneElement to duplicate "
+                + "an element within the same save.",
+                nameof(source));
+        }
         ArgumentOutOfRangeException.ThrowIfNegative(targetBlockIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(targetFieldIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(insertAt);
