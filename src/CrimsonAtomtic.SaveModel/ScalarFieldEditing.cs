@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Globalization;
 
 namespace CrimsonAtomtic.SaveModel;
@@ -219,7 +220,9 @@ public static class ScalarFieldEditing
             case "u16":
                 if (ushort.TryParse(trimmed, NumberStyles.Integer, ci, out var u16))
                 {
-                    bytes = BitConverter.GetBytes(u16);
+                    var buf = new byte[2];
+                    BinaryPrimitives.WriteUInt16LittleEndian(buf, u16);
+                    bytes = buf;
                     return true;
                 }
                 error = $"Value '{trimmed}' is out of range for u16 (0..65535).";
@@ -228,7 +231,9 @@ public static class ScalarFieldEditing
             case "u32":
                 if (uint.TryParse(trimmed, NumberStyles.Integer, ci, out var u32))
                 {
-                    bytes = BitConverter.GetBytes(u32);
+                    var buf = new byte[4];
+                    BinaryPrimitives.WriteUInt32LittleEndian(buf, u32);
+                    bytes = buf;
                     return true;
                 }
                 error = $"Value '{trimmed}' is out of range for u32 (0..4294967295).";
@@ -237,7 +242,9 @@ public static class ScalarFieldEditing
             case "u64":
                 if (ulong.TryParse(trimmed, NumberStyles.Integer, ci, out var u64))
                 {
-                    bytes = BitConverter.GetBytes(u64);
+                    var buf = new byte[8];
+                    BinaryPrimitives.WriteUInt64LittleEndian(buf, u64);
+                    bytes = buf;
                     return true;
                 }
                 error = $"Value '{trimmed}' is out of range for u64.";
@@ -255,7 +262,9 @@ public static class ScalarFieldEditing
             case "i16":
                 if (short.TryParse(trimmed, NumberStyles.Integer, ci, out var i16))
                 {
-                    bytes = BitConverter.GetBytes(i16);
+                    var buf = new byte[2];
+                    BinaryPrimitives.WriteInt16LittleEndian(buf, i16);
+                    bytes = buf;
                     return true;
                 }
                 error = $"Value '{trimmed}' is out of range for i16 (-32768..32767).";
@@ -264,7 +273,9 @@ public static class ScalarFieldEditing
             case "i32":
                 if (int.TryParse(trimmed, NumberStyles.Integer, ci, out var i32))
                 {
-                    bytes = BitConverter.GetBytes(i32);
+                    var buf = new byte[4];
+                    BinaryPrimitives.WriteInt32LittleEndian(buf, i32);
+                    bytes = buf;
                     return true;
                 }
                 error = $"Value '{trimmed}' is out of range for i32.";
@@ -273,7 +284,9 @@ public static class ScalarFieldEditing
             case "i64":
                 if (long.TryParse(trimmed, NumberStyles.Integer, ci, out var i64))
                 {
-                    bytes = BitConverter.GetBytes(i64);
+                    var buf = new byte[8];
+                    BinaryPrimitives.WriteInt64LittleEndian(buf, i64);
+                    bytes = buf;
                     return true;
                 }
                 error = $"Value '{trimmed}' is out of range for i64.";
@@ -282,7 +295,9 @@ public static class ScalarFieldEditing
             case "f32":
                 if (float.TryParse(trimmed, NumberStyles.Float, ci, out var f32))
                 {
-                    bytes = BitConverter.GetBytes(f32);
+                    var buf = new byte[4];
+                    BinaryPrimitives.WriteSingleLittleEndian(buf, f32);
+                    bytes = buf;
                     return true;
                 }
                 error = $"Value '{trimmed}' is not a valid f32.";
@@ -291,7 +306,9 @@ public static class ScalarFieldEditing
             case "f64":
                 if (double.TryParse(trimmed, NumberStyles.Float, ci, out var f64))
                 {
-                    bytes = BitConverter.GetBytes(f64);
+                    var buf = new byte[8];
+                    BinaryPrimitives.WriteDoubleLittleEndian(buf, f64);
+                    bytes = buf;
                     return true;
                 }
                 error = $"Value '{trimmed}' is not a valid f64.";
@@ -331,7 +348,7 @@ public static class ScalarFieldEditing
                 error = $"Component {i} ('{parts[i]}') is not a valid f32.";
                 return false;
             }
-            BitConverter.GetBytes(f).CopyTo(buf, i * 4);
+            BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(i * 4), f);
         }
         bytes = buf;
         return true;
@@ -358,8 +375,8 @@ public static class ScalarFieldEditing
         {
             var part = parts[i];
             uint v;
-            if (part.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
-                || part.StartsWith("0X", StringComparison.Ordinal))
+            // OrdinalIgnoreCase already matches both "0x" and "0X".
+            if (part.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
             {
                 if (!uint.TryParse(part.AsSpan(2), NumberStyles.HexNumber, ci, out v))
                 {
@@ -372,7 +389,7 @@ public static class ScalarFieldEditing
                 error = $"Component {i} ('{part}') is not a valid u32 decimal.";
                 return false;
             }
-            BitConverter.GetBytes(v).CopyTo(buf, i * 4);
+            BinaryPrimitives.WriteUInt32LittleEndian(buf.AsSpan(i * 4), v);
         }
         bytes = buf;
         return true;
