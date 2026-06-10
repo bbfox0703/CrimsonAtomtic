@@ -37,7 +37,7 @@ namespace CrimsonAtomtic.Ui.Services;
 /// a low score usually means "the closest portrait, but probably wrong".
 /// </para>
 /// </summary>
-public sealed class PortraitProvider
+public sealed class PortraitProvider : IDisposable
 {
     /// <summary>
     /// Subdirectory under <c>%LOCALAPPDATA%\CrimsonAtomtic\</c> where
@@ -306,5 +306,25 @@ public sealed class PortraitProvider
 #pragma warning disable CA1031
         catch (Exception) { return null; }
 #pragma warning restore CA1031
+    }
+
+    /// <summary>
+    /// Dispose every decoded portrait Bitmap in the cache. Mirrors
+    /// <see cref="IconProvider.Dispose"/>: a provider being replaced
+    /// (Tools → Set Game Install Folder re-seed) or torn down at app exit
+    /// must release the native Skia memory rather than leak it to the
+    /// finalizer. The caller must ensure no live UI element is still bound
+    /// to a cached Bitmap when this runs.
+    /// </summary>
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            foreach (var bmp in _cache.Values)
+            {
+                bmp?.Dispose();
+            }
+            _cache.Clear();
+        }
     }
 }

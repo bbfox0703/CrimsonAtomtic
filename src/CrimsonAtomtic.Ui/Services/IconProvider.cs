@@ -27,7 +27,7 @@ namespace CrimsonAtomtic.Ui.Services;
 /// <c>11.webp</c> for Camp Funds.
 /// </para>
 /// </summary>
-public sealed class IconProvider
+public sealed class IconProvider : IDisposable
 {
     /// <summary>
     /// Subdirectory under <c>%LOCALAPPDATA%\CrimsonAtomtic\</c>
@@ -201,5 +201,31 @@ public sealed class IconProvider
             _cache[itemKey] = bmp;
         }
         return bmp;
+    }
+
+    /// <summary>
+    /// Dispose every decoded icon Bitmap in the cache. The full item
+    /// catalog can be thousands of WebP bitmaps, each holding native
+    /// Skia memory, so a provider that's being replaced (Tools → Extract
+    /// Icons re-seed) or torn down (app exit) must release them rather
+    /// than leaving them for the finalizer.
+    ///
+    /// <para>
+    /// The caller is responsible for ensuring no live UI element is still
+    /// bound to a cached Bitmap when this runs — on re-seed that means
+    /// deferring the dispose until after the icon grid has rebuilt against
+    /// the replacement provider (see <c>MainWindowViewModel.RefreshIconCache</c>).
+    /// </para>
+    /// </summary>
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            foreach (var bmp in _cache.Values)
+            {
+                bmp?.Dispose();
+            }
+            _cache.Clear();
+        }
     }
 }

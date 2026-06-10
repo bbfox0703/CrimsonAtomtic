@@ -764,6 +764,8 @@
   <!-- MainWindow alert dialogs (hard-coded literals; the rest resolve via FindResource). -->
   <sys:String x:Key="SaveFailedTitle">Save failed</sys:String>
   <sys:String x:Key="SaveFailedBody">Could not write save: {0}. The app stayed open so you can retry or use Discard.</sys:String>
+  <sys:String x:Key="OpenSaveFailedTitle">Could not open save</sys:String>
+  <sys:String x:Key="OpenSaveFailedBody">Failed to load the save file: {0}. The file may be corrupt, locked by the running game, or from an unsupported version.</sys:String>
   <sys:String x:Key="DyeScanFailedTitle">Could not scan dyed items</sys:String>
   <sys:String x:Key="DyeSlotOpenFailedTitle">Could not open slot editor</sys:String>
   <sys:String x:Key="AbyssGatesLoadFailedTitle">Could not load abyss gates</sys:String>

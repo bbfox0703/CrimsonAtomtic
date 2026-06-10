@@ -27,9 +27,19 @@ public sealed partial class WorldMapWindow : Window
     {
         InitializeComponent();
         Opened += OnWindowOpened;
+        // The VM owns the user's basemap bitmap (~108 MB of native Skia
+        // memory for the canonical map). Dispose it when the window
+        // closes instead of abandoning it to the finalizer, so repeated
+        // open/close cycles don't stack native allocations.
+        Closed += OnWindowClosed;
     }
 
     private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();
+
+    private void OnWindowClosed(object? sender, System.EventArgs e)
+    {
+        (DataContext as System.IDisposable)?.Dispose();
+    }
 
     /// <summary>
     /// Auto-fit the square map canvas to the host monitor on first

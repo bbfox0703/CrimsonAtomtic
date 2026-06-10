@@ -190,6 +190,12 @@ def _encode_field_for_json(f: dict, bytes_as: str) -> dict:
     out = dict(f)
     if "bytes" in out:
         out["bytes"] = _encode_bytes(out["bytes"], bytes_as)
+    # A scalar field's "value" slot can itself hold raw bytes (the
+    # decoder emits PyBytes for ScalarValue::Bytes), which json.dump
+    # can't serialize. _encode_bytes is a no-op for non-bytes values,
+    # so this is safe to apply unconditionally.
+    if "value" in out:
+        out["value"] = _encode_bytes(out["value"], bytes_as)
     if "child" in out and isinstance(out["child"], dict):
         out["child"] = encode_block_for_json(out["child"], bytes_as)
     if "elements" in out and isinstance(out["elements"], list):

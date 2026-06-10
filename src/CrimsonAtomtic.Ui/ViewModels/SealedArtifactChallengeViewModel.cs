@@ -120,7 +120,7 @@ public sealed partial class SealedArtifactChallengeViewModel : ObservableObject
         {
             return;
         }
-        _ = OnScopeToggledAsync(value);
+        OnScopeToggledAsync(value).SafeFireAndForget();
     }
 
     private async Task OnScopeToggledAsync(bool value)

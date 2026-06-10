@@ -145,9 +145,22 @@ public sealed class SaveBackupService
 
         var sourceDir = Path.GetDirectoryName(targetSavePath)!;
         var timestamp = DateTime.Now;
-        var stamp = FormatTimestamp(timestamp);
         var slotDir = SlotBackupDirectory(platform, userId, slotName);
+        var stamp = FormatTimestamp(timestamp);
         var destDir = Path.Combine(slotDir, stamp);
+        // The stamp resolves to the second, so two Saves within the same
+        // second would collide on the same folder and the later one would
+        // overwrite (and silently lose) the earlier snapshot. Advance the
+        // stamp a second at a time until the folder is free. This keeps the
+        // yyyy-MM-dd_HH-mm-ss format intact, so List/Prune still parse it —
+        // unlike adding sub-second precision, which would orphan every
+        // existing backup folder that lacks the finer suffix.
+        while (Directory.Exists(destDir))
+        {
+            timestamp = timestamp.AddSeconds(1);
+            stamp = FormatTimestamp(timestamp);
+            destDir = Path.Combine(slotDir, stamp);
+        }
 
         try
         {

@@ -91,11 +91,23 @@ public sealed partial class MainWindow : Window
                 // close. On failure the dialog stays implicitly
                 // dismissed but the close is aborted so the user
                 // can try again.
+                //
+                // SaveCommand is an AsyncRelayCommand. Await the actual
+                // task (ExecuteAsync) rather than the fire-and-forget
+                // Execute so that:
+                //   (a) a write failure surfaces in the catch below
+                //       instead of being rethrown on the dispatcher and
+                //       crashing the AOT process during teardown, and
+                //   (b) the window stays open while SaveAsync's
+                //       structural-edit confirm dialog runs — calling
+                //       Close() synchronously (as before) tore that modal
+                //       down, resolving its await to "cancel" and
+                //       silently abandoning the save.
                 try
                 {
                     if (vm.SaveCommand.CanExecute(null))
                     {
-                        vm.SaveCommand.Execute(null);
+                        await vm.SaveCommand.ExecuteAsync(null);
                     }
                 }
                 catch (System.Exception ex)
@@ -105,6 +117,14 @@ public sealed partial class MainWindow : Window
                         UiText.Format("SaveFailedBody",
                             "Could not write save: {0}. The app stayed open so you can retry or use Discard.",
                             ex.Message));
+                    return;
+                }
+                // Only close if the save actually went through. Declining
+                // the structural-edit warning returns without writing and
+                // without throwing; closing then would discard the edits
+                // silently. The journal is cleared on a successful write.
+                if (vm.Journal.HasUnsavedChanges)
+                {
                     return;
                 }
                 _allowCloseWithoutPrompt = true;
@@ -142,9 +162,23 @@ public sealed partial class MainWindow : Window
         switch (result)
         {
             case ChangeSummaryDialogResult.Save:
-                if (vm.SaveCommand.CanExecute(null))
+                // Await the async save so a write failure is caught here
+                // rather than rethrown on the dispatcher and crashing the
+                // process.
+                try
                 {
-                    vm.SaveCommand.Execute(null);
+                    if (vm.SaveCommand.CanExecute(null))
+                    {
+                        await vm.SaveCommand.ExecuteAsync(null);
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    await ConfirmDialog.ShowAlertAsync(this,
+                        UiText.Get("SaveFailedTitle", "Save failed"),
+                        UiText.Format("SaveFailedBody",
+                            "Could not write save: {0}. The app stayed open so you can retry or use Discard.",
+                            ex.Message));
                 }
                 break;
             case ChangeSummaryDialogResult.Discard:
@@ -152,8 +186,21 @@ public sealed partial class MainWindow : Window
                     && vm.LoadSaveCommand.CanExecute(path))
                 {
                     // Reload the save bytes from disk → journal +
-                    // IsDirty both clear via the normal Load flow.
-                    vm.LoadSaveCommand.Execute(path);
+                    // IsDirty both clear via the normal Load flow. A
+                    // reload failure (file deleted / locked since load)
+                    // must surface as an alert, not crash the app.
+                    try
+                    {
+                        vm.LoadSaveCommand.Execute(path);
+                    }
+                    catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex)
+                    {
+                        await ConfirmDialog.ShowAlertAsync(this,
+                            UiText.Get("OpenSaveFailedTitle", "Could not open save"),
+                            UiText.Format("OpenSaveFailedBody",
+                                "Failed to load the save file: {0}. The file may be corrupt, locked by the running game, or from an unsupported version.",
+                                ex.Message));
+                    }
                 }
                 break;
         }
@@ -447,7 +494,23 @@ public sealed partial class MainWindow : Window
         var path = files[0].TryGetLocalPath();
         if (!string.IsNullOrEmpty(path))
         {
-            vm.LoadSaveCommand.Execute(path);
+            // LoadSave throws CrimsonSaveException on any parse / HMAC /
+            // IO failure (corrupt file, file picked mid-write by the
+            // running game, unsupported schema version). LoadSaveCommand
+            // is a synchronous RelayCommand, so the throw propagates here
+            // — guard it or it crashes the dispatcher.
+            try
+            {
+                vm.LoadSaveCommand.Execute(path);
+            }
+            catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex)
+            {
+                await ConfirmDialog.ShowAlertAsync(this,
+                    UiText.Get("OpenSaveFailedTitle", "Could not open save"),
+                    UiText.Format("OpenSaveFailedBody",
+                        "Failed to load the save file: {0}. The file may be corrupt, locked by the running game, or from an unsupported version.",
+                        ex.Message));
+            }
         }
     }
 
@@ -495,7 +558,22 @@ public sealed partial class MainWindow : Window
         var path = file.TryGetLocalPath();
         if (!string.IsNullOrEmpty(path))
         {
-            vm.SaveAsCommand.Execute(path);
+            // Save As writes the file then re-loads it to re-anchor the
+            // handle, so it can throw on either the write or the verify
+            // re-load. Await the async command + catch so a failure is
+            // reported instead of crashing the process.
+            try
+            {
+                await vm.SaveAsCommand.ExecuteAsync(path);
+            }
+            catch (System.Exception ex)
+            {
+                await ConfirmDialog.ShowAlertAsync(this,
+                    UiText.Get("SaveFailedTitle", "Save failed"),
+                    UiText.Format("SaveFailedBody",
+                        "Could not write save: {0}. The app stayed open so you can retry or use Discard.",
+                        ex.Message));
+            }
         }
     }
 
@@ -631,7 +709,7 @@ public sealed partial class MainWindow : Window
         var restoreVm = new RestoreFromBackupViewModel(vm.BackupService);
         restoreVm.RestoreRequested += entry =>
         {
-            _ = vm.RestoreFromBackupAsync(entry);
+            vm.RestoreFromBackupAsync(entry).SafeFireAndForget();
         };
         var dialog = new RestoreFromBackupWindow
         {
@@ -696,7 +774,7 @@ public sealed partial class MainWindow : Window
                 if (childVm.IsDirty)
                 {
                     masterVm.NotifyChildApplied();
-                    _ = masterVm.RefreshAsync();
+                    masterVm.RefreshAsync().SafeFireAndForget();
                 }
             };
             child.Show(this);
@@ -788,7 +866,7 @@ public sealed partial class MainWindow : Window
         // The VM constructor only stashes inputs + sets IsLoading=true,
         // so the dialog renders immediately with "Loading dyed items…"
         // in the footer; the actual block walk runs on the thread pool.
-        _ = masterVm.RefreshAsync();
+        masterVm.RefreshAsync().SafeFireAndForget();
     }
 
     /// <summary>
@@ -871,10 +949,10 @@ public sealed partial class MainWindow : Window
         buybackVm.JumpToItemRequested += row =>
         {
             child.Close();
-            _ = vm.NavigateToVendorBuybackItemAsync(
+            vm.NavigateToVendorBuybackItemAsync(
                 row.BlockIndex,
                 row.StoreElementIdx,
-                row.BuybackElementIdx);
+                row.BuybackElementIdx).SafeFireAndForget();
         };
         child.Closed += (_, _) =>
         {
@@ -1106,7 +1184,7 @@ public sealed partial class MainWindow : Window
         // still-open Find Items dialog.
         pickerVm.GotoRequested += row =>
         {
-            _ = NavigateToFindItemsRowAsync(vm, row);
+            NavigateToFindItemsRowAsync(vm, row).SafeFireAndForget();
         };
         var child = new FindItemsWindow
         {
@@ -1185,7 +1263,7 @@ public sealed partial class MainWindow : Window
         browserVm.JumpToBlockRequested += blockIdx =>
         {
             child.Close();
-            _ = vm.NavigateToTopLevelBlockAsync(blockIdx);
+            vm.NavigateToTopLevelBlockAsync(blockIdx).SafeFireAndForget();
         };
         child.Show(this);
     }
@@ -1271,14 +1349,14 @@ public sealed partial class MainWindow : Window
         };
         pickerVm.AddItemRequested += itemKey =>
         {
-            _ = vm.AddItemToCurrentListAsync(itemKey);
+            vm.AddItemToCurrentListAsync(itemKey).SafeFireAndForget();
         };
         // "Go to item in save": jump the main window to the item's slot
         // in the loaded save (or report "not in this save"). Mirrors the
         // Find Items "Go" routing.
         pickerVm.GotoItemRequested += itemKey =>
         {
-            _ = NavigateToBrowseItemAsync(vm, itemKey);
+            NavigateToBrowseItemAsync(vm, itemKey).SafeFireAndForget();
         };
 
         // Live-sync the picker's target bar to the main VM as the user
@@ -1480,12 +1558,30 @@ public sealed partial class MainWindow : Window
         {
             return;
         }
-        var socketsVm = ViewModels.SocketEditorViewModel.TryCreate(
-            vm.GetSaveLoader(),
-            vm.Localization,
-            vm.Journal,
-            path,
-            vm.LoadCustomGemSets());
+        ViewModels.SocketEditorViewModel? socketsVm;
+        try
+        {
+            // TryCreate walks every item container via ListAllItems (an
+            // FFI enumerator); a save unloaded mid-call / FFI fault throws
+            // CrimsonSaveException. This runs inside an async void handler,
+            // so an uncaught throw would crash the process — report it
+            // instead, matching the other Tools dialogs.
+            socketsVm = ViewModels.SocketEditorViewModel.TryCreate(
+                vm.GetSaveLoader(),
+                vm.Localization,
+                vm.Journal,
+                path,
+                vm.LoadCustomGemSets());
+        }
+        catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex)
+        {
+            await ConfirmDialog.ShowAlertAsync(this,
+                UiText.Get("OpenSaveFailedTitle", "Could not open save"),
+                UiText.Format("OpenSaveFailedBody",
+                    "Failed to load the save file: {0}. The file may be corrupt, locked by the running game, or from an unsupported version.",
+                    ex.Message));
+            return;
+        }
         if (socketsVm is null)
         {
             var title = (string?)this.FindResource("SocketEditorNotAvailableTitle")
