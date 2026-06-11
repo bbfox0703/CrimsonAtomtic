@@ -87,11 +87,23 @@ try {
     # in addition flips some AOT analyzers into error mode on Avalonia
     # 12.x DataGrid trim warnings. The csproj already pins TrimMode=full,
     # which is enough.
-    & dotnet publish $UiProj `
-        --configuration Release `
-        --runtime $Runtime `
-        -p:PublishAot=true `
-        --output $DistRoot
+    # Prefer the MSVC linker already on PATH (dev shell / inherited dev env) over
+    # ILC's findvcvarsall.bat auto-discovery, which captures cmd.exe stdout to find
+    # link.exe and so corrupts the linker path ("The input line is too long." ->
+    # exit 123) when the environment is bloated by stacked vcvars/DevShell layers.
+    # Gated on a linker being on PATH; a plain shell still lets ILC auto-discover
+    # (cargo + ILC both self-locate MSVC), so no regression.
+    $aotArgs = @(
+        "publish", $UiProj,
+        "--configuration", "Release",
+        "--runtime", $Runtime,
+        "-p:PublishAot=true",
+        "--output", $DistRoot
+    )
+    if (Get-Command link.exe -ErrorAction SilentlyContinue) {
+        $aotArgs += "-p:IlcUseEnvironmentalTools=true"
+    }
+    & dotnet @aotArgs
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed (exit $LASTEXITCODE)" }
 }
 finally {
