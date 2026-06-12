@@ -93,6 +93,15 @@ try {
     # exit 123) when the environment is bloated by stacked vcvars/DevShell layers.
     # Gated on a linker being on PATH; a plain shell still lets ILC auto-discover
     # (cargo + ILC both self-locate MSVC), so no regression.
+    #
+    # CAVEAT — must be the *MSVC* link.exe, not GNU coreutils' `link` (the
+    # hard-link utility). Git-for-Windows ships C:\Program Files\Git\usr\bin\
+    # link.exe, which is on the default GitHub Actions runner PATH. Handing ILC
+    # *that* link makes it choke on the MSVC-style "/DEF: @link.rsp" args
+    # ("link: extra operand …" -> exit 1, the whole publish fails). So opt in
+    # only when the resolved path looks like the VS/MSVC toolchain; on a clean
+    # CI runner (only the GNU link on PATH) we fall through and let ILC's own
+    # vcvars discovery find the real MSVC link.
     $aotArgs = @(
         "publish", $UiProj,
         "--configuration", "Release",
@@ -100,7 +109,8 @@ try {
         "-p:PublishAot=true",
         "--output", $DistRoot
     )
-    if (Get-Command link.exe -ErrorAction SilentlyContinue) {
+    $linkCmd = Get-Command link.exe -ErrorAction SilentlyContinue
+    if ($linkCmd -and $linkCmd.Source -match '(?i)\\VC\\Tools\\MSVC\\|\\VC\\bin\\|Microsoft Visual Studio') {
         $aotArgs += "-p:IlcUseEnvironmentalTools=true"
     }
     & dotnet @aotArgs
