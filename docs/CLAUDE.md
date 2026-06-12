@@ -5,7 +5,8 @@
 
 ## How to read
 
-- **status.md** — current progress, next concrete task, roadmap, gotchas. **Start here on a new session.**
+- **status.md** — current progress, next concrete task, roadmap, gotchas. **Start here on a new session.** (Lean by design.)
+- **status-archive.md** — the full append-only session-by-session history + long-form investigations, trimmed out of status.md once it grew past 300 KB. Read only for deep history behind a decision; never append new sessions here.
 - **architecture.md** — the big picture: layers, language boundaries, why we chose A1
 - **data-policy.md** — hygiene rules for game data and reference data (foundation-first)
 - **game-versions.md** — paths to current and historical game installs; version detection; diffing
