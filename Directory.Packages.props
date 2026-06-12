@@ -20,7 +20,7 @@
     <!-- Avalonia.Diagnostics is 11.x only as of 2026-05; once a 12.x is
          published we'll add it back behind a Debug condition. -->
     <!-- MVVM source generators (AOT-safe) -->
-    <PackageVersion Include="Azure.Core" Version="1.57.0" />
+    <PackageVersion Include="Azure.Core" Version="1.59.0" />
     <PackageVersion Include="Azure.Monitor.OpenTelemetry.Exporter" Version="1.8.1" />
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <!-- Testing -->
@@ -31,20 +31,20 @@
     <PackageVersion Include="HarfBuzzSharp.NativeAssets.Win32" Version="8.3.1.5" />
     <PackageVersion Include="MicroCom.Runtime" Version="0.11.6" />
     <PackageVersion Include="Microsoft.ApplicationInsights" Version="3.1.2" />
-    <PackageVersion Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.9" />
     <PackageVersion Include="Microsoft.CodeCoverage" Version="18.6.0" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Diagnostics.Abstractions" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.FileProviders.Abstractions" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Configuration" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.8" />
-    <PackageVersion Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.84.1" />
-    <PackageVersion Include="Microsoft.IdentityModel.Abstractions" Version="8.18.0" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.Abstractions" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.FileProviders.Abstractions" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Configuration" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.84.2" />
+    <PackageVersion Include="Microsoft.IdentityModel.Abstractions" Version="8.19.1" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.6.0" />
     <PackageVersion Include="Microsoft.Testing.Extensions.Telemetry" Version="2.2.3" />
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport.Abstractions" Version="2.2.3" />
@@ -52,7 +52,16 @@
     <PackageVersion Include="Microsoft.Testing.Platform.MSBuild" Version="2.2.3" />
     <PackageVersion Include="OpenTelemetry.PersistentStorage.Abstractions" Version="1.1.0" />
     <PackageVersion Include="OpenTelemetry.PersistentStorage.FileSystem" Version="1.1.0" />
-    <PackageVersion Include="runtime.win-x64.Microsoft.DotNet.ILCompiler" Version="10.0.8" />
+    <!-- Must match the installed .NET runtime: PublishAot auto-injects
+         Microsoft.DotNet.ILCompiler at the runtime's version, which then
+         requires runtime.win-x64.Microsoft.DotNet.ILCompiler >= that
+         version. SDK 10.0.301 ships runtime 10.0.9, so the central pin
+         tracks it (was 10.0.8); a stale pin trips NU1109 (downgrade). -->
+    <PackageVersion Include="runtime.win-x64.Microsoft.DotNet.ILCompiler" Version="10.0.9" />
+    <PackageVersion Include="SkiaSharp" Version="3.119.4" />
+    <PackageVersion Include="System.Memory.Data" Version="10.0.9" />
+    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.9" />
+    <PackageVersion Include="Tmds.DBus.Protocol" Version="0.94.1" />
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
   </ItemGroup>

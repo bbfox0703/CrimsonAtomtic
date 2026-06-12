@@ -52,6 +52,10 @@
     <PackageReference Include="OpenTelemetry.PersistentStorage.Abstractions" />
     <PackageReference Include="OpenTelemetry.PersistentStorage.FileSystem" />
     <PackageReference Include="runtime.win-x64.Microsoft.DotNet.ILCompiler" />
+    <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="System.Memory.Data" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" />
+    <PackageReference Include="Tmds.DBus.Protocol" />
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio">
       <PrivateAssets>all</PrivateAssets>
