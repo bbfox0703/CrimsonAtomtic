@@ -37,7 +37,7 @@
     <!-- UE5CEDumper uses.                                              -->
     <!-- ============================================================ -->
     <VerMajor>1</VerMajor>
-    <VerMinor>10</VerMinor>
+    <VerMinor>11</VerMinor>
     <VerPatch>1</VerPatch>
     <BuildNumberFile>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\build_number.txt'))</BuildNumberFile>
     <VerBuild Condition="Exists('$(BuildNumberFile)')">$([System.IO.File]::ReadAllText('$(BuildNumberFile)').Trim())</VerBuild>
@@ -94,6 +94,8 @@
     <PackageReference Include="HarfBuzzSharp.NativeAssets.WebAssembly" />
     <PackageReference Include="HarfBuzzSharp.NativeAssets.Win32" />
     <PackageReference Include="MicroCom.Runtime" />
+    <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="Tmds.DBus.Protocol" />
   </ItemGroup>
 
   <ItemGroup>
