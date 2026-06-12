@@ -34,11 +34,11 @@
   <sys:String x:Key="SetGameInstallFolderInvalidBody">所選資料夾不包含必要的素材檔 (0020\0.pamt)。請選擇包含遊戲 0000\、0020\、… 各個 pack group 的目錄 — 通常是 &lt;Steam library&gt;\steamapps\common\Crimson Desert，或是 Epic / 為 Game Pass 拷貝出來的素材資料夾。</sys:String>
   <sys:String x:Key="MenuRenameMercenary">傭兵改名(_M)…</sys:String>
   <sys:String x:Key="MenuEditItemSockets">編輯物品插槽(_S)…</sys:String>
-  <sys:String x:Key="SocketEditorHeader">逐孔填入 / 變更 / 清除。Fill 與 Change 操作會將耐久 (Endurance) 重設為 65535 (最大值)，避免新鑲入的高階寶石繼承舊孔的耗損值。當你填入一個索引超過物品目前上限的孔時，_validSocketCount 會自動上修 (讓該孔在遊戲中可見)。底層 list 預先配置的任何孔都可以填 (一般是 5 個)，不受遊戲資料定義的上限限制。改動會在下一次存檔時寫回。</sys:String>
+  <sys:String x:Key="SocketEditorHeader">逐插槽填入 / 變更 / 清除。Fill 與 Change 操作會將耐久 (Endurance) 重設為 65535 (最大值)，避免新鑲入的高階寶石繼承舊插槽的耗損值。當你填入一個索引超過物品目前上限的插槽數時，_validSocketCount 會自動上修 (讓該插槽在遊戲中可見)。底層 list 預先配置的任何插槽都可以填 (一般是 5 個)，不受遊戲資料定義的上限限制。改動會在下一次存檔時寫回。</sys:String>
   <sys:String x:Key="SocketEditorColBag">背包</sys:String>
   <sys:String x:Key="SocketEditorColItem">物品</sys:String>
   <sys:String x:Key="SocketEditorColItemKey">ItemKey</sys:String>
-  <sys:String x:Key="SocketEditorColSocket">孔</sys:String>
+  <sys:String x:Key="SocketEditorColSocket">插槽</sys:String>
   <sys:String x:Key="SocketEditorColCurrentGem">目前寶石</sys:String>
   <sys:String x:Key="SocketEditorColCurrentGemKey">GemKey</sys:String>
   <sys:String x:Key="SocketEditorColAction">動作</sys:String>
@@ -46,8 +46,8 @@
   <sys:String x:Key="SocketEditorChangeGem">變更…</sys:String>
   <sys:String x:Key="SocketEditorFillGem">填入…</sys:String>
   <sys:String x:Key="SocketEditorClearGem">清除</sys:String>
-  <sys:String x:Key="SocketEditorChangeGemTip">開啟寶石選擇器，覆寫這個已填入的孔。會將 _currentEndurance 重設為 65535 (最大值)，讓高階寶石從滿耐久開始。</sys:String>
-  <sys:String x:Key="SocketEditorFillGemTip">開啟寶石選擇器，填入這個空孔。必要時會自動上修 _validSocketCount，讓該孔在遊戲中可見。</sys:String>
+  <sys:String x:Key="SocketEditorChangeGemTip">開啟寶石選擇器，覆寫這個已填入的插槽。會將 _currentEndurance 重設為 65535 (最大值)，讓高階寶石從耐久度全滿開始。</sys:String>
+  <sys:String x:Key="SocketEditorFillGemTip">開啟寶石選擇器，填入這個空插槽。必要時會自動上修 _validSocketCount，讓該插槽在遊戲中可見。</sys:String>
   <sys:String x:Key="SocketEditorClearGemTip">把這個插槽退回成空。_currentEndurance 和 _itemKey 都會變成 absent；mask 翻成 [0x00]。</sys:String>
   <sys:String x:Key="SocketEditorColState">狀態</sys:String>
   <sys:String x:Key="SocketEditorApplySetItemLabel">套用組合至：</sys:String>
@@ -56,15 +56,15 @@
   <sys:String x:Key="SocketEditorApplySetEditCustom">編輯自訂組合…</sys:String>
   <sys:String x:Key="SocketEditorApplySetEditCustomTip">定義 / 重新命名三組使用者自訂的寶石組合。儲存至 settings.json。</sys:String>
   <sys:String x:Key="SocketEditorFilterLabel">篩選：</sys:String>
-  <sys:String x:Key="SocketEditorFilterWatermark">輸入文字以篩選 — 物品名稱 / 背包 / item key 會顯示全部 5 個孔；寶石名稱 / gem key 則只顯示符合的孔…</sys:String>
+  <sys:String x:Key="SocketEditorFilterWatermark">輸入文字以篩選 — 物品名稱 / 背包 / item key 會顯示全部 5 個插槽；寶石名稱 / gem key 則只顯示符合的插槽…</sys:String>
 
   <!-- Custom gem sets editor (launched from Sockets editor toolbar) -->
   <sys:String x:Key="CustomGemSetsWindowTitle">編輯自訂寶石組合</sys:String>
-  <sys:String x:Key="CustomGemSetsHeader">三組使用者可自訂的寶石組合，會與內建的三組一起出現在插槽編輯器的 Apply-Set 工具列中。每組有一個標籤 + 最多 5 個 ItemKey 項目 (空白格會被略過)。套用含 N 個項目的組合會覆寫目標物品的 0..N-1 孔，[N..max] 範圍的孔保持不動。按下儲存後寫入 settings.json。</sys:String>
+  <sys:String x:Key="CustomGemSetsHeader">三組使用者可自訂的寶石組合，會與內建的三組一起出現在插槽編輯器的 Apply-Set 工具列中。每組有一個標籤 + 最多 5 個 ItemKey 項目 (空白格會被略過)。套用含 N 個項目的組合會覆寫目標物品的 0..N-1 插槽，[N..max] 範圍的插槽保持不動。按下儲存後寫入 settings.json。</sys:String>
   <sys:String x:Key="CustomGemSetsSave">儲存</sys:String>
   <sys:String x:Key="CustomGemSetsClose">關閉</sys:String>
   <sys:String x:Key="SocketEditorClose">關閉</sys:String>
-  <sys:String x:Key="SocketEditorNotAvailableTitle">此存檔沒有已鑲嵌寶石的孔</sys:String>
+  <sys:String x:Key="SocketEditorNotAvailableTitle">此存檔沒有已鑲嵌寶石的插槽</sys:String>
   <sys:String x:Key="SocketEditorNotAvailableBody">載入的存檔沒有任何物品有已填入的插槽 (或根本沒有任何物品帶有 _socketSaveDataList)。在遊戲中鑲入一顆寶石後，已填入的槽位就會出現在這裡。</sys:String>
   <sys:String x:Key="SocketEditorPickerTitle">選擇寶石</sys:String>
   <sys:String x:Key="RenameMercenaryHeader">為傭兵 / 寵物改名。「名稱」欄顯示由 CharacterKey 解析出來的角色 / 樣板名稱 (與主視窗 mercenaryDataList 名稱欄同源) — 用來辨識每一列。「新名稱」欄會預先帶入目前的自訂名稱 (_mercenaryName)；編輯後逐列按下 Apply。欄位留空則清除自訂名稱。改動會在下一次存檔時儲存回檔案。</sys:String>
@@ -134,20 +134,20 @@
 
   <!-- Dye editor master dialog -->
   <sys:String x:Key="DyeEditorWindowTitle">編輯物品染色</sys:String>
-  <sys:String x:Key="DyeEditorHeader">逐物品編輯染色。列出已有 _itemDyeDataList 的物品 (Edit)、以及裝備中可染色但尚未染色的物品 (+ Add)。Edit 可修改各孔位的 R/G/B/A + 髒污 + 材質 + 色彩群組；+ Add 會讓你先挑選一個有效的孔位，再生成預設空的染色元素，之後再用 Edit 上色。</sys:String>
+  <sys:String x:Key="DyeEditorHeader">逐物品編輯染色。列出已有 _itemDyeDataList 的物品 (Edit)、以及裝備中可染色但尚未染色的物品 (+ Add)。Edit 可修改各槽位的 R/G/B/A + 髒污 + 材質 + 色彩群組；+ Add 會讓你先挑選一個有效的槽位，再生成預設空的染色元素，之後再用 Edit 上色。</sys:String>
   <sys:String x:Key="DyeEditorSearchPlaceholder">依物品名稱、背包或 ItemKey 篩選…</sys:String>
   <sys:String x:Key="DyeEditorColIcon">圖示</sys:String>
   <sys:String x:Key="DyeEditorColBag">背包</sys:String>
   <sys:String x:Key="DyeEditorColItem">物品</sys:String>
   <sys:String x:Key="DyeEditorColItemKey">ItemKey</sys:String>
-  <sys:String x:Key="DyeEditorColSlotCount">孔數</sys:String>
+  <sys:String x:Key="DyeEditorColSlotCount">插槽數</sys:String>
   <sys:String x:Key="DyeEditorColAction">動作</sys:String>
   <sys:String x:Key="DyeEditorEdit">編輯…</sys:String>
-  <sys:String x:Key="DyeEditorEditTip">為此物品的染色清單開啟逐孔編輯器。對話框在套用後不會關閉，方便連續編輯多個槽位。</sys:String>
+  <sys:String x:Key="DyeEditorEditTip">為此物品的染色清單開啟逐槽位編輯器。對話框在套用後不會關閉，方便連續編輯多個槽位。</sys:String>
   <sys:String x:Key="DyeEditorAdd">+ 新增</sys:String>
-  <sys:String x:Key="DyeEditorAddTip">為此物品挑選一個有效的染色孔位、並生成一筆預設空的染色元素。生成後可用 Edit 上色。</sys:String>
-  <sys:String x:Key="DyeEditorAddPickSlotTitle">挑選染色孔位</sys:String>
-  <sys:String x:Key="DyeEditorAddPickSlotHeader">挑一個要在此物品上生成的染色孔位。下方清單是由 partprefabdyeslotinfo 解析出來的這件物品所有孔位，標籤是該孔位的預設材質名稱。</sys:String>
+  <sys:String x:Key="DyeEditorAddTip">為此物品挑選一個有效的染色槽位、並生成一筆預設空的染色元素。生成後可用 Edit 上色。</sys:String>
+  <sys:String x:Key="DyeEditorAddPickSlotTitle">挑選染色槽位</sys:String>
+  <sys:String x:Key="DyeEditorAddPickSlotHeader">挑一個要在此物品上生成的染色槽位。下方清單是由 partprefabdyeslotinfo 解析出來的這件物品所有槽位，標籤是該槽位的預設材質名稱。</sys:String>
   <sys:String x:Key="DyeEditorAddNoTemplateTitle">此存檔尚無染色範本</sys:String>
   <sys:String x:Key="DyeEditorAddNoTemplateBody">切換 ABI 需要存檔中至少有一件已染色物品做為元素 schema 範本。請先進遊戲染一件 (任何服裝/盔甲)、存檔、回此重新載入後再試一次。</sys:String>
   <sys:String x:Key="DyeEditorAddFailedTitle">無法新增染色</sys:String>
@@ -157,7 +157,7 @@
 
   <!-- Dye slot editor child dialog -->
   <sys:String x:Key="DyeSlotEditorWindowTitle">編輯染色槽</sys:String>
-  <sys:String x:Key="DyeSlotColSlot">孔</sys:String>
+  <sys:String x:Key="DyeSlotColSlot">槽位</sys:String>
   <sys:String x:Key="DyeSlotColColor">顏色</sys:String>
   <sys:String x:Key="DyeSlotColGrime">髒污</sys:String>
   <sys:String x:Key="DyeSlotColMaterial">材質</sys:String>
@@ -216,7 +216,7 @@
   <sys:String x:Key="KnowledgeLearnSelected">學習選取項</sys:String>
   <sys:String x:Key="KnowledgeLearnCategory">學習此類別全部</sys:String>
   <sys:String x:Key="KnowledgeClose">關閉</sys:String>
-  <sys:String x:Key="SealedArtifactWindowTitle">完成封印深淵神器挑戰</sys:String>
+  <sys:String x:Key="SealedArtifactWindowTitle">完成封印阿比斯神器挑戰</sys:String>
   <sys:String x:Key="SealedArtifactHeader">列出所有符合 Pattern B v1 完成條件的挑戰。勾選要完成的項目，再按「完成所選」。目錄列與其孿生列維持不變（領取獎勵時由引擎補上）；成就仍需在遊戲內完成。下次檔案 → 儲存時寫入。</sys:String>
   <sys:String x:Key="SealedArtifactSearchHint">以名稱、內部名稱或鍵值篩選…</sys:String>
   <sys:String x:Key="SealedArtifactSelectAll">全選</sys:String>
@@ -233,15 +233,15 @@
   <sys:String x:Key="DialogCancelled">已取消。</sys:String>
   <!-- 封印神器對話框:廣域掃描切換 + VM 內建的狀態／確認訊息。 -->
   <sys:String x:Key="SealedArtifactBroadScan">廣域掃描 — 納入非封印神器的任務 (進階，有風險)</sys:String>
-  <sys:String x:Key="SealedArtifactBroadScanTip">關閉 (預設):只列出真正的封印深淵神器挑戰 (Challenge_SealedArtifact_*)。開啟:還會列出封印神器恰好指向的深淵之門／據點／知識探索／一般任務 — 本工具不支援，且更可能讓存檔無法載入。</sys:String>
+  <sys:String x:Key="SealedArtifactBroadScanTip">關閉 (預設):只列出真正的封印阿比斯神器挑戰 (Challenge_SealedArtifact_*)。開啟:還會列出封印神器恰好指向的阿比斯之門／據點／知識探索／一般任務 — 本工具不支援，且更可能讓存檔無法載入。</sys:String>
   <sys:String x:Key="SaBroadScanHint">勾選上方的「廣域掃描」也會列出封印神器指向的其他任務類型。</sys:String>
   <sys:String x:Key="SaStatusEligible">{0:N0} 個符合條件的挑戰。勾選要完成的項目，再按「完成所選」。(目錄列與孿生列維持不變 — 領取獎勵時由引擎補上;成就仍需在遊戲內完成。)</sys:String>
   <sys:String x:Key="SaBroadWarnTitle">廣域掃描 — 不建議</sys:String>
-  <sys:String x:Key="SaBroadWarnBody" xml:space="preserve">嚴格掃描 (預設) 只列出真正的封印深淵神器挑戰 (Challenge_SealedArtifact_*)。&#10;&#10;廣域掃描還會列出封印神器恰好指向的其他任務 — 深淵之門、據點／領地、知識／探索、一般任務。用本工具完成這些並不受支援,而且更可能產生遊戲無法載入的存檔。&#10;&#10;要啟用廣域掃描並重新掃描嗎？</sys:String>
+  <sys:String x:Key="SaBroadWarnBody" xml:space="preserve">嚴格掃描 (預設) 只列出真正的封印阿比斯神器挑戰 (Challenge_SealedArtifact_*)。&#10;&#10;廣域掃描還會列出封印神器恰好指向的其他任務 — 阿比斯之門、據點／領地、知識／探索、一般任務。用本工具完成這些並不受支援,而且更可能產生遊戲無法載入的存檔。&#10;&#10;要啟用廣域掃描並重新掃描嗎？</sys:String>
   <sys:String x:Key="SaNoCandidatesNoArtifacts">無事可做 — iteminfo.pabgb 中沒有 Sealed_Abyss_Artifact_* 項目。遊戲安裝路徑設定好了嗎？</sys:String>
   <sys:String x:Key="SaNoCandidatesNoneEligible">沒有可套用的項目 — iteminfo 列出 {0} 個 SA 神器,但此存檔中沒有任何一個有符合條件的挑戰:可能是還沒有 FAR 追蹤器 (神器從未撿取)、目錄列已是 state=5、或 X_2 子任務鍵值不在 iteminfo 中。({1} 無任務、{2} 無 FAR、{3} 已完成、{4} 其他。)</sys:String>
   <sys:String x:Key="SaNoneTicked">沒有勾選任何挑戰。</sys:String>
-  <sys:String x:Key="SaConfirmTitle">完成所選的封印深淵神器挑戰？</sys:String>
+  <sys:String x:Key="SaConfirmTitle">完成所選的封印阿比斯神器挑戰？</sys:String>
   <sys:String x:Key="SaConfirmBody" xml:space="preserve">以 Pattern B v1 將 {0} 個挑戰標記為完成？&#10;&#10;每個挑戰會寫入:FAR 追蹤器 _state ← 5、標記 _completedTime、加入可見性 tag;X_2 子任務項目從 FAR 複製 (若缺少)。目錄列與相鄰孿生:維持不動 — 領取獎勵時由引擎補上。&#10;&#10;成就仍需在遊戲內完成。寫入前已備份於 %LOCALAPPDATA%\CrimsonAtomtic\Backups\;檔案 → 從備份還原… 可回復。&#10;&#10;要繼續嗎？</sys:String>
   <sys:String x:Key="SaApplying">正在對 {0} 個挑戰套用 Pattern B v1…</sys:String>
   <sys:String x:Key="SaDone">完成:已透過 Pattern B v1 完成 {1} 個中的 {0} 個挑戰。</sys:String>
@@ -420,7 +420,7 @@
   <!-- Character refs browser (Tools menu) + per-field CharacterKey picker share
        the warning banner + Pick button strings below. -->
   <sys:String x:Key="MenuBrowseCharacterRefs">瀏覽角色參照(_R)…</sys:String>
-  <sys:String x:Key="CharacterRefsBrowserWarning">⚠ 參照串接僅為盡力而為。同一個 CharacterKey 在不同 block / 不同欄位脈絡下可能代表不同實體。本列表僅列舉所有 schema TypeName 為 "CharacterKey" 的欄位 — 請以原始編輯器交叉驗證。</sys:String>
+  <sys:String x:Key="CharacterRefsBrowserWarning">⚠ 參照串接資料僅為盡力而為。同一個 CharacterKey 在不同 block / 不同欄位脈絡下可能代表不同實體。本列表僅列舉所有 schema TypeName 為 "CharacterKey" 的欄位 — 請以原始編輯器交叉驗證。</sys:String>
   <sys:String x:Key="CharacterRefsBrowserJump">跳轉…</sys:String>
   <sys:String x:Key="CharacterRefsBrowserJumpTip">關閉此對話框，並在主編輯器的 block 樹中跳轉到含有該 CharacterKey 參照的頂層 block。再從那裡手動鑽到特定欄位。</sys:String>
   <sys:String x:Key="CharacterRefsBrowserFilterLabel">篩選：</sys:String>
@@ -434,7 +434,7 @@
 
   <!-- Picker shared with CharacterPickerWindow (Pick mode + warning banner)
        + edit panel button strings for the CharacterKey scalar field picker. -->
-  <sys:String x:Key="CharacterPickerWarning">⚠ 串接僅為盡力而為。characterinfo.pabgb 中的 key 在不同欄位脈絡下不一定對應同一實體。請以遊戲畫面或主編輯器交叉驗證後再依賴解析後的名稱。</sys:String>
+  <sys:String x:Key="CharacterPickerWarning">⚠ 串接資料僅為盡力而為。characterinfo.pabgb 中的 key 在不同欄位脈絡下不一定對應同一實體。請以遊戲畫面或主編輯器交叉驗證後再依賴解析後的名稱。</sys:String>
   <sys:String x:Key="CharacterPickerPick">選擇</sys:String>
   <sys:String x:Key="CharacterPickerColPick">選擇</sys:String>
   <sys:String x:Key="EditPanelPickCharacter">選擇角色…</sys:String>
@@ -453,10 +453,10 @@
   <!-- 遊戲資料版本不一致警告。啟動時若 meta/0.paver 的 minor 與
        parser 目標不符就會顯示。 -->
   <sys:String x:Key="GameVersionMismatchTitle">遊戲版本不一致</sys:String>
-  <sys:String x:Key="GameVersionMismatchHeadline">CrimsonAtomtic 的 parser 鎖定的遊戲版本與目前安裝的版本不同。</sys:String>
+  <sys:String x:Key="GameVersionMismatchHeadline">CrimsonAtomtic 的解析器鎖定的遊戲版本、與目前安裝的版本不同。</sys:String>
   <sys:String x:Key="GameVersionMismatchDetectedLabel">偵測到的安裝：</sys:String>
   <sys:String x:Key="GameVersionMismatchTargetLabel">Parser 目標：</sys:String>
-  <sys:String x:Key="GameVersionMismatchExplanation">Pearl Abyss 在不同 patch 之間可能更動 item / save 資料的 layout。將此版本的 CrimsonAtomtic 用在不同 patch 的資料上，可能會在 iteminfo 載入時 crash、靜默地把 value 解錯，或寫入時毀掉存檔。請自行斟酌風險。你也可以先離開、把遊戲安裝降版或升版後再重啟。</sys:String>
+  <sys:String x:Key="GameVersionMismatchExplanation">Pearl Abyss 在不同 patch 之間可能更動道具/存檔資料的佈局結構。將此版本的 CrimsonAtomtic 用在不同的遊戲版本上，可能會在物品資料載入時直接不正常結束、無預警地把值解錯，或寫入時毀掉存檔。請自行斟酌風險。你也可以先離開、把遊戲安裝降版或升版後再重啟。</sys:String>
   <sys:String x:Key="GameVersionMismatchContinue">仍然繼續</sys:String>
   <sys:String x:Key="GameVersionMismatchQuit">離開</sys:String>
 
@@ -511,7 +511,7 @@
   <sys:String x:Key="FieldsFilterCount">{0:N0} / {1:N0}</sys:String>
 
   <!-- Drill-down + navigation -->
-  <sys:String x:Key="FieldsColDrill">深入</sys:String>
+  <sys:String x:Key="FieldsColDrill">切入</sys:String>
   <sys:String x:Key="FieldsDrillButton">▸</sys:String>
 
   <!-- Edit panel -->
@@ -523,7 +523,7 @@
   <sys:String x:Key="EditPanelRevert">復原</sys:String>
   <sys:String x:Key="EditPanelFillMaxStack">填到最大值</sys:String>
   <sys:String x:Key="EditPanelFillMaxStackTip">把這個欄位填上該物品的 max_stack_count (來自 iteminfo)。會預填到文字框 — 確認後再按 Apply。</sys:String>
-  <sys:String x:Key="EditPanelMakeAbsent">標為缺席 (absent)</sys:String>
+  <sys:String x:Key="EditPanelMakeAbsent">標為不存在 (absent)</sys:String>
   <sys:String x:Key="EditPanelMakeAbsentTip">將此 scalar 的存在位元關掉 — 該欄位從 block 移除 (mask bit 清掉，payload bytes 丟棄)。要復原就輸入一個值再按 Apply。</sys:String>
   <sys:String x:Key="MarkChallengeCompleteButton">✓ 標記挑戰完成 (Pattern B v1)</sys:String>
   <sys:String x:Key="MarkChallengeCompleteTip">引擎自然單一挑戰完成 (Pattern B v1)。只有當遊戲已對此挑戰做過偵測、顯示為可用 (你已在遊戲中撿起封印神器) 時才會啟用。會寫入相關項目 — 與遊戲本身在已完成、但尚未領取的狀態的情況完全相同。生活部份的挑戰可能不適用。尚未完整測試 — 請先備份你的存檔。</sys:String>
@@ -531,7 +531,7 @@
 
   <!-- 結構性（會改變長度）的儲存警告 -->
   <sys:String x:Key="StructuralEditWarningTitle">結構性變更 — 可能無法載入</sys:String>
-  <sys:String x:Key="StructuralEditWarningBody" xml:space="preserve">此存檔包含會改變長度的（結構性）變更，例如完成封印深淵神器挑戰或新增／移除清單項目。&#10;&#10;資料本身寫入正確，但《赤色沙漠》自家的存檔讀取器有一個臭蟲，可能讓某些高進度存檔在這類變更後載入時崩潰。就地變更（道具數量、狀態、開關旗標）則不受影響。&#10;&#10;原始檔案已保留備份。仍要儲存嗎？</sys:String>
+  <sys:String x:Key="StructuralEditWarningBody" xml:space="preserve">此存檔包含會改變長度的（結構性）變更，例如完成封印阿比斯神器挑戰或新增／移除清單項目。&#10;&#10;資料本身寫入正確，但《赤色沙漠》自家的存檔讀取器有一個臭蟲，可能讓某些高進度存檔在這類變更後載入時崩潰。就地變更（道具數量、狀態、開關旗標）則不受影響。&#10;&#10;原始檔案已保留備份。仍要儲存嗎？</sys:String>
 
   <!-- 封印神器「將挑戰標記為完成」確認對話框。Detail 為格式字串：
        {0}=挑戰鍵值、{1}=內部名稱、{2}=孿生鍵值、{3}=FAR 索引、{4}=FAR 鍵值、
@@ -542,15 +542,15 @@
   <sys:String x:Key="MarkChallengeWordCreate">建立</sys:String>
   <sys:String x:Key="MarkChallengeFollowUpExists" xml:space="preserve">  • X_2 子任務項目已存在；略過插入。&#10;</sys:String>
   <sys:String x:Key="MarkChallengeFollowUpNew" xml:space="preserve">  • 已附加新的 MissionStateData 項目（從 FAR 追蹤器複製，並把 _key 與 _branchedTime 修補為 X_2 子任務的形狀）。&#10;</sys:String>
-  <sys:String x:Key="MarkChallengeConfirmDetail" xml:space="preserve">以 Pattern B v1 流程將此挑戰標記為完成？&#10;&#10;  挑戰鍵值：{0}&#10;  內部名稱：{1}&#10;  相鄰可見性孿生鍵值：{2}&#10;  FAR 追蹤器：索引 {3}，鍵值 {4}&#10;  要{5}的 X_2 子任務：鍵值 {6}（{7}）&#10;&#10;本操作會寫入：&#10;  • FAR 追蹤器 _state ← 5，並標記 _completedTime。&#10;  • FAR 追蹤器 _usedTagList：{8} → {9} 筆（加入可見性 magic tag）。&#10;{10}  • 目錄列與相鄰孿生：維持不動。引擎會在領取獎勵時處理。&#10;&#10;</sys:String>
-  <sys:String x:Key="MarkChallengeConfirmWarnings" xml:space="preserve">[!! 請持有對應的神器] 請確認「這個」特定挑戰所對應的封印深淵神器目前就在你的背包中。此按鈕只在你至少持有一個 SA 神器（任何種類）時才會啟用，但下次重新載入時的遊戲內領獎流程，只有在對應此挑戰的神器確實在背包中時才會完成。光靠 Pattern B v1 並不足夠 — 撿取神器才是引擎的關卡判定訊號。&#10;&#10;[!! 已在 SLOT102 的 Shield II / Spear I / Hooves II / Slash III 驗證過] Pattern B v1 是從引擎自然完成 Hooves II（slot102 → 實機 slot103 的轉換）逆向工程而來。此流程寫入領獎前的狀態，並讓引擎在下次載入時補完後續記帳。先前直接寫入領獎後狀態的做法都會破壞遊戲內 UI。動作前請先確認你的存檔已備份（自動備份位於 %LOCALAPPDATA%\CrimsonAtomtic\Backups\ — 檔案 → 從備份還原… 可以回復）。&#10;&#10;[!! 會影響遊戲進度] 將 FAR 追蹤器強制設為 state=5 等於告訴引擎此挑戰已完成；依賴此挑戰完成的後續內容／NPC 對話都會被觸發。&#10;&#10;[!! 不會解鎖成就] Steam／平台成就只會在真正的遊戲內完成時觸發。透過修改檔案標記不會觸發成就，而且一旦挑戰進入此狀態，引擎也不會在你之後正規完成時再次觸發。請勿對你打算之後正規完成的挑戰使用此功能。&#10;&#10;要繼續嗎？</sys:String>
+  <sys:String x:Key="MarkChallengeConfirmDetail" xml:space="preserve">以 Pattern B v1 流程將此挑戰標記為完成？&#10;&#10;  挑戰鍵值：{0}&#10;  內部名稱：{1}&#10;  相鄰可見性孿生鍵值：{2}&#10;  FAR 追蹤器：索引 {3}，鍵值 {4}&#10;  要{5}的 X_2 子任務：鍵值 {6}（{7}）&#10;&#10;本操作會寫入：&#10;  • FAR 追蹤器 _state ← 5，並標記 _completedTime。&#10;  • FAR 追蹤器 _usedTagList：{8} → {9} 筆（加入可見性 magic tag）。&#10;{10}  • 目錄列與相鄰孿生資料：維持不動。引擎會在領取獎勵時處理。&#10;&#10;</sys:String>
+  <sys:String x:Key="MarkChallengeConfirmWarnings" xml:space="preserve">[!! 請持有對應的神器] 請確認「這個」特定挑戰所對應的封印阿比斯神器目前就在你的背包中。此按鈕只在你至少持有一個封印的阿比斯神器（任何種類）時才會啟用，但下次重新載入時的遊戲內領獎流程，只有在對應此挑戰的神器確實在背包中時才會完成。光靠 Pattern B v1 並不足夠 — 撿取神器才是引擎的關卡判定訊號。&#10;&#10;[!! 已在 Shield II / Spear I / Hooves II / Slash III 驗證過] Pattern B v1 是從引擎自然完成的 Hooves II 挑戰逆向工程而來。此流程寫入領獎前的狀態，並讓引擎在下次載入時補完後續程序。先前直接寫入領獎後狀態的做法都會破壞遊戲內 UI。動作前請先確認你的存檔已備份（自動備份位於 %LOCALAPPDATA%\CrimsonAtomtic\Backups\ — 檔案 → 從備份還原… 可以回復）。&#10;&#10;[!! 會影響遊戲進度] 將 FAR 追蹤器強制設為 state=5 等於告訴引擎此挑戰已完成；依賴此挑戰完成的後續內容／NPC 對話都會被觸發。&#10;&#10;[!! 不會解鎖成就] Steam／平台成就只會在真正的遊戲內完成時觸發。透過修改檔案標記不會觸發成就，而且一旦挑戰進入此狀態，引擎也不會在你之後用正常流程完成時再次觸發。請勿對你打算之後用正常管道完成的挑戰使用此功能。&#10;&#10;要繼續嗎？</sys:String>
   <sys:String x:Key="MarkChallengeCancelled">已取消標記。</sys:String>
 
   <sys:String x:Key="ConfirmDialogYes">是</sys:String>
   <sys:String x:Key="ConfirmDialogNo">否</sys:String>
   <sys:String x:Key="ElementsColBulkFill">批次</sys:String>
   <sys:String x:Key="ElementsBulkFillButton">填滿堆疊</sys:String>
-  <sys:String x:Key="ElementsBulkFillTip">把這個容器內每個物品的 _stackCount 設為其 iteminfo max_stack_count。</sys:String>
+  <sys:String x:Key="ElementsBulkFillTip">把這個容器內每個物品的數量設為其遊戲中的最大堆疊數。</sys:String>
   <sys:String x:Key="ElementsBulkFillConfirmTitle">填滿堆疊至最大值？</sys:String>
   <sys:String x:Key="ElementsColAddItem">新增</sys:String>
   <sys:String x:Key="ElementsAddItemButton">+ 新增道具…</sys:String>
@@ -561,14 +561,14 @@
   <sys:String x:Key="ItemPickerAddToBagTip">把這個物品加入主視窗目前顯示的背包清單。請先打開一個背包 (鑽進 _inventorylist[N]._itemList)；否則點擊會在狀態列回報前置需求。</sys:String>
   <sys:String x:Key="MenuRestoreFromBackup">從備份還原…</sys:String>
   <sys:String x:Key="RestoreFromBackupTitle">從備份還原</sys:String>
-  <sys:String x:Key="RestoreFromBackupColumnHint">在某一列按下「還原」可以將該快照覆寫到目前的存檔。當前狀態「不會」被備份 — 只有在編輯器中執行儲存時才會建立備份。</sys:String>
+  <sys:String x:Key="RestoreFromBackupColumnHint">在某一列按下「還原」可以將該快照覆寫到目前的存檔。目前存檔狀態「不會」被備份 — 只有在編輯器中執行儲存時才會建立備份。</sys:String>
   <sys:String x:Key="RestoreColSlot">Slot (使用者 / 名稱)</sys:String>
   <sys:String x:Key="RestoreColTimestamp">備份時間</sys:String>
   <sys:String x:Key="RestoreColFiles">檔案</sys:String>
   <sys:String x:Key="RestoreColSize">大小</sys:String>
   <sys:String x:Key="RestoreColAction">動作</sys:String>
   <sys:String x:Key="RestoreButton">⤺ 還原</sys:String>
-  <sys:String x:Key="RestoreButtonTip">用此備份覆寫目前的存檔。當前狀態「不會」事先備份 — 若想保留，請先在編輯器中儲存。</sys:String>
+  <sys:String x:Key="RestoreButtonTip">用此備份覆寫目前的存檔。目前的存檔狀態「不會」備份 — 若想保留，請先在編輯器中儲存。</sys:String>
   <sys:String x:Key="EditPanelNestedReadOnly">尚不支援編輯巢狀欄位。請按 Back 回到頂層 block。</sys:String>
   <sys:String x:Key="ElementsColIcon">圖示</sys:String>
   <sys:String x:Key="ElementsColIndex">#</sys:String>
@@ -606,7 +606,7 @@
   <sys:String x:Key="JournalCatFieldEdit">欄位編輯</sys:String>
   <sys:String x:Key="JournalCatBulkFill">批次填滿</sys:String>
   <sys:String x:Key="JournalCatRemoveElement">移除元素</sys:String>
-  <sys:String x:Key="JournalCatAbyssGates">深淵之門</sys:String>
+  <sys:String x:Key="JournalCatAbyssGates">阿比斯之門</sys:String>
   <sys:String x:Key="JournalCatKnowledge">知識</sys:String>
   <sys:String x:Key="JournalCatFactionNodes">勢力據點</sys:String>
   <sys:String x:Key="JournalCatAddItem">新增道具</sys:String>
@@ -622,10 +622,10 @@
   <sys:String x:Key="MarkFailedGeneric">標記失敗：{0}。存檔狀態可能為部分套用 — 不寫入直接重新載入即可回復。</sys:String>
   <sys:String x:Key="BulkMarkProgress">正在套用 Pattern B v1：{0} / {1}…</sys:String>
   <sys:String x:Key="BulkMarkProgressKey">正在套用 Pattern B v1：{0} / {1} — 挑戰 0x{2}</sys:String>
-  <sys:String x:Key="JournalBulkMark">已批次完成 {0} 個封印深淵神器挑戰（Pattern B v1）</sys:String>
+  <sys:String x:Key="JournalBulkMark">已批次完成 {0} 個封印阿比斯神器挑戰（Pattern B v1）</sys:String>
   <sys:String x:Key="BulkMarkDone">完成：已透過 Pattern B v1 批次完成 {1} 個中的 {0} 個符合條件的封印深淵神器挑戰。</sys:String>
   <sys:String x:Key="BulkMarkFailed">批次標記在挑戰 {0} 失敗（已套用 {1}/{2}）：{3}。存檔狀態為部分套用 — 不寫入直接重新載入即可回復。</sys:String>
-  <sys:String x:Key="JournalBulkMarkPartial">已批次完成 {0} 個封印深淵神器挑戰（Pattern B v1，部分 — 在 {1} 失敗）</sys:String>
+  <sys:String x:Key="JournalBulkMarkPartial">已批次完成 {0} 個封印阿比斯神器挑戰（Pattern B v1，部分 — 在 {1} 失敗）</sys:String>
 
   <!-- 欄位編輯 journal -->
   <sys:String x:Key="JournalFieldEditAbsentWord">不存在</sys:String>
@@ -661,14 +661,14 @@
 
   <!-- 解鎖所有深淵之門 (地圖探索) + 知識注入 -->
   <sys:String x:Key="AbyssNoKnowledgeInfo">無事可做 — knowledgeinfo.pabgb 未載入（未設定遊戲安裝路徑）。</sys:String>
-  <sys:String x:Key="AbyssNoEntries">無事可做 — 在 knowledgeinfo.pabgb 中找不到深淵之門知識項目。</sys:String>
-  <sys:String x:Key="AbyssAllDiscovered">無事可做 — 全部 {0} 個深淵之門知識項目皆已探索。</sys:String>
-  <sys:String x:Key="AbyssConfirmTitle">解鎖所有深淵之門（地圖探索）？</sys:String>
-  <sys:String x:Key="AbyssConfirmBody" xml:space="preserve">要將 {0} 個深淵之門知識鍵值注入 {1}._list 嗎？&#10;&#10;從 knowledgeinfo.pabgb 收集到 {2} 個相符鍵值（{3} 個名稱前綴）。&#10;{4} 個已存在於你的存檔 — 維持不動。&#10;將附加 {0} 個。&#10;&#10;這只是 **探索旗標** 那一層 — 之後深淵之門會顯示在地圖上。要真正解鎖可穿越的門，請用 工具 → 編輯深淵之門… 做個別狀態變更。&#10;&#10;不寫入直接重新載入即可回復。</sys:String>
+  <sys:String x:Key="AbyssNoEntries">無事可做 — 在 knowledgeinfo.pabgb 中找不到阿比斯之門知識項目。</sys:String>
+  <sys:String x:Key="AbyssAllDiscovered">無事可做 — 全部 {0} 個阿比斯之門知識項目皆已探索。</sys:String>
+  <sys:String x:Key="AbyssConfirmTitle">解鎖所有阿比斯之門（地圖探索）？</sys:String>
+  <sys:String x:Key="AbyssConfirmBody" xml:space="preserve">要將 {0} 個阿比斯之門知識鍵值注入 {1}._list 嗎？&#10;&#10;從 knowledgeinfo.pabgb 收集到 {2} 個相符鍵值（{3} 個名稱前綴）。&#10;{4} 個已存在於你的存檔 — 維持不動。&#10;將附加 {0} 個。&#10;&#10;這只是 **探索旗標** 那一層 — 之後深淵之門會顯示在地圖上。要真正解鎖可穿越的門，請用 工具 → 編輯深淵之門… 做個別狀態變更。&#10;&#10;不寫入直接重新載入即可回復。</sys:String>
   <sys:String x:Key="KnowledgeInjecting">正在注入 {0} 個知識鍵值…</sys:String>
-  <sys:String x:Key="JournalAbyssAdded">已批次新增 {0} 個深淵之門知識鍵值到 {1}._list（地圖探索）</sys:String>
-  <sys:String x:Key="AbyssDone">完成：已新增 {0} 個深淵之門知識鍵值（{2}._list 中共 {1} 個）。</sys:String>
-  <sys:String x:Key="JournalAbyssAddedPartial">已批次新增 {0}/{1} 個深淵之門知識鍵值，於鍵值 0x{2} 前失敗</sys:String>
+  <sys:String x:Key="JournalAbyssAdded">已批次新增 {0} 個阿比斯之門知識鍵值到 {1}._list（地圖探索）</sys:String>
+  <sys:String x:Key="AbyssDone">完成：已新增 {0} 個阿比斯之門知識鍵值（{2}._list 中共 {1} 個）。</sys:String>
+  <sys:String x:Key="JournalAbyssAddedPartial">已批次新增 {0}/{1} 個阿比斯之門知識鍵值，於鍵值 0x{2} 前失敗</sys:String>
   <sys:String x:Key="KnowledgeInjectFailed">在 {0}/{1} 後失敗：{2}（代碼 {3}）。{4}</sys:String>
   <sys:String x:Key="KnowledgeInjectFailedPartial">不寫入直接重新載入即可回復部分進度。</sys:String>
   <sys:String x:Key="KnowledgeInjectFailedNone">未寫入任何變更。</sys:String>
@@ -740,9 +740,9 @@
   <sys:String x:Key="MountMethodTransplant">移植元素 + 知識</sys:String>
 
   <!-- 編輯深淵之門對話框 -->
-  <sys:String x:Key="AbyssGateNoEntries">gimmickinfo.pabgb 中沒有深淵／超空間項目（未設定遊戲安裝？）。對話框為空。</sys:String>
-  <sys:String x:Key="AbyssGateNoneMatched">已掃描 {1} 個 {2} 根節點下的 {0} 個巢狀 gimmick 元素 — 沒有深淵之門 gimmick 符合允許清單。</sys:String>
-  <sys:String x:Key="AbyssGateLoaded">已從 {2} 個 {3} 根節點下的 {1} 個巢狀 gimmick 元素載入 {0} 個深淵之門列。切換 Lock 狀態以翻轉 _initStateNameHash;重新載入存檔即可回復。</sys:String>
+  <sys:String x:Key="AbyssGateNoEntries">gimmickinfo.pabgb 中沒有阿比斯／超空間項目（未設定遊戲安裝？）。對話框為空。</sys:String>
+  <sys:String x:Key="AbyssGateNoneMatched">已掃描 {1} 個 {2} 根節點下的 {0} 個巢狀 gimmick 元素 — 沒有阿比斯之門 gimmick 符合允許清單。</sys:String>
+  <sys:String x:Key="AbyssGateLoaded">已從 {2} 個 {3} 根節點下的 {1} 個巢狀 gimmick 元素載入 {0} 個阿比斯之門列。切換 Lock 狀態以翻轉 _initStateNameHash;重新載入存檔即可回復。</sys:String>
   <sys:String x:Key="AbyssGateToggleFailed">在 {0} / {1} 切換失敗：{2}</sys:String>
   <sys:String x:Key="JournalAbyssToggle">已將 {0} / {1} 設為 {2}</sys:String>
   <sys:String x:Key="AbyssGateToggleDone">已將 {0} / {1} 設為 {2}。</sys:String>
@@ -754,7 +754,7 @@
   <sys:String x:Key="RestoreNoHook">還原需要確認對話框掛鉤 — UI bug，請回報。</sys:String>
   <sys:String x:Key="RestoreNoRoot">還原失敗：本機未偵測到 {0} 的存檔根目錄。寫入原始存檔的啟動器可能未安裝於此。</sys:String>
   <sys:String x:Key="RestoreConfirmTitle">從備份還原？</sys:String>
-  <sys:String x:Key="RestoreConfirmBody" xml:space="preserve">要從 {1} 拍攝的備份還原 {0} 嗎？&#10;&#10;平台：{2}&#10;檔案：{3}（{4:N0} bytes）&#10;目標：{5}&#10;&#10;這會覆寫該插槽目前的存檔。當前狀態「不會」被備份 — 只有在編輯器中執行儲存時才會建立備份。</sys:String>
+  <sys:String x:Key="RestoreConfirmBody" xml:space="preserve">要從 {1} 拍攝的備份還原 {0} 嗎？&#10;&#10;平台：{2}&#10;檔案：{3}（{4:N0} bytes）&#10;目標：{5}&#10;&#10;這會覆寫該插槽目前的存檔。目前存檔狀態「不會」被備份 — 只有在編輯器中執行儲存時才會建立備份。</sys:String>
   <sys:String x:Key="RestoreCancelled">已取消還原。</sys:String>
   <sys:String x:Key="RestoreFailed">還原失敗：{0}</sys:String>
   <sys:String x:Key="RestoreDone">已從 {1} 還原 {0}。</sys:String>
@@ -767,10 +767,10 @@
   <sys:String x:Key="SaveFailedTitle">儲存失敗</sys:String>
   <sys:String x:Key="SaveFailedBody">無法寫入存檔：{0}。應用程式保持開啟,你可以重試或選擇捨棄。</sys:String>
   <sys:String x:Key="OpenSaveFailedTitle">無法開啟存檔</sys:String>
-  <sys:String x:Key="OpenSaveFailedBody">載入存檔失敗：{0}。檔案可能已損毀、正被執行中的遊戲鎖定,或來自不支援的版本。</sys:String>
+  <sys:String x:Key="OpenSaveFailedBody">載入存檔失敗：{0}。檔案可能已損毀、被正在執行中的遊戲鎖定,或來自不支援的版本。</sys:String>
   <sys:String x:Key="DyeScanFailedTitle">無法掃描已染色的道具</sys:String>
   <sys:String x:Key="DyeSlotOpenFailedTitle">無法開啟染色槽編輯器</sys:String>
-  <sys:String x:Key="AbyssGatesLoadFailedTitle">無法載入深淵之門</sys:String>
+  <sys:String x:Key="AbyssGatesLoadFailedTitle">無法載入阿比斯之門</sys:String>
   <sys:String x:Key="AbyssGatesLoadFailedBody">掃描存檔失敗：{0}（代碼 {1}）</sys:String>
 
   <!-- 染色槽編輯對話框 -->
