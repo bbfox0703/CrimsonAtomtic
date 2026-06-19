@@ -37,7 +37,7 @@
     <!-- UE5CEDumper uses.                                              -->
     <!-- ============================================================ -->
     <VerMajor>1</VerMajor>
-    <VerMinor>11</VerMinor>
+    <VerMinor>12</VerMinor>
     <VerPatch>1</VerPatch>
     <BuildNumberFile>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\build_number.txt'))</BuildNumberFile>
     <VerBuild Condition="Exists('$(BuildNumberFile)')">$([System.IO.File]::ReadAllText('$(BuildNumberFile)').Trim())</VerBuild>
