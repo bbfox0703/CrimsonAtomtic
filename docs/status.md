@@ -7,34 +7,43 @@
 > **[status-archive.md](status-archive.md)** — look there only when you need
 > the deep history behind a decision.
 >
-> Last updated: **2026-06-12** — released **v1.11.01** (editor aligned to game
-> 1.11).
+> Last updated: **2026-06-19** — editor aligned to game **1.12** (v1.12.01),
+> verified locally. Release is **pending crimson-rs 1.12 landing on `main`**
+> (see the release-boundary note in Current state).
 
 ## Current state
 
-- **Editor v1.11.01**, aligned to live game **1.11**. Cut as a **DRAFT**
-  GitHub release via the annotated tag `v1.11.01`; CI builds the single-file
-  AOT exe and assembles bilingual release notes — a human still clicks
-  **Publish** in the GitHub UI after verifying the zip. See
-  [release-process.md](release-process.md).
+- **Editor v1.12.01**, aligned to live game **1.12** (`VerMinor` 11 → 12,
+  `VerPatch` reset to 1 per the lock-step `VerMinor == ParserTargetMinor`
+  convention). Verified locally this session; **NOT yet released** — see the
+  release-boundary note below. The release flow (annotated `v*` tag → CI
+  single-file AOT exe + bilingual notes → human clicks **Publish**) is
+  unchanged; see [release-process.md](release-process.md).
 - **Save read/write is version-agnostic.** Each save embeds its own schema, so
-  1.05–1.11 saves round-trip byte-perfect in their own format (no version
-  conversion). Verified this session at the C# loader level: slot107 (1.11
-  native), slot100 (old-format) and slot102 (slot100's 1.11 save-as) all load
-  HMAC-ok with `fieldsDecoded == fieldsPresent` (no undecoded drift) and
-  survive a write round-trip.
+  1.05–1.12 saves round-trip in their own format (no version conversion). 1.12
+  brought **no save-body drift** (format still v2 / flags `0x0080`). Verified
+  this session: the live C# loader suite (slot0/1/2) round-trips clean, and the
+  new-format `slot106` / `slot107` parse `hmac_ok` with `undecoded_bytes=0`
+  (1107 blocks, 3098/3098 fields decoded) and re-seal decode-stable.
 - **Name/icon resolution targets the *installed* game.**
-  `GameDataVersion.ParserTargetMinor = 11`, `CompatibleMinors = {11}`. 1.11
-  drifted the iteminfo schema (a new per-item `u8`
-  `unk_post_apply_drop_stat_type`; 6,333 items) so 1.10-and-earlier installs
-  no longer round-trip against this parser and are warned at startup. No
-  save-body drift in 1.11.
-- **Vendor `crimson-rs` at `cc37011`** (1.11 iteminfo, commit `8fdeb45`). The
-  same commit is on `bbfox0703/crimson-rs` **`main`**, which is what CI clones
-  — so a release builds against the right parser.
+  `GameDataVersion.ParserTargetMinor = 12`, `CompatibleMinors = {12}`. 1.12
+  drifted the iteminfo schema (+150 items → 6,483; four byte-perfect layout
+  changes) and the `partprefabdyeslotinfo` dye table (−143 rows → 968), so
+  1.11-and-earlier installs no longer round-trip against this parser and are
+  warned at startup. Full per-field breakdown in
+  [game-versions.md](game-versions.md).
+- **⚠️ Release-boundary note: crimson-rs 1.12 is NOT yet on `main`.** The 1.12
+  parser lives on the source repo `D:\Github\crimson-rs` **`dev`** (commit
+  `0694dfb`, "feat(1.12): … iteminfo + dye-slot + save mutation"); it is not
+  pushed/merged. For this session the gitignored `vendor/crimson-rs` was synced
+  from that local `dev` (fetch + `reset --hard`, no tracked files touched) so
+  the build picks up 1.12. **Before tagging a 1.12 release**, land `0694dfb` on
+  `bbfox0703/crimson-rs` `main` via PR — CI clones `main`, so a release built
+  before that lands would silently ship the 1.11 parser.
 - **Health:** 346 tests pass (0 skipped — live-install + catalog tests parse
-  the real 1.11 iteminfo). Debug build clean (0/0). AOT publish clean (single
-  `CrimsonAtomtic.exe` ~27.5 MB, `crimson_rs.dll` folded in).
+  the real 1.12 iteminfo). Debug build clean (0/0). AOT publish verified this
+  session (single self-contained `CrimsonAtomtic.exe`, `crimson_rs` staticlib
+  folded in).
 
 ## Feature ledger
 
@@ -47,7 +56,7 @@ are in [status-archive.md](status-archive.md).
 ## Open work / backlog
 
 - **`ParserTargetMinor` / `CompatibleMinors` are still hard-coded C#-side** —
-  this was the *fourth* manual bump (8→9→10→11). Promote to a
+  this was the *fifth* manual bump (8→9→10→11→12). Promote to a
   `crimson_parser_target_gamedata_minor()` + compatible-set C ABI so Rust is
   the single source of truth and the values stop being duplicated. Friction
   recurs every patch; do it next time this is touched.
@@ -151,6 +160,15 @@ Each step should be green. If anything fails, fix it before touching new code
 
 One line per milestone; full detail in [status-archive.md](status-archive.md).
 
+- **2026-06-19 — game 1.12 alignment (v1.12.01, unreleased)**: third
+  consecutive iteminfo schema drift (+150 items → 6,483; four byte-perfect
+  layout changes) + `partprefabdyeslotinfo` dye-table drift (−143 rows → 968),
+  no save-body change. Synced the gitignored `vendor/crimson-rs` from local
+  `crimson-rs` `dev` `0694dfb` (not yet on `main`), rebuilt the native lib,
+  bumped `ParserTargetMinor` / `CompatibleMinors` / `VerMinor` to 12, refreshed
+  the paver tests. 346 tests green against the real 1.12 install;
+  `slot106` / `slot107` verified `hmac_ok` + `undecoded_bytes=0` +
+  decode-stable. Release deferred until crimson-rs 1.12 lands on `main`.
 - **2026-06-12 — v1.11.01**: aligned editor to game 1.11 (iteminfo `u8`
   drift, no save-body change); rebuilt native lib; bumped NuGet packages +
   fixed the ILCompiler-pin / CI `link.exe` traps; refined zh-TW translations;

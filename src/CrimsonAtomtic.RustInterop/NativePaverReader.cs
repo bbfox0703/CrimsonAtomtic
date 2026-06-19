@@ -14,8 +14,8 @@ namespace CrimsonAtomtic.RustInterop;
 /// <param name="Minor">Minor — the **schema-compatibility key**.
 /// Iteminfo / save-body parsers target a specific minor; running them
 /// against a mismatched minor either crashes or silently corrupts.
-/// Currently <see cref="ParserTargetMinor"/> = 11.</param>
-/// <param name="Patch">Sub-version (e.g. <c>1.11</c> → 0, <c>1.11.01</c> → 1).
+/// Currently <see cref="ParserTargetMinor"/> = 12.</param>
+/// <param name="Patch">Sub-version (e.g. <c>1.12</c> → 0, <c>1.12.01</c> → 1).
 /// Compatible within the same minor.</param>
 /// <param name="Build">Opaque build identifier. Bumps every PA hotfix
 /// — informational only.</param>
@@ -30,36 +30,37 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     /// </summary>
     /// <remarks>
     /// Bumped together with the vendor refresh that lands a new
-    /// patch's parser. Latest: 1.10 → 1.11 in vendor commit
-    /// <c>cc37011</c> (iteminfo change <c>8fdeb45</c>). 1.11 DRIFTED the
-    /// iteminfo schema again — it inserts a new boolean <c>u8</c>
-    /// (<c>unk_post_apply_drop_stat_type</c>) between
-    /// <c>apply_drop_stat_type</c> and <c>drop_default_data</c>, so every
-    /// item grows by exactly one byte (anchored export: ok=6,333,
-    /// leftover=0). The parser therefore targets the 1.11 layout
-    /// exclusively and 1.10 iteminfo no longer round-trips against it.
-    /// Unlike the 1.09→1.10 jump, 1.11 brought NO save-body drift — the
-    /// save format is unchanged (v2 / flags 0x0080), all live slots parse
-    /// hmac_ok with undecoded_bytes=0, and slot100 (old-format) + slot102
-    /// (its 1.11 save-as) both round-trip clean. The prior 1.10 fix (the
-    /// ContentsMiscSaveData leading-pad scan widened to 4, commit
-    /// <c>f1513b8</c>) still applies. Keep this in sync with the Rust
-    /// side; bump both at the same time on the next patch.
+    /// patch's parser. Latest: 1.11 → 1.12 in vendor commit
+    /// <c>0694dfb</c>. 1.12 DRIFTED the iteminfo schema again (+150
+    /// items, 6,333 → 6,483) with four byte-perfect layout changes: a
+    /// payload-free <c>SubItem</c> <c>type_id==16</c> variant, an
+    /// unconditional <c>unk_pre_max_endurance: u32</c>, a sibling-gated
+    /// <c>unk_pre_gimmick_visual: u32</c> (equipment/gem only), and
+    /// inter-element <c>u32</c> separators in <c>EnchantData</c>. So 1.11
+    /// iteminfo no longer round-trips and the parser targets the 1.12
+    /// layout exclusively. The <c>partprefabdyeslotinfo</c> table also
+    /// drifted (−143 rows, 1,111 → 968, plus a new 5-byte per-slot
+    /// field) — handled Rust-side. Like 1.11, 1.12 brought NO save-body
+    /// drift: the save format is unchanged (v2 / flags 0x0080), every
+    /// live slot (incl. the new-format slot106/slot107) parses hmac_ok
+    /// with undecoded_bytes=0, and a body-stable write round-trips. Keep
+    /// this in sync with the Rust side; bump both at the same time on the
+    /// next patch.
     /// </remarks>
-    public const ushort ParserTargetMinor = 11;
+    public const ushort ParserTargetMinor = 12;
 
     /// <summary>
     /// Every game-data minor whose iteminfo / save-body schema this
     /// build can load without mis-decoding — not just the single
-    /// latest target. 1.11 changed the iteminfo layout vs 1.10 (see
-    /// <see cref="ParserTargetMinor"/> remarks — a new per-item
-    /// <c>u8</c>), so the older minors are NOT byte-compatible with
+    /// latest target. 1.12 changed the iteminfo layout vs 1.11 (see
+    /// <see cref="ParserTargetMinor"/> remarks — +150 items and four
+    /// schema drifts), so the older minors are NOT byte-compatible with
     /// this parser and item-name resolution would fail against them.
-    /// The allow-list is therefore just <c>{11}</c>; a user still on
-    /// 1.10 or earlier is warned to update.
+    /// The allow-list is therefore just <c>{12}</c>; a user still on
+    /// 1.11 or earlier is warned to update.
     /// <see cref="ParserTargetMinor"/> is always present here.
     /// </summary>
-    public static readonly ushort[] CompatibleMinors = [11];
+    public static readonly ushort[] CompatibleMinors = [12];
 
     /// <summary>
     /// True when this install's schema is one this parser build can
@@ -71,14 +72,14 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     public bool IsCompatibleWithParser => Array.IndexOf(CompatibleMinors, Minor) >= 0;
 
     /// <summary>
-    /// Human-readable version (e.g. <c>"1.11.00 build 0x202c7a24"</c>).
+    /// Human-readable version (e.g. <c>"1.12.00 build 0xac738402"</c>).
     /// Suitable for an About / Settings dialog or a status-bar field.
     /// </summary>
     public string DisplayString =>
         $"{Major}.{Minor:D2}.{Patch:D2} build 0x{Build:x8}";
 
     /// <summary>
-    /// Short version string without the build id (e.g. <c>"1.11.00"</c>).
+    /// Short version string without the build id (e.g. <c>"1.12.00"</c>).
     /// Suitable for inline log lines / warning dialogs where the build
     /// number is noise.
     /// </summary>
