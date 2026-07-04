@@ -3248,6 +3248,35 @@ internal static partial class NativeMethods
         CrimsonPartPrefabDyeSlotInfoHandle handle, uint prefabKey, uint slotIdx,
         byte* outMask);
 
+    // 1.13 "expanded dyeable equipment" — a slot's optional second
+    // (extra) material/dye layer (DyeExtraLayer). extra_layer_count is 0
+    // on 1.07-1.12 rows and unaffected 1.13 slots, 1 on the new gear;
+    // layer_idx past the count returns OUT_OF_RANGE (-10).
+
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_slot_info_lookup_slot_extra_layer_count")]
+    public static partial int PartPrefabDyeSlotInfoLookupSlotExtraLayerCount(
+        CrimsonPartPrefabDyeSlotInfoHandle handle, uint prefabKey, uint slotIdx,
+        out uint count);
+
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_slot_info_lookup_slot_extra_layer_material")]
+    public static unsafe partial int PartPrefabDyeSlotInfoLookupSlotExtraLayerMaterial(
+        CrimsonPartPrefabDyeSlotInfoHandle handle, uint prefabKey, uint slotIdx,
+        uint layerIdx, uint matIdx, byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_slot_info_lookup_slot_extra_layer_mask")]
+    public static unsafe partial int PartPrefabDyeSlotInfoLookupSlotExtraLayerMask(
+        CrimsonPartPrefabDyeSlotInfoHandle handle, uint prefabKey, uint slotIdx,
+        uint layerIdx, byte* outMask);
+
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_slot_info_lookup_slot_extra_layer_flag")]
+    public static partial int PartPrefabDyeSlotInfoLookupSlotExtraLayerFlag(
+        CrimsonPartPrefabDyeSlotInfoHandle handle, uint prefabKey, uint slotIdx,
+        uint layerIdx, out byte outFlag);
+
     [LibraryImport(LibraryName, EntryPoint = "crimson_part_prefab_dye_slot_info_get_entry_key")]
     public static partial int PartPrefabDyeSlotInfoGetEntryKey(
         CrimsonPartPrefabDyeSlotInfoHandle handle, uint idx, out uint outKey);

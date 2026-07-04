@@ -1147,6 +1147,44 @@ public sealed class LocalizationProvider : IDisposable
     }
 
     /// <summary>
+    /// Describe a dye slot's gamedata material layers as a short display
+    /// hint. Returns the primary-layer default material and, for 1.13's
+    /// expanded dyeable gear (cloaks / shields / quivers / skullknight
+    /// set), the second (extra) layer's material — e.g.
+    /// <c>"leather + cloth"</c>. Shows only the primary when the slot has
+    /// no extra layer (<c>"leather"</c>). Returns <c>null</c> when the
+    /// item's partprefab join or the slot-info bridge is unavailable, or
+    /// when neither layer names a material.
+    /// </summary>
+    public string? DescribeDyeSlotLayers(uint itemKey, int slotIdx)
+    {
+        if (_itemPartPrefab is null || _dyeSlotInfo is null || slotIdx < 0) return null;
+        try
+        {
+            if (_itemPartPrefab.LookupFirstPrefabKey(itemKey) is not { } prefabKey)
+            {
+                return null;
+            }
+            var primary = _dyeSlotInfo.LookupSlotDefaultMaterial(prefabKey, slotIdx, 0);
+            string? extra = null;
+            if ((_dyeSlotInfo.LookupSlotExtraLayerCount(prefabKey, slotIdx) ?? 0) >= 1)
+            {
+                extra = _dyeSlotInfo.LookupSlotExtraLayerMaterial(prefabKey, slotIdx, 0, 0);
+            }
+            var hasPrimary = !string.IsNullOrEmpty(primary);
+            var hasExtra = !string.IsNullOrEmpty(extra);
+            if (hasPrimary && hasExtra) return $"{primary} + {extra}";
+            if (hasPrimary) return primary;
+            if (hasExtra) return extra;
+            return null;
+        }
+        catch (CrimsonSaveException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Get the <c>(GimmickInfoKey, InternalName)</c> pair at insertion
     /// index <paramref name="index"/>. Returns <c>null</c> when the
     /// bridge isn't loaded or <paramref name="index"/> is out of range.
