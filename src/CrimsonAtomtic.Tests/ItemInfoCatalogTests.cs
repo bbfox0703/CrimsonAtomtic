@@ -162,16 +162,17 @@ public sealed class ItemInfoCatalogTests
         Assert.Null(cat.LookupSummary(uint.MaxValue));
         Assert.Null(cat.LookupFlags(uint.MaxValue));
 
-        // Pyeonjeon_Arrow (key 2200) — vendor pins this as
-        // item_type=0 (arrow) and explicitly NOT
-        // IS_EQUIP_QUICK_SLOT_VISIBLE in the upstream live-install
-        // test. We mirror just enough of that pin to catch a parser
-        // regression here; the broader cross-version drift the upstream
-        // covers is out of scope for this binding test.
+        // Pyeonjeon_Arrow (key 2200) — vendor pins this as an arrow that is
+        // explicitly NOT IS_EQUIP_QUICK_SLOT_VISIBLE in the upstream
+        // live-install test. Its item_type was remapped 0 → 23 in game 1.13
+        // (a game-side enum shuffle, not a parser drift — crimson-rs tag
+        // v1.0.13.x bumped the same pin). We mirror just enough of that pin
+        // to catch a parser regression here; the broader cross-version drift
+        // the upstream covers is out of scope for this binding test.
         var arrow = cat.LookupSummary(2200);
         Assert.NotNull(arrow);
         Assert.Equal(2200u, arrow!.Value.Key);
-        Assert.Equal(0, arrow.Value.ItemType);
+        Assert.Equal(23, arrow.Value.ItemType);
         Assert.False(arrow.Value.Flags.HasFlag(ItemInfoFlags.IsEquipQuickSlotVisible),
             "Pyeonjeon_Arrow should not be flagged as IS_EQUIP_QUICK_SLOT_VISIBLE");
 

@@ -35,8 +35,9 @@ public sealed class PazExtractorTests
 
     private static string? FindIconsPamt()
     {
-        // 0012 ships every icon DDS — including the partial-compressed ones
-        // (~97% of the directory) the new decompressor unblocks.
+        // 0012 ships every icon DDS under the partial-compression layout the
+        // decompressor unblocks (the layout covers ~the whole directory;
+        // whether each file's payload is LZ4 or identity-stored varies).
         string[] candidates =
         [
             @"D:\SteamLibrary\steamapps\common\Crimson Desert",
@@ -62,14 +63,23 @@ public sealed class PazExtractorTests
     /// well-known icons from <c>0012/ui/texture/icon/</c> — pre-Phase 3 these
     /// would have surfaced as <c>BODY_PARSE</c> from the Rust side. Skips
     /// cleanly when no install / dll is present.
+    /// <para>
+    /// Note: game 1.13 repacked this directory so genuinely LZ4-compressed
+    /// icons are now rare (~14 of 7,815 — the large <c>itemicon_gachaimage_*</c>
+    /// loot-box textures); the earlier <c>cd_icon_skill_*</c> icons were
+    /// renamed/removed. The LZ4 case below uses one of those gacha images
+    /// (compressed &lt; uncompressed) so it still exercises the prefix-dict
+    /// decoder; the rest of the directory is identity-stored under the same
+    /// partial-compression layout.
+    /// </para>
     /// </summary>
     [Theory]
     // LZ4-compressed: exercises the header(128)+lz4(prefix-dict) decoder.
-    [InlineData("ui/texture/icon", "cd_icon_skill_07.dds")]
+    [InlineData("ui/texture/icon", "itemicon_gachaimage_knowledge_book_00.dds", true)]
     // Identity-stored: exercises the c==u fast path.
-    [InlineData("ui/texture/icon", "icon_item_collection_prop_statue_0001.dds")]
+    [InlineData("ui/texture/icon", "icon_item_collection_prop_statue_0001.dds", false)]
     public void ExtractFile_LiveInstall_PartialCompressedIconExtractsAsValidDds(
-        string directory, string fileName)
+        string directory, string fileName, bool lz4Compressed)
     {
         if (!File.Exists("crimson_rs.dll"))
         {
@@ -82,6 +92,31 @@ public sealed class PazExtractorTests
         }
 
         var extractor = new NativePazExtractor();
+
+        // Enforce the intended coverage split via the PAZ entry metadata: the
+        // LZ4 row must be genuinely compressed (compressed < uncompressed),
+        // the identity row genuinely stored (compressed >= uncompressed).
+        // Without this, both InlineData rows would assert identically (DDS
+        // magic + length) and a future repack that flipped the LZ4 file to
+        // identity-stored — as 1.13 did to nearly this whole directory — would
+        // silently drop the prefix-dict LZ4 decode-path coverage while staying
+        // green. See the class note on FindIconsPamt.
+        var entry = extractor.ListDir(pamt, directory)
+            .FirstOrDefault(e => e.Name == fileName);
+        Assert.Equal(fileName, entry.Name);
+        if (lz4Compressed)
+        {
+            Assert.True(entry.CompressedSize < entry.UncompressedSize,
+                $"{fileName} expected LZ4-compressed (compressed < uncompressed), got " +
+                    $"compressed={entry.CompressedSize} uncompressed={entry.UncompressedSize}");
+        }
+        else
+        {
+            Assert.True(entry.CompressedSize >= entry.UncompressedSize,
+                $"{fileName} expected identity-stored (compressed >= uncompressed), got " +
+                    $"compressed={entry.CompressedSize} uncompressed={entry.UncompressedSize}");
+        }
+
         var bytes = extractor.ExtractFile(pamt, directory, fileName);
 
         Assert.NotEmpty(bytes);

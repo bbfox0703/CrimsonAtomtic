@@ -7,43 +7,48 @@
 > **[status-archive.md](status-archive.md)** — look there only when you need
 > the deep history behind a decision.
 >
-> Last updated: **2026-06-19** — editor aligned to game **1.12** (v1.12.01),
-> verified locally. Release is **pending crimson-rs 1.12 landing on `main`**
-> (see the release-boundary note in Current state).
+> Last updated: **2026-07-04** — editor aligned to game **1.13** (v1.13.01),
+> verified locally. `ParserTargetMinor` / `CompatibleMinors` are now read from
+> the crimson-rs C ABI (Rust is the single source of truth); crimson-rs 1.13 is
+> vendored from `main` (tag `v1.0.13.x`).
 
 ## Current state
 
-- **Editor v1.12.01**, aligned to live game **1.12** (`VerMinor` 11 → 12,
+- **Editor v1.13.01**, aligned to live game **1.13** (`VerMinor` 12 → 13,
   `VerPatch` reset to 1 per the lock-step `VerMinor == ParserTargetMinor`
-  convention). Verified locally this session; **NOT yet released** — see the
-  release-boundary note below. The release flow (annotated `v*` tag → CI
-  single-file AOT exe + bilingual notes → human clicks **Publish**) is
-  unchanged; see [release-process.md](release-process.md).
+  convention — but note `VerMinor` is still a **manual** build-identity bump,
+  while `ParserTargetMinor` is now **ABI-sourced**). Verified locally this
+  session. The prior 1.12 alignment was aligned but never publicly released;
+  1.13 supersedes it. The release flow (annotated `v*` tag → CI single-file
+  AOT exe + bilingual notes → human clicks **Publish**) is unchanged; see
+  [release-process.md](release-process.md).
 - **Save read/write is version-agnostic.** Each save embeds its own schema, so
-  1.05–1.12 saves round-trip in their own format (no version conversion). 1.12
+  1.05–1.13 saves round-trip in their own format (no version conversion). 1.13
   brought **no save-body drift** (format still v2 / flags `0x0080`). Verified
   this session: the live C# loader suite (slot0/1/2) round-trips clean, and the
-  new-format `slot106` / `slot107` parse `hmac_ok` with `undecoded_bytes=0`
-  (1107 blocks, 3098/3098 fields decoded) and re-seal decode-stable.
+  live-1.13 `slot107` parses `hmac_ok` with `undecoded_bytes=0` and re-seals
+  decode-stable.
 - **Name/icon resolution targets the *installed* game.**
-  `GameDataVersion.ParserTargetMinor = 12`, `CompatibleMinors = {12}`. 1.12
-  drifted the iteminfo schema (+150 items → 6,483; four byte-perfect layout
-  changes) and the `partprefabdyeslotinfo` dye table (−143 rows → 968), so
-  1.11-and-earlier installs no longer round-trip against this parser and are
-  warned at startup. Full per-field breakdown in
-  [game-versions.md](game-versions.md).
-- **⚠️ Release-boundary note: crimson-rs 1.12 is NOT yet on `main`.** The 1.12
-  parser lives on the source repo `D:\Github\crimson-rs` **`dev`** (commit
-  `0694dfb`, "feat(1.12): … iteminfo + dye-slot + save mutation"); it is not
-  pushed/merged. For this session the gitignored `vendor/crimson-rs` was synced
-  from that local `dev` (fetch + `reset --hard`, no tracked files touched) so
-  the build picks up 1.12. **Before tagging a 1.12 release**, land `0694dfb` on
-  `bbfox0703/crimson-rs` `main` via PR — CI clones `main`, so a release built
-  before that lands would silently ship the 1.11 parser.
-- **Health:** 346 tests pass (0 skipped — live-install + catalog tests parse
-  the real 1.12 iteminfo). Debug build clean (0/0). AOT publish verified this
-  session (single self-contained `CrimsonAtomtic.exe`, `crimson_rs` staticlib
-  folded in).
+  `GameDataVersion.ParserTargetMinor` and `CompatibleMinors` are now read from
+  the crimson-rs C ABI (`crimson_parser_target_gamedata_minor()` → 13;
+  `crimson_parser_compatible_gamedata_minors()` → {13}) — no longer hand-coded.
+  1.13 drifted the iteminfo schema (+25 items → 6,508; `SubItem` `type_id`
+  16→17; `prefab_data_list` + `gimmick_visual_prefab_data_list` merged into
+  `MergedPrefabVisualData` relocated to item end) and grew the
+  `partprefabdyeslotinfo` dye table (968 → 1,538 rows, +570; new additive
+  `DyeExtraLayer` 2nd layer), all inside the Rust parser, so 1.12-and-earlier
+  installs no longer round-trip against this parser and are warned at startup.
+  Full per-field breakdown in [game-versions.md](game-versions.md).
+- **crimson-rs 1.13 is on `main`.** The 1.13 parser (iteminfo relocation/merge
+  + dye 2nd layer + the parser-target C ABI) is merged to
+  `bbfox0703/crimson-rs` `main` and tagged **`v1.0.13.x`** (vendored at
+  `7462f0e`). CI clones `main`, so a release cut now ships the 1.13 parser.
+  Reminder for the next patch: land the crimson-rs change on `main` *before*
+  tagging a CrimsonAtomtic release.
+- **Health:** full suite green this session (live-install + catalog tests parse
+  the real 1.13 iteminfo, 6,508 items). Debug build clean (0/0). AOT publish
+  verified this session (single self-contained `CrimsonAtomtic.exe`,
+  `crimson_rs` staticlib folded in).
 
 ## Feature ledger
 
@@ -55,11 +60,6 @@ are in [status-archive.md](status-archive.md).
 
 ## Open work / backlog
 
-- **`ParserTargetMinor` / `CompatibleMinors` are still hard-coded C#-side** —
-  this was the *fifth* manual bump (8→9→10→11→12). Promote to a
-  `crimson_parser_target_gamedata_minor()` + compatible-set C ABI so Rust is
-  the single source of truth and the values stop being duplicated. Friction
-  recurs every patch; do it next time this is touched.
 - **🐞 World Map parchment composite layer-alignment bug** (from the
   2026-05-17 part-14 work) — the `blur_height` and `road_sdf` layers disagree
   on world coverage, so roads land in the wrong places relative to the
@@ -160,6 +160,24 @@ Each step should be green. If anything fails, fix it before touching new code
 
 One line per milestone; full detail in [status-archive.md](status-archive.md).
 
+- **2026-07-04 — game 1.13 alignment (v1.13.01)**: fourth consecutive
+  iteminfo schema drift (+25 items → 6,508; `SubItem` `type_id` 16→17;
+  `prefab_data_list` + `gimmick_visual_prefab_data_list` merged into
+  `MergedPrefabVisualData` relocated to item end), plus `partprefabdyeslotinfo`
+  +570 rows (968 → 1,538) with a new additive `DyeExtraLayer` 2nd layer — all
+  inside the Rust parser; no save-body change (format v2 / flags `0x0080`,
+  `slot107` = live 1.13 save, all round-trip). Vendored crimson-rs at
+  `7462f0e` / tag `v1.0.13.x`. **Retired the manual `ParserTargetMinor` /
+  `CompatibleMinors` bump chain (8→9→10→11→12→13):** wired the C#
+  `GameDataVersion` constants to the new crimson-rs C ABI
+  (`crimson_parser_target_gamedata_minor()` /
+  `crimson_parser_compatible_gamedata_minors()`, commit `a3ab5ee`) so Rust is
+  the single source of truth. Bumped editor `VerMinor` 12 → 13 (manual
+  build-identity), `VerPatch` reset to 1. Fixed two live-install test drifts:
+  `Pyeonjeon_Arrow` `item_type` 0 → 23 (game remap) and the Paz LZ4-icon test
+  (the `cd_icon_skill_*` icons are gone in 1.13 → switched to a still-LZ4
+  `itemicon_gachaimage_*`). The prior 1.12 alignment was aligned but never
+  publicly released.
 - **2026-06-19 — game 1.12 alignment (v1.12.01, unreleased)**: third
   consecutive iteminfo schema drift (+150 items → 6,483; four byte-perfect
   layout changes) + `partprefabdyeslotinfo` dye-table drift (−143 rows → 968),

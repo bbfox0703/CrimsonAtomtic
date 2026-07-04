@@ -1943,6 +1943,26 @@ internal static partial class NativeMethods
         out ushort outPatch,
         out uint outBuild);
 
+    // ── Parser target / compatible gamedata minor ──────────────────────────
+    //
+    // Rust owns PARSER_TARGET_GAMEDATA_MINOR / COMPATIBLE_GAMEDATA_MINORS
+    // (vendor/crimson-rs/src/binary/paver.rs). GameDataVersion.ParserTargetMinor
+    // / CompatibleMinors read them here instead of hand-bumping a C# constant
+    // every patch — Rust is the single source of truth. See
+    // vendor/crimson-rs/src/c_abi/paver.rs (added in commit a3ab5ee).
+
+    // Infallible, direct u16 return — no error code, no out-pointer.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_parser_target_gamedata_minor")]
+    public static partial ushort ParserTargetGamedataMinor();
+
+    // First-call sizing: outBuf=null, cap=0 → writes outCount and returns
+    // BUFFER_TOO_SMALL (cap < count). Refill with cap >= count → OK, fills
+    // outBuf[0..count]. NULL_ARG if outCount is null, or outBuf is null with
+    // cap != 0. `usize` → nuint, `u16*` → ushort*.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_parser_compatible_gamedata_minors")]
+    public static unsafe partial int ParserCompatibleGamedataMinors(
+        ushort* outBuf, nuint cap, out nuint outCount);
+
     // ── PALOC catalog ───────────────────────────────────────────────────────
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_paloc_load_from_file",
