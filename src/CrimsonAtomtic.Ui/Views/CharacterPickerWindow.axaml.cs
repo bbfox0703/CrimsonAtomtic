@@ -12,6 +12,8 @@ public sealed partial class CharacterPickerWindow : Window
     public CharacterPickerWindow()
     {
         InitializeComponent();
+        // Drift-free maximize/restore (ported window-restore design).
+        CrimsonAtomtic.Ui.Services.ManagedWindowRestore.Attach(this);
         // Pick-mode wiring: when the VM is set and reports
         // IsPickMode=true, subscribe to PickConfirmed and close the
         // window with the chosen CharacterKey as the dialog result.

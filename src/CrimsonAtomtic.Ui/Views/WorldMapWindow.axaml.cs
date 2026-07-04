@@ -26,6 +26,8 @@ public sealed partial class WorldMapWindow : Window
     public WorldMapWindow()
     {
         InitializeComponent();
+        // Drift-free maximize/restore (ported window-restore design).
+        CrimsonAtomtic.Ui.Services.ManagedWindowRestore.Attach(this);
         Opened += OnWindowOpened;
         // The VM owns the user's basemap bitmap (~108 MB of native Skia
         // memory for the canonical map). Dispose it when the window

@@ -20,6 +20,8 @@ public sealed partial class DyePalettePickerWindow : Window
     public DyePalettePickerWindow()
     {
         InitializeComponent();
+        // Drift-free maximize/restore (ported window-restore design).
+        CrimsonAtomtic.Ui.Services.ManagedWindowRestore.Attach(this);
     }
 
     /// <summary>

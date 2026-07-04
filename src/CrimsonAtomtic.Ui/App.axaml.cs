@@ -106,6 +106,12 @@ public sealed class App : Application
                 DataContext = new MainWindowViewModel(loader, paths, localization, backupService, uiLanguage),
             };
 
+            // Cross-restart placement: load last-session position / size /
+            // maximized state and apply BEFORE the window is shown (validation
+            // against the monitors present this session happens on Opened).
+            mainWindow.AttachWindowState(
+                new CrimsonAtomtic.Ui.Services.WindowStateStore(paths.LocalAppDataDirectory));
+
             // First-launch legal disclaimer + game-data-version
             // mismatch warning. Both fire AFTER the main window has
             // rendered once so the user sees the editor's frame behind
