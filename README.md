@@ -82,8 +82,9 @@ set of Tools-menu bulk operations. Highlights:
   an Apply-Set toolbar, automatic `_validSocketCount` bump.
 - **Dye editor** — per-item slot editor with R/G/B/A + grime + material
   (palette tier) + colour-group dropdowns, all resolved live from the
-  three dye gamedata bridges. Async load + "Loading dyed items…"
-  feedback for large saves.
+  three dye gamedata bridges, plus a read-only **Layers** hint that surfaces
+  1.13's second material/dye layer on newly dyeable gear. Async load +
+  "Loading dyed items…" feedback for large saves.
 - **Sealed Abyss Artifact challenges** — per-row "Mark Challenge Complete"
   (Pattern B v1: FAR tracker flip + X_2 sub-mission insert) plus
   **Tools → Complete All Sealed Abyss Artifact Challenges** which sweeps
@@ -133,6 +134,11 @@ set of Tools-menu bulk operations. Highlights:
   main window straight to the item-detail view.
 - **Auto-find saves on launch** — Steam / Epic / Game Pass plain-folder
   probe + most-recent preference + per-platform backup tree.
+- **Window position memory** — the main window reopens at its last-closed
+  position / size / maximized state (validated against the monitors present
+  this session; an off-screen rect resets to centered-on-primary), and
+  maximize/restore is drift-free. All resizable dialogs share the same
+  drift-free maximize/restore.
 - **First-launch disclaimer** — bilingual (中文 + English) modal shown
   once per machine; acceptance persisted to `settings.json`. Version-
   gated so future material changes can re-prompt every user.

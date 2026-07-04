@@ -7,19 +7,19 @@
 > **[status-archive.md](status-archive.md)** — look there only when you need
 > the deep history behind a decision.
 >
-> Last updated: **2026-07-04** — editor aligned to game **1.13** (v1.13.01),
-> verified locally. `ParserTargetMinor` / `CompatibleMinors` are now read from
-> the crimson-rs C ABI (Rust is the single source of truth); crimson-rs 1.13 is
-> vendored from `main` (tag `v1.0.13.x`).
+> Last updated: **2026-07-04** — editor aligned to game **1.13** and
+> **released as v1.13.01** (published). `ParserTargetMinor` / `CompatibleMinors`
+> are now read from the crimson-rs C ABI (Rust is the single source of truth);
+> crimson-rs 1.13 is vendored from `main` (tag `v1.0.13.x`).
 
 ## Current state
 
 - **Editor v1.13.01**, aligned to live game **1.13** (`VerMinor` 12 → 13,
   `VerPatch` reset to 1 per the lock-step `VerMinor == ParserTargetMinor`
   convention — but note `VerMinor` is still a **manual** build-identity bump,
-  while `ParserTargetMinor` is now **ABI-sourced**). Verified locally this
-  session. The prior 1.12 alignment was aligned but never publicly released;
-  1.13 supersedes it. The release flow (annotated `v*` tag → CI single-file
+  while `ParserTargetMinor` is now **ABI-sourced**). Verified locally and
+  **released as v1.13.01** (published 2026-07-04); it supersedes v1.12.01
+  (released 2026-06-19). The release flow (annotated `v*` tag → CI single-file
   AOT exe + bilingual notes → human clicks **Publish**) is unchanged; see
   [release-process.md](release-process.md).
 - **Save read/write is version-agnostic.** Each save embeds its own schema, so
@@ -192,9 +192,10 @@ One line per milestone; full detail in [status-archive.md](status-archive.md).
   build-identity), `VerPatch` reset to 1. Fixed two live-install test drifts:
   `Pyeonjeon_Arrow` `item_type` 0 → 23 (game remap) and the Paz LZ4-icon test
   (the `cd_icon_skill_*` icons are gone in 1.13 → switched to a still-LZ4
-  `itemicon_gachaimage_*`). The prior 1.12 alignment was aligned but never
-  publicly released.
-- **2026-06-19 — game 1.12 alignment (v1.12.01, unreleased)**: third
+  `itemicon_gachaimage_*`). **Released as v1.13.01** (published 2026-07-04) —
+  the release bundles this alignment plus the same-day DyeExtraLayer
+  2nd-dye-layer UI and the window-position-memory work.
+- **2026-06-19 — game 1.12 alignment (v1.12.01)**: third
   consecutive iteminfo schema drift (+150 items → 6,483; four byte-perfect
   layout changes) + `partprefabdyeslotinfo` dye-table drift (−143 rows → 968),
   no save-body change. Synced the gitignored `vendor/crimson-rs` from local
@@ -202,7 +203,7 @@ One line per milestone; full detail in [status-archive.md](status-archive.md).
   bumped `ParserTargetMinor` / `CompatibleMinors` / `VerMinor` to 12, refreshed
   the paver tests. 346 tests green against the real 1.12 install;
   `slot106` / `slot107` verified `hmac_ok` + `undecoded_bytes=0` +
-  decode-stable. Release deferred until crimson-rs 1.12 lands on `main`.
+  decode-stable. Later released as v1.12.01 (tag `1.12.01`).
 - **2026-06-12 — v1.11.01**: aligned editor to game 1.11 (iteminfo `u8`
   drift, no save-body change); rebuilt native lib; bumped NuGet packages +
   fixed the ILCompiler-pin / CI `link.exe` traps; refined zh-TW translations;
