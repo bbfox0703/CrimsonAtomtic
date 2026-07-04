@@ -449,6 +449,75 @@ public sealed class KeyInfoCatalogsTests
         Assert.Equal(3, matIdx!.Length);
     }
 
+    [Fact]
+    public void PartPrefabDyeSlotInfo_LiveInstall_SurfacesExtraLayerOnNewGear()
+    {
+        var live = LiveOrSkip();
+        if (live is null) return;
+        var (paz, p0008, _) = live.Value;
+
+        var pabgb = paz.ExtractFile(p0008, ItemInfoDirectory,
+                                     "partprefabdyeslotinfo.pabgb");
+        var pabgh = paz.ExtractFile(p0008, ItemInfoDirectory,
+                                     "partprefabdyeslotinfo.pabgh");
+        using var cat = NativePartPrefabDyeSlotInfoCatalog.LoadFromBytes(pabgb, pabgh);
+
+        // Every slot on every prefab has a well-defined extra-layer count
+        // (0 on pre-1.13 rows), never a spurious throw.
+        var firstKey = cat.GetEntryKey(0);
+        Assert.NotNull(firstKey);
+        var firstExtra = cat.LookupSlotExtraLayerCount(firstKey!.Value, 0);
+        Assert.NotNull(firstExtra);
+        Assert.True(firstExtra!.Value >= 0);
+
+        // Scan the live install for the first prefab+slot carrying a 1.13
+        // extra (second) dye layer — 1.13's expanded dyeable gear
+        // (cloaks / shields / quivers / skullknight set). Pre-1.13
+        // installs have none; skip cleanly in that case, matching the
+        // live-gated convention across this suite.
+        uint layeredKey = 0;
+        var layeredSlot = -1;
+        for (var i = 0; i < cat.EntryCount && layeredSlot < 0; i++)
+        {
+            var keyN = cat.GetEntryKey(i);
+            if (keyN is not { } key) continue;
+            var slotCount = cat.LookupSlotCount(key) ?? 0;
+            for (var s = 0; s < slotCount; s++)
+            {
+                if ((cat.LookupSlotExtraLayerCount(key, s) ?? 0) >= 1)
+                {
+                    layeredKey = key;
+                    layeredSlot = s;
+                    break;
+                }
+            }
+        }
+        if (layeredSlot < 0) return; // Pre-1.13 install: no expanded gear.
+
+        // Count is the anchor — the found slot reports ≥1 extra layer.
+        var count = cat.LookupSlotExtraLayerCount(layeredKey, layeredSlot);
+        Assert.NotNull(count);
+        Assert.True(count!.Value >= 1,
+            $"expected ≥1 extra layer on 0x{layeredKey:X8} slot {layeredSlot}, got {count}");
+
+        // The three per-layer getters all resolve for layer 0. Material
+        // may be an empty string (unset channel) but never null; mask is
+        // 3 bytes; flag is a defined byte.
+        var material = cat.LookupSlotExtraLayerMaterial(layeredKey, layeredSlot, 0, 0);
+        Assert.NotNull(material);
+        var xmask = cat.LookupSlotExtraLayerMask(layeredKey, layeredSlot, 0);
+        Assert.NotNull(xmask);
+        Assert.Equal(3, xmask!.Length);
+        var flag = cat.LookupSlotExtraLayerFlag(layeredKey, layeredSlot, 0);
+        Assert.NotNull(flag);
+
+        // Negative paths: layer_idx past the count is OUT_OF_RANGE → null;
+        // an unknown prefab is NOT_FOUND → null.
+        Assert.Null(cat.LookupSlotExtraLayerFlag(layeredKey, layeredSlot, 99));
+        Assert.Null(cat.LookupSlotExtraLayerMask(layeredKey, layeredSlot, 99));
+        Assert.Null(cat.LookupSlotExtraLayerCount(uint.MaxValue, 0));
+    }
+
     // ── 13 niche name-only bridges (impl_name_only_bridge! macro) ───────────
     //
     // Smoke test: load all 13, assert entry counts match the upstream

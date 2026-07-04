@@ -356,6 +356,18 @@ public sealed partial class DyeSlotRow : ObservableObject
     public sbyte SlotNo { get; }
     public string SlotLabel { get; }
 
+    /// <summary>
+    /// Gamedata material-layer hint from <c>partprefabdyeslotinfo</c> for
+    /// this slot — the primary-layer default material plus, for 1.13's
+    /// expanded dyeable gear (cloaks / shields / quivers / skullknight
+    /// set), the second (extra) layer's material (e.g. "leather + cloth").
+    /// Empty when the item's prefab join or the slot-info bridge is
+    /// unavailable, or when the slot names no material. Read-only info —
+    /// the save has a single <c>_texturePalleteKey</c> per slot, so the
+    /// extra layer is surfaced for orientation, not separately editable.
+    /// </summary>
+    public string MaterialLayers { get; }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SwatchBrush))]
     [NotifyPropertyChangedFor(nameof(SwatchHex))]
@@ -408,13 +420,15 @@ public sealed partial class DyeSlotRow : ObservableObject
         bool rPresent, bool gPresent, bool bPresent, bool aPresent,
         bool grimePresent, bool colorGroupPresent, bool materialPresent,
         DyeColorGroupOption? selectedColorGroup,
-        DyeMaterialOption? selectedMaterial)
+        DyeMaterialOption? selectedMaterial,
+        string materialLayers)
     {
         _parent = parent;
         _fields = fields;
         SlotIndex = slotIndex;
         SlotNo = slotNo;
         SlotLabel = slotNo >= 0 ? $"Slot {slotNo}" : $"Slot #{slotIndex} (no _dyeSlotNo)";
+        MaterialLayers = materialLayers;
         _r = r; _g = g; _b = b; _a = a; _grime = grime;
         _origR = r; _origG = g; _origB = b; _origA = a; _origGrime = grime;
         _origColorGroupKey = colorGroupKey;
@@ -491,10 +505,18 @@ public sealed partial class DyeSlotRow : ObservableObject
                 if (opt.Key == materialKey) { selMat = opt; break; }
             }
         }
+        // Gamedata material-layer hint. The picker seeds a slot's
+        // _dyeSlotNo from the prefab's slot index, so _dyeSlotNo is the
+        // gamedata slot index; fall back to the list position when the
+        // scalar is absent (best-effort — the hint is informational).
+        var gamedataSlotIdx = slotNo >= 0 ? slotNo : slotIndex;
+        var materialLayers =
+            localization.DescribeDyeSlotLayers(itemRow.ItemKey, gamedataSlotIdx)
+            ?? string.Empty;
         return new DyeSlotRow(parent, slotIndex, slotNo, fields,
             r, g, b, a, grime, colorGroupKey, materialKey,
             rPres, gPres, bPres, aPres, grimePres, cgPres, matPres,
-            selCg, selMat);
+            selCg, selMat, materialLayers);
     }
 
     /// <summary>

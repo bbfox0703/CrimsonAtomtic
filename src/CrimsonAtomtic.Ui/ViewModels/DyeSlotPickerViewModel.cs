@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CrimsonAtomtic.RustInterop;
 using CrimsonAtomtic.Ui.Services;
 
 namespace CrimsonAtomtic.Ui.ViewModels;
@@ -49,9 +48,11 @@ public sealed partial class DyeSlotPickerViewModel : ObservableObject
 
     /// <summary>
     /// Build the slot-option list. For each slot 0..N-1, try to label
-    /// it with the prefab's first default-material name; fall back to
-    /// "Slot N" when the default-material lookup misses (e.g.
-    /// partprefab resolved but the per-slot bridge returned null).
+    /// it with the prefab's default-material name(s); fall back to
+    /// "Slot N" when the lookup misses (e.g. partprefab resolved but the
+    /// per-slot bridge returned null). For 1.13's expanded dyeable gear
+    /// the label carries both material layers (e.g. "leather + cloth"),
+    /// not just the first.
     /// </summary>
     private static ObservableCollection<DyeSlotPickerOption> BuildOptions(
         uint itemKey, int slotCount, LocalizationProvider localization)
@@ -59,40 +60,15 @@ public sealed partial class DyeSlotPickerViewModel : ObservableObject
         var options = new ObservableCollection<DyeSlotPickerOption>();
         if (slotCount <= 0) return options;
 
-        // Resolve the item's first partprefab key so we can pull each
-        // slot's default-material name for label hints. Best-effort —
-        // any failure here just falls through to numeric labels.
-        var slotInfo = localization.DyeSlotInfo;
-        uint? prefabKey = null;
-        try
-        {
-            prefabKey = localization.ItemPartPrefab?.LookupFirstPrefabKey(itemKey);
-        }
-        catch (CrimsonSaveException) { }
-
         for (var i = 0; i < slotCount; i++)
         {
-            string label;
-            string? material = null;
-            if (prefabKey is { } pk && slotInfo is not null)
-            {
-                try
-                {
-                    material = slotInfo.LookupSlotDefaultMaterial(pk, i, 0);
-                }
-                catch (CrimsonSaveException) { }
-            }
-            if (!string.IsNullOrEmpty(material))
-            {
-                label = string.Format(
-                    CultureInfo.InvariantCulture,
-                    "Slot {0} ({1})", i, material);
-            }
-            else
-            {
-                label = string.Format(
-                    CultureInfo.InvariantCulture, "Slot {0}", i);
-            }
+            // DescribeDyeSlotLayers is best-effort (null on any lookup
+            // miss / offline gamedata) and already includes 1.13's
+            // second material layer when the slot has one.
+            var materials = localization.DescribeDyeSlotLayers(itemKey, i);
+            var label = string.IsNullOrEmpty(materials)
+                ? string.Format(CultureInfo.InvariantCulture, "Slot {0}", i)
+                : string.Format(CultureInfo.InvariantCulture, "Slot {0} ({1})", i, materials);
             options.Add(new DyeSlotPickerOption(i, label));
         }
         return options;

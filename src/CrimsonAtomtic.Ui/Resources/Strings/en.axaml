@@ -151,6 +151,7 @@
   <!-- Dye slot editor child dialog -->
   <sys:String x:Key="DyeSlotEditorWindowTitle">Edit dye slots</sys:String>
   <sys:String x:Key="DyeSlotColSlot">Slot</sys:String>
+  <sys:String x:Key="DyeSlotColLayers">Layers</sys:String>
   <sys:String x:Key="DyeSlotColColor">Color</sys:String>
   <sys:String x:Key="DyeSlotColGrime">Grime</sys:String>
   <sys:String x:Key="DyeSlotColMaterial">Material</sys:String>

@@ -587,6 +587,109 @@ public sealed class NativePartPrefabDyeSlotInfoCatalog : IDisposable
         return buf;
     }
 
+    // ── 1.13 extra (second) dye layer ───────────────────────────────────────
+    //
+    // 1.13's "expanded dyeable equipment" gave some slots a second
+    // material/dye layer (DyeExtraLayer). These mirror the primary-layer
+    // getters above with an added layer index. Extra-layer count is 0 on
+    // 1.07-1.12 rows and unaffected 1.13 slots; 1 on the new dyeable gear
+    // (cloaks / shields / quivers / skullknight set).
+
+    /// <summary>
+    /// Number of extra (secondary) dye layers on <paramref name="slotIndex"/>.
+    /// <c>0</c> on pre-1.13 rows and unaffected 1.13 slots; <c>1</c> on the
+    /// new dyeable gear. Returns <c>null</c> when the prefab isn't in the
+    /// table (NOT_FOUND) or the slot is out of range (OUT_OF_RANGE).
+    /// </summary>
+    public int? LookupSlotExtraLayerCount(uint prefabKey, int slotIndex)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentOutOfRangeException.ThrowIfNegative(slotIndex);
+        var rc = NativeMethods.PartPrefabDyeSlotInfoLookupSlotExtraLayerCount(
+            _handle, prefabKey, (uint)slotIndex, out var count);
+        if (rc == NativeMethods.NOT_FOUND || rc == NativeMethods.OUT_OF_RANGE) return null;
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_part_prefab_dye_slot_info_lookup_slot_extra_layer_count({prefabKey},{slotIndex}) "
+                + $"failed: {NameBuffer.ErrorName(rc)}");
+        }
+        return (int)count;
+    }
+
+    /// <summary>
+    /// Default material name for extra layer <paramref name="layerIndex"/>'s
+    /// <paramref name="matIndex"/> channel (<c>0..2</c>) on
+    /// <paramref name="slotIndex"/>. Same value shape as the primary
+    /// <see cref="LookupSlotDefaultMaterial"/> — common non-empty values are
+    /// <c>"cloth"</c> / <c>"leather"</c> / <c>"metal"</c>. Returns <c>null</c>
+    /// on NOT_FOUND; empty string when the channel is unset.
+    /// </summary>
+    public string? LookupSlotExtraLayerMaterial(
+        uint prefabKey, int slotIndex, int layerIndex, int matIndex)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentOutOfRangeException.ThrowIfNegative(slotIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(layerIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(matIndex);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(matIndex, 2);
+        unsafe
+        {
+            return NameBuffer.ReadString(
+                (byte* buf, nuint bufLen, out nuint required) =>
+                    NativeMethods.PartPrefabDyeSlotInfoLookupSlotExtraLayerMaterial(
+                        _handle, prefabKey, (uint)slotIndex, (uint)layerIndex, (uint)matIndex,
+                        buf, bufLen, out required),
+                $"crimson_part_prefab_dye_slot_info_lookup_slot_extra_layer_material("
+                + $"{prefabKey},{slotIndex},{layerIndex},{matIndex})");
+        }
+    }
+
+    /// <summary>3 raw mask bytes for an extra layer. Returns <c>null</c> on
+    /// NOT_FOUND / OUT_OF_RANGE.</summary>
+    public byte[]? LookupSlotExtraLayerMask(uint prefabKey, int slotIndex, int layerIndex)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentOutOfRangeException.ThrowIfNegative(slotIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(layerIndex);
+        var buf = new byte[3];
+        unsafe
+        {
+            fixed (byte* p = buf)
+            {
+                var rc = NativeMethods.PartPrefabDyeSlotInfoLookupSlotExtraLayerMask(
+                    _handle, prefabKey, (uint)slotIndex, (uint)layerIndex, p);
+                if (rc == NativeMethods.NOT_FOUND || rc == NativeMethods.OUT_OF_RANGE) return null;
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_part_prefab_dye_slot_info_lookup_slot_extra_layer_mask("
+                        + $"{prefabKey},{slotIndex},{layerIndex}) failed: {NameBuffer.ErrorName(rc)}");
+                }
+            }
+        }
+        return buf;
+    }
+
+    /// <summary>Trailing flag byte for an extra layer. Returns <c>null</c> on
+    /// NOT_FOUND / OUT_OF_RANGE.</summary>
+    public byte? LookupSlotExtraLayerFlag(uint prefabKey, int slotIndex, int layerIndex)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentOutOfRangeException.ThrowIfNegative(slotIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(layerIndex);
+        var rc = NativeMethods.PartPrefabDyeSlotInfoLookupSlotExtraLayerFlag(
+            _handle, prefabKey, (uint)slotIndex, (uint)layerIndex, out var flag);
+        if (rc == NativeMethods.NOT_FOUND || rc == NativeMethods.OUT_OF_RANGE) return null;
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_part_prefab_dye_slot_info_lookup_slot_extra_layer_flag("
+                + $"{prefabKey},{slotIndex},{layerIndex}) failed: {NameBuffer.ErrorName(rc)}");
+        }
+        return flag;
+    }
+
     public uint? GetEntryKey(int index)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

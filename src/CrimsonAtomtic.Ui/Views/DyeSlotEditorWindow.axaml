@@ -50,6 +50,14 @@
                             Binding="{Binding SlotLabel}"
                             Width="110"
                             IsReadOnly="True" />
+        <!-- Read-only gamedata material-layer hint. Shows both dye layers
+             ("leather + cloth") on 1.13's expanded dyeable gear; the save
+             carries a single palette key per slot, so this is orientation
+             only, not separately editable. -->
+        <DataGridTextColumn Header="{DynamicResource DyeSlotColLayers}"
+                            Binding="{Binding MaterialLayers}"
+                            Width="140"
+                            IsReadOnly="True" />
         <!-- Color column: replaces the previous R/G/B/A NumericUpDowns
              with a visual swatch + "Pick…" button. The engine snaps
              every in-game dye to one of the color group's 109 palette
