@@ -11,6 +11,8 @@ public sealed partial class LocalizationSearchWindow : Window
     public LocalizationSearchWindow()
     {
         InitializeComponent();
+        // Drift-free maximize/restore (ported window-restore design).
+        CrimsonAtomtic.Ui.Services.ManagedWindowRestore.Attach(this);
     }
 
     /// <summary>

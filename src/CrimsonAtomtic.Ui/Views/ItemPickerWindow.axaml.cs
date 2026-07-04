@@ -12,6 +12,8 @@ public sealed partial class ItemPickerWindow : Window
     public ItemPickerWindow()
     {
         InitializeComponent();
+        // Drift-free maximize/restore (ported window-restore design).
+        CrimsonAtomtic.Ui.Services.ManagedWindowRestore.Attach(this);
     }
 
     /// <summary>

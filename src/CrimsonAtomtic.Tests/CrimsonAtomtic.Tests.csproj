@@ -9,8 +9,9 @@
     <IsAotCompatible>false</IsAotCompatible>
     <!-- xUnit naming convention (Method_Scenario_Expected) uses
          underscores; xUnit1051 wants test-context cancellation tokens
-         in every call. Both are noise for our minimal tests. -->
-    <NoWarn>$(NoWarn);CA1707;xUnit1051</NoWarn>
+         in every call; CA1861 flags inline constant arrays passed as
+         one-shot test data. All three are noise for our minimal tests. -->
+    <NoWarn>$(NoWarn);CA1707;xUnit1051;CA1861</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

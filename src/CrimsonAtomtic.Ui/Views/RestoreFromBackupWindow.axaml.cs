@@ -10,6 +10,8 @@ public sealed partial class RestoreFromBackupWindow : Window
     public RestoreFromBackupWindow()
     {
         InitializeComponent();
+        // Drift-free maximize/restore (ported window-restore design).
+        CrimsonAtomtic.Ui.Services.ManagedWindowRestore.Attach(this);
     }
 
     /// <summary>

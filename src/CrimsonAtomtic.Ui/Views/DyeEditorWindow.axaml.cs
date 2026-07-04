@@ -9,6 +9,8 @@ public sealed partial class DyeEditorWindow : Window
     public DyeEditorWindow()
     {
         InitializeComponent();
+        // Drift-free maximize/restore (ported window-restore design).
+        CrimsonAtomtic.Ui.Services.ManagedWindowRestore.Attach(this);
     }
 
     private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();

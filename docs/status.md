@@ -160,6 +160,22 @@ Each step should be green. If anything fails, fix it before touching new code
 
 One line per milestone; full detail in [status-archive.md](status-archive.md).
 
+- **2026-07-04 — window position memory + drift-free maximize/restore (all
+  windows)**: ported UE5CEDumper's window-restore design. New pure, unit-tested
+  services `WindowRestoreState` (deferred-commit snapshot state machine),
+  `WindowPlacement` (off-screen visibility + centering), `WindowStateStore`
+  (`%LOCALAPPDATA%\CrimsonAtomtic\window-state.txt`, AOT-safe key=value). The
+  **main window** now (a) restores last-session position/size/maximized on
+  restart — validated against the monitors present this session (a rect on a
+  now-absent monitor is reset to centered-on-primary), wired via
+  `MainWindow.AttachWindowState` in `App.axaml.cs` before the window shows — and
+  (b) gained the previously-missing off-screen position guard + **deferred
+  (Background) re-apply** + re-seed, so repeated maximize/restore no longer
+  drifts or jumps to 0,0 (the old code re-applied synchronously mid-transition —
+  the anti-pattern). **20 resizable child dialogs** attach the new
+  `ManagedWindowRestore` helper (one line per ctor, no `.axaml` re-rooting) for
+  the same drift-free maximize/restore; the 5 fixed-size dialogs are unchanged.
+  +33 unit tests; smoke-verified end-to-end (restore-on-restart + save-on-close).
 - **2026-07-04 — game 1.13 alignment (v1.13.01)**: fourth consecutive
   iteminfo schema drift (+25 items → 6,508; `SubItem` `type_id` 16→17;
   `prefab_data_list` + `gimmick_visual_prefab_data_list` merged into

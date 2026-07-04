@@ -9,6 +9,8 @@ public sealed partial class DyeSlotEditorWindow : Window
     public DyeSlotEditorWindow()
     {
         InitializeComponent();
+        // Drift-free maximize/restore (ported window-restore design).
+        CrimsonAtomtic.Ui.Services.ManagedWindowRestore.Attach(this);
         DataContextChanged += OnDataContextChanged;
     }
 
