@@ -7,48 +7,55 @@
 > **[status-archive.md](status-archive.md)** — look there only when you need
 > the deep history behind a decision.
 >
-> Last updated: **2026-07-04** — editor aligned to game **1.13** and
-> **released as v1.13.01** (published). `ParserTargetMinor` / `CompatibleMinors`
-> are now read from the crimson-rs C ABI (Rust is the single source of truth);
-> crimson-rs 1.13 is vendored from `main` (tag `v1.0.13.x`).
+> Last updated: **2026-07-17** — editor aligned to game **1.14** (a
+> **content-only** patch over 1.13 — no schema drift in any subsystem) and
+> **tagged v1.14.01** (CI draft release; human Publish pending).
+> Because `ParserTargetMinor` / `CompatibleMinors` are read from the crimson-rs
+> C ABI (Rust is the single source of truth), 1.14 needed only the manual
+> `VerMinor` 13→14 lock-step bump + a version-pin test refresh; crimson-rs 1.14
+> is vendored from `main` (tag `v1.0.14.x`).
 
 ## Current state
 
-- **Editor v1.13.01**, aligned to live game **1.13** (`VerMinor` 12 → 13,
+- **Editor v1.14.01**, aligned to live game **1.14** (`VerMinor` 13 → 14,
   `VerPatch` reset to 1 per the lock-step `VerMinor == ParserTargetMinor`
-  convention — but note `VerMinor` is still a **manual** build-identity bump,
-  while `ParserTargetMinor` is now **ABI-sourced**). Verified locally and
-  **released as v1.13.01** (published 2026-07-04); it supersedes v1.12.01
-  (released 2026-06-19). The release flow (annotated `v*` tag → CI single-file
+  convention — `VerMinor` is a **manual** build-identity bump, while
+  `ParserTargetMinor` is **ABI-sourced**). Verified locally and **tagged
+  v1.14.01** (CI draft release; human Publish pending); it supersedes v1.13.01
+  (published 2026-07-04). The release flow (annotated `v*` tag → CI single-file
   AOT exe + bilingual notes → human clicks **Publish**) is unchanged; see
   [release-process.md](release-process.md).
+- **1.14 is a content-only patch over 1.13** — item field values changed but
+  there was **no schema/layout drift in any subsystem** (iteminfo, save body,
+  skill, all 30 gamedata bridges). So unlike the 1.10→1.13 run of four
+  consecutive iteminfo drifts, aligning the editor needed **no parser-logic
+  change**: the vendored crimson-rs bumped only `PARSER_TARGET_GAMEDATA_MINOR`
+  13→14, and the ABI-sourced C# constants followed automatically.
 - **Save read/write is version-agnostic.** Each save embeds its own schema, so
-  1.05–1.13 saves round-trip in their own format (no version conversion). 1.13
+  1.05–1.14 saves round-trip in their own format (no version conversion). 1.14
   brought **no save-body drift** (format still v2 / flags `0x0080`). Verified
-  this session: the live C# loader suite (slot0/1/2) round-trips clean, and the
-  live-1.13 `slot107` parses `hmac_ok` with `undecoded_bytes=0` and re-seals
-  decode-stable.
+  this session: the live C# loader suite round-trips clean, and the live-1.14
+  `slot107` parses `hmac_ok` with `undecoded_bytes=0` and re-seals
+  decode-stable (all 381 C# tests ran with 0 skipped; iteminfo catalog parses
+  the real 1.14 data, still 6,508 items).
 - **Name/icon resolution targets the *installed* game.**
-  `GameDataVersion.ParserTargetMinor` and `CompatibleMinors` are now read from
-  the crimson-rs C ABI (`crimson_parser_target_gamedata_minor()` → 13;
-  `crimson_parser_compatible_gamedata_minors()` → {13}) — no longer hand-coded.
-  1.13 drifted the iteminfo schema (+25 items → 6,508; `SubItem` `type_id`
-  16→17; `prefab_data_list` + `gimmick_visual_prefab_data_list` merged into
-  `MergedPrefabVisualData` relocated to item end) and grew the
-  `partprefabdyeslotinfo` dye table (968 → 1,538 rows, +570; new additive
-  `DyeExtraLayer` 2nd layer), all inside the Rust parser, so 1.12-and-earlier
-  installs no longer round-trip against this parser and are warned at startup.
-  Full per-field breakdown in [game-versions.md](game-versions.md).
-- **crimson-rs 1.13 is on `main`.** The 1.13 parser (iteminfo relocation/merge
-  + dye 2nd layer + the parser-target C ABI) is merged to
-  `bbfox0703/crimson-rs` `main` and tagged **`v1.0.13.x`** (vendored at
-  `7462f0e`). CI clones `main`, so a release cut now ships the 1.13 parser.
+  `GameDataVersion.ParserTargetMinor` and `CompatibleMinors` are read from the
+  crimson-rs C ABI (`crimson_parser_target_gamedata_minor()` → 14;
+  `crimson_parser_compatible_gamedata_minors()` → {14}) — not hand-coded. The
+  allow-list is kept target-only by convention, so 1.13-and-earlier installs
+  are warned at startup even though 1.14's content-only nature means the 1.13
+  layout is in fact byte-readable. Full per-version breakdown in
+  [game-versions.md](game-versions.md).
+- **crimson-rs 1.14 is on `main`.** The content-only 1.14 pin bump is merged to
+  `bbfox0703/crimson-rs` `main` (PR #84) and tagged **`v1.0.14.x`** (vendored
+  at `7cfe072`). CI clones `main`, so a release cut ships the 1.14 parser.
   Reminder for the next patch: land the crimson-rs change on `main` *before*
   tagging a CrimsonAtomtic release.
-- **Health:** full suite green this session (live-install + catalog tests parse
-  the real 1.13 iteminfo, 6,508 items). Debug build clean (0/0). AOT publish
-  verified this session (single self-contained `CrimsonAtomtic.exe`,
-  `crimson_rs` staticlib folded in).
+- **Health:** full suite green this session (381 C# tests, 0 skipped; after the
+  version-pin refresh, 0 failures — live-install + catalog tests parse the real
+  1.14 iteminfo, 6,508 items). Release build clean (0/0). Also bumped the
+  `runtime.win-x64.Microsoft.DotNet.ILCompiler` central pin 10.0.9 → 10.0.10 to
+  track SDK 10.0.302's runtime (a stale pin was tripping NU1109 on restore).
 
 ## Feature ledger
 
@@ -160,6 +167,21 @@ Each step should be green. If anything fails, fix it before touching new code
 
 One line per milestone; full detail in [status-archive.md](status-archive.md).
 
+- **2026-07-17 — game 1.14 alignment (v1.14.01)**: first content-only patch
+  since the 1.10→1.13 run of four consecutive iteminfo schema drifts — 1.14
+  changed item **values** but not the layout, and the save body / skill / all
+  30 gamedata bridges parse unchanged (crimson-rs `v1.0.14.x`, vendored at
+  `7cfe072`; only `PARSER_TARGET_GAMEDATA_MINOR` bumped 13→14). Because the C#
+  `ParserTargetMinor` / `CompatibleMinors` are ABI-sourced (since 1.13), the
+  editor alignment was just the manual `VerMinor` 13→14 lock-step bump plus a
+  version-pin test refresh (`NativePaverReaderTests`: happy-path now pins the
+  1.14 paver `01 00 0e 00 00 00 f8 42 7d 59` / build `0x597d42f8`, the
+  previous-minor guard moved to 1.13, and the "future minor" guard to 1.15).
+  Live 1.14 `slot107` parses `hmac_ok` / `undecoded_bytes=0`; all 381 C# tests
+  ran with 0 skipped and 0 failures after the refresh. Also bumped the
+  `runtime.win-x64.Microsoft.DotNet.ILCompiler` central pin 10.0.9 → 10.0.10
+  (SDK moved to 10.0.302, whose auto-injected ILCompiler tripped NU1109 on the
+  stale pin). Tagged **v1.14.01** (CI draft → human Publish).
 - **2026-07-04 — window position memory + drift-free maximize/restore (all
   windows)**: ported UE5CEDumper's window-restore design. New pure, unit-tested
   services `WindowRestoreState` (deferred-commit snapshot state machine),

@@ -14,8 +14,8 @@ namespace CrimsonAtomtic.RustInterop;
 /// <param name="Minor">Minor — the **schema-compatibility key**.
 /// Iteminfo / save-body parsers target a specific minor; running them
 /// against a mismatched minor either crashes or silently corrupts.
-/// Currently <see cref="ParserTargetMinor"/> = 13.</param>
-/// <param name="Patch">Sub-version (e.g. <c>1.13</c> → 0, <c>1.13.01</c> → 1).
+/// Currently <see cref="ParserTargetMinor"/> = 14.</param>
+/// <param name="Patch">Sub-version (e.g. <c>1.14</c> → 0, <c>1.14.01</c> → 1).
 /// Compatible within the same minor.</param>
 /// <param name="Build">Opaque build identifier. Bumps every PA hotfix
 /// — informational only.</param>
@@ -32,22 +32,25 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     /// Read from the crimson-rs C ABI
     /// (<c>crimson_parser_target_gamedata_minor</c>) so Rust is the single
     /// source of truth — this is no longer a hand-bumped C# constant. The
-    /// 8→9→10→11→12→13 manual-bump chain ended at the 1.13 alignment
-    /// (vendored crimson-rs <c>7462f0e</c> / tag <c>v1.0.13.x</c>); the
-    /// value now follows whatever parser the vendored lib ships.
+    /// 8→9→10→11→12→13→14 manual-bump chain ended at the 1.13 alignment
+    /// (which wired this value to the ABI); the value now follows whatever
+    /// parser the vendored lib ships (currently 1.14, vendored crimson-rs
+    /// tag <c>v1.0.14.x</c>).
     /// <para>
-    /// 1.13 DRIFTED the iteminfo schema again (+25 items, 6,483 → 6,508):
-    /// the payload-free <c>SubItem</c> variant's <c>type_id</c> bumped
-    /// 16 → 17, and <c>prefab_data_list</c> + <c>gimmick_visual_prefab_data_list</c>
-    /// were merged into a single <c>MergedPrefabVisualData</c> block
-    /// relocated to the end of each item. So 1.12 iteminfo no longer
-    /// round-trips and the parser targets the 1.13 layout exclusively. The
-    /// <c>partprefabdyeslotinfo</c> table also drifted (968 → 1,538 rows,
-    /// +570, plus a new additive <c>DyeExtraLayer</c> 2nd layer) — handled
-    /// Rust-side. Like 1.11/1.12, 1.13 brought NO save-body drift: the save
-    /// format is unchanged (v2 / flags 0x0080), every live slot (incl. the
-    /// live-1.13 <c>slot107</c>) parses hmac_ok with undecoded_bytes=0, and
-    /// a body-stable write round-trips.
+    /// 1.14 is a CONTENT-ONLY patch over 1.13: item field values changed but
+    /// the iteminfo layout is byte-identical, and the save body, skill, and
+    /// every gamedata bridge parse unchanged — the only change is this pin
+    /// bumping 13 → 14. (The last STRUCTURAL drift was 1.13, which reworked
+    /// the iteminfo item-payload layout: the payload-free <c>SubItem</c>
+    /// variant's <c>type_id</c> bumped 16 → 17, and <c>prefab_data_list</c> +
+    /// <c>gimmick_visual_prefab_data_list</c> were merged into a single
+    /// <c>MergedPrefabVisualData</c> block relocated to the end of each item.)
+    /// Because the allow-list is kept target-only by convention, 1.13 and
+    /// earlier installs are flagged incompatible even though the 1.13 layout
+    /// is in fact readable. 1.14 brought NO save-body drift: the save format
+    /// is unchanged (v2 / flags 0x0080), every live slot (incl. the live-1.14
+    /// <c>slot107</c>) parses hmac_ok with undecoded_bytes=0, and a
+    /// body-stable write round-trips (6,508 items, byte-perfect serialize).
     /// </para>
     /// The editor's own <c>VerMinor</c> in the .csproj still tracks this as
     /// a manual lock-step build-identity bump — intentionally separate from
@@ -60,11 +63,11 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     /// build can load without mis-decoding — not just the single latest
     /// target. Read from the crimson-rs C ABI
     /// (<c>crimson_parser_compatible_gamedata_minors</c>, first-call
-    /// sizing then refill). Each new patch drifts the iteminfo layout, so
-    /// older minors are NOT byte-compatible and the allow-list is currently
-    /// a single element (<c>{13}</c>); a user still on 1.12 or earlier is
-    /// warned to update. <see cref="ParserTargetMinor"/> is always present
-    /// here.
+    /// sizing then refill). The allow-list is kept a single element
+    /// (<c>{14}</c>) by convention — it tracks just the target even when a
+    /// content-only patch (like 1.14 over 1.13) leaves an older minor's
+    /// layout readable — so a user still on 1.13 or earlier is warned to
+    /// update. <see cref="ParserTargetMinor"/> is always present here.
     /// </summary>
     public static ushort[] CompatibleMinors => ParserTargetInfo.Value.Compatible;
 
@@ -128,14 +131,14 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     public bool IsCompatibleWithParser => Array.IndexOf(CompatibleMinors, Minor) >= 0;
 
     /// <summary>
-    /// Human-readable version (e.g. <c>"1.13.00 build 0x536a2c0d"</c>).
+    /// Human-readable version (e.g. <c>"1.14.00 build 0x597d42f8"</c>).
     /// Suitable for an About / Settings dialog or a status-bar field.
     /// </summary>
     public string DisplayString =>
         $"{Major}.{Minor:D2}.{Patch:D2} build 0x{Build:x8}";
 
     /// <summary>
-    /// Short version string without the build id (e.g. <c>"1.13.00"</c>).
+    /// Short version string without the build id (e.g. <c>"1.14.00"</c>).
     /// Suitable for inline log lines / warning dialogs where the build
     /// number is noise.
     /// </summary>

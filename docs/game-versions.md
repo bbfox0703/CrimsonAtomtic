@@ -2,7 +2,7 @@
 
 ## Current install
 
-`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 1.13**
+`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 1.14**
 
 Top-level layout:
 
@@ -23,23 +23,25 @@ Crimson Desert/
   is fully decoded (see `crimson-rs` `src/binary/paver.rs`, exposed via
   `crimson_paver_read_from_*`): three little-endian u16s `(major, minor,
   patch)` followed by a little-endian u32 `build`. The **minor** is the
-  schema-compatibility key. Live 1.13.00 install:
-  `01 00 0d 00 00 00 0d 2c 6a 53` → major 1, minor 13, patch 0,
-  build `0x536a2c0d`. (1.12.00 was `01 00 0c 00 00 00 02 84 73 ac`,
+  schema-compatibility key. Live 1.14.00 install:
+  `01 00 0e 00 00 00 f8 42 7d 59` → major 1, minor 14, patch 0,
+  build `0x597d42f8`. (1.13.00 was `01 00 0d 00 00 00 0d 2c 6a 53`,
+  build `0x536a2c0d`; 1.12.00 was `01 00 0c 00 00 00 02 84 73 ac`,
   build `0xac738402`; 1.11.00 was `01 00 0b 00 00 00 24 7a 2c 20`,
   build `0x202c7a24`; 1.10.00 was `01 00 0a 00 00 00 ac b2 84 cf`,
   build `0xcf84b2ac`; 1.09.00 was `01 00 09 00 00 00 24 48 f3 bb`,
   build `0xbbf34824`; 1.08.00 was `01 00 08 00 00 00 3e b0 39 dc`,
   build `0xdc39b03e`.) The editor reads this at startup and warns when
   the install's minor isn't one the parser can load
-  (`GameDataVersion.CompatibleMinors`, now `{13}` — **1.13 drifted the
-  iteminfo schema again** (crimson-rs tag `v1.0.13.x`: +25 items → 6,508,
-  `SubItem` `type_id` 16→17, `prefab_data_list` +
-  `gimmick_visual_prefab_data_list` merged into `MergedPrefabVisualData`
-  relocated to item end), so 1.12 and earlier no longer round-trip against
-  this parser; `ParserTargetMinor = 13` is the latest of that set and the
-  version the dialog displays. Both values are now read from the crimson-rs
-  C ABI, not hand-coded).
+  (`GameDataVersion.CompatibleMinors`, now `{14}`). **1.14 is a
+  content-only patch over 1.13** (crimson-rs tag `v1.0.14.x`: item field
+  values changed but the iteminfo layout is byte-identical, and the save
+  body, skill, and every gamedata bridge parse unchanged — only the
+  `PARSER_TARGET_GAMEDATA_MINOR` pin moved 13→14). The allow-list is kept
+  target-only by convention, so 1.13 and earlier are flagged incompatible
+  even though the 1.13 layout is in fact readable; `ParserTargetMinor = 14`
+  is the version the dialog displays. Both values are read from the
+  crimson-rs C ABI, not hand-coded.
 
 ## Historical versions
 
@@ -97,3 +99,5 @@ The 1.05 → 1.06 jump turned out to be **zero schema changes** (only +17 items)
 **1.11 → 1.12 was a third consecutive iteminfo schema drift, again with NO save-body change.** iteminfo (`crimson-rs` commit `0694dfb`, byte-perfect on all 6,483 items, +150 vs 1.11) drifted in four places, RE'd by a tandem byte-walk against the kept real-1.11 binary: (1) a payload-free `SubItem` `type_id == 16` variant (15 → 16 on 4,496 items); (2) an unconditional `unk_pre_max_endurance: u32` before `max_endurance`; (3) a sibling-value-gated `unk_pre_gimmick_visual: u32` (present when `equip_type_info != 0 || item_type == 74` — the first sibling-gated field, which extended the `py_binary_struct!` macro with a `=> <cond>` conditional-field form); and (4) inter-element `u32` separators in `EnchantData` (N−1 per N elements, via the new `EnchantDataList`). `serialize_iteminfo` round-trips byte-identical on the live binary (export ok=6,483, leftover=0, fail=0). Separately, `partprefabdyeslotinfo` drifted (−143 rows, 1,111 → 968, plus a new 5-byte per-slot field — `u8` + `u32`, uniformly `0xFF`/0); the dye-editor bridge parses the live 1.12 table again. The save body did **not** drift: format unchanged (v2 / flags `0x0080`); the new-format `slot106` / `slot107` both parse `hmac_ok` with `undecoded_bytes=0` (1107 blocks, 3098/3098 fields decoded) and re-seal decode-stable. The one save-side change is a `relocate_trailing_pad_offsets` bug fix (confined to trailing_pad byte ranges so the offset-relocation pass no longer rewrites decoded content that coincidentally equals `old_off + p + 4` — fixes the clear-then-set and batch-vs-single mutation round-trip invariants). The parser now targets 1.12 exclusively (`CompatibleMinors = {12}`); 1.11 iteminfo no longer round-trips against it, so a user still on 1.11 is warned. Per-table gamedata snapshot in `crimson-rs` `data/gamedata-keys-1.12/` (30 tables, 94,608 keys).
 
 **1.12 → 1.13 was a fourth consecutive iteminfo schema drift, again with NO save-body change.** iteminfo (crimson-rs tag `v1.0.13.x`, byte-perfect on all 6,508 items, +25 vs 1.12) drifted in the item-payload layout: (1) the payload-free `SubItem` variant's `type_id` bumped 16 → 17 (both sites); and (2) the former `prefab_data_list` and `gimmick_visual_prefab_data_list` were merged into a single `MergedPrefabVisualData` block relocated to the *end* of each item (the enchant-data list and the equip/gem-gated `unk_pre_gimmick_visual` stay in the middle; a constant `0xff00` item tail follows). `serialize_iteminfo` round-trips byte-identical on the live binary. Separately, `partprefabdyeslotinfo` grew 968 → 1,538 rows (+570) and the 1.12 `(0xFF, 0)` 5-byte per-slot pad was RE'd as a `u8` marker + `u32 extra_layer_count`; 1.13's new dyeable gear sets `count = 1`, adding a second material/dye layer (`DyeExtraLayer`) exposed via four new *additive* getters (`crimson_..._lookup_slot_extra_layer_{count,material,mask,flag}`); the same schema refinement also recovered 9 new-gear rows the old blind-pad model could not parse (1,529 → all 1,538). The existing C# dye bridge still parses the live 1.13 table (additive change — surfacing the 2nd layer in the UI is optional feature work, not a correctness requirement). The save body did **not** drift: format unchanged (v2 / flags `0x0080`); `slot107` is the live 1.13 native save and parses `hmac_ok` with `undecoded_bytes=0`, and every live slot round-trips decode-stable. The parser now targets 1.13 exclusively (`CompatibleMinors = {13}`); 1.12 iteminfo no longer round-trips against it, so a user still on 1.12 is warned. Per-table gamedata snapshot in `crimson-rs` `data/gamedata-keys-1.13/` (30 tables). Note one game-side content shuffle rather than a parse drift: the `Pyeonjeon_Arrow` (key 2200) `item_type` was remapped 0 → 23. **This alignment also retired the manual `ParserTargetMinor` / `CompatibleMinors` bump chain (8→9→10→11→12→13):** the C# values are now read from the crimson-rs C ABI (`crimson_parser_target_gamedata_minor()` + `crimson_parser_compatible_gamedata_minors()`, commit `a3ab5ee`), so Rust is the single source of truth. (Editor `VerMinor` still tracks it as a manual lock-step build-identity bump.)
+
+**1.13 → 1.14 was CONTENT-ONLY — no schema drift in any subsystem.** After four consecutive iteminfo schema drifts (1.10 → 1.11 → 1.12 → 1.13), 1.14 broke the streak: the iteminfo item **values** changed but the layout is byte-identical to 1.13 (crimson-rs tag `v1.0.14.x`, `serialize_iteminfo` round-trips byte-perfect on all 6,508 items, 0 skipped), and the save body, `skill.pabgb`, and all 30 gamedata bridges parse unchanged. The gamedata-key diff vs 1.13 is a single row (`knowledgeinfo −1`; 95,185 keys across 30 tables). The save body did **not** drift: format unchanged (v2 / flags `0x0080`); `slot107` is the live 1.14 native save (paver `1/14/0/0x597d42f8`, 2026-07-17) and parses `hmac_ok` with `undecoded_bytes=0`, and every live slot round-trips decode-stable. The **only** parser change was the version pin `PARSER_TARGET_GAMEDATA_MINOR` 13 → 14; because the C# `ParserTargetMinor` / `CompatibleMinors` have been ABI-sourced since 1.13, the editor picked up the new target with no hand-edit beyond the manual `VerMinor` lock-step bump (13 → 14) and the version-pin test refresh. `CompatibleMinors` stays a single-element allow-list (`{14}`) by convention, so 1.13-and-earlier installs are warned even though the 1.13 layout is byte-compatible. Per-table gamedata snapshot in `crimson-rs` `data/gamedata-keys-1.14/` (30 tables).
