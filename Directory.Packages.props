@@ -55,9 +55,12 @@
     <!-- Must match the installed .NET runtime: PublishAot auto-injects
          Microsoft.DotNet.ILCompiler at the runtime's version, which then
          requires runtime.win-x64.Microsoft.DotNet.ILCompiler >= that
-         version. SDK 10.0.301 ships runtime 10.0.9, so the central pin
-         tracks it (was 10.0.8); a stale pin trips NU1109 (downgrade). -->
-    <PackageVersion Include="runtime.win-x64.Microsoft.DotNet.ILCompiler" Version="10.0.9" />
+         version. SDK 10.0.302 ships runtime 10.0.10, so the central pin
+         tracks it (was 10.0.8 → 10.0.9); a stale pin trips NU1109
+         (downgrade). Pin at-or-above the SDK's runtime — an equal-or-higher
+         pin still satisfies an older SDK whose meta-package needs a lower
+         floor, so it is safe across CI runners. -->
+    <PackageVersion Include="runtime.win-x64.Microsoft.DotNet.ILCompiler" Version="10.0.10" />
     <PackageVersion Include="SkiaSharp" Version="3.119.4" />
     <PackageVersion Include="System.Memory.Data" Version="10.0.9" />
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.9" />
