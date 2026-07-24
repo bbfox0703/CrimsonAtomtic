@@ -14,45 +14,45 @@ namespace CrimsonAtomtic.Tests;
 /// <see cref="GameDataVersion.CompatibleMinors"/> are now read from the
 /// crimson-rs C ABI (Rust is the single source of truth), so the
 /// compatibility assertions below transitively verify the wiring: the
-/// live target (1.14) is compatible, the previous minor (1.13) and any
+/// live target (1.15) is compatible, the previous minor (1.14) and any
 /// other minor are not.
 /// </para>
 /// </summary>
 public sealed class NativePaverReaderTests
 {
-    /// <summary>Bit-for-bit copy of the live 1.14.00 install's paver
-    /// (<c>01 00 0e 00 00 00 f8 42 7d 59</c> → build 0x597d42f8 LE).</summary>
-    private static readonly byte[] Paver_1_14_Live =
-        [0x01, 0x00, 0x0e, 0x00, 0x00, 0x00, 0xf8, 0x42, 0x7d, 0x59];
+    /// <summary>Bit-for-bit copy of the live 1.15.00 install's paver
+    /// (<c>01 00 0f 00 00 00 e1 88 84 6a</c> → build 0x6a8488e1 LE).</summary>
+    private static readonly byte[] Paver_1_15_Live =
+        [0x01, 0x00, 0x0f, 0x00, 0x00, 0x00, 0xe1, 0x88, 0x84, 0x6a];
 
-    /// <summary>The previous patch's paver (1.13.00) — kept to pin that
-    /// it is now flagged INCOMPATIBLE. 1.14 is a <b>content-only</b> patch
-    /// over 1.13 (item field values changed but the iteminfo layout is
-    /// byte-identical — the 1.13 parser reads 1.14 unchanged), so 1.13 is in
+    /// <summary>The previous patch's paver (1.14.00) — kept to pin that
+    /// it is now flagged INCOMPATIBLE. 1.15 is a <b>content-only</b> patch
+    /// over 1.14 (item field values changed but the iteminfo layout is
+    /// byte-identical — the 1.14 parser reads 1.15 unchanged), so 1.14 is in
     /// fact layout-compatible; the allow-list is nonetheless kept target-only
-    /// by convention (<c>CompatibleMinors</c> = <c>{14}</c>), so a 1.13
+    /// by convention (<c>CompatibleMinors</c> = <c>{15}</c>), so a 1.14
     /// install is still warned to update. (The last <i>structural</i> iteminfo
     /// drift was 1.12 → 1.13.)</summary>
-    private static readonly byte[] Paver_1_13_Prev =
-        [0x01, 0x00, 0x0d, 0x00, 0x00, 0x00, 0x0d, 0x2c, 0x6a, 0x53];
+    private static readonly byte[] Paver_1_14_Prev =
+        [0x01, 0x00, 0x0e, 0x00, 0x00, 0x00, 0xf8, 0x42, 0x7d, 0x59];
 
     [Fact]
-    public void TryReadFromBytes_HappyPath_Returns_1_14_Live()
+    public void TryReadFromBytes_HappyPath_Returns_1_15_Live()
     {
         if (!File.Exists("crimson_rs.dll"))
         {
             return;
         }
-        var v = NativePaverReader.TryReadFromBytes(Paver_1_14_Live);
+        var v = NativePaverReader.TryReadFromBytes(Paver_1_15_Live);
         Assert.NotNull(v);
         Assert.Equal(1, v!.Value.Major);
-        Assert.Equal(14, v.Value.Minor);
+        Assert.Equal(15, v.Value.Minor);
         Assert.Equal(0, v.Value.Patch);
-        Assert.Equal(0x597d42f8u, v.Value.Build);
+        Assert.Equal(0x6a8488e1u, v.Value.Build);
         Assert.True(v.Value.IsCompatibleWithParser,
-            "1.14.00 should be compatible with the current ParserTargetMinor=14");
-        Assert.Equal("1.14.00", v.Value.ShortVersionString);
-        Assert.Equal("1.14.00 build 0x597d42f8", v.Value.DisplayString);
+            "1.15.00 should be compatible with the current ParserTargetMinor=15");
+        Assert.Equal("1.15.00", v.Value.ShortVersionString);
+        Assert.Equal("1.15.00 build 0x6a8488e1", v.Value.DisplayString);
     }
 
     [Fact]
@@ -65,11 +65,11 @@ public sealed class NativePaverReaderTests
         // These values are sourced from the crimson-rs C ABI
         // (crimson_parser_target_gamedata_minor /
         // crimson_parser_compatible_gamedata_minors), NOT a hand-coded C#
-        // constant. Pin the currently-vendored target (14) and that the
+        // constant. Pin the currently-vendored target (15) and that the
         // target is always a member of the compatible set.
-        Assert.Equal(14, GameDataVersion.ParserTargetMinor);
-        Assert.Contains<ushort>(14, GameDataVersion.CompatibleMinors);
-        Assert.DoesNotContain<ushort>(13, GameDataVersion.CompatibleMinors);
+        Assert.Equal(15, GameDataVersion.ParserTargetMinor);
+        Assert.Contains<ushort>(15, GameDataVersion.CompatibleMinors);
+        Assert.DoesNotContain<ushort>(14, GameDataVersion.CompatibleMinors);
     }
 
     [Fact]
@@ -79,16 +79,16 @@ public sealed class NativePaverReaderTests
         {
             return;
         }
-        // 1.14 is content-only over 1.13 (item values changed, iteminfo layout
-        // byte-identical), so the 1.13 schema is in fact readable — but
-        // CompatibleMinors is kept target-only ({14}) by convention, so a 1.13
+        // 1.15 is content-only over 1.14 (item values changed, iteminfo layout
+        // byte-identical), so the 1.14 schema is in fact readable — but
+        // CompatibleMinors is kept target-only ({15}) by convention, so a 1.14
         // install is flagged incompatible and warned to update before iteminfo
         // / save-body loading. (The last STRUCTURAL drift was 1.12 → 1.13.)
-        var v = NativePaverReader.TryReadFromBytes(Paver_1_13_Prev);
+        var v = NativePaverReader.TryReadFromBytes(Paver_1_14_Prev);
         Assert.NotNull(v);
-        Assert.Equal(13, v!.Value.Minor);
+        Assert.Equal(14, v!.Value.Minor);
         Assert.False(v.Value.IsCompatibleWithParser,
-            "1.13.00 must NOT be compatible — CompatibleMinors is {14}");
+            "1.14.00 must NOT be compatible — CompatibleMinors is {15}");
     }
 
     [Fact]
@@ -113,14 +113,14 @@ public sealed class NativePaverReaderTests
             return;
         }
         // Synthetic 1.07.xx layout: minor = 7 is not in CompatibleMinors
-        // {14} — 1.07 used a different iteminfo layout.
+        // {15} — 1.07 used a different iteminfo layout.
         ReadOnlySpan<byte> bytes =
             [0x01, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
         var v = NativePaverReader.TryReadFromBytes(bytes);
         Assert.NotNull(v);
         Assert.Equal(7, v!.Value.Minor);
         Assert.False(v.Value.IsCompatibleWithParser,
-            "1.07.xx must NOT be compatible — not in CompatibleMinors {14}");
+            "1.07.xx must NOT be compatible — not in CompatibleMinors {15}");
     }
 
     [Fact]
@@ -130,17 +130,17 @@ public sealed class NativePaverReaderTests
         {
             return;
         }
-        // Synthetic 1.15.xx layout: minor = 15 is past the validated set.
+        // Synthetic 1.16.xx layout: minor = 16 is past the validated set.
         // The gate is an explicit allow-list, not "≥ target", so a future
         // patch this build hasn't been validated against is flagged until
         // CompatibleMinors is extended (Rust-side, via the vendored parser).
         ReadOnlySpan<byte> bytes =
-            [0x01, 0x00, 0x0f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+            [0x01, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
         var v = NativePaverReader.TryReadFromBytes(bytes);
         Assert.NotNull(v);
-        Assert.Equal(15, v!.Value.Minor);
+        Assert.Equal(16, v!.Value.Minor);
         Assert.False(v.Value.IsCompatibleWithParser,
-            "1.15.xx must NOT be compatible — not yet in CompatibleMinors {14}");
+            "1.16.xx must NOT be compatible — not yet in CompatibleMinors {15}");
     }
 
     [Fact]
@@ -185,7 +185,7 @@ public sealed class NativePaverReaderTests
         Assert.NotNull(v);
         // Pin the major (always 1 in shipped versions). Don't pin the
         // minor — the live install on a developer's machine may not
-        // be 1.14 forever, and this test should survive a future
+        // be 1.15 forever, and this test should survive a future
         // game-data minor bump without being rewritten alongside.
         Assert.Equal(1, v!.Value.Major);
     }

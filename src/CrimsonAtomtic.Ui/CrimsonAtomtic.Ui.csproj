@@ -26,7 +26,7 @@
     <!-- track the live game data version the editor parses against —   -->
     <!--   VerMajor = game major (always 1 for Crimson Desert)          -->
     <!--   VerMinor = game minor   == NativePaverReader.ParserTargetMinor -->
-    <!-- so a game patch to 1.14 means VerMinor 13 → 14 AT THE SAME     -->
+    <!-- so a game patch to 1.15 means VerMinor 14 → 15 AT THE SAME     -->
     <!-- TIME ParserTargetMinor tracks it (keep them in lock-step).     -->
     <!-- NOTE: ParserTargetMinor is now READ from the crimson-rs C ABI   -->
     <!-- (Rust is the single source of truth); VerMinor stays a MANUAL   -->
@@ -40,7 +40,7 @@
     <!-- UE5CEDumper uses.                                              -->
     <!-- ============================================================ -->
     <VerMajor>1</VerMajor>
-    <VerMinor>14</VerMinor>
+    <VerMinor>15</VerMinor>
     <VerPatch>1</VerPatch>
     <BuildNumberFile>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\build_number.txt'))</BuildNumberFile>
     <VerBuild Condition="Exists('$(BuildNumberFile)')">$([System.IO.File]::ReadAllText('$(BuildNumberFile)').Trim())</VerBuild>
