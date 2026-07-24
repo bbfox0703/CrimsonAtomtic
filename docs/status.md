@@ -9,8 +9,8 @@
 >
 > Last updated: **2026-07-24** — editor aligned to game **1.15** (a
 > **content-only** patch over 1.14 — no schema drift in any subsystem; the
-> 30-table gamedata-key snapshot is byte-identical to 1.14). Committed on
-> `dev` and merged to `main`; **not tagged/released** this session.
+> 30-table gamedata-key snapshot is byte-identical to 1.14) and **released as
+> v1.15.01** (annotated tag → CI single-file AOT build → published on GitHub).
 > Because `ParserTargetMinor` / `CompatibleMinors` are read from the crimson-rs
 > C ABI (Rust is the single source of truth), 1.15 needed only the manual
 > `VerMinor` 14→15 lock-step bump + a version-pin test refresh; crimson-rs 1.15
@@ -18,15 +18,15 @@
 
 ## Current state
 
-- **Editor aligned to live game 1.15** (`VerMinor` 14 → 15, `VerPatch` reset
-  to 1 per the lock-step `VerMinor == ParserTargetMinor` convention —
-  `VerMinor` is a **manual** build-identity bump, while `ParserTargetMinor`
-  is **ABI-sourced**). Verified locally (381 C# tests green, 0 skipped) and
-  **committed on `dev` + merged to `main`**; **not tagged/released** this
-  session. (The last *published* release is v1.13.01, 2026-07-04; v1.14.01 was
-  tagged as a CI draft.) When a release is cut, the flow (annotated `v*` tag →
-  CI single-file AOT exe + bilingual notes → human clicks **Publish**) is
-  unchanged; see [release-process.md](release-process.md).
+- **Editor v1.15.01**, aligned to live game **1.15** (`VerMinor` 14 → 15,
+  `VerPatch` reset to 1 per the lock-step `VerMinor == ParserTargetMinor`
+  convention — `VerMinor` is a **manual** build-identity bump, while
+  `ParserTargetMinor` is **ABI-sourced**). Verified locally (381 C# tests
+  green, 0 skipped), committed on `dev` + merged to `main` (PR #23), then
+  **tagged and published as v1.15.01**; it supersedes v1.14.01 (published
+  2026-07-17). The release flow (annotated `v*` tag → CI single-file AOT exe +
+  bilingual notes → human clicks **Publish**) is unchanged; see
+  [release-process.md](release-process.md).
 - **1.15 is a content-only patch over 1.14** (itself content-only over 1.13) —
   item field values changed but there was **no schema/layout drift in any
   subsystem** (iteminfo, save body, skill, all 30 gamedata bridges), and the
@@ -183,8 +183,10 @@ One line per milestone; full detail in [status-archive.md](status-archive.md).
   1.15 paver `01 00 0f 00 00 00 e1 88 84 6a` / build `0x6a8488e1`, the
   previous-minor guard moved to 1.14, and the "future minor" guard to 1.16).
   All 381 C# tests ran with 0 skipped and 0 failures after the refresh (native
-  lib rebuilt from vendored 1.15). Committed on `dev` and merged to `main`;
-  not tagged/released this session.
+  lib rebuilt from vendored 1.15). Committed on `dev`, merged to `main` (PR
+  #23), then **released as v1.15.01** (annotated tag `v1.15.01` → CI AOT draft
+  → published; bilingual release notes trimmed to the `## Highlights` / `## 重點`
+  sections, matching prior releases).
 - **2026-07-17 — game 1.14 alignment (v1.14.01)**: first content-only patch
   since the 1.10→1.13 run of four consecutive iteminfo schema drifts — 1.14
   changed item **values** but not the layout, and the save body / skill / all
