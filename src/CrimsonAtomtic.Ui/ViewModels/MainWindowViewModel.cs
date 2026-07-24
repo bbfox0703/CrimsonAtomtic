@@ -1128,9 +1128,9 @@ public sealed partial class MainWindowViewModel(
     }
 
     /// <summary>
-    /// Application version string from assembly metadata, e.g. "v1.14.01.42".
+    /// Application version string from assembly metadata, e.g. "v1.15.01.42".
     /// Minor + patch are zero-padded to two digits so the displayed version
-    /// mirrors the game data version format ("1.14.xx") — major.minor track
+    /// mirrors the game data version format ("1.15.xx") — major.minor track
     /// the game (see CrimsonAtomtic.Ui.csproj sync convention), patch is the
     /// editor's own release counter. The 4th digit is the build number baked
     /// in from build_number.txt at compile time. Uses GetEntryAssembly rather
