@@ -14,8 +14,8 @@ namespace CrimsonAtomtic.RustInterop;
 /// <param name="Minor">Minor — the **schema-compatibility key**.
 /// Iteminfo / save-body parsers target a specific minor; running them
 /// against a mismatched minor either crashes or silently corrupts.
-/// Currently <see cref="ParserTargetMinor"/> = 15.</param>
-/// <param name="Patch">Sub-version (e.g. <c>1.15</c> → 0, <c>1.15.01</c> → 1).
+/// Currently <see cref="ParserTargetMinor"/> = 16.</param>
+/// <param name="Patch">Sub-version (e.g. <c>1.16</c> → 0, <c>1.16.01</c> → 1).
 /// Compatible within the same minor.</param>
 /// <param name="Build">Opaque build identifier. Bumps every PA hotfix
 /// — informational only.</param>
@@ -32,25 +32,31 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     /// Read from the crimson-rs C ABI
     /// (<c>crimson_parser_target_gamedata_minor</c>) so Rust is the single
     /// source of truth — this is no longer a hand-bumped C# constant. The
-    /// 8→9→10→11→12→13→14→15 manual-bump chain ended at the 1.13 alignment
+    /// 8→9→10→11→12→13→14→15→16 manual-bump chain ended at the 1.13 alignment
     /// (which wired this value to the ABI); the value now follows whatever
-    /// parser the vendored lib ships (currently 1.15, vendored crimson-rs
-    /// tag <c>v1.0.15.x</c>).
+    /// parser the vendored lib ships (currently 1.16, vendored crimson-rs
+    /// tag <c>v1.0.16.x</c>).
     /// <para>
-    /// 1.15 is a CONTENT-ONLY patch over 1.14 (itself content-only over 1.13):
-    /// item field values changed but the iteminfo layout is byte-identical, and
-    /// the save body, skill, and every gamedata bridge parse unchanged — the
-    /// only change is this pin bumping 14 → 15. (The last STRUCTURAL drift was
-    /// 1.13, which reworked the iteminfo item-payload layout: the payload-free
-    /// <c>SubItem</c> variant's <c>type_id</c> bumped 16 → 17, and
-    /// <c>prefab_data_list</c> + <c>gimmick_visual_prefab_data_list</c> were
-    /// merged into a single <c>MergedPrefabVisualData</c> block relocated to the
-    /// end of each item.) Because the allow-list is kept target-only by
-    /// convention, 1.14 and earlier installs are flagged incompatible even
-    /// though the 1.14 layout is in fact readable. 1.15 brought NO save-body
-    /// drift: the save format is unchanged (v2 / flags 0x0080), every live slot
-    /// parses hmac_ok with undecoded_bytes=0, and a body-stable write
-    /// round-trips (6,508 items, byte-perfect serialize).
+    /// 1.16 is a STRUCTURAL drift — the largest since 1.13, and the first patch
+    /// ever to break the skill parser — ending the 1.14/1.15 run of two
+    /// content-only patches. Iteminfo (6,508 → 6,581 items) took four layout
+    /// changes: the head-side <c>inventory_info</c> was removed;
+    /// <c>DockingChildData::unk_post_summon_tag</c> (added in 1.08) was removed;
+    /// a 10 + 28*N byte block (<c>u32</c> + flag + <c>CArray&lt;UnkPreRespawnData&gt;</c>
+    /// + <c>u8</c>) was inserted before <c>respawn_time_seconds</c> with
+    /// <c>unk_pre_max_endurance</c> swapped ahead of it; and
+    /// <c>inventory_info</c> reappeared at the item END as
+    /// <c>inventory_info_list: [u16; 9]</c>, absorbing the 1.13-era constant
+    /// <c>unk_tail</c> as slot 8. Skill (1,999 → 2,013 entries) gained
+    /// <c>PostBuff::unk_pre_damage_type: u8</c> before <c>damage_type</c> — 1 B
+    /// per entry, which had broken 589 of 2,013 entries before the fix. The C
+    /// ABI surface is nonetheless UNCHANGED: <c>CrimsonItemInfoSummary</c> still
+    /// exports <c>inventory_info</c>, now sourced from
+    /// <c>inventory_info_list[0]</c>, which is byte-for-byte the pre-1.16 value.
+    /// 1.16 brought NO save-body drift: the save format is unchanged
+    /// (v2 / flags 0x0080), every live slot parses hmac_ok with
+    /// undecoded_bytes=0, and a body-stable write round-trips (6,581 items,
+    /// byte-perfect serialize).
     /// </para>
     /// The editor's own <c>VerMinor</c> in the .csproj still tracks this as
     /// a manual lock-step build-identity bump — intentionally separate from
@@ -64,10 +70,13 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     /// target. Read from the crimson-rs C ABI
     /// (<c>crimson_parser_compatible_gamedata_minors</c>, first-call
     /// sizing then refill). The allow-list is kept a single element
-    /// (<c>{15}</c>) by convention — it tracks just the target even when a
+    /// (<c>{16}</c>) by convention — it tracks just the target even when a
     /// content-only patch (like 1.15 over 1.14) leaves an older minor's
-    /// layout readable — so a user still on 1.14 or earlier is warned to
-    /// update. <see cref="ParserTargetMinor"/> is always present here.
+    /// layout readable — so a user still on 1.15 or earlier is warned to
+    /// update. For 1.16 that warning is substantive rather than merely
+    /// conventional: the structural iteminfo + skill drift means 1.15 data
+    /// genuinely mis-decodes. <see cref="ParserTargetMinor"/> is always
+    /// present here.
     /// </summary>
     public static ushort[] CompatibleMinors => ParserTargetInfo.Value.Compatible;
 
@@ -131,14 +140,14 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     public bool IsCompatibleWithParser => Array.IndexOf(CompatibleMinors, Minor) >= 0;
 
     /// <summary>
-    /// Human-readable version (e.g. <c>"1.15.00 build 0x6a8488e1"</c>).
+    /// Human-readable version (e.g. <c>"1.16.00 build 0x8d1d6de1"</c>).
     /// Suitable for an About / Settings dialog or a status-bar field.
     /// </summary>
     public string DisplayString =>
         $"{Major}.{Minor:D2}.{Patch:D2} build 0x{Build:x8}";
 
     /// <summary>
-    /// Short version string without the build id (e.g. <c>"1.15.00"</c>).
+    /// Short version string without the build id (e.g. <c>"1.16.00"</c>).
     /// Suitable for inline log lines / warning dialogs where the build
     /// number is noise.
     /// </summary>
