@@ -14,20 +14,22 @@
 > so the C# side again needed only the manual `VerMinor` 15→16 lock-step bump
 > and a version-pin/expectation refresh — the C ABI surface is unchanged.
 > crimson-rs 1.16 is vendored from `main` (tag `v1.0.16.x`, commit `e81acc5`).
-> 381 C# tests green, 0 skipped. **Not yet released** — v1.16.01 still to be
-> tagged.
+> 381 C# tests green, 0 skipped. Merged to `main` (PR #25) and **tagged
+> `v1.16.01`**; the CI AOT build is green and the GitHub Release is sitting as
+> a **DRAFT** — clicking **Publish** is the remaining human step.
 
 ## Current state
 
-- **Editor v1.16.01 (unreleased)**, aligned to live game **1.16** (`VerMinor`
-  15 → 16, `VerPatch` reset to 1 per the lock-step
+- **Editor v1.16.01 (tagged; release DRAFT pending publish)**, aligned to live
+  game **1.16** (`VerMinor` 15 → 16, `VerPatch` reset to 1 per the lock-step
   `VerMinor == ParserTargetMinor` convention — `VerMinor` is a **manual**
   build-identity bump, while `ParserTargetMinor` is **ABI-sourced**). Verified
-  locally (381 C# tests green, 0 skipped). **Next concrete task: merge `dev` →
-  `main` and cut the v1.16.01 release** (annotated `v*` tag → CI single-file
-  AOT exe + bilingual notes → human clicks **Publish**); see
-  [release-process.md](release-process.md). It will supersede v1.15.01
-  (published 2026-07-24).
+  locally (381 C# tests green, 0 skipped), merged to `main` (PR #25), then
+  tagged `v1.16.01` → CI built the single-file AOT exe (run `30699496761`,
+  3m25s) and created the draft with the bilingual notes trimmed to
+  `## Highlights` / `## 重點`. **Next concrete task: click Publish** on the
+  draft release; see [release-process.md](release-process.md). It supersedes
+  v1.15.01 (published 2026-07-24).
 - **1.16 is a STRUCTURAL patch over 1.15** — the largest drift since 1.13 and
   the **first ever to break the skill parser**, ending the 1.14/1.15
   content-only streak. iteminfo went 6,508 → **6,581** items with four layout
@@ -200,7 +202,7 @@ Each step should be green. If anything fails, fix it before touching new code
 
 One line per milestone; full detail in [status-archive.md](status-archive.md).
 
-- **2026-08-01 — game 1.16 alignment (v1.16.01, unreleased)**: the
+- **2026-08-01 — game 1.16 alignment (v1.16.01, tagged; draft pending)**: the
   content-only streak ended — 1.16 is the largest schema drift since 1.13 and
   the **first patch ever to break the skill parser**. iteminfo 6,508 → 6,581
   items with four layout drifts (head-side `inventory_info` removed;
@@ -221,7 +223,10 @@ One line per milestone; full detail in [status-archive.md](status-archive.md).
   moved to 1.15, future-minor guard to 1.17) and `ItemInfoCatalogTests`
   (`Pyeonjeon_Arrow` `item_type` 23 → 0 — a game-side enum remap, the second
   for this key). All 381 C# tests green, 0 skipped, against the live 1.16
-  install. **Still to do: merge to `main` and tag v1.16.01.**
+  install. Merged to `main` (PR #25) and **tagged `v1.16.01`** → CI AOT build
+  green (run `30699496761`), draft release created and trimmed to the
+  bilingual `## Highlights` / `## 重點` sections. **Still to do: click
+  Publish** on the draft.
 - **2026-07-24 — game 1.15 alignment**: second content-only patch in a row
   (after 1.14 broke the 1.10→1.13 four-drift streak) — 1.15 changed item
   **values** but not the layout; the save body / skill / all 30 gamedata
