@@ -37,6 +37,20 @@ git push origin v1.10.01-fix
   - 繁體中文重點 …
   ```
 
+- **Pass `--cleanup=verbatim` when the message contains `##` headings.** `git tag`
+  defaults to `--cleanup=strip`, which treats every line starting with `#` as a comment
+  and **silently deletes it** — so `-F`/editor-authored messages lose both `## Highlights`
+  and `## 重點`, and the notes CI assembles start abruptly at the first bullet. This bit
+  v1.17.01 (fixed after the fact with `gh release edit --notes-file`). Write the tag as:
+
+  ```sh
+  git tag -a v1.17.01 origin/main --cleanup=verbatim -F notes.md
+  git tag -l --format='%(contents)' v1.17.01 | head -1   # must print "## Highlights"
+  ```
+
+  Verify with that second command *before* pushing — once the tag is pushed, correcting
+  it means deleting the tag and the draft release and re-running CI.
+
 - **Build number (4th version digit):** a *pure-numeric* `vNNN` tag pins
   `build_number.txt` = NNN for that build (so the embedded version's build digit equals
   the tag). Any other shape — e.g. `v1.10.01`, `v1.10.01-fix` — leaves the committed

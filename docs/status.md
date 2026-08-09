@@ -15,20 +15,23 @@
 > (tag `v1.0.17.x`, commit `0767361`, merge `dcf3a42`). The C# side needed only
 > the manual `VerMinor` 16→17 lock-step bump plus the `NativePaverReaderTests`
 > version-pin refresh — **no** count/value pin moved, and the C ABI surface is
-> unchanged. 381 C# tests green, 0 skipped. **Next concrete task: commit on
-> `dev`, merge to `main`, tag `v1.17.01`.** (v1.16.01 was published on
-> 2026-08-01 and is the current Latest release.)
+> unchanged. 381 C# tests green, 0 skipped. Merged to `main` (PR #26) and
+> **tagged `v1.17.01`**; the CI AOT build is green and the GitHub Release is
+> sitting as a **DRAFT** with the notes trimmed to the bilingual sections —
+> clicking **Publish** is the remaining human step.
 
 ## Current state
 
-- **Editor aligned to live game 1.17 — not yet committed/tagged.** `VerMinor`
-  16 → 17, `VerPatch` stays 1 per the lock-step `VerMinor == ParserTargetMinor`
-  convention (`VerMinor` is a **manual** build-identity bump, while
-  `ParserTargetMinor` is **ABI-sourced**). Verified locally: 381 C# tests
-  green, 0 skipped, against the real 1.17 install. **Next concrete task:
-  commit on `dev` → merge to `main` → tag `v1.17.01`**; see
-  [release-process.md](release-process.md). The shipped Latest release is still
-  v1.16.01 (tagged + **published** 2026-08-01).
+- **Editor v1.17.01 (tagged; release DRAFT pending publish)**, aligned to live
+  game **1.17** (`VerMinor` 16 → 17, `VerPatch` stays 1 per the lock-step
+  `VerMinor == ParserTargetMinor` convention — `VerMinor` is a **manual**
+  build-identity bump, while `ParserTargetMinor` is **ABI-sourced**). Verified
+  locally (381 C# tests green, 0 skipped), merged to `main` (PR #26), then
+  tagged `v1.17.01` → CI built the single-file AOT exe (run `31316944938`) and
+  created the draft (`CrimsonAtomtic-v1.17.01-win-x64.zip`, 20,542,059 B).
+  **Next concrete task: click Publish** on the draft release; see
+  [release-process.md](release-process.md). It supersedes v1.16.01 (published
+  2026-08-01).
 - **1.17 is a CONTENT-ONLY patch over 1.16** — the structural 1.16 drift was a
   one-off; 1.17 returns to the 1.14/1.15 shape. iteminfo went 6,581 →
   **6,572** items: nine `Item_Set_*_Tier0_Reminiscence` keys (1004912–1004920)
@@ -210,8 +213,9 @@ Each step should be green. If anything fails, fix it before touching new code
 
 One line per milestone; full detail in [status-archive.md](status-archive.md).
 
-- **2026-08-09 — game 1.17 alignment (pending commit/tag)**: content-only over
-  1.16 — the structural 1.16 patch was a one-off. iteminfo 6,581 → **6,572**
+- **2026-08-09 — game 1.17 alignment (v1.17.01, tagged; draft pending)**:
+  content-only over 1.16 — the structural 1.16 patch was a one-off. iteminfo
+  6,581 → **6,572**
   items (nine `Item_Set_*_Tier0_Reminiscence` keys 1004912–1004920 removed,
   none added) with the **layout untouched**; the size-delta accounting is what
   proves it (6,435 of 6,572 survivors byte-identical, 137 value-only changes,
@@ -229,7 +233,14 @@ One line per milestone; full detail in [status-archive.md](status-archive.md).
   1.18, ABI target pin 16→17). **No count/value pin moved** — unlike every
   alignment since 1.13, `Pyeonjeon_Arrow` `item_type` stayed 0 and the catalog
   tests passed untouched, so exactly 3 of 381 tests were red pre-bump and all
-  381 are green after. C ABI surface unchanged.
+  381 are green after. C ABI surface unchanged. Merged to `main` (PR #26) and
+  **tagged `v1.17.01`** → CI AOT build green (run `31316944938`), draft release
+  created and trimmed to the bilingual `## Highlights` / `## 重點` sections.
+  **Still to do: click Publish** on the draft. Two process findings: the
+  vendor-refresh trap (stale Python `.pyd` — see gotchas) and that `git tag`
+  defaults to `--cleanup=strip`, which silently ate the `##` headings out of
+  this tag's message (release-process.md now documents `--cleanup=verbatim`
+  plus the pre-push verification command).
 - **2026-08-01 — game 1.16 alignment (v1.16.01, released)**: the
   content-only streak ended — 1.16 is the largest schema drift since 1.13 and
   the **first patch ever to break the skill parser**. iteminfo 6,508 → 6,581
