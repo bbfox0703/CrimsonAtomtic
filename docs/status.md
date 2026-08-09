@@ -7,69 +7,68 @@
 > **[status-archive.md](status-archive.md)** — look there only when you need
 > the deep history behind a decision.
 >
-> Last updated: **2026-08-01** — editor aligned to game **1.16**, a
-> **structural** patch over 1.15: the largest schema drift since 1.13 and the
-> **first patch ever to break the skill parser** (4 iteminfo layout drifts +
-> `PostBuff::unk_pre_damage_type`). All of that landed inside the Rust parser,
-> so the C# side again needed only the manual `VerMinor` 15→16 lock-step bump
-> and a version-pin/expectation refresh — the C ABI surface is unchanged.
-> crimson-rs 1.16 is vendored from `main` (tag `v1.0.16.x`, commit `e81acc5`).
-> 381 C# tests green, 0 skipped. **Not yet released** — v1.16.01 still to be
-> tagged.
+> Last updated: **2026-08-09** — editor aligned to game **1.17**, a
+> **content-only** patch over 1.16: the structural 1.16 drift was a one-off and
+> 1.17 goes back to the 1.14/1.15 pattern. No schema drift in any subsystem —
+> iteminfo lost nine items (6,581 → 6,572) with the layout untouched, and
+> `skill.pabgb` is byte-identical. crimson-rs 1.17 is vendored from `main`
+> (tag `v1.0.17.x`, commit `0767361`, merge `dcf3a42`). The C# side needed only
+> the manual `VerMinor` 16→17 lock-step bump plus the `NativePaverReaderTests`
+> version-pin refresh — **no** count/value pin moved, and the C ABI surface is
+> unchanged. 381 C# tests green, 0 skipped. **Next concrete task: commit on
+> `dev`, merge to `main`, tag `v1.17.01`.** (v1.16.01 was published on
+> 2026-08-01 and is the current Latest release.)
 
 ## Current state
 
-- **Editor v1.16.01 (unreleased)**, aligned to live game **1.16** (`VerMinor`
-  15 → 16, `VerPatch` reset to 1 per the lock-step
-  `VerMinor == ParserTargetMinor` convention — `VerMinor` is a **manual**
-  build-identity bump, while `ParserTargetMinor` is **ABI-sourced**). Verified
-  locally (381 C# tests green, 0 skipped). **Next concrete task: merge `dev` →
-  `main` and cut the v1.16.01 release** (annotated `v*` tag → CI single-file
-  AOT exe + bilingual notes → human clicks **Publish**); see
-  [release-process.md](release-process.md). It will supersede v1.15.01
-  (published 2026-07-24).
-- **1.16 is a STRUCTURAL patch over 1.15** — the largest drift since 1.13 and
-  the **first ever to break the skill parser**, ending the 1.14/1.15
-  content-only streak. iteminfo went 6,508 → **6,581** items with four layout
-  changes (head-side `inventory_info` removed; `DockingChildData::
-  unk_post_summon_tag` removed; a 10 + 28·N `UnkPreRespawnData` block inserted
-  before `respawn_time_seconds` with `unk_pre_max_endurance` swapped ahead of
-  it; `inventory_info` relocated to the item end as `inventory_info_list:
-  [u16; 9]`, absorbing the 1.13-era `unk_tail` as slot 8). skill went
-  1,999 → **2,013** entries with `PostBuff::unk_pre_damage_type: u8` before
-  `damage_type` (+1 B/entry; 589 of 2,013 entries failed to parse before the
-  fix — the `BuffData` tail probe doesn't cover `PostBuff`, so this one was
-  *not* absorbed automatically). All of it landed inside the Rust parser, so
-  the editor still needed **no C# parser-logic change**.
+- **Editor aligned to live game 1.17 — not yet committed/tagged.** `VerMinor`
+  16 → 17, `VerPatch` stays 1 per the lock-step `VerMinor == ParserTargetMinor`
+  convention (`VerMinor` is a **manual** build-identity bump, while
+  `ParserTargetMinor` is **ABI-sourced**). Verified locally: 381 C# tests
+  green, 0 skipped, against the real 1.17 install. **Next concrete task:
+  commit on `dev` → merge to `main` → tag `v1.17.01`**; see
+  [release-process.md](release-process.md). The shipped Latest release is still
+  v1.16.01 (tagged + **published** 2026-08-01).
+- **1.17 is a CONTENT-ONLY patch over 1.16** — the structural 1.16 drift was a
+  one-off; 1.17 returns to the 1.14/1.15 shape. iteminfo went 6,581 →
+  **6,572** items: nine `Item_Set_*_Tier0_Reminiscence` keys (1004912–1004920)
+  removed, none added, **layout untouched**. The proof it isn't a layout drift
+  hiding behind value changes: of the 6,572 survivors 6,435 are byte-identical,
+  137 changed values, and **zero changed size** — and the −5,652 B file delta
+  is exactly the sum of the nine removed items' spans. `skill.pabgb` /
+  `.pabgh` are byte-identical to 1.16 (2,013/2,013 entries parse). gamedata
+  keys: `gimmickinfo` +1 (13,690), `itemgroupinfo` −1 (1,596), other 28 tables
+  key-identical. The only crimson-rs code change was the version pin.
 - **Save read/write is version-agnostic.** Each save embeds its own schema, so
-  1.05–1.16 saves round-trip in their own format (no version conversion). 1.16
-  brought **no save-body drift** (format still v2 / flags `0x0080`; all 12 live
-  slots parse `hmac_ok` / `undecoded_bytes=0`). Verified this session: the live
-  C# loader suite round-trips clean (all 381 C# tests ran with 0 skipped;
-  iteminfo catalog parses the real 1.16 data, now 6,581 items).
-- **The C ABI surface did NOT change across this structural drift.**
-  `CrimsonItemInfoSummary` still exports `inventory_info` — now sourced from
-  `inventory_info_list[0]`, which is byte-for-byte the pre-1.16 value — so the
-  C# interop struct is untouched and the 80-byte `Marshal.SizeOf` pin still
-  holds. This is the payoff of the foundation-first rule: a four-way layout
-  drift stayed entirely inside Rust.
+  1.05–1.17 saves round-trip in their own format (no version conversion). 1.17
+  brought **no save-body drift** (format still v2 / flags `0x0080`; the live
+  `slot107` 1.17 save decodes 1,107 blocks / 3,097 fields with
+  `undecoded_bytes=0`). Verified this session: the live C# loader suite
+  round-trips clean (all 381 C# tests ran with 0 skipped; iteminfo catalog
+  parses the real 1.17 data, now 6,572 items).
+- **The C ABI surface did NOT change.** `CrimsonItemInfoSummary` is untouched
+  and the 80-byte `Marshal.SizeOf` pin still holds — as it also did across the
+  *structural* 1.16 drift, where `inventory_info` was re-sourced from
+  `inventory_info_list[0]` entirely inside Rust. This is the payoff of the
+  foundation-first rule.
 - **Name/icon resolution targets the *installed* game.**
   `GameDataVersion.ParserTargetMinor` and `CompatibleMinors` are read from the
-  crimson-rs C ABI (`crimson_parser_target_gamedata_minor()` → 16;
-  `crimson_parser_compatible_gamedata_minors()` → {16}) — not hand-coded.
-  Unlike 1.14/1.15, where the allow-list warned older installs purely by
-  convention, **1.15-and-earlier are now genuinely incompatible** — the
-  structural drift means 1.15 data really does mis-decode. Full per-version
+  crimson-rs C ABI (`crimson_parser_target_gamedata_minor()` → 17;
+  `crimson_parser_compatible_gamedata_minors()` → {17}) — not hand-coded.
+  Because 1.17 is content-only, the allow-list warns a 1.16 install purely by
+  **convention** again (its layout would still parse) — unlike at 1.16, where
+  the structural drift made the warning substantive. Full per-version
   breakdown in [game-versions.md](game-versions.md).
-- **crimson-rs 1.16 is on `main`.** The structural 1.16 support is merged to
-  `bbfox0703/crimson-rs` `main` (commit `e81acc5`, PR #87) and tagged
-  **`v1.0.16.x`** (vendored at `92fc0e2`). CI clones `main`, so a release cut
-  ships the 1.16 parser. Reminder for the next patch: land the crimson-rs
-  change on `main` *before* tagging a CrimsonAtomtic release.
+- **crimson-rs 1.17 is on `main`.** The 1.17 support is merged to
+  `bbfox0703/crimson-rs` `main` (commit `0767361`, PR #88, merge `dcf3a42`)
+  and tagged **`v1.0.17.x`** (vendored at `dcf3a42`). CI clones `main`, so a
+  release cut ships the 1.17 parser. Reminder for the next patch: land the
+  crimson-rs change on `main` *before* tagging a CrimsonAtomtic release.
 - **Health:** full suite green this session (381 C# tests, 0 skipped, 0
   failures after the version-pin refresh — live-install + catalog tests parse
-  the real 1.16 iteminfo, 6,581 items; the native lib was rebuilt from the
-  vendored 1.16 crimson-rs so the ABI reports target minor 16). The
+  the real 1.17 iteminfo, 6,572 items; the native lib was rebuilt from the
+  vendored 1.17 crimson-rs so the ABI reports target minor 17). Only 3 tests
+  were red pre-bump, all in `NativePaverReaderTests`. The
   `runtime.win-x64.Microsoft.DotNet.ILCompiler` central pin stays at 10.0.10
   (SDK 10.0.302, unchanged since 1.14).
 
@@ -163,6 +162,17 @@ window-restore quirks, etc.) is in
   via PR; never push to upstream `potter420/crimson-rs`.
 - **Run tests with `dotnet run --project src/CrimsonAtomtic.Tests`** — this SDK
   rejects the legacy `dotnet test` VSTest path for MTP.
+- **A vendor refresh does NOT rebuild the Python `crimson_rs` module.**
+  `maturin develop` installs *editable* (a `.pth` pointing at
+  `vendor/crimson-rs/python`), so after `update_vendors.ps1` the in-tree source
+  and `crimson_rs.__file__` both look current while the compiled
+  `python/crimson_rs/crimson_rs.pyd` is still whatever was last built — it was
+  51 days stale (a 1.12-era build) at the 1.17 alignment. The C# editor is
+  unaffected (it loads `crimson_rs.dll` from `scripts/build_rust.ps1`), but the
+  `tools/` Python toolchain would silently parse new game data with an old
+  schema. Re-run `scripts/setup_python_env.ps1` after every vendor refresh, and
+  check the `.pyd` mtime — not `crimson_rs.__file__` — to tell whether it's
+  current.
 - **Avalonia 12 quirks**: DataGrid pinned at 12.0.0 (core is ahead);
   `Avalonia.Diagnostics` 12.x not released; MVVM uses field-based
   `[ObservableProperty]` (partial-property syntax didn't generate on
@@ -200,7 +210,27 @@ Each step should be green. If anything fails, fix it before touching new code
 
 One line per milestone; full detail in [status-archive.md](status-archive.md).
 
-- **2026-08-01 — game 1.16 alignment (v1.16.01, unreleased)**: the
+- **2026-08-09 — game 1.17 alignment (pending commit/tag)**: content-only over
+  1.16 — the structural 1.16 patch was a one-off. iteminfo 6,581 → **6,572**
+  items (nine `Item_Set_*_Tier0_Reminiscence` keys 1004912–1004920 removed,
+  none added) with the **layout untouched**; the size-delta accounting is what
+  proves it (6,435 of 6,572 survivors byte-identical, 137 value-only changes,
+  **zero** size changes, and the −5,652 B file delta exactly equals the nine
+  removed items' spans). `skill.pabgb` byte-identical to 1.16 (2,013/2,013
+  parse). No save-body drift (v2 / flags `0x0080`; live `slot107` decodes
+  1,107 blocks / 3,097 fields, undecoded 0/5,204,773). gamedata keys 30 tables
+  / 96,076: `gimmickinfo` +1 (13,690, new key 1012695), `itemgroupinfo` −1
+  (1,596, removed key 18566), other 28 key-identical. crimson-rs commit
+  `0767361`, tag `v1.0.17.x`, merged to `main` via PR #88 (vendored at
+  `dcf3a42`); its only code change was `PARSER_TARGET_GAMEDATA_MINOR` 16 → 17.
+  C# side: manual `VerMinor` 16→17 lock-step bump + `NativePaverReaderTests`
+  refresh (happy path pins the 1.17 paver `01 00 11 00 00 00 97 4c 5e d0` /
+  build `0xd05e4c97`, previous-minor guard moved to 1.16, future-minor guard to
+  1.18, ABI target pin 16→17). **No count/value pin moved** — unlike every
+  alignment since 1.13, `Pyeonjeon_Arrow` `item_type` stayed 0 and the catalog
+  tests passed untouched, so exactly 3 of 381 tests were red pre-bump and all
+  381 are green after. C ABI surface unchanged.
+- **2026-08-01 — game 1.16 alignment (v1.16.01, released)**: the
   content-only streak ended — 1.16 is the largest schema drift since 1.13 and
   the **first patch ever to break the skill parser**. iteminfo 6,508 → 6,581
   items with four layout drifts (head-side `inventory_info` removed;
@@ -221,7 +251,10 @@ One line per milestone; full detail in [status-archive.md](status-archive.md).
   moved to 1.15, future-minor guard to 1.17) and `ItemInfoCatalogTests`
   (`Pyeonjeon_Arrow` `item_type` 23 → 0 — a game-side enum remap, the second
   for this key). All 381 C# tests green, 0 skipped, against the live 1.16
-  install. **Still to do: merge to `main` and tag v1.16.01.**
+  install. Merged to `main` (PR #25) and **tagged `v1.16.01`** → CI AOT build
+  green (run `30699496761`), draft release created and trimmed to the
+  bilingual `## Highlights` / `## 重點` sections, then **published**
+  2026-08-01.
 - **2026-07-24 — game 1.15 alignment**: second content-only patch in a row
   (after 1.14 broke the 1.10→1.13 four-drift streak) — 1.15 changed item
   **values** but not the layout; the save body / skill / all 30 gamedata

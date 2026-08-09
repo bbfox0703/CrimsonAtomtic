@@ -2,7 +2,7 @@
 
 ## Current install
 
-`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 1.16**
+`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 1.17**
 
 Top-level layout:
 
@@ -23,9 +23,10 @@ Crimson Desert/
   is fully decoded (see `crimson-rs` `src/binary/paver.rs`, exposed via
   `crimson_paver_read_from_*`): three little-endian u16s `(major, minor,
   patch)` followed by a little-endian u32 `build`. The **minor** is the
-  schema-compatibility key. Live 1.16.00 install:
-  `01 00 10 00 00 00 e1 6d 1d 8d` → major 1, minor 16, patch 0,
-  build `0x8d1d6de1`. (1.15.00 was `01 00 0f 00 00 00 e1 88 84 6a`,
+  schema-compatibility key. Live 1.17.00 install:
+  `01 00 11 00 00 00 97 4c 5e d0` → major 1, minor 17, patch 0,
+  build `0xd05e4c97`. (1.16.00 was `01 00 10 00 00 00 e1 6d 1d 8d`,
+  build `0x8d1d6de1`; 1.15.00 was `01 00 0f 00 00 00 e1 88 84 6a`,
   build `0x6a8488e1`; 1.14.00 was `01 00 0e 00 00 00 f8 42 7d 59`,
   build `0x597d42f8`; 1.13.00 was `01 00 0d 00 00 00 0d 2c 6a 53`,
   build `0x536a2c0d`; 1.12.00 was `01 00 0c 00 00 00 02 84 73 ac`,
@@ -35,25 +36,18 @@ Crimson Desert/
   build `0xbbf34824`; 1.08.00 was `01 00 08 00 00 00 3e b0 39 dc`,
   build `0xdc39b03e`.) The editor reads this at startup and warns when
   the install's minor isn't one the parser can load
-  (`GameDataVersion.CompatibleMinors`, now `{16}`). **1.16 is a structural
-  drift over 1.15** (crimson-rs tag `v1.0.16.x`) — the largest since 1.13 and
-  the first patch ever to break the skill parser. Iteminfo went 6,508 → 6,581
-  items with four layout changes: head-side `inventory_info` removed;
-  `DockingChildData::unk_post_summon_tag` (added in 1.08) removed; a
-  10 + 28·N byte block (`u32` + flag + `CArray<UnkPreRespawnData>` + `u8`)
-  inserted before `respawn_time_seconds` with `unk_pre_max_endurance` swapped
-  ahead of it; and `inventory_info` relocated to the item END as
-  `inventory_info_list: [u16; 9]`, absorbing the 1.13-era constant `unk_tail`
-  as slot 8. Skill went 1,999 → 2,013 entries with
-  `PostBuff::unk_pre_damage_type: u8` before `damage_type` (+1 B per entry;
-  589 of 2,013 entries failed to parse before the fix). Unlike the 1.14/1.15
-  content-only patches, 1.15 and earlier are therefore **genuinely**
-  incompatible, not merely flagged by the target-only convention;
-  `ParserTargetMinor = 16` is the version the dialog displays. Both values are
+  (`GameDataVersion.CompatibleMinors`, now `{17}`). **1.17 is a content-only
+  patch over 1.16** (crimson-rs tag `v1.0.17.x`) — no schema drift in any
+  subsystem, so the only crimson-rs code change was the version pin. Iteminfo
+  went 6,581 → 6,572 items: nine `Item_Set_*_Tier0_Reminiscence` entries (keys
+  1004912–1004920) were removed and none added; `skill.pabgb` is byte-identical
+  to 1.16. Because 1.16 stays layout-readable, the incompatibility flagged for
+  a 1.16 install is the **target-only allow-list convention** again, not the
+  substantive mis-decode that 1.15-on-a-1.16-build was.
+  `ParserTargetMinor = 17` is the version the dialog displays. Both values are
   read from the crimson-rs C ABI, not hand-coded. The **C ABI surface is
-  unchanged**: `CrimsonItemInfoSummary` still exports `inventory_info`, now
-  sourced from `inventory_info_list[0]` (byte-for-byte the pre-1.16 value), so
-  no C# interop change was needed.
+  unchanged** (as it also was across the structural 1.16 drift), so no C#
+  interop change was needed.
 
 ## Historical versions
 
@@ -125,3 +119,11 @@ The 1.05 → 1.06 jump turned out to be **zero schema changes** (only +17 items)
 Two RE findings worth keeping: (a) **a byte-identical round-trip does NOT validate field boundaries** — the first 1.16 model round-tripped perfectly while `respawn_time_seconds` decoded as `-4294967296`; the *value distribution* (0 / −1 / 604800 = 7 days) is what caught the 4-byte error. (b) `[u16; 9]` rather than 8 + a separate tail: all 9 × 6,581 slot values fall in `{1,2,3,5,6,7,8,9,10,13,14,255}` with no out-of-domain `u16`, and slot 7, slot 8 and `unk_pre_max_endurance` deviate on exactly the same 59 `Trade_*_PackedInVehicle` items.
 
 The save body did **not** drift: format unchanged (v2 / flags `0x0080`); all 12 live slots parse `hmac_ok` with `undecoded_bytes=0`. The **C ABI surface is unchanged** — `CrimsonItemInfoSummary` still exports `inventory_info`, now sourced from `inventory_info_list[0]`, which is byte-for-byte the value that field carried pre-1.16 — so no C# interop change was needed and the 80-byte struct pin still holds. `CompatibleMinors` = `{16}`; unlike 1.14/1.15 this is a **genuine** incompatibility rather than the target-only convention, since 1.15 data really does mis-decode. Soft test pins bumped alongside: `gameplayvariableinfo` 57→56, `itemgroupinfo` 1550→1597, `mercenaryinfo` 19→21, `reserveslot` 30→28, and `Pyeonjeon_Arrow` `item_type` 23→0 (a game-side enum remap — the second for this key, which read 0 through 1.12 and 23 in 1.13–1.15; `item_tier` / `quick_slot_index` / flags unchanged, which is what proves the field is still aligned). Per-table gamedata snapshot in `crimson-rs` `data/gamedata-keys-1.16/` (30 tables, 96,076 keys, +891; 13 tables changed, all PABGH shapes still auto-detect).
+
+**1.16 → 1.17 was CONTENT-ONLY — no schema drift in any subsystem.** The structural 1.16 patch was a one-off; 1.17 goes back to the 1.14/1.15 pattern. crimson-rs commit `0767361` / tag `v1.0.17.x`, validated against the live 1.17 install (paver `1/17/0/0xd05e4c97`, 2026-08-09). The only crimson-rs code changes are version pins — the iteminfo parser itself is untouched.
+
+*iteminfo* went 6,581 → **6,572** items (6,145,386 → 6,139,734 B, SHA256 `f5d1ba50…`): nine keys were removed (1004912–1004920, the `Item_Set_*_Tier0_Reminiscence` block) and none added. Anchored export ok=6,572, leftover=0, fail=0, no_anchor=0, and `serialize_iteminfo` round-trips byte-identical. The check that proves this is content-only rather than a layout drift masked by compensating value changes: of the 6,572 surviving items **6,435 are byte-identical, 137 changed values, and zero changed size** — and the −5,652 B file delta is *exactly* the sum of the nine removed items' spans, so nothing else moved. (Contrast the 1.16 lesson that a byte-identical round-trip alone does not validate field boundaries; here the size-delta accounting is what carries the proof.)
+
+*skill* did not drift: `skill.pabgb` / `.pabgh` are byte-identical to 1.16, so the parser cannot have regressed — `_probe_skill_entry_failures` reports 2,013/2,013 ok.
+
+The save body did **not** drift: format unchanged (v2 / flags `0x0080`); `slot107` is the live 1.17 save and decodes 1,107 blocks / 3,097 fields at 100%, undecoded bytes 0/5,204,773, with all live-save c_abi round-trips (inventory, socket, dye, deferred-redecode, mutate→write) green. Per-table gamedata snapshot in `crimson-rs` `data/gamedata-keys-1.17/` (30 tables, 96,076 keys): `gimmickinfo` +1 (13,690 — new key 1012695) and `itemgroupinfo` −1 (1,596 — removed key 18566); the other 28 tables are key-identical. `CompatibleMinors` = `{17}` by the usual target-only convention, so a 1.16 install is warned even though its layout would still parse. On the editor side the alignment cost only the manual `VerMinor` 16→17 lock-step bump plus the `NativePaverReaderTests` version-pin refresh — **no** count/value pin moved this time (notably `Pyeonjeon_Arrow` `item_type` stayed 0), and the C ABI surface is unchanged.
