@@ -32,25 +32,27 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     /// Read from the crimson-rs C ABI
     /// (<c>crimson_parser_target_gamedata_minor</c>) so Rust is the single
     /// source of truth — this is no longer a hand-bumped C# constant. The
-    /// 8→9→10→11→12→13→14→15→16→17 manual-bump chain ended at the 1.13
+    /// 8→9→10→11→12→13→14→15→16→17→18 manual-bump chain ended at the 1.13
     /// alignment (which wired this value to the ABI); the value now follows
-    /// whatever parser the vendored lib ships (currently 1.17, vendored
-    /// crimson-rs tag <c>v1.0.17.x</c>).
+    /// whatever parser the vendored lib ships (currently 1.18, vendored
+    /// crimson-rs commit <c>87fd09f</c>).
     /// <para>
-    /// 1.17 is a CONTENT-ONLY patch over 1.16 — no schema drift in any
-    /// subsystem, and the only crimson-rs code change is the version pin.
-    /// Iteminfo went 6,581 → 6,572 items: nine
-    /// <c>Item_Set_*_Tier0_Reminiscence</c> entries (keys 1004912–1004920) were
-    /// removed and none added. What rules out a layout drift hiding behind
-    /// compensating value changes is that of the 6,572 surviving items 6,435
-    /// are byte-identical, 137 changed values, and ZERO changed size — and the
-    /// −5,652 B file delta is exactly the sum of the nine removed items' spans.
-    /// <c>skill.pabgb</c>/<c>.pabgh</c> are byte-identical to 1.16, and the save
-    /// body did not drift (still v2 / flags 0x0080; the live 1.17 save decodes
-    /// 1,107 blocks / 3,097 fields with undecoded_bytes=0).
+    /// 1.18 ships exactly ONE iteminfo layout drift: every
+    /// <c>MergedPrefabVisualData</c> element gained a <c>u32</c> between
+    /// <c>tribe_gender_list</c> and the 3-byte flag tail. It reads the same
+    /// constant on all 12,274 elements of all 6,573 items — <c>0xeac5e173</c>,
+    /// the "empty string" Jenkins sentinel already documented under the 1.10
+    /// <c>money_icon_path</c> removal — so it is very likely a string/prefab
+    /// name hash shipping unset; it is typed as a bare <c>u32</c> until a
+    /// populated value turns up. Iteminfo went 6,572 → 6,573 items (one new
+    /// key, 1005446 <c>Demian_Greyfur_Fabric_Cloak_II</c>) and
+    /// 6,139,734 → 6,190,316 B. Everything else is content-only: skill grew to
+    /// 2,027 entries with ZERO drift (probe 2027/2027 ok, format still
+    /// <c>WithField58</c>), and the save body did not drift (still v2 /
+    /// flags 0x0080; the live 1.18 save decodes with undecoded_bytes=0).
     /// </para>
     /// <para>
-    /// The preceding 1.16 was by contrast a STRUCTURAL drift — the largest since
+    /// The 1.16 patch was the other recent structural one — the largest since
     /// 1.13 and the first patch ever to break the skill parser: four iteminfo
     /// layout changes (head-side <c>inventory_info</c> removed;
     /// <c>DockingChildData::unk_post_summon_tag</c> removed; a 10 + 28*N byte
@@ -58,8 +60,9 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     /// <c>respawn_time_seconds</c> with <c>unk_pre_max_endurance</c> swapped
     /// ahead of it; <c>inventory_info</c> relocated to the item END as
     /// <c>inventory_info_list: [u16; 9]</c>) plus
-    /// <c>PostBuff::unk_pre_damage_type: u8</c> in skill. The C ABI surface came
-    /// through that unchanged and is unchanged again here.
+    /// <c>PostBuff::unk_pre_damage_type: u8</c> in skill. (1.17 in between was
+    /// content-only.) The C ABI surface came through all of those unchanged and
+    /// is unchanged again here.
     /// </para>
     /// The editor's own <c>VerMinor</c> in the .csproj still tracks this as
     /// a manual lock-step build-identity bump — intentionally separate from
@@ -73,13 +76,14 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     /// target. Read from the crimson-rs C ABI
     /// (<c>crimson_parser_compatible_gamedata_minors</c>, first-call
     /// sizing then refill). The allow-list is kept a single element
-    /// (<c>{17}</c>) by convention — it tracks just the target even when a
+    /// (<c>{18}</c>) by convention — it tracks just the target even when a
     /// content-only patch (like 1.17 over 1.16) leaves an older minor's
-    /// layout readable — so a user still on 1.16 or earlier is warned to
-    /// update. Because 1.17 is content-only, that warning is again the
-    /// conventional one rather than a substantive mis-decode (which is what it
-    /// meant at 1.16, whose structural drift really did make 1.15 data
-    /// unreadable). <see cref="ParserTargetMinor"/> is always present here.
+    /// layout readable — so a user still on 1.17 or earlier is warned to
+    /// update. Because 1.18 carries a real iteminfo layout drift, that warning
+    /// is SUBSTANTIVE this time — 1.17 data genuinely mis-decodes, same as
+    /// 1.15 data did at 1.16 — rather than the conventional one it was at the
+    /// content-only 1.14/1.15/1.17 patches.
+    /// <see cref="ParserTargetMinor"/> is always present here.
     /// </summary>
     public static ushort[] CompatibleMinors => ParserTargetInfo.Value.Compatible;
 
@@ -143,14 +147,14 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     public bool IsCompatibleWithParser => Array.IndexOf(CompatibleMinors, Minor) >= 0;
 
     /// <summary>
-    /// Human-readable version (e.g. <c>"1.17.00 build 0xd05e4c97"</c>).
+    /// Human-readable version (e.g. <c>"1.18.00 build 0x28577c0f"</c>).
     /// Suitable for an About / Settings dialog or a status-bar field.
     /// </summary>
     public string DisplayString =>
         $"{Major}.{Minor:D2}.{Patch:D2} build 0x{Build:x8}";
 
     /// <summary>
-    /// Short version string without the build id (e.g. <c>"1.16.00"</c>).
+    /// Short version string without the build id (e.g. <c>"1.18.00"</c>).
     /// Suitable for inline log lines / warning dialogs where the build
     /// number is noise.
     /// </summary>

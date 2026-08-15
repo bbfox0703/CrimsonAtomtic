@@ -82,12 +82,24 @@ Write-Host "Installing maturin..." -ForegroundColor Cyan
 if ($LASTEXITCODE -ne 0) { throw "maturin install failed" }
 
 Write-Host "Building crimson_rs Python module from vendor/crimson-rs..." -ForegroundColor Cyan
+# Build into a SEPARATE target dir. maturin builds the same crate with the
+# DEFAULT features (PyO3, no `c_abi`), so sharing target/ with
+# scripts/build_rust.ps1 -- which builds `--features c_abi` -- means whichever
+# ran last wins and overwrites target/release/crimson_rs.dll. The C# test/UI
+# projects copy that dll via <Content Include=...>, so a maturin build left
+# every c_abi P/Invoke failing with EntryPointNotFoundException (hit for real
+# at the 1.18 alignment). Separate dirs also stop the two feature sets from
+# forcing a full recompile of each other on every alternation.
+$PyTargetDir = Join-Path $VendorRs "target-py"
 Push-Location $VendorRs
+$PrevTargetDir = $env:CARGO_TARGET_DIR
 try {
+    $env:CARGO_TARGET_DIR = $PyTargetDir
     & $VenvPy -m maturin develop --release
     if ($LASTEXITCODE -ne 0) { throw "maturin develop failed" }
 }
 finally {
+    $env:CARGO_TARGET_DIR = $PrevTargetDir
     Pop-Location
 }
 

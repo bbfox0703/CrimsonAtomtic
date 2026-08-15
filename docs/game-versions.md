@@ -2,7 +2,7 @@
 
 ## Current install
 
-`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 1.17**
+`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 1.18**
 
 Top-level layout:
 
@@ -23,9 +23,10 @@ Crimson Desert/
   is fully decoded (see `crimson-rs` `src/binary/paver.rs`, exposed via
   `crimson_paver_read_from_*`): three little-endian u16s `(major, minor,
   patch)` followed by a little-endian u32 `build`. The **minor** is the
-  schema-compatibility key. Live 1.17.00 install:
-  `01 00 11 00 00 00 97 4c 5e d0` → major 1, minor 17, patch 0,
-  build `0xd05e4c97`. (1.16.00 was `01 00 10 00 00 00 e1 6d 1d 8d`,
+  schema-compatibility key. Live 1.18.00 install:
+  `01 00 12 00 00 00 0f 7c 57 28` → major 1, minor 18, patch 0,
+  build `0x28577c0f`. (1.17.00 was `01 00 11 00 00 00 97 4c 5e d0`,
+  build `0xd05e4c97`; 1.16.00 was `01 00 10 00 00 00 e1 6d 1d 8d`,
   build `0x8d1d6de1`; 1.15.00 was `01 00 0f 00 00 00 e1 88 84 6a`,
   build `0x6a8488e1`; 1.14.00 was `01 00 0e 00 00 00 f8 42 7d 59`,
   build `0x597d42f8`; 1.13.00 was `01 00 0d 00 00 00 0d 2c 6a 53`,
@@ -36,15 +37,16 @@ Crimson Desert/
   build `0xbbf34824`; 1.08.00 was `01 00 08 00 00 00 3e b0 39 dc`,
   build `0xdc39b03e`.) The editor reads this at startup and warns when
   the install's minor isn't one the parser can load
-  (`GameDataVersion.CompatibleMinors`, now `{17}`). **1.17 is a content-only
-  patch over 1.16** (crimson-rs tag `v1.0.17.x`) — no schema drift in any
-  subsystem, so the only crimson-rs code change was the version pin. Iteminfo
-  went 6,581 → 6,572 items: nine `Item_Set_*_Tier0_Reminiscence` entries (keys
-  1004912–1004920) were removed and none added; `skill.pabgb` is byte-identical
-  to 1.16. Because 1.16 stays layout-readable, the incompatibility flagged for
-  a 1.16 install is the **target-only allow-list convention** again, not the
-  substantive mis-decode that 1.15-on-a-1.16-build was.
-  `ParserTargetMinor = 17` is the version the dialog displays. Both values are
+  (`GameDataVersion.CompatibleMinors`, now `{18}`). **1.18 carries exactly one
+  iteminfo layout drift** (crimson-rs commit `87fd09f`): every
+  `MergedPrefabVisualData` element gained a `u32` between `tribe_gender_list`
+  and the 3-byte flag tail. Iteminfo went 6,572 → 6,573 items (one new key,
+  1005446 `Demian_Greyfur_Fabric_Cloak_II`); `skill.pabgb` grew to 2,027
+  entries with no drift. Because that `u32` shifts every item that carries a
+  merged-prefab element, a 1.17 install really does mis-decode against this
+  build — the flagged incompatibility is **substantive**, like
+  1.15-on-a-1.16-build, not the target-only convention it was at 1.14/1.15/1.17.
+  `ParserTargetMinor = 18` is the version the dialog displays. Both values are
   read from the crimson-rs C ABI, not hand-coded. The **C ABI surface is
   unchanged** (as it also was across the structural 1.16 drift), so no C#
   interop change was needed.
@@ -127,3 +129,15 @@ The save body did **not** drift: format unchanged (v2 / flags `0x0080`); all 12 
 *skill* did not drift: `skill.pabgb` / `.pabgh` are byte-identical to 1.16, so the parser cannot have regressed — `_probe_skill_entry_failures` reports 2,013/2,013 ok.
 
 The save body did **not** drift: format unchanged (v2 / flags `0x0080`); `slot107` is the live 1.17 save and decodes 1,107 blocks / 3,097 fields at 100%, undecoded bytes 0/5,204,773, with all live-save c_abi round-trips (inventory, socket, dye, deferred-redecode, mutate→write) green. Per-table gamedata snapshot in `crimson-rs` `data/gamedata-keys-1.17/` (30 tables, 96,076 keys): `gimmickinfo` +1 (13,690 — new key 1012695) and `itemgroupinfo` −1 (1,596 — removed key 18566); the other 28 tables are key-identical. `CompatibleMinors` = `{17}` by the usual target-only convention, so a 1.16 install is warned even though its layout would still parse. On the editor side the alignment cost only the manual `VerMinor` 16→17 lock-step bump plus the `NativePaverReaderTests` version-pin refresh — **no** count/value pin moved this time (notably `Pyeonjeon_Arrow` `item_type` stayed 0), and the C ABI surface is unchanged.
+
+**1.17 → 1.18 ships exactly ONE iteminfo drift; everything else is content-only.** crimson-rs commit `87fd09f` (PR #90, merged `e4261be`), validated against the live 1.18 install (paver `1/18/0/0x28577c0f`, 2026-08-15).
+
+*iteminfo* (6,572 → **6,573** items; 6,139,734 → 6,190,316 B, SHA256 `771fecb3…`): every `MergedPrefabVisualData` element gained a `u32` between `tribe_gender_list` and the 3-byte flag tail. It reads the **same constant on all 12,274 elements of all 6,573 items** — `0xeac5e173`, the "empty string" Jenkins sentinel already documented under the 1.10 `money_icon_path` removal — so it is very likely a string/prefab name hash shipping unset; it is typed as a bare `u32` until a populated value turns up. The one new item is key 1005446 `Demian_Greyfur_Fabric_Cloak_II`. `serialize_iteminfo` round-trips byte-identical on the live binary.
+
+RE'd with `scripts/diff_117_118.py` (a clone of `diff_115_116.py`) against the kept 1.17 binary. **Two other length-changing signatures in that report are walk artifacts, not drifts**: 1.18 reorders the `item_group_info_list` u16s, which manufactures compensating ±1 B pairs against `look_detail_mission_info` (93×) and `enable_alert_system_to_ui` (5×). Worth remembering as its own trap — a value **reordering** inside a fixed-size list can present in a byte-walk diff as a pair of offsetting inserts/deletes on unrelated neighbouring fields.
+
+*skill* did not drift: 2,027 entries, probe 2,027/2,027 ok, format still `WithField58`. The save body did **not** drift either: format unchanged (v2 / flags `0x0080`); `slot107` is the live 1.18 save and decodes with `undecoded_bytes=0`. Per-table gamedata snapshot in `crimson-rs` `data/gamedata-keys-1.18/` (30 tables, 96,197 keys): 9 tables moved, 21 key-identical. The extracted-bin roster went 270 → **268** — `zoneinfo` was dropped, and nothing in the toolchain references it.
+
+Soft pins bumped Rust-side: `itemgroupinfo` 1596→1597, `houseinfo` 4→12, `triggerregioninfo` 12→13, `IS_EQUIP_QUICK_SLOT_VISIBLE` 1005→1006 (the one new item is equipment). One pin was **re-shaped rather than re-numbered**: `part_prefab_dye_slot_info_lossy_live` asserted `slot_count == 1` on more than a quarter of rows, and 1.18's 65 new rows pushed that to 399/1,619 = 24.6%. All 1,619 rows parse, every KNOWN name+slot_count still matches, and the histogram is textbook right-skewed — so this is content, not the record-schema drift the check guards (1.12 broke it to 0 rows). The fixed fraction was replaced by "`slot_count == 1` must be the modal bucket".
+
+`CompatibleMinors` = `{18}`; unlike 1.14/1.15/1.17 this is a **genuine** incompatibility rather than the target-only convention, since 1.17 iteminfo really does mis-decode. On the editor side the alignment cost the manual `VerMinor` 17→18 lock-step bump plus the `NativePaverReaderTests` version-pin refresh — **no** count/value pin moved on the C# side (the drift is absorbed entirely in Rust and the C ABI surface is unchanged), so all 381 C# tests pass with only those pins touched.
