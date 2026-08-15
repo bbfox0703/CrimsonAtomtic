@@ -14,44 +14,44 @@ namespace CrimsonAtomtic.Tests;
 /// <see cref="GameDataVersion.CompatibleMinors"/> are now read from the
 /// crimson-rs C ABI (Rust is the single source of truth), so the
 /// compatibility assertions below transitively verify the wiring: the
-/// live target (1.17) is compatible, the previous minor (1.16) and any
+/// live target (1.18) is compatible, the previous minor (1.17) and any
 /// other minor are not.
 /// </para>
 /// </summary>
 public sealed class NativePaverReaderTests
 {
-    /// <summary>Bit-for-bit copy of the live 1.17.00 install's paver
-    /// (<c>01 00 11 00 00 00 97 4c 5e d0</c> → build 0xd05e4c97 LE).</summary>
-    private static readonly byte[] Paver_1_17_Live =
+    /// <summary>Bit-for-bit copy of the live 1.18.00 install's paver
+    /// (<c>01 00 12 00 00 00 0f 7c 57 28</c> → build 0x28577c0f LE).</summary>
+    private static readonly byte[] Paver_1_18_Live =
+        [0x01, 0x00, 0x12, 0x00, 0x00, 0x00, 0x0f, 0x7c, 0x57, 0x28];
+
+    /// <summary>The previous patch's paver (1.17.00) — kept to pin that
+    /// it is flagged INCOMPATIBLE. 1.18 carries a <b>structural</b> iteminfo
+    /// drift (a <c>u32</c> added to every <c>MergedPrefabVisualData</c>
+    /// element), so — like the 1.15 → 1.16 drift and unlike the content-only
+    /// 1.14/1.15/1.17 patches — 1.17 data genuinely mis-decodes under this
+    /// build. The warning here is a <i>substantive</i> incompatibility, not
+    /// just the target-only allow-list convention.</summary>
+    private static readonly byte[] Paver_1_17_Prev =
         [0x01, 0x00, 0x11, 0x00, 0x00, 0x00, 0x97, 0x4c, 0x5e, 0xd0];
 
-    /// <summary>The previous patch's paver (1.16.00) — kept to pin that
-    /// it is flagged INCOMPATIBLE. 1.17 is a <b>content-only</b> patch over
-    /// 1.16 (identical iteminfo layout, byte-identical <c>skill.pabgb</c>), so
-    /// unlike the structural 1.15 → 1.16 drift the 1.16 layout is still
-    /// readable by this build — the warning here is the <i>target-only
-    /// allow-list convention</i>, same as it was for the content-only 1.14 and
-    /// 1.15 patches, not a substantive mis-decode.</summary>
-    private static readonly byte[] Paver_1_16_Prev =
-        [0x01, 0x00, 0x10, 0x00, 0x00, 0x00, 0xe1, 0x6d, 0x1d, 0x8d];
-
     [Fact]
-    public void TryReadFromBytes_HappyPath_Returns_1_17_Live()
+    public void TryReadFromBytes_HappyPath_Returns_1_18_Live()
     {
         if (!File.Exists("crimson_rs.dll"))
         {
             return;
         }
-        var v = NativePaverReader.TryReadFromBytes(Paver_1_17_Live);
+        var v = NativePaverReader.TryReadFromBytes(Paver_1_18_Live);
         Assert.NotNull(v);
         Assert.Equal(1, v!.Value.Major);
-        Assert.Equal(17, v.Value.Minor);
+        Assert.Equal(18, v.Value.Minor);
         Assert.Equal(0, v.Value.Patch);
-        Assert.Equal(0xd05e4c97u, v.Value.Build);
+        Assert.Equal(0x28577c0fu, v.Value.Build);
         Assert.True(v.Value.IsCompatibleWithParser,
-            "1.17.00 should be compatible with the current ParserTargetMinor=17");
-        Assert.Equal("1.17.00", v.Value.ShortVersionString);
-        Assert.Equal("1.17.00 build 0xd05e4c97", v.Value.DisplayString);
+            "1.18.00 should be compatible with the current ParserTargetMinor=18");
+        Assert.Equal("1.18.00", v.Value.ShortVersionString);
+        Assert.Equal("1.18.00 build 0x28577c0f", v.Value.DisplayString);
     }
 
     [Fact]
@@ -64,11 +64,11 @@ public sealed class NativePaverReaderTests
         // These values are sourced from the crimson-rs C ABI
         // (crimson_parser_target_gamedata_minor /
         // crimson_parser_compatible_gamedata_minors), NOT a hand-coded C#
-        // constant. Pin the currently-vendored target (17) and that the
+        // constant. Pin the currently-vendored target (18) and that the
         // target is always a member of the compatible set.
-        Assert.Equal(17, GameDataVersion.ParserTargetMinor);
-        Assert.Contains<ushort>(17, GameDataVersion.CompatibleMinors);
-        Assert.DoesNotContain<ushort>(16, GameDataVersion.CompatibleMinors);
+        Assert.Equal(18, GameDataVersion.ParserTargetMinor);
+        Assert.Contains<ushort>(18, GameDataVersion.CompatibleMinors);
+        Assert.DoesNotContain<ushort>(17, GameDataVersion.CompatibleMinors);
     }
 
     [Fact]
@@ -78,18 +78,17 @@ public sealed class NativePaverReaderTests
         {
             return;
         }
-        // 1.17 is CONTENT-ONLY over 1.16 — the iteminfo layout is unchanged
-        // (only nine Item_Set_*_Tier0_Reminiscence items were removed, 6,581 →
-        // 6,572, and skill.pabgb is byte-identical) — so unlike the structural
-        // 1.15 → 1.16 drift, this build genuinely *could* read 1.16 data. The
-        // allow-list stays target-only by convention (CompatibleMinors = {17}),
-        // so a user still on 1.16 is warned to update even though the layout
-        // would parse. Pin that convention.
-        var v = NativePaverReader.TryReadFromBytes(Paver_1_16_Prev);
+        // 1.18 is a STRUCTURAL drift over 1.17: every MergedPrefabVisualData
+        // element gained a u32 between tribe_gender_list and the 3-byte flag
+        // tail, so every item that carries one shifts. 1.17 iteminfo really
+        // does mis-decode against this build — this is a substantive
+        // incompatibility (like 1.15-on-a-1.16-build), not merely the
+        // target-only allow-list convention. Pin it.
+        var v = NativePaverReader.TryReadFromBytes(Paver_1_17_Prev);
         Assert.NotNull(v);
-        Assert.Equal(16, v!.Value.Minor);
+        Assert.Equal(17, v!.Value.Minor);
         Assert.False(v.Value.IsCompatibleWithParser,
-            "1.16.00 must NOT be compatible — CompatibleMinors is {17}");
+            "1.17.00 must NOT be compatible — CompatibleMinors is {18}");
     }
 
     [Fact]
@@ -114,14 +113,14 @@ public sealed class NativePaverReaderTests
             return;
         }
         // Synthetic 1.07.xx layout: minor = 7 is not in CompatibleMinors
-        // {17} — 1.07 used a different iteminfo layout.
+        // {18} — 1.07 used a different iteminfo layout.
         ReadOnlySpan<byte> bytes =
             [0x01, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
         var v = NativePaverReader.TryReadFromBytes(bytes);
         Assert.NotNull(v);
         Assert.Equal(7, v!.Value.Minor);
         Assert.False(v.Value.IsCompatibleWithParser,
-            "1.07.xx must NOT be compatible — not in CompatibleMinors {17}");
+            "1.07.xx must NOT be compatible — not in CompatibleMinors {18}");
     }
 
     [Fact]
@@ -131,17 +130,17 @@ public sealed class NativePaverReaderTests
         {
             return;
         }
-        // Synthetic 1.18.xx layout: minor = 18 is past the validated set.
+        // Synthetic 1.19.xx layout: minor = 19 is past the validated set.
         // The gate is an explicit allow-list, not "≥ target", so a future
         // patch this build hasn't been validated against is flagged until
         // CompatibleMinors is extended (Rust-side, via the vendored parser).
         ReadOnlySpan<byte> bytes =
-            [0x01, 0x00, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+            [0x01, 0x00, 0x13, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
         var v = NativePaverReader.TryReadFromBytes(bytes);
         Assert.NotNull(v);
-        Assert.Equal(18, v!.Value.Minor);
+        Assert.Equal(19, v!.Value.Minor);
         Assert.False(v.Value.IsCompatibleWithParser,
-            "1.18.xx must NOT be compatible — not yet in CompatibleMinors {17}");
+            "1.19.xx must NOT be compatible — not yet in CompatibleMinors {18}");
     }
 
     [Fact]
@@ -186,7 +185,7 @@ public sealed class NativePaverReaderTests
         Assert.NotNull(v);
         // Pin the major (always 1 in shipped versions). Don't pin the
         // minor — the live install on a developer's machine may not
-        // be 1.17 forever, and this test should survive a future
+        // be 1.18 forever, and this test should survive a future
         // game-data minor bump without being rewritten alongside.
         Assert.Equal(1, v!.Value.Major);
     }
