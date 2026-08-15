@@ -144,7 +144,9 @@ switch ($Target) {
     "Test" {
         $cs = if ($Mode -eq "Debug") { "Debug" } else { "Release" }
         Invoke-Step "Build + Test ($cs)" {
-            & dotnet test $Sln -c $cs --logger "console;verbosity=normal"
+            # MTP (xunit.v3) — the .NET 10 SDK dropped the `dotnet test`
+            # VSTest bridge, so run the test project's own runner.
+            & dotnet run --project (Join-Path $ProjectRoot "src\CrimsonAtomtic.Tests\CrimsonAtomtic.Tests.csproj") -c $cs
         }
     }
     "All" {
