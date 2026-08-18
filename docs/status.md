@@ -7,37 +7,57 @@
 > **[status-archive.md](status-archive.md)** — look there only when you need
 > the deep history behind a decision.
 >
-> Last updated: **2026-08-15** — editor aligned to game **1.18**, which ships
-> **exactly one** iteminfo layout drift and is otherwise content-only: every
-> `MergedPrefabVisualData` element gained a `u32` (constant `0xeac5e173`, the
-> empty-string Jenkins sentinel, on all 12,274 elements of all 6,573 items).
-> Skill grew to 2,027 entries with zero drift; no save-body drift. crimson-rs
-> 1.18 is vendored from `main` (commit `87fd09f`, PR #90, merge `e4261be`) —
-> **not yet tagged** `v1.0.18.x`. The C# side needed the manual `VerMinor`
-> 17→18 lock-step bump plus the `NativePaverReaderTests` version-pin refresh —
-> **no** count/value pin moved, and the C ABI surface is unchanged. 381 C#
-> tests green, 0 skipped. Three unrelated build blockers fixed en route: the
-> ILCompiler central pin (SDK moved to 10.0.400), the `dotnet test` VSTest
-> bridge the .NET 10 SDK removed, and `maturin develop` clobbering the c_abi
-> cdylib. Merged to `main` (PR #27) and **tagged `v1.18.01`**; the CI AOT build
-> is green and the GitHub Release is sitting as a **DRAFT** with the notes
-> trimmed to the bilingual sections — clicking **Publish** is the remaining
-> human step.
+> Last updated: **2026-08-18** — **v1.18.01 is tagged, built and PUBLISHED**
+> (2026-08-15T10:58Z), so the 1.18 alignment is fully closed out; the only
+> loose end is that crimson-rs still has no `v1.0.18.x` tag. The single change
+> since is a **NuGet dependency refresh** (PR #28, merge `3b3aa5e`) with no
+> game-data, parser, or C ABI impact: Avalonia 12.0.4 → **12.1.1**, DataGrid
+> 12.0.0 → **12.1.2** (DataGrid now *leads* core — the old "DataGrid lags"
+> note was inverted), the `Microsoft.Extensions` / `Bcl` / `System.*` family
+> 10.0.9 → **10.0.11**, plus Azure / Identity / OpenTelemetry / Tmds to current
+> stable. `Microsoft.NET.Test.Sdk` was dragged 18.6.0 → **18.9.0** to re-match
+> `Microsoft.CodeCoverage`, which had been bumped alone. 381 C# tests green,
+> 0 skipped; restore clean; AOT publish emits **zero** IL/trim warnings.
+>
+> The editor is aligned to game **1.18**, which ships **exactly one** iteminfo
+> layout drift and is otherwise content-only: every `MergedPrefabVisualData`
+> element gained a `u32` (constant `0xeac5e173`, the empty-string Jenkins
+> sentinel, on all 12,274 elements of all 6,573 items). Skill grew to 2,027
+> entries with zero drift; no save-body drift. crimson-rs 1.18 is vendored from
+> `main` (commit `87fd09f`, PR #90, merge `e4261be`). The C# side needed the
+> manual `VerMinor` 17→18 lock-step bump plus the `NativePaverReaderTests`
+> version-pin refresh — **no** count/value pin moved, and the C ABI surface is
+> unchanged. Three unrelated build blockers were fixed en route: the ILCompiler
+> central pin (SDK moved to 10.0.400), the `dotnet test` VSTest bridge the
+> .NET 10 SDK removed, and `maturin develop` clobbering the c_abi cdylib.
 
 ## Current state
 
-- **Editor v1.18.01 (tagged; release DRAFT pending publish)**, aligned to live
-  game **1.18** (`VerMinor` 17 → 18, `VerPatch` stays 1 per the lock-step
+- **Editor v1.18.01 — tagged, built and PUBLISHED** (2026-08-15), aligned to
+  live game **1.18** (`VerMinor` 17 → 18, `VerPatch` stays 1 per the lock-step
   `VerMinor == ParserTargetMinor` convention — `VerMinor` is a **manual**
   build-identity bump, while `ParserTargetMinor` is **ABI-sourced**). Verified
   locally (381 C# tests green, 0 skipped, against the live 1.18 install),
   merged to `main` (PR #27), then tagged `v1.18.01` → CI built the single-file
   AOT exe (run `31880379039`) and created the draft
   (`CrimsonAtomtic-v1.18.01-win-x64.zip`, 20,539,560 B), whose notes were
-  trimmed to the bilingual `## Highlights` / `## 重點` sections.
-  **Next concrete task: click Publish** on the draft release; see
-  [release-process.md](release-process.md). It supersedes v1.17.01 (published
-  2026-08-09).
+  trimmed to the bilingual `## Highlights` / `## 重點` sections; published
+  2026-08-15T10:58Z. It supersedes v1.17.01 (published 2026-08-09). See
+  [release-process.md](release-process.md).
+  **Next concrete task: cut the crimson-rs `v1.0.18.x` tag** (see the
+  crimson-rs bullet below) — after that there is no open release work, and the
+  next milestone is whenever the game ships 1.19.
+- **Dependency baseline refreshed 2026-08-18 (PR #28, merge `3b3aa5e`).**
+  Avalonia 12.0.4 → **12.1.1**, DataGrid 12.0.0 → **12.1.2**,
+  `Microsoft.Extensions`/`Bcl`/`System.*` 10.0.9 → **10.0.11**, Azure.Core
+  1.59.0 → 1.61.0, Azure.Monitor.OpenTelemetry.Exporter 1.8.1 → 1.8.3, Msal
+  4.84.2 → 4.87.0, IdentityModel.Abstractions 8.19.1 → 8.22.0,
+  OpenTelemetry.PersistentStorage.* 1.1.0 → 1.1.1, Tmds.DBus.Protocol 0.94.1 →
+  0.94.2, CodeCoverage + **Test.Sdk** both to 18.9.0. The ILCompiler pin stayed
+  at **10.0.11** (SDK unchanged at 10.0.400). Restore clean, 381/381 green, AOT
+  publish with **zero** IL/trim warnings. Note this bump got **no CI run** —
+  `release.yml` triggers on a pushed `v*` tag only, so PR merges never build;
+  the local `build.ps1 -Mode Publish` was the AOT verification.
 - **1.18 has ONE iteminfo drift; the rest is content-only.** Every
   `MergedPrefabVisualData` element gained a `u32` between `tribe_gender_list`
   and the 3-byte flag tail, reading the same constant `0xeac5e173` on all
@@ -77,7 +97,12 @@
   vendored at `e4261be`); there is **no `v1.0.18.x` tag yet** — worth cutting
   for parity with 1.13–1.17. CI clones `main`, so a release cut already ships
   the 1.18 parser. Reminder for the next patch: land the crimson-rs change on
-  `main` *before* tagging a CrimsonAtomtic release.
+  `main` *before* tagging a CrimsonAtomtic release. Caveat when you go to cut
+  it: the `v1.0.10.x`–`v1.0.17.x` tags exist **only in the local clone** at
+  `D:\Github\crimson-rs`; `git ls-remote --tags` against the fork returns
+  **nothing**, so none of them were ever pushed. "Parity with 1.13–1.17"
+  therefore means parity with local-only tags; decide whether to push the whole
+  set or keep them local.
 - **Health:** full suite green this session (381 C# tests, 0 skipped, 0
   failures after the version-pin refresh — live-install + catalog tests parse
   the real 1.18 iteminfo, 6,573 items; the native lib was rebuilt from the
@@ -98,11 +123,18 @@ are in [status-archive.md](status-archive.md).
 
 ## Open work / backlog
 
-- **🐞 World Map parchment composite layer-alignment bug** (from the
-  2026-05-17 part-14 work) — the `blur_height` and `road_sdf` layers disagree
-  on world coverage, so roads land in the wrong places relative to the
-  coastline. Iteration was paused; the likely fix is to validate per-layer
-  world ranges or fall back to the 785-tile terrain composite. Still open.
+- **✅ World Map parchment composite layer-alignment bug — OBSOLETE, not
+  fixed.** This sat here as "still open" long after the code it describes was
+  deleted. The `blur_height` / `road_sdf` composite pipeline
+  (`WorldMapCompositor`, added dd1e650) was removed on 2026-05-18 by a44c12c
+  "refactor(ui-worldmap): pivot to user-picked basemap + canonical-affine
+  projection" — one day after the part-14 report that logged the bug. The
+  dialog now loads a **user-supplied basemap image**
+  (`WorldMapBasemapService`) and projects markers purely against
+  `WorldMapAffine.Canonical`, so there are no layers left to misalign. The L8
+  (`DDPF_LUMINANCE`) decode path for those two layers still exists in
+  `IconImageEncoder`, but nothing composites them any more. Nothing to do —
+  delete this line once someone confirms they don't want the composite back.
 - **Feature-parity backlog vs the reference editor**
   (NattKh's `CRIMSON-DESERT-SAVE-EDITOR-AND-GAME-MODS`) — features we only do
   via the generic field tree (🔸) or not at all (❌): ItemBuffs (iteminfo
@@ -111,10 +143,19 @@ are in [status-archive.md](status-archive.md).
   (`fieldinfo`/`vehicleinfo`), inventory storage expansion, dedicated quest /
   equipment-enchant editing, item-pack share/import/export, full reveal-map.
   Most need a new crimson-rs parser first. Full table in the archive.
-- **Name resolution gaps** (deferred until prioritised): `MissionKey` /
-  `QuestKey` / `KnowledgeKey` (large) / `SkillKey` / field-NPC / learned-skill
-  names aren't resolvable from PALOC today — see the gotchas + archive for why
-  each is intentionally left blank rather than mislabelled.
+- **Name resolution gaps — mostly CLOSED; this bullet was badly out of date.**
+  `MissionKey`, `QuestKey`, `StageKey`, `KnowledgeKey`, `GimmickInfoKey` and
+  `CharacterKey` now go through `LocalizationProvider.ResolveKeyTableOne` →
+  `DisplayOrFallback(..., LookupDisplayName(key, paloc))`, i.e. they **do**
+  resolve to localized PALOC names today, falling back to the internal string
+  key only when PALOC has no entry. What genuinely remains is narrower:
+  `SkillKey`, `QuestGaugeKey` and `StoreKey` are **internal-name only** — the
+  code comments say outright "no PALOC chain", and the secondary-language
+  column intentionally echoes English rather than showing a blank cell next to
+  a populated one. Field-NPC and learned-skill names have no dedicated
+  resolver at all (NPCs may be partly covered by `CharacterKey`). So the open
+  work is a PALOC chain for skills/gauges/stores, not the broad gap this
+  bullet used to claim.
 
 ## Gotchas — don't relearn these
 
@@ -180,7 +221,10 @@ window-restore quirks, etc.) is in
   the in-game picker sort by mtime). Save As re-anchors the working doc to the
   new path.
 - **AOT publish is fragile about the linker.** `<NoWarn>IL2104;IL3053</NoWarn>`
-  in the Ui csproj is load-bearing (Avalonia DataGrid 12 roll-up warnings).
+  in the Ui csproj is load-bearing (Avalonia DataGrid 12 roll-up warnings) —
+  **still true at DataGrid 12.1.2**, re-verified 2026-08-18 by publishing with
+  `-p:NoWarn=`, which brings both warnings straight back. Don't drop it on the
+  assumption a newer DataGrid fixed the trim annotations.
   `scripts/package_aot.ps1` only opts into `IlcUseEnvironmentalTools` when the
   `link.exe` on PATH is the **MSVC** linker — a bare `Get-Command link.exe`
   matches Git-for-Windows' GNU coreutils `link` on the CI runner, which makes
@@ -196,6 +240,12 @@ window-restore quirks, etc.) is in
   used to ride on. `build.ps1 -Target Test` and `build_ui.ps1 -Test` were both
   still on the old invocation and had been silently dead since; both now call
   the test project's own runner (fixed at the 1.18 alignment).
+- **`Microsoft.NET.Test.Sdk` and `Microsoft.CodeCoverage` ship as a matched
+  set.** They are versioned and released together (Test.Sdk depends on the
+  same-version CodeCoverage), so bumping one alone leaves a silent mismatch —
+  restore still succeeds and the tests still pass, so nothing tells you. The
+  2026-08-18 bump moved CodeCoverage 18.6.0 → 18.9.0 and left Test.Sdk behind
+  at 18.6.0; both are now 18.9.0. When bumping either, bump both.
 - **The ILCompiler central pin tracks the installed SDK's runtime.** A newer
   SDK auto-injects a newer `Microsoft.DotNet.ILCompiler`, which then demands
   `runtime.win-x64.Microsoft.DotNet.ILCompiler >=` that version → **NU1109 at
@@ -207,13 +257,22 @@ window-restore quirks, etc.) is in
   `vendor/crimson-rs/python`), so after `update_vendors.ps1` the in-tree source
   and `crimson_rs.__file__` both look current while the compiled
   `python/crimson_rs/crimson_rs.pyd` is still whatever was last built — it was
-  51 days stale (a 1.12-era build) at the 1.17 alignment and **70 days stale
-  again at 1.18**, i.e. documenting it did not prevent the recurrence. The C#
-  editor is unaffected (it loads `crimson_rs.dll` from
+  51 days stale (a 1.12-era build, 2026-06-19) at the 1.17 alignment, i.e.
+  documenting it did not prevent the recurrence. (An earlier revision of this
+  line claimed "70 days stale again at 1.18"; that figure was impossible — the
+  `.pyd` had been rebuilt six days earlier at 1.17 — and has been dropped.)
+  The C# editor is unaffected (it loads `crimson_rs.dll` from
   `scripts/build_rust.ps1`), but the `tools/` Python toolchain would silently
   parse new game data with an old schema. Re-run
   `scripts/setup_python_env.ps1` after every vendor refresh, and check the
   `.pyd` mtime — not `crimson_rs.__file__` — to tell whether it's current.
+  **⚠️ As of 2026-08-18 the trap is LIVE again**: the in-tree
+  `crimson_rs.pyd` is 1,274,368 B dated **2026-08-09 20:39** — the 1.17-era
+  build — and the venv `.pth` carries the same date, so the toolchain parses
+  1.18 data with a 1.17 parser. `vendor/crimson-rs/target-py/` does not exist
+  either, so the 1.18 `CARGO_TARGET_DIR` fix below has not actually been
+  exercised on this machine. Run `scripts/setup_python_env.ps1` before trusting
+  anything under `tools/`.
 - **…and until 1.18, that Python rebuild CLOBBERED the C# native lib.**
   `maturin develop` builds the same crate with the **default** features (PyO3,
   no `c_abi`), so it shared `vendor/crimson-rs/target/release/crimson_rs.dll`
@@ -223,12 +282,19 @@ window-restore quirks, etc.) is in
   that reads like a broken ABI but is really a build-artifact collision. Fixed
   at 1.18 by scoping `CARGO_TARGET_DIR` to `vendor/crimson-rs/target-py` for
   the maturin call only. If you see `EntryPointNotFoundException : Unable to
-  find an entry point named 'crimson_…'`, check the dll's **size** (c_abi
-  build ≈ 1,097 KB vs PyO3 ≈ 1,275 KB) before suspecting the ABI.
-- **Avalonia 12 quirks**: DataGrid pinned at 12.0.0 (core is ahead);
-  `Avalonia.Diagnostics` 12.x not released; MVVM uses field-based
-  `[ObservableProperty]` (partial-property syntax didn't generate on
-  CommunityToolkit 8.4 / .NET 10).
+  find an entry point named 'crimson_…'`, check the dll's **size** before
+  suspecting the ABI. Quoting exact bytes to avoid a unit trap: the c_abi build
+  is **1,097,216 B** and the PyO3 one **1,274,368 B**. Windows Explorer and
+  `Get-Item .Length/1KB` divide by 1024, so they show these as **1,071 KB** and
+  **1,244 KB** — don't be thrown when they disagree with the decimal-KB
+  (÷1000) figures of ~1,097 / ~1,275 this note used to quote.
+- **Avalonia 12 quirks**: DataGrid is at **12.1.2 and now *leads* core
+  (12.1.1)** — it ships on its own cadence, so a version mismatch between the
+  two is expected and is **not** something to "fix" by pinning them together
+  (this note used to say the opposite, back when DataGrid lagged at 12.0.0);
+  `Avalonia.Diagnostics` 12.x still not released (latest is 11.3.20), so it
+  stays out; MVVM uses field-based `[ObservableProperty]` (partial-property
+  syntax didn't generate on CommunityToolkit 8.4 / .NET 10).
 
 ## How to verify state on a fresh checkout
 
@@ -247,7 +313,10 @@ Pop-Location
 # 2. Python toolchain + crimson_rs as Python module
 .\scripts\setup_python_env.ps1
 .\.venv\Scripts\python.exe .\tools\extract\extract_save.py --out .\out\save-extract\
-.\.venv\Scripts\python.exe .\tools\inspect\inspect_save_body.py
+# NOTE: pass --body explicitly. Per CLAUDE.md rule 9 every tool prints usage
+# and exits 2 when called with no args, so the bare form can never go green —
+# it does NOT fall back to the --body default.
+.\.venv\Scripts\python.exe .\tools\inspect\inspect_save_body.py --body .\out\save-extract\slot0.bin
 
 # 3. C# end-to-end
 .\scripts\build_rust.ps1          # builds vendor/crimson-rs --features c_abi
@@ -262,7 +331,51 @@ Each step should be green. If anything fails, fix it before touching new code
 
 One line per milestone; full detail in [status-archive.md](status-archive.md).
 
-- **2026-08-15 — game 1.18 alignment (v1.18.01, tagged; draft pending)**: 1.18 ships
+- **2026-08-18 — NuGet dependency refresh + status-doc housekeeping**:
+  maintenance only, no game-data / parser / C ABI change. Avalonia core 12.0.4
+  → **12.1.1** (Desktop, FreeDesktop, HarfBuzz, Themes.Fluent, Fonts.Inter),
+  `Avalonia.Controls.DataGrid` 12.0.0 → **12.1.2**, the `Microsoft.Extensions` /
+  `Bcl` / `System.*` family 10.0.9 → **10.0.11**, Azure.Core 1.59.0 → 1.61.0,
+  Azure.Monitor.OpenTelemetry.Exporter 1.8.1 → 1.8.3, Msal 4.84.2 → 4.87.0,
+  IdentityModel.Abstractions 8.19.1 → 8.22.0, OpenTelemetry.PersistentStorage.*
+  1.1.0 → 1.1.1, Tmds.DBus.Protocol 0.94.1 → 0.94.2, Microsoft.CodeCoverage
+  18.6.0 → 18.9.0. The ILCompiler pin did **not** move this time (still
+  10.0.11; SDK still 10.0.400). Two review catches: `Microsoft.NET.Test.Sdk`
+  had been left behind at 18.6.0 while its matched-set partner CodeCoverage
+  went to 18.9.0 (both now 18.9.0 — see gotchas), and the **"DataGrid lags
+  core" note was inverted** — DataGrid now *leads* (12.1.2 vs 12.1.1), so that
+  line was corrected in the gotchas and in
+  [architecture.md](architecture.md). Also re-verified that
+  `<NoWarn>IL2104;IL3053</NoWarn>` is still load-bearing at DataGrid 12.1.2
+  (publishing with `-p:NoWarn=` brings both warnings straight back) rather than
+  assuming the newer package had fixed it. Restore clean (no NU warnings),
+  **381/381 C# tests green, 0 skipped**, AOT publish emits zero IL/trim
+  warnings and stages a 27.8 MB single-file exe. Deps merged to `main` as
+  PR #28 (merge `3b3aa5e`) — **no CI run**, because `release.yml` fires on
+  pushed `v*` tags only, so PR merges never build and the local
+  `build.ps1 -Mode Publish` was the AOT verification. This doc then got a
+  correctness pass (a fan-out audit of every checkable claim in it, each
+  finding then adversarially re-verified). What it caught: v1.18.01 was still
+  written up as a **pending DRAFT** when it had actually been published
+  2026-08-15T10:58Z, and the headline "next concrete task" still said "click
+  Publish"; the **World Map parchment-composite bug** had been sitting in the
+  backlog as "still open" since 2026-05-17 even though the whole
+  `WorldMapCompositor` pipeline was deleted a day later by a44c12c (pivot to a
+  user-picked basemap), so there are no layers left to misalign; the **name
+  resolution gaps** bullet was largely obsolete — Mission/Quest/Stage/
+  Knowledge/Gimmick/Character keys all resolve through PALOC today, and only
+  `SkillKey` / `QuestGaugeKey` / `StoreKey` are still internal-name-only; the
+  `.pyd` staleness note carried an arithmetically impossible "70 days stale at
+  1.18" (it had been rebuilt 6 days earlier at 1.17); the c_abi-vs-PyO3 dll
+  sizes were quoted in decimal KB, which is off by 1024/1000 from what Explorer
+  shows, so they're now given in exact bytes; and the "verify on a fresh
+  checkout" recipe called
+  `inspect_save_body.py` **with no arguments**, which per rule 9 always exits 2
+  — that step could never have gone green as written. Also newly recorded: the
+  stale-`.pyd` trap is **live right now** (the in-tree build is the 2026-08-09
+  1.17-era one and `target-py/` does not exist), so `tools/` must not be
+  trusted until `setup_python_env.ps1` is re-run.
+- **2026-08-15 — game 1.18 alignment (v1.18.01, released)**: 1.18 ships
   **exactly one** iteminfo layout drift and is otherwise content-only. Every
   `MergedPrefabVisualData` element gained a `u32` between `tribe_gender_list`
   and the 3-byte flag tail, reading the constant `0xeac5e173` — the
@@ -290,7 +403,8 @@ One line per milestone; full detail in [status-archive.md](status-archive.md).
   pin 10.0.10 → **10.0.11** (SDK moved to 10.0.400 → NU1109), and both build
   scripts' dead `dotnet test` invocation (the .NET 10 SDK dropped the VSTest
   bridge MTP rode on) switched to the test project's own runner. Also caught
-  the stale-`.pyd` vendor-refresh trap **again** (70 days stale); after
+  the stale-`.pyd` vendor-refresh trap **again** (the "70 days" figure recorded
+  at the time was wrong — see gotchas); after
   `setup_python_env.ps1` the Python toolchain round-trips the live 1.18
   `iteminfo.pabgb` byte-identical (6,573 items, SHA256 `771fecb3…`). Fixing
   that surfaced a **third** build trap, new this session: `maturin develop`
@@ -302,7 +416,7 @@ One line per milestone; full detail in [status-archive.md](status-archive.md).
   green (run `31880379039`), draft release created and trimmed to the bilingual
   `## Highlights` / `## 重點` sections. The `--cleanup=verbatim` guard from the
   1.17 session worked — the `##` headings survived into the tag this time.
-  **Still to do: click Publish** on the draft; and crimson-rs still wants a
+  The draft was **published 2026-08-15T10:58Z**. Still open: crimson-rs wants a
   `v1.0.18.x` tag for parity with 1.13–1.17 (its `main` already carries 1.18,
   so this release does ship the right parser).
 - **2026-08-09 — game 1.17 alignment (v1.17.01, released)**:
