@@ -131,6 +131,7 @@ For the running ledger of what shipped per session see
 
 - Cross-platform save path on Linux/macOS: probably Wine/Proton prefix
   only. Document once we test.
-- Avalonia.Diagnostics 12.x doesn't exist yet (only 11.3.15). Add back
+- Avalonia.Diagnostics 12.x doesn't exist yet (latest is 11.3.20). Add back
   behind a Debug-only condition once Avalonia ships the 12.x version.
-- DataGrid lags Avalonia core (12.0.0 vs 12.0.3 for core).
+- DataGrid now leads Avalonia core (12.1.2 vs 12.1.1) — it ships on its own
+  cadence, so the two are not expected to match.
