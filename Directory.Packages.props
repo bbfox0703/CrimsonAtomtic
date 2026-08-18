@@ -5,23 +5,22 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Avalonia UI 12 -->
-    <PackageVersion Include="Avalonia" Version="12.0.4" />
+    <PackageVersion Include="Avalonia" Version="12.1.1" />
     <PackageVersion Include="Avalonia.Angle.Windows.Natives" Version="2.1.27548.20260419" />
     <PackageVersion Include="Avalonia.BuildServices" Version="11.3.2" />
-    <PackageVersion Include="Avalonia.Desktop" Version="12.0.4" />
-    <PackageVersion Include="Avalonia.FreeDesktop" Version="12.0.4" />
-    <PackageVersion Include="Avalonia.HarfBuzz" Version="12.0.4" />
-    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.0.4" />
-    <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.0.4" />
-    <!-- DataGrid lags Avalonia core slightly — 12.0.0 is the latest
-         published as of 2026-05. Will bump alongside core when a 12.0.3+
-         lands. -->
-    <PackageVersion Include="Avalonia.Controls.DataGrid" Version="12.0.0" />
+    <PackageVersion Include="Avalonia.Desktop" Version="12.1.1" />
+    <PackageVersion Include="Avalonia.FreeDesktop" Version="12.1.1" />
+    <PackageVersion Include="Avalonia.HarfBuzz" Version="12.1.1" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.1" />
+    <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.1.1" />
+    <!-- DataGrid now leads Avalonia core (12.1.2 vs 12.1.1) — it ships on
+         its own cadence, so the two versions are not expected to match. -->
+    <PackageVersion Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
     <!-- Avalonia.Diagnostics is 11.x only as of 2026-05; once a 12.x is
          published we'll add it back behind a Debug condition. -->
     <!-- MVVM source generators (AOT-safe) -->
-    <PackageVersion Include="Azure.Core" Version="1.59.0" />
-    <PackageVersion Include="Azure.Monitor.OpenTelemetry.Exporter" Version="1.8.1" />
+    <PackageVersion Include="Azure.Core" Version="1.61.0" />
+    <PackageVersion Include="Azure.Monitor.OpenTelemetry.Exporter" Version="1.8.3" />
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <!-- Testing -->
     <PackageVersion Include="HarfBuzzSharp" Version="8.3.1.5" />
@@ -31,27 +30,27 @@
     <PackageVersion Include="HarfBuzzSharp.NativeAssets.Win32" Version="8.3.1.5" />
     <PackageVersion Include="MicroCom.Runtime" Version="0.11.6" />
     <PackageVersion Include="Microsoft.ApplicationInsights" Version="3.1.2" />
-    <PackageVersion Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.CodeCoverage" Version="18.6.0" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.Extensions.Diagnostics.Abstractions" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.Extensions.FileProviders.Abstractions" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Configuration" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.84.2" />
-    <PackageVersion Include="Microsoft.IdentityModel.Abstractions" Version="8.19.1" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.6.0" />
+    <PackageVersion Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.CodeCoverage" Version="18.9.0" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.FileProviders.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Configuration" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.87.0" />
+    <PackageVersion Include="Microsoft.IdentityModel.Abstractions" Version="8.22.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageVersion Include="Microsoft.Testing.Extensions.Telemetry" Version="2.2.3" />
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport.Abstractions" Version="2.2.3" />
     <PackageVersion Include="Microsoft.Testing.Platform" Version="2.2.3" />
     <PackageVersion Include="Microsoft.Testing.Platform.MSBuild" Version="2.2.3" />
-    <PackageVersion Include="OpenTelemetry.PersistentStorage.Abstractions" Version="1.1.0" />
-    <PackageVersion Include="OpenTelemetry.PersistentStorage.FileSystem" Version="1.1.0" />
+    <PackageVersion Include="OpenTelemetry.PersistentStorage.Abstractions" Version="1.1.1" />
+    <PackageVersion Include="OpenTelemetry.PersistentStorage.FileSystem" Version="1.1.1" />
     <!-- Must match the installed .NET runtime: PublishAot auto-injects
          Microsoft.DotNet.ILCompiler at the runtime's version, which then
          requires runtime.win-x64.Microsoft.DotNet.ILCompiler >= that
@@ -62,9 +61,9 @@
          floor, so it is safe across CI runners. -->
     <PackageVersion Include="runtime.win-x64.Microsoft.DotNet.ILCompiler" Version="10.0.11" />
     <PackageVersion Include="SkiaSharp" Version="3.119.4" />
-    <PackageVersion Include="System.Memory.Data" Version="10.0.9" />
-    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.9" />
-    <PackageVersion Include="Tmds.DBus.Protocol" Version="0.94.1" />
+    <PackageVersion Include="System.Memory.Data" Version="10.0.11" />
+    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.11" />
+    <PackageVersion Include="Tmds.DBus.Protocol" Version="0.94.2" />
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
   </ItemGroup>

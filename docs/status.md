@@ -16,22 +16,28 @@
 > **not yet tagged** `v1.0.18.x`. The C# side needed the manual `VerMinor`
 > 17→18 lock-step bump plus the `NativePaverReaderTests` version-pin refresh —
 > **no** count/value pin moved, and the C ABI surface is unchanged. 381 C#
-> tests green, 0 skipped. Two unrelated build blockers fixed en route: the
-> ILCompiler central pin (SDK moved to 10.0.400) and the `dotnet test` VSTest
-> bridge the .NET 10 SDK removed. **Not yet released** — `dev` is ahead of
-> `main`; cutting v1.18.01 is the next concrete step.
+> tests green, 0 skipped. Three unrelated build blockers fixed en route: the
+> ILCompiler central pin (SDK moved to 10.0.400), the `dotnet test` VSTest
+> bridge the .NET 10 SDK removed, and `maturin develop` clobbering the c_abi
+> cdylib. Merged to `main` (PR #27) and **tagged `v1.18.01`**; the CI AOT build
+> is green and the GitHub Release is sitting as a **DRAFT** with the notes
+> trimmed to the bilingual sections — clicking **Publish** is the remaining
+> human step.
 
 ## Current state
 
-- **Editor aligned to live game 1.18 on `dev`, NOT yet released.**
-  `VerMinor` 17 → 18, `VerPatch` stays 1 per the lock-step
+- **Editor v1.18.01 (tagged; release DRAFT pending publish)**, aligned to live
+  game **1.18** (`VerMinor` 17 → 18, `VerPatch` stays 1 per the lock-step
   `VerMinor == ParserTargetMinor` convention — `VerMinor` is a **manual**
-  build-identity bump, while `ParserTargetMinor` is **ABI-sourced**. Verified
-  locally (381 C# tests green, 0 skipped, against the live 1.18 install).
-  **Next concrete task: commit, then merge `dev` → `main` and tag
-  `v1.18.01`** to trigger the CI AOT build → draft release → human Publish; see
-  [release-process.md](release-process.md). The previous release, v1.17.01,
-  **was published** 2026-08-09.
+  build-identity bump, while `ParserTargetMinor` is **ABI-sourced**). Verified
+  locally (381 C# tests green, 0 skipped, against the live 1.18 install),
+  merged to `main` (PR #27), then tagged `v1.18.01` → CI built the single-file
+  AOT exe (run `31880379039`) and created the draft
+  (`CrimsonAtomtic-v1.18.01-win-x64.zip`, 20,539,560 B), whose notes were
+  trimmed to the bilingual `## Highlights` / `## 重點` sections.
+  **Next concrete task: click Publish** on the draft release; see
+  [release-process.md](release-process.md). It supersedes v1.17.01 (published
+  2026-08-09).
 - **1.18 has ONE iteminfo drift; the rest is content-only.** Every
   `MergedPrefabVisualData` element gained a `u32` between `tribe_gender_list`
   and the 3-byte flag tail, reading the same constant `0xeac5e173` on all
@@ -256,7 +262,7 @@ Each step should be green. If anything fails, fix it before touching new code
 
 One line per milestone; full detail in [status-archive.md](status-archive.md).
 
-- **2026-08-15 — game 1.18 alignment (not yet released)**: 1.18 ships
+- **2026-08-15 — game 1.18 alignment (v1.18.01, tagged; draft pending)**: 1.18 ships
   **exactly one** iteminfo layout drift and is otherwise content-only. Every
   `MergedPrefabVisualData` element gained a `u32` between `tribe_gender_list`
   and the 3-byte flag tail, reading the constant `0xeac5e173` — the
@@ -291,8 +297,14 @@ One line per milestone; full detail in [status-archive.md](status-archive.md).
   built into the same `target/release/` as `build_rust.ps1` but **without**
   `--features c_abi`, clobbering `crimson_rs.dll` and turning every C# P/Invoke
   into `EntryPointNotFoundException`. `setup_python_env.ps1` now scopes
-  `CARGO_TARGET_DIR` to `target-py` so the two builds cannot collide.
-  **Next: merge `dev` → `main` and tag `v1.18.01`.**
+  `CARGO_TARGET_DIR` to `target-py` so the two builds cannot collide. Merged to
+  `main` (PR #27, merge `a621fa4`) and **tagged `v1.18.01`** → CI AOT build
+  green (run `31880379039`), draft release created and trimmed to the bilingual
+  `## Highlights` / `## 重點` sections. The `--cleanup=verbatim` guard from the
+  1.17 session worked — the `##` headings survived into the tag this time.
+  **Still to do: click Publish** on the draft; and crimson-rs still wants a
+  `v1.0.18.x` tag for parity with 1.13–1.17 (its `main` already carries 1.18,
+  so this release does ship the right parser).
 - **2026-08-09 — game 1.17 alignment (v1.17.01, released)**:
   content-only over 1.16 — the structural 1.16 patch was a one-off. iteminfo
   6,581 → **6,572**
