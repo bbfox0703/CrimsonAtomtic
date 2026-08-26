@@ -2,7 +2,7 @@
 
 ## Current install
 
-`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 1.18**
+`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 2.00**
 
 Top-level layout:
 
@@ -22,10 +22,16 @@ Crimson Desert/
 - **Version stamp**: `meta/0.paver` is 10 bytes, binary-encoded. Layout
   is fully decoded (see `crimson-rs` `src/binary/paver.rs`, exposed via
   `crimson_paver_read_from_*`): three little-endian u16s `(major, minor,
-  patch)` followed by a little-endian u32 `build`. The **minor** is the
-  schema-compatibility key. Live 1.18.00 install:
-  `01 00 12 00 00 00 0f 7c 57 28` → major 1, minor 18, patch 0,
-  build `0x28577c0f`. (1.17.00 was `01 00 11 00 00 00 97 4c 5e d0`,
+  patch)` followed by a little-endian u32 `build`. The schema-compatibility
+  key is the **`(major, minor)` pair** — it used to be described as "the
+  minor", which was true only while the major sat at 1 for every shipped
+  patch. **Game 2.00 is the first major bump, and it RESETS the minor**
+  (1.18 → 2.00 is `18` → `0`), so a bare minor no longer identifies a schema:
+  minor `0` means 2.00 today and would have meant a hypothetical 1.00
+  yesterday. Live 2.00.00 install:
+  `02 00 00 00 00 00 14 d2 41 b2` → major 2, minor 0, patch 0,
+  build `0xb241d214`. (1.18.00 was `01 00 12 00 00 00 0f 7c 57 28`,
+  build `0x28577c0f`; 1.17.00 was `01 00 11 00 00 00 97 4c 5e d0`,
   build `0xd05e4c97`; 1.16.00 was `01 00 10 00 00 00 e1 6d 1d 8d`,
   build `0x8d1d6de1`; 1.15.00 was `01 00 0f 00 00 00 e1 88 84 6a`,
   build `0x6a8488e1`; 1.14.00 was `01 00 0e 00 00 00 f8 42 7d 59`,
@@ -35,21 +41,29 @@ Crimson Desert/
   build `0x202c7a24`; 1.10.00 was `01 00 0a 00 00 00 ac b2 84 cf`,
   build `0xcf84b2ac`; 1.09.00 was `01 00 09 00 00 00 24 48 f3 bb`,
   build `0xbbf34824`; 1.08.00 was `01 00 08 00 00 00 3e b0 39 dc`,
-  build `0xdc39b03e`.) The editor reads this at startup and warns when
-  the install's minor isn't one the parser can load
-  (`GameDataVersion.CompatibleMinors`, now `{18}`). **1.18 carries exactly one
-  iteminfo layout drift** (crimson-rs commit `87fd09f`): every
-  `MergedPrefabVisualData` element gained a `u32` between `tribe_gender_list`
-  and the 3-byte flag tail. Iteminfo went 6,572 → 6,573 items (one new key,
-  1005446 `Demian_Greyfur_Fabric_Cloak_II`); `skill.pabgb` grew to 2,027
-  entries with no drift. Because that `u32` shifts every item that carries a
-  merged-prefab element, a 1.17 install really does mis-decode against this
+  build `0xdc39b03e`.) The editor reads this at startup and warns when the
+  install's `(major, minor)` isn't one the parser can load —
+  `GameDataVersion.IsCompatibleWithParser` now gates on
+  `Major == ParserTargetMajor` **and** `Minor ∈ CompatibleMinors`
+  (currently `2` and `{0}`). The major half was added at the 2.00 alignment
+  and is not cosmetic: with the minor reset to `0`, the old minor-only test
+  would have reported a hypothetical `1.00.xx` install as compatible with the
+  2.00 parser. **2.00 carries two iteminfo layout drifts** (crimson-rs commit
+  `0f2363b`): (1) `SubItem` gained a payload-free `type_id == 18` — the same
+  renumbering 1.12 (16) and 1.13 (17) did, with no item still reading
+  14..=17 — and (2) a new always-zero `u32` (`unk_pre_max_endurance_a`) sits
+  directly ahead of the 1.12-era `unk_pre_max_endurance`. Iteminfo went
+  6,573 → 6,810 items (+237, none removed), 6,190,316 → 6,446,719 B;
+  `skill.pabgb` grew to 2,046 entries with no drift. Because those changes
+  shift every item, a 1.18 install really does mis-decode against this
   build — the flagged incompatibility is **substantive**, like
-  1.15-on-a-1.16-build, not the target-only convention it was at 1.14/1.15/1.17.
-  `ParserTargetMinor = 18` is the version the dialog displays. Both values are
-  read from the crimson-rs C ABI, not hand-coded. The **C ABI surface is
-  unchanged** (as it also was across the structural 1.16 drift), so no C#
-  interop change was needed.
+  1.17-on-a-1.18-build and 1.15-on-a-1.16-build, not the target-only
+  convention it was at 1.14/1.15/1.17. `ParserTargetMajor.ParserTargetMinor`
+  = `2.0` is what the dialog displays (it used to hard-code the `1.` prefix,
+  which would have rendered as `1.00.xx` here). All three values are read from
+  the crimson-rs C ABI, not hand-coded. The **C ABI surface only grew** —
+  `crimson_parser_target_gamedata_major()` is purely additive, nothing
+  existing moved — so the C# interop change was one new `LibraryImport`.
 
 ## Historical versions
 
@@ -141,3 +155,17 @@ RE'd with `scripts/diff_117_118.py` (a clone of `diff_115_116.py`) against the k
 Soft pins bumped Rust-side: `itemgroupinfo` 1596→1597, `houseinfo` 4→12, `triggerregioninfo` 12→13, `IS_EQUIP_QUICK_SLOT_VISIBLE` 1005→1006 (the one new item is equipment). One pin was **re-shaped rather than re-numbered**: `part_prefab_dye_slot_info_lossy_live` asserted `slot_count == 1` on more than a quarter of rows, and 1.18's 65 new rows pushed that to 399/1,619 = 24.6%. All 1,619 rows parse, every KNOWN name+slot_count still matches, and the histogram is textbook right-skewed — so this is content, not the record-schema drift the check guards (1.12 broke it to 0 rows). The fixed fraction was replaced by "`slot_count == 1` must be the modal bucket".
 
 `CompatibleMinors` = `{18}`; unlike 1.14/1.15/1.17 this is a **genuine** incompatibility rather than the target-only convention, since 1.17 iteminfo really does mis-decode. On the editor side the alignment cost the manual `VerMinor` 17→18 lock-step bump plus the `NativePaverReaderTests` version-pin refresh — **no** count/value pin moved on the C# side (the drift is absorbed entirely in Rust and the C ABI surface is unchanged), so all 381 C# tests pass with only those pins touched.
+
+**1.18 → 2.00 is the FIRST MAJOR BUMP, and it ships two iteminfo drifts.** crimson-rs commit `0f2363b` (PR #91, merge `8e942d7`), validated against the live 2.00 install (paver `2/0/0/0xb241d214`, 2026-08-26).
+
+The version-model change matters more than either drift. `meta/0.paver`'s **`minor` resets across a major bump** — 1.18 → 2.00 is `18` → `0` — so the minor alone stopped identifying a schema: minor `0` means 2.00 today and would have meant a hypothetical 1.00 yesterday. Rust added `PARSER_TARGET_GAMEDATA_MAJOR = 2` beside `PARSER_TARGET_GAMEDATA_MINOR = 0`, exposed as a new `crimson_parser_target_gamedata_major()` bridge (purely additive; the existing minor + compatible-minors surfaces are untouched, and their entries are now read as minors *within* that major). On the editor side that closed a real hole: `GameDataVersion.IsCompatibleWithParser` was `Array.IndexOf(CompatibleMinors, Minor) >= 0`, which with `CompatibleMinors = {0}` would have waved a `1.00.xx` install straight through into a mis-decode. It now gates on `Major == ParserTargetMajor` first, and `NativePaverReaderTests` carries a dedicated regression case for exactly that shape (same minor, wrong major). The mismatch dialog had the same bug in its readout — it hard-coded a `"1."` prefix and would have shown the 2.00 target as `1.00.xx`.
+
+*iteminfo* (6,573 → **6,810** items, +237 with none removed; 6,190,316 → 6,446,719 B) drifted in two places: (1) `SubItem` gained a payload-free `type_id == 18`, the same renumbering 1.12 (16) and 1.13 (17) did — every site that read 17 in 1.18 reads 18 in 2.00 (item-level `default_sub_item` on all 6,810 items, `drop_default_data.default_sub_item` on 6,806, the other 4 reading tag 0), and no item still reads 14..=17; and (2) a new always-zero `u32` (`unk_pre_max_endurance_a`) inserted directly ahead of the 1.12-era `unk_pre_max_endurance`, so the block before `respawn_time_seconds` now carries two `u32`s (unconditional: 6,513 of the 6,573 carried-over items are exactly +4 B, and on 1,500 sampled carry-overs `old[max_endurance..] == new[max_endurance + 4..]` byte-for-byte). `serialize_iteminfo` round-trips byte-identical on the live binary; anchored export ok=6,810, leftover=0, fail=0, no_anchor=0.
+
+**Drift (2)'s *position* is not decidable from the byte diff** — this is the new trap worth keeping. It lands inside an all-zero run, so inserting it before `unk_pre_max_endurance`, between the two, or after `respawn_time_seconds` all produce identical bytes and all round-trip byte-perfectly. What settles it is the value-sanity argument the 1.16 swap already rests on: only with the new `u32` first do both neighbours keep their known distributions — `unk_pre_max_endurance` still reads `0x01000000` on exactly the 59 `Trade_*_PackedInVehicle` items, and `respawn_time_seconds` still reads 0 (6,053) / −1 (755) / 604800 (2, the `Item_Egg_KuKu` and `Item_Egg_Wyvern` 7-day respawns). The wrong placements drag `0x01000000` into the new field and turn 604800 into `604800 << 32` and −1 into `-4294967296` — the exact nonsense signature 1.16 documented. A round-trip proves nothing about placement inside a constant run; check value distributions.
+
+*skill* did not drift: 2,027 → **2,046** entries, probe 2,046/2,046 ok, format still `WithField58` — even a major bump left it alone. The save body did **not** drift either: format unchanged (v2 / flags `0x0080`); the live 2.00 save decodes 1,103 blocks / 3,315 fields with `undecoded_bytes` 0/5,229,306. Per-table gamedata snapshot in `crimson-rs` `data/gamedata-keys-2.00/` (30 tables, 96,997 keys): 13 tables moved, 17 key-identical. The extracted-bin roster went 268 → **269**: `levelgimmicksceneobjectinfo_misc.base.pabgm` is new while `levelgimmicksceneobjectinfo.pabgb` shrank 3,410,666 → 21,376 B as its payload moved into that new `.pabgm` container — nothing in the toolchain parses either.
+
+Soft pins bumped Rust-side: `gameadviceinfo` 472→478, `gameplayvariableinfo` 56→59, `globalgameevent` 188→191, `IS_EQUIP_QUICK_SLOT_VISIBLE` 1006→1008. One pin was **re-shaped rather than re-numbered** on both sides: the whole `globalgameevent` 188 → 191 delta is 2.00 removing `RoyalSupply` (`0x424a`) and adding four per-faction rows `RoyalSupply_{Her,Dem,Del,Var}` (`0x4308`–`0x430b`), all still group `0x4241` with `paloc_key = 0` — so Rust's `KNOWN_BODY` triple and the C# `NicheBridges_LiveInstall_LoadAllAndResolveKnownKeys` assertion were each replaced one-for-four. That C# assertion was the **only** count/value pin that moved this side; unlike 1.17/1.18 it did move, because the row it named no longer exists.
+
+`CompatibleMinors` = `{0}` (read as "minor 0 within major 2"); like 1.16 and 1.18 this is a **genuine** incompatibility rather than the target-only convention, since 1.18 iteminfo really does mis-decode. On the editor side the alignment cost the manual `VerMajor` 1→2 / `VerMinor` 18→0 lock-step bump (`VerPatch` back to 1), the new `ParserTargetGamedataMajor` `LibraryImport` and the major-aware compatibility gate, the mismatch-dialog prefix fix, and the paver + RoyalSupply pin refreshes — 382 C# tests green, 0 skipped.

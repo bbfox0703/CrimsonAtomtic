@@ -1943,15 +1943,23 @@ internal static partial class NativeMethods
         out ushort outPatch,
         out uint outBuild);
 
-    // ── Parser target / compatible gamedata minor ──────────────────────────
+    // ── Parser target / compatible gamedata major+minor ────────────────────
     //
-    // Rust owns PARSER_TARGET_GAMEDATA_MINOR / COMPATIBLE_GAMEDATA_MINORS
-    // (vendor/crimson-rs/src/binary/paver.rs). GameDataVersion.ParserTargetMinor
-    // / CompatibleMinors read them here instead of hand-bumping a C# constant
-    // every patch — Rust is the single source of truth. See
-    // vendor/crimson-rs/src/c_abi/paver.rs (added in commit a3ab5ee).
+    // Rust owns PARSER_TARGET_GAMEDATA_MAJOR / PARSER_TARGET_GAMEDATA_MINOR /
+    // COMPATIBLE_GAMEDATA_MINORS (vendor/crimson-rs/src/binary/paver.rs).
+    // GameDataVersion.ParserTargetMajor / ParserTargetMinor / CompatibleMinors
+    // read them here instead of hand-bumping a C# constant every patch — Rust
+    // is the single source of truth. See vendor/crimson-rs/src/c_abi/paver.rs
+    // (minor + compatible set added in commit a3ab5ee, major in 0f2363b).
 
-    // Infallible, direct u16 return — no error code, no out-pointer.
+    // Infallible, direct u16 returns — no error code, no out-pointer.
+
+    // Added for game 2.00, the first MAJOR bump: the minor RESETS across one
+    // (1.18 → 2.00 is 18 → 0), so a minor-only gate can no longer tell 2.00
+    // apart from a hypothetical 1.00. Compare the install's (major, minor).
+    [LibraryImport(LibraryName, EntryPoint = "crimson_parser_target_gamedata_major")]
+    public static partial ushort ParserTargetGamedataMajor();
+
     [LibraryImport(LibraryName, EntryPoint = "crimson_parser_target_gamedata_minor")]
     public static partial ushort ParserTargetGamedataMinor();
 

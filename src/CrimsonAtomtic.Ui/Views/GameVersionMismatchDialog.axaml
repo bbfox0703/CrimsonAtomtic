@@ -14,8 +14,8 @@
         ShowInTaskbar="True"
         WindowStartupLocation="CenterOwner">
 
-  <!-- Warning shown when the install's meta/0.paver minor doesn't
-       match GameDataVersion.ParserTargetMinor. The user can continue
+  <!-- Warning shown when the install's meta/0.paver (major, minor) doesn't
+       match what this build's parser targets. The user can continue
        at their own risk (iteminfo / save-body loads may parse-crash
        or silently mis-decode) or quit the app. -->
   <Grid Margin="16" RowDefinitions="Auto,Auto,Auto,*,Auto">

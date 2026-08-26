@@ -24,23 +24,26 @@
     <!--                                                               -->
     <!-- Sync convention (from 1.10.01 on): the FIRST TWO components    -->
     <!-- track the live game data version the editor parses against —   -->
-    <!--   VerMajor = game major (always 1 for Crimson Desert)          -->
-    <!--   VerMinor = game minor   == NativePaverReader.ParserTargetMinor -->
+    <!--   VerMajor = game major == NativePaverReader.ParserTargetMajor -->
+    <!--   VerMinor = game minor == NativePaverReader.ParserTargetMinor -->
     <!-- so a game patch to 1.18 means VerMinor 17 → 18 AT THE SAME     -->
     <!-- TIME ParserTargetMinor tracks it (keep them in lock-step).     -->
-    <!-- NOTE: ParserTargetMinor is now READ from the crimson-rs C ABI   -->
-    <!-- (Rust is the single source of truth); VerMinor stays a MANUAL   -->
-    <!-- build-identity bump and is NOT auto-derived from that ABI.      -->
+    <!-- VerMajor was 1 on every patch through 1.18 and used to be      -->
+    <!-- described as "always 1"; game 2.00 is the first major bump, and -->
+    <!-- it RESETS the minor (18 → 0), so both components move together. -->
+    <!-- NOTE: ParserTargetMajor/Minor are READ from the crimson-rs C ABI -->
+    <!-- (Rust is the single source of truth); VerMajor/VerMinor stay    -->
+    <!-- MANUAL build-identity bumps, NOT auto-derived from that ABI.    -->
     <!-- VerPatch is the editor's OWN release counter within that game  -->
-    <!-- version: reset to 1 whenever VerMinor changes, then increment  -->
-    <!-- per editor release (1.10.01 → 1.10.02 → …). Build number (4th  -->
-    <!-- digit) is read from the shared build_number.txt at the repo    -->
-    <!-- root; build.ps1 increments it once per build invocation        -->
-    <!-- (MSBuild only READS it). Same single-source-of-truth pattern   -->
-    <!-- UE5CEDumper uses.                                              -->
+    <!-- version: reset to 1 whenever VerMajor/VerMinor change, then    -->
+    <!-- increment per editor release (2.00.01 → 2.00.02 → …). Build    -->
+    <!-- number (4th digit) is read from the shared build_number.txt at -->
+    <!-- the repo root; build.ps1 increments it once per build          -->
+    <!-- invocation (MSBuild only READS it). Same single-source-of-truth -->
+    <!-- pattern UE5CEDumper uses.                                      -->
     <!-- ============================================================ -->
-    <VerMajor>1</VerMajor>
-    <VerMinor>18</VerMinor>
+    <VerMajor>2</VerMajor>
+    <VerMinor>0</VerMinor>
     <VerPatch>1</VerPatch>
     <BuildNumberFile>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\build_number.txt'))</BuildNumberFile>
     <VerBuild Condition="Exists('$(BuildNumberFile)')">$([System.IO.File]::ReadAllText('$(BuildNumberFile)').Trim())</VerBuild>
