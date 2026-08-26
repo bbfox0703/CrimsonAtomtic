@@ -592,11 +592,24 @@ public sealed class KeyInfoCatalogsTests
         Assert.Equal("Drought_Varnian", ggeCat.LookupStringKey(0x4258));
         // Body fields: every Weather event row carries the same group key
         // (0x4240 = WeatherEventGroup) and a non-zero PALOC key. The
-        // RoyalSupply group is the canonical "row exists, no PALOC" case —
-        // 0x424a (RoyalSupply_Hernand) returns paloc=0, not null.
+        // RoyalSupply group (0x4241) is the canonical "row exists, no PALOC"
+        // case — those rows return paloc=0, not null.
         Assert.Equal(0x4240u, ggeCat.LookupGroupKey(0x4258));
         Assert.Equal(72_945_724_555_969UL, ggeCat.LookupPalocKey(0x4258));
-        Assert.Equal(0UL, ggeCat.LookupPalocKey(0x424a));
+        // Game 2.00 split the single RoyalSupply row (0x424a) into four
+        // per-faction rows, 0x4308–0x430b (Her/Dem/Del/Var) — that −1 +4 IS
+        // the whole 188 → 191 delta for this table, verified against the
+        // 1.18 vs 2.00 key snapshots. All four keep group 0x4241 and the
+        // absent PALOC ref, so they replace 0x424a here one-for-four; the
+        // matching Rust pin (global_game_event_info's KNOWN_BODY) was
+        // re-shaped the same way. Asserting the group too keeps this a
+        // schema-drift probe rather than just a "key exists" check.
+        foreach (var royalSupplyKey in new uint[] { 0x4308, 0x4309, 0x430a, 0x430b })
+        {
+            Assert.Equal(0x4241u, ggeCat.LookupGroupKey(royalSupplyKey));
+            Assert.Equal(0UL, ggeCat.LookupPalocKey(royalSupplyKey));
+        }
+        Assert.Null(ggeCat.LookupGroupKey(0x424a));
         Assert.Null(ggeCat.LookupGroupKey(0xFFFFFFFFu));
         Assert.Null(ggeCat.LookupPalocKey(0xFFFFFFFFu));
 

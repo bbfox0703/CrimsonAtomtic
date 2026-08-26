@@ -7,46 +7,51 @@
 > **[status-archive.md](status-archive.md)** — look there only when you need
 > the deep history behind a decision.
 >
-> Last updated: **2026-08-18** — **v1.18.01 is tagged, built and PUBLISHED**
-> (2026-08-15T10:58Z), so the 1.18 alignment is fully closed out; the only
-> loose end is that crimson-rs still has no `v1.0.18.x` tag. The single change
-> since is a **NuGet dependency refresh** (PR #28, merge `3b3aa5e`) with no
-> game-data, parser, or C ABI impact: Avalonia 12.0.4 → **12.1.1**, DataGrid
-> 12.0.0 → **12.1.2** (DataGrid now *leads* core — the old "DataGrid lags"
-> note was inverted), the `Microsoft.Extensions` / `Bcl` / `System.*` family
-> 10.0.9 → **10.0.11**, plus Azure / Identity / OpenTelemetry / Tmds to current
-> stable. `Microsoft.NET.Test.Sdk` was dragged 18.6.0 → **18.9.0** to re-match
-> `Microsoft.CodeCoverage`, which had been bumped alone. 381 C# tests green,
-> 0 skipped; restore clean; AOT publish emits **zero** IL/trim warnings.
+> Last updated: **2026-08-26** — the editor is aligned to game **2.00**,
+> Crimson Desert's **first major version bump**. Work is done and green
+> **locally**; nothing is committed, tagged or released yet, so the previous
+> release v1.18.01 (published 2026-08-15T10:58Z) is still the shipped one.
+> **Next concrete task: review the working tree, then decide whether to cut
+> v2.00.01** (see [release-process.md](release-process.md)).
 >
-> The editor is aligned to game **1.18**, which ships **exactly one** iteminfo
-> layout drift and is otherwise content-only: every `MergedPrefabVisualData`
-> element gained a `u32` (constant `0xeac5e173`, the empty-string Jenkins
-> sentinel, on all 12,274 elements of all 6,573 items). Skill grew to 2,027
-> entries with zero drift; no save-body drift. crimson-rs 1.18 is vendored from
-> `main` (commit `87fd09f`, PR #90, merge `e4261be`). The C# side needed the
-> manual `VerMinor` 17→18 lock-step bump plus the `NativePaverReaderTests`
-> version-pin refresh — **no** count/value pin moved, and the C ABI surface is
-> unchanged. Three unrelated build blockers were fixed en route: the ILCompiler
-> central pin (SDK moved to 10.0.400), the `dotnet test` VSTest bridge the
-> .NET 10 SDK removed, and `maturin develop` clobbering the c_abi cdylib.
+> **The version model changed, and that matters more than either drift.**
+> `meta/0.paver`'s `minor` **resets across a major bump** — 1.18 → 2.00 is
+> `18` → `0` — so the minor alone no longer identifies a schema. crimson-rs
+> added `PARSER_TARGET_GAMEDATA_MAJOR = 2` beside
+> `PARSER_TARGET_GAMEDATA_MINOR = 0` and a new
+> `crimson_parser_target_gamedata_major()` bridge (purely additive). That
+> closed a **real hole on the editor side**: `IsCompatibleWithParser` was a
+> minor-only lookup, and with `CompatibleMinors = {0}` it would have accepted
+> a hypothetical `1.00.xx` install into a mis-decode. It now gates on the
+> `(major, minor)` pair. The mismatch dialog had the same bug in its readout
+> (hard-coded `"1."` prefix → would have shown the 2.00 target as `1.00.xx`).
+>
+> **2.00 ships two iteminfo drifts**: `SubItem` gained a payload-free
+> `type_id == 18` (the same renumbering 1.12 and 1.13 did), and a new
+> always-zero `u32` (`unk_pre_max_endurance_a`) sits ahead of the 1.12-era
+> `unk_pre_max_endurance`. Iteminfo 6,573 → **6,810** items (+237, none
+> removed); skill grew to **2,046** with zero drift; no save-body drift.
+> crimson-rs 2.00 is vendored from `main` (commit `0f2363b`, PR #91, merge
+> `8e942d7`). The C# side needed the manual `VerMajor` 1→2 / `VerMinor` 18→0
+> bump, the new major `LibraryImport` + compatibility gate, the dialog prefix
+> fix, and two pin refreshes — **382 C# tests green, 0 skipped**; AOT publish
+> emits **zero** IL/trim warnings and stamps `2.0.1.17` (rendered
+> `v2.00.01.17`).
 
 ## Current state
 
-- **Editor v1.18.01 — tagged, built and PUBLISHED** (2026-08-15), aligned to
-  live game **1.18** (`VerMinor` 17 → 18, `VerPatch` stays 1 per the lock-step
-  `VerMinor == ParserTargetMinor` convention — `VerMinor` is a **manual**
-  build-identity bump, while `ParserTargetMinor` is **ABI-sourced**). Verified
-  locally (381 C# tests green, 0 skipped, against the live 1.18 install),
-  merged to `main` (PR #27), then tagged `v1.18.01` → CI built the single-file
-  AOT exe (run `31880379039`) and created the draft
-  (`CrimsonAtomtic-v1.18.01-win-x64.zip`, 20,539,560 B), whose notes were
-  trimmed to the bilingual `## Highlights` / `## 重點` sections; published
-  2026-08-15T10:58Z. It supersedes v1.17.01 (published 2026-08-09). See
-  [release-process.md](release-process.md).
-  **Next concrete task: cut the crimson-rs `v1.0.18.x` tag** (see the
-  crimson-rs bullet below) — after that there is no open release work, and the
-  next milestone is whenever the game ships 1.19.
+- **Editor 2.00.01 — aligned and green LOCALLY, not committed or released.**
+  `VerMajor` 1 → **2**, `VerMinor` 18 → **0**, `VerPatch` reset to **1** per
+  the convention (both game-tracking components are **manual** build-identity
+  bumps; `ParserTargetMajor` / `ParserTargetMinor` are **ABI-sourced**). The
+  AOT publish stamps `2.0.1.17`, which the UI renders `v2.00.01.17` — the
+  `:D2` padding in `MainWindowViewModel.GetAppVersion` is what keeps a game
+  "2.00" from displaying as "2.0". Verified against the live 2.00 install:
+  **382 C# tests green, 0 skipped**; AOT publish clean with zero IL/trim
+  warnings (27.8 MB exe).
+  **Next concrete task: review the working tree and decide whether to cut
+  `v2.00.01`** — nothing is staged, committed or tagged yet, and the shipped
+  release is still v1.18.01. See [release-process.md](release-process.md).
 - **Dependency baseline refreshed 2026-08-18 (PR #28, merge `3b3aa5e`).**
   Avalonia 12.0.4 → **12.1.1**, DataGrid 12.0.0 → **12.1.2**,
   `Microsoft.Extensions`/`Bcl`/`System.*` 10.0.9 → **10.0.11**, Azure.Core
@@ -58,60 +63,86 @@
   publish with **zero** IL/trim warnings. Note this bump got **no CI run** —
   `release.yml` triggers on a pushed `v*` tag only, so PR merges never build;
   the local `build.ps1 -Mode Publish` was the AOT verification.
-- **1.18 has ONE iteminfo drift; the rest is content-only.** Every
-  `MergedPrefabVisualData` element gained a `u32` between `tribe_gender_list`
-  and the 3-byte flag tail, reading the same constant `0xeac5e173` on all
-  12,274 elements of all 6,573 items — the "empty string" Jenkins sentinel
-  from the 1.10 `money_icon_path` removal, so very likely a name hash shipping
-  unset; typed as a bare `u32` until a populated value turns up. iteminfo went
-  6,572 → **6,573** items (one new key, 1005446
-  `Demian_Greyfur_Fabric_Cloak_II`), 6,139,734 → 6,190,316 B. `skill.pabgb`
-  grew to **2,027** entries with **zero** drift (probe 2,027/2,027, format
-  still `WithField58`). gamedata: 30 tables / 96,197 keys, 9 moved, 21
-  key-identical; the extracted-bin roster went 270 → 268 (`zoneinfo` dropped,
-  nothing references it).
+- **2.00 has TWO iteminfo drifts; the rest is content-only.** (1) `SubItem`
+  gained a payload-free `type_id == 18` — the same renumbering 1.12 (16) and
+  1.13 (17) did; every site that read 17 in 1.18 reads 18 here, and no item
+  still reads 14..=17. (2) A new always-zero `u32`
+  (`unk_pre_max_endurance_a`) sits directly ahead of the 1.12-era
+  `unk_pre_max_endurance`, so the block before `respawn_time_seconds` now
+  carries two `u32`s. iteminfo went 6,573 → **6,810** items (+237, none
+  removed), 6,190,316 → 6,446,719 B. `skill.pabgb` grew to **2,046** entries
+  with **zero** drift (probe 2,046/2,046, format still `WithField58`) — even a
+  major bump left it alone. gamedata: 30 tables / 96,997 keys, 13 moved, 17
+  key-identical; the extracted-bin roster went 268 → **269**
+  (`levelgimmicksceneobjectinfo_misc.base.pabgm` is new while
+  `levelgimmicksceneobjectinfo.pabgb` shrank 3,410,666 → 21,376 B as its
+  payload moved into it — nothing parses either).
+- **The minor now RESETS on a major bump — this is the load-bearing change.**
+  1.18 → 2.00 is minor `18` → `0`, so the minor alone stopped identifying a
+  schema. crimson-rs added `PARSER_TARGET_GAMEDATA_MAJOR = 2` +
+  `crimson_parser_target_gamedata_major()`; the editor added the matching
+  `LibraryImport`, a `GameDataVersion.ParserTargetMajor`, and changed
+  `IsCompatibleWithParser` from a minor-only `Array.IndexOf` to
+  `Major == ParserTargetMajor && Minor ∈ CompatibleMinors`. Without that, a
+  hypothetical `1.00.xx` install (minor 0, the very value in
+  `CompatibleMinors`) would have been waved through into a mis-decode;
+  `NativePaverReaderTests` now pins exactly that shape. The mismatch dialog
+  carried the same latent bug — a hard-coded `"1."` prefix that would have
+  shown the 2.00 target as `1.00.xx`.
 - **Save read/write is version-agnostic.** Each save embeds its own schema, so
-  1.05–1.18 saves round-trip in their own format (no version conversion). 1.18
+  1.05–2.00 saves round-trip in their own format (no version conversion). 2.00
   brought **no save-body drift** (format still v2 / flags `0x0080`; the live
-  `slot107` 1.18 save decodes with `undecoded_bytes=0`). Verified this session:
-  the live C# loader suite round-trips clean (all 381 C# tests ran with 0
-  skipped; iteminfo catalog parses the real 1.18 data, now 6,573 items), and
-  the refreshed Python toolchain round-trips the live 1.18 `iteminfo.pabgb`
-  byte-identical (6,573 items, SHA256 `771fecb3…`).
-- **The C ABI surface did NOT change.** `CrimsonItemInfoSummary` is untouched
-  and the 80-byte `Marshal.SizeOf` pin still holds — as it also did across the
-  *structural* 1.16 drift and now across 1.18's `MergedPrefabVisualData` `u32`,
-  both absorbed entirely inside Rust. This is the payoff of the
-  foundation-first rule: the only crimson-rs `src/c_abi/` edits in the 1.18
-  commit are inside `mod tests` (count pins), not the exported surface.
+  2.00 save decodes 1,103 blocks / 3,315 fields with `undecoded_bytes`
+  0/5,229,306). Verified this session: the live C# loader suite round-trips
+  clean (all 382 C# tests ran with 0 skipped; iteminfo catalog parses the real
+  2.00 data, now 6,810 items), and the refreshed Python toolchain round-trips
+  the live 2.00 `iteminfo.pabgb` **byte-identical** (6,446,719 B, 6,810 items,
+  SHA256 `51f87fb4…`).
+- **The C ABI surface only GREW — nothing existing moved.**
+  `crimson_parser_target_gamedata_major()` is purely additive;
+  `CrimsonItemInfoSummary` is untouched and the 80-byte `Marshal.SizeOf` pin
+  still holds, as it did across the *structural* 1.16 and 1.18 drifts. Both
+  2.00 iteminfo drifts are absorbed entirely inside Rust. This is the payoff
+  of the foundation-first rule: the C# interop cost of a two-drift **major**
+  game bump was one new `LibraryImport`.
 - **Name/icon resolution targets the *installed* game.**
-  `GameDataVersion.ParserTargetMinor` and `CompatibleMinors` are read from the
-  crimson-rs C ABI (`crimson_parser_target_gamedata_minor()` → 18;
-  `crimson_parser_compatible_gamedata_minors()` → {18}) — not hand-coded.
-  Because 1.18 carries a real layout drift, the warning shown to a 1.17
+  `GameDataVersion.ParserTargetMajor`, `ParserTargetMinor` and
+  `CompatibleMinors` are all read from the crimson-rs C ABI
+  (`crimson_parser_target_gamedata_major()` → 2;
+  `crimson_parser_target_gamedata_minor()` → 0;
+  `crimson_parser_compatible_gamedata_minors()` → {0}) — not hand-coded.
+  Because 2.00 carries two real layout drifts, the warning shown to a 1.18
   install is **substantive** (its iteminfo genuinely mis-decodes), not the
   target-only convention it was at 1.14/1.15/1.17. Full per-version breakdown
   in [game-versions.md](game-versions.md).
-- **crimson-rs 1.18 is on `main` but NOT tagged.** The 1.18 support is merged
-  to `bbfox0703/crimson-rs` `main` (commit `87fd09f`, PR #90, merge `e4261be`,
-  vendored at `e4261be`); there is **no `v1.0.18.x` tag yet** — worth cutting
-  for parity with 1.13–1.17. CI clones `main`, so a release cut already ships
-  the 1.18 parser. Reminder for the next patch: land the crimson-rs change on
-  `main` *before* tagging a CrimsonAtomtic release. Caveat when you go to cut
-  it: the `v1.0.10.x`–`v1.0.17.x` tags exist **only in the local clone** at
-  `D:\Github\crimson-rs`; `git ls-remote --tags` against the fork returns
-  **nothing**, so none of them were ever pushed. "Parity with 1.13–1.17"
-  therefore means parity with local-only tags; decide whether to push the whole
-  set or keep them local.
-- **Health:** full suite green this session (381 C# tests, 0 skipped, 0
-  failures after the version-pin refresh — live-install + catalog tests parse
-  the real 1.18 iteminfo, 6,573 items; the native lib was rebuilt from the
-  vendored 1.18 crimson-rs so the ABI reports target minor 18). Only the
-  `NativePaverReaderTests` version pins were red pre-bump. The
-  `runtime.win-x64.Microsoft.DotNet.ILCompiler` central pin moved 10.0.10 →
-  **10.0.11** (SDK moved 10.0.302 → **10.0.400**, whose auto-injected
-  ILCompiler tripped NU1109 on the stale pin — the same trap as at 1.14 and
-  1.11).
+- **crimson-rs 2.00 is on `main`, and vendored.** Merged to
+  `bbfox0703/crimson-rs` `main` (commit `0f2363b`, PR #91, merge `8e942d7`);
+  `vendor/update_vendors.ps1` (which tracks `main`) refreshed the local copy
+  to `8e942d7`, and `build_rust.ps1` rebuilt the c_abi cdylib from it. CI
+  clones `main`, so a release cut would ship the 2.00 parser. The
+  land-on-`main`-before-tagging order was followed this time.
+  **Still no version tags**, now for 1.18 *and* 2.00: the `v1.0.10.x`–
+  `v1.0.17.x` tags exist **only in the local clone** at
+  `D:\Github\crimson-rs` — `git ls-remote --tags` against the fork returns
+  **nothing**, so none were ever pushed. "Parity with 1.13–1.17" therefore
+  means parity with local-only tags; decide whether to push the whole set,
+  keep them local, or stop cutting them.
+- **Health:** full suite green this session (**382** C# tests, 0 skipped, 0
+  failures after the pin refresh — live-install + catalog tests parse the real
+  2.00 iteminfo, 6,810 items; the native lib was rebuilt from the vendored
+  2.00 crimson-rs so the ABI reports target major 2 / minor 0). The count went
+  381 → 382 because the 2.00 alignment added one test
+  (`TryReadFromBytes_SameMinorUnderOtherMajor_FlagsIncompatible`). Two pin
+  groups were red pre-fix: the `NativePaverReaderTests` version pins
+  (expected — they name the live paver), and — **unlike 1.17/1.18, where no
+  C# pin moved** — one live-data assertion,
+  `KeyInfoCatalogsTests.NicheBridges_LiveInstall_LoadAllAndResolveKnownKeys`,
+  which looked up `globalgameevent` key `0x424a` (RoyalSupply). 2.00 deleted
+  that row and added four per-faction ones (`0x4308`–`0x430b`), so the lookup
+  returned `null` where the test expected paloc `0`. Re-shaped one-for-four,
+  matching the Rust `KNOWN_BODY` change, and strengthened to assert the group
+  key too. The `runtime.win-x64.Microsoft.DotNet.ILCompiler` central pin did
+  **not** move this time (still **10.0.11**, SDK still 10.0.400).
 
 ## Feature ledger
 
@@ -166,6 +197,30 @@ window-restore quirks, etc.) is in
 
 - **Foundation-first.** When parsing produces wrong data, fix the parser or
   schema — never add a workaround in a consumer. (CLAUDE.md rule 12.)
+- **The paver `minor` RESETS on a major bump — never gate on it alone.**
+  Game 2.00 took the major 1 → 2 and the minor 18 → **0**. Everything written
+  before that (docs, code comments, the C# compatibility check) treated the
+  minor as *the* schema key because the major had been 1 on every shipped
+  patch since 1.03. That made `IsCompatibleWithParser` silently unsound the
+  moment 2.00 landed: with `CompatibleMinors = {0}`, a hypothetical `1.00.xx`
+  install matches on minor and would have been let through into a mis-decode.
+  The gate is now `(major, minor)`, both ABI-sourced. Generalise the lesson:
+  a component that has been constant for 15 patches is an *assumption*, not an
+  invariant — the two places that hard-coded a literal `1` (the compat check
+  and the mismatch dialog's readout) were both written as if it were the
+  latter. The old `TryReadFromInstall_LiveInstall_PinsCurrent` test asserted
+  `Major == 1` for the same reason, and broke.
+- **A field's POSITION inside an all-zero run is not decidable from bytes.**
+  2.00's new `unk_pre_max_endurance_a: u32` lands in a constant-zero region,
+  so placing it before `unk_pre_max_endurance`, between the two, or after
+  `respawn_time_seconds` all produce **identical bytes and all round-trip
+  byte-perfectly**. Only the *value distributions* of the neighbours pick the
+  winner: `unk_pre_max_endurance` must stay `0x01000000` on exactly the 59
+  `Trade_*_PackedInVehicle` items, and `respawn_time_seconds` must stay
+  0 / −1 / 604800. The wrong placements reproduce 1.16's `-4294967296`
+  nonsense signature. This is the same lesson as the round-trip gotcha below,
+  sharpened: inside a constant run, a round-trip is not just insufficient
+  evidence, it is *no* evidence.
 - **A byte-identical round-trip does NOT validate field boundaries.** Learned
   the hard way in the 1.16 RE: the first iteminfo model round-tripped
   *perfectly* while `respawn_time_seconds` decoded as `-4294967296` — a 4-byte
@@ -266,13 +321,15 @@ window-restore quirks, etc.) is in
   parse new game data with an old schema. Re-run
   `scripts/setup_python_env.ps1` after every vendor refresh, and check the
   `.pyd` mtime — not `crimson_rs.__file__` — to tell whether it's current.
-  **⚠️ As of 2026-08-18 the trap is LIVE again**: the in-tree
-  `crimson_rs.pyd` is 1,274,368 B dated **2026-08-09 20:39** — the 1.17-era
-  build — and the venv `.pth` carries the same date, so the toolchain parses
-  1.18 data with a 1.17 parser. `vendor/crimson-rs/target-py/` does not exist
-  either, so the 1.18 `CARGO_TARGET_DIR` fix below has not actually been
-  exercised on this machine. Run `scripts/setup_python_env.ps1` before trusting
-  anything under `tools/`.
+  **✅ Cleared 2026-08-26** (it was LIVE from 2026-08-18: a 1.17-era `.pyd`
+  dated 2026-08-09 parsing 1.18 data). `setup_python_env.ps1` was re-run at
+  the 2.00 alignment; the in-tree `crimson_rs.pyd` is now **1,272,832 B dated
+  2026-08-26 15:48**, and `vendor/crimson-rs/target-py/` now exists — so the
+  1.18 `CARGO_TARGET_DIR` fix below has finally been exercised on this
+  machine. Verified by round-tripping the live 2.00 `iteminfo.pabgb` through
+  the module: 6,446,719 B / 6,810 items, byte-identical. Expect the trap to
+  come back at the next vendor refresh; it recurs because documenting it does
+  not run the script.
 - **…and until 1.18, that Python rebuild CLOBBERED the C# native lib.**
   `maturin develop` builds the same crate with the **default** features (PyO3,
   no `c_abi`), so it shared `vendor/crimson-rs/target/release/crimson_rs.dll`
@@ -283,11 +340,13 @@ window-restore quirks, etc.) is in
   at 1.18 by scoping `CARGO_TARGET_DIR` to `vendor/crimson-rs/target-py` for
   the maturin call only. If you see `EntryPointNotFoundException : Unable to
   find an entry point named 'crimson_…'`, check the dll's **size** before
-  suspecting the ABI. Quoting exact bytes to avoid a unit trap: the c_abi build
-  is **1,097,216 B** and the PyO3 one **1,274,368 B**. Windows Explorer and
-  `Get-Item .Length/1KB` divide by 1024, so they show these as **1,071 KB** and
-  **1,244 KB** — don't be thrown when they disagree with the decimal-KB
-  (÷1000) figures of ~1,097 / ~1,275 this note used to quote.
+  suspecting the ABI. The two builds differ by roughly 150 KB, and that gap —
+  not any absolute number — is the tell: **don't memorise the byte counts,
+  they move with every patch.** At 2.00 the c_abi build is **1,114,112 B** and
+  the PyO3 one **1,272,832 B** (they were 1,097,216 / 1,274,368 at 1.18).
+  Windows Explorer and `Get-Item .Length/1KB` divide by 1024, so they show the
+  2.00 pair as **1,088 KB** and **1,243 KB** — don't be thrown when those
+  disagree with decimal-KB (÷1000) figures.
 - **Avalonia 12 quirks**: DataGrid is at **12.1.2 and now *leads* core
   (12.1.1)** — it ships on its own cadence, so a version mismatch between the
   two is expected and is **not** something to "fix" by pinning them together
@@ -331,6 +390,46 @@ Each step should be green. If anything fails, fix it before touching new code
 
 One line per milestone; full detail in [status-archive.md](status-archive.md).
 
+- **2026-08-26 — game 2.00 alignment (first MAJOR bump; local, unreleased)**:
+  Crimson Desert went 1.18 → **2.00**, the first major-version bump since the
+  project started. The headline is not either iteminfo drift but the
+  **version-model change**: `meta/0.paver`'s minor *resets* across a major
+  (18 → **0**), so the minor alone stopped identifying a schema. crimson-rs
+  had already landed 2.00 support on `dev` and it was merged to `main` during
+  this session (commit `0f2363b`, PR #91, merge `8e942d7`), adding
+  `PARSER_TARGET_GAMEDATA_MAJOR = 2` and a purely additive
+  `crimson_parser_target_gamedata_major()` bridge; `update_vendors.ps1`
+  (tracks `main`) pulled it to `8e942d7` and `build_rust.ps1` rebuilt the
+  c_abi cdylib. **The editor side had a real bug waiting**:
+  `GameDataVersion.IsCompatibleWithParser` was a minor-only
+  `Array.IndexOf(CompatibleMinors, Minor)`, so with `CompatibleMinors = {0}`
+  a hypothetical `1.00.xx` install would have been reported compatible with
+  the 2.00 parser and let into a mis-decode. It now gates on
+  `Major == ParserTargetMajor` first, with a dedicated regression test for
+  that exact shape (same minor, wrong major). `GameVersionMismatchDialog`
+  carried the same latent defect in its readout — a hard-coded `"1."` prefix
+  that would have rendered the 2.00 target as `1.00.xx`. Both majors are now
+  ABI-sourced, so the next major bump needs no code edit. Data side: iteminfo
+  6,573 → **6,810** items (+237, none removed; `SubItem` tag 17 → 18, plus a
+  new always-zero `u32` ahead of `unk_pre_max_endurance`), skill 2,027 →
+  **2,046** with zero drift, **no** save-body drift, gamedata 30 tables /
+  96,997 keys. Version bumped `VerMajor` 1 → 2 / `VerMinor` 18 → 0 /
+  `VerPatch` → 1; the AOT exe stamps `2.0.1.17` and the UI renders
+  `v2.00.01.17`. **382 C# tests green, 0 skipped**; AOT publish zero IL/trim
+  warnings (27.8 MB exe); the Python toolchain was refreshed
+  (`setup_python_env.ps1`) and round-trips the live 2.00 `iteminfo.pabgb`
+  byte-identical (6,446,719 B). Two C# pin groups moved: the
+  `NativePaverReaderTests` version pins, and — the first C# count/value pin to
+  move since 1.16 — the `globalgameevent` RoyalSupply assertion, because 2.00
+  deleted key `0x424a` and split it into four per-faction rows
+  `0x4308`–`0x430b` (re-shaped one-for-four, matching the Rust `KNOWN_BODY`
+  change, and strengthened to assert the group key). New gotchas recorded: the
+  minor-resets-on-major trap, and that a field's **position inside an all-zero
+  run is not decidable from bytes** — 2.00's new `u32` round-trips
+  byte-perfectly in three different placements, and only the neighbours' value
+  distributions pick the right one. The stale-`.pyd` trap, flagged LIVE on
+  2026-08-18, is **cleared**. **Nothing is committed, tagged or released** —
+  v1.18.01 is still the shipped build.
 - **2026-08-18 — NuGet dependency refresh + status-doc housekeeping**:
   maintenance only, no game-data / parser / C ABI change. Avalonia core 12.0.4
   → **12.1.1** (Desktop, FreeDesktop, HarfBuzz, Themes.Fluent, Fonts.Inter),

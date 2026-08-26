@@ -10,48 +10,61 @@ namespace CrimsonAtomtic.Tests;
 /// <c>meta/0.paver</c> when present and skips otherwise.
 ///
 /// <para>
+/// <see cref="GameDataVersion.ParserTargetMajor"/>,
 /// <see cref="GameDataVersion.ParserTargetMinor"/> and
-/// <see cref="GameDataVersion.CompatibleMinors"/> are now read from the
+/// <see cref="GameDataVersion.CompatibleMinors"/> are all read from the
 /// crimson-rs C ABI (Rust is the single source of truth), so the
 /// compatibility assertions below transitively verify the wiring: the
-/// live target (1.18) is compatible, the previous minor (1.17) and any
-/// other minor are not.
+/// live target (2.00) is compatible, the previous patch (1.18) is not,
+/// and — the case game 2.00 newly opened up — neither is a version that
+/// happens to share the target's <i>minor</i> under a different major.
 /// </para>
 /// </summary>
 public sealed class NativePaverReaderTests
 {
-    /// <summary>Bit-for-bit copy of the live 1.18.00 install's paver
-    /// (<c>01 00 12 00 00 00 0f 7c 57 28</c> → build 0x28577c0f LE).</summary>
-    private static readonly byte[] Paver_1_18_Live =
+    /// <summary>Bit-for-bit copy of the live 2.00.00 install's paver
+    /// (<c>02 00 00 00 00 00 14 d2 41 b2</c> → build 0xb241d214 LE).
+    /// First shipped paver with a major other than 1.</summary>
+    private static readonly byte[] Paver_2_00_Live =
+        [0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x14, 0xd2, 0x41, 0xb2];
+
+    /// <summary>The previous patch's paver (1.18.00) — kept to pin that
+    /// it is flagged INCOMPATIBLE. 2.00 carries <b>two</b> iteminfo layout
+    /// drifts (<c>SubItem</c> tag 17 → 18, and a new <c>u32</c> ahead of
+    /// <c>unk_pre_max_endurance</c>), so — like the 1.17 → 1.18 and
+    /// 1.15 → 1.16 drifts, and unlike the content-only 1.14/1.15/1.17
+    /// patches — 1.18 data genuinely mis-decodes under this build. The
+    /// warning here is a <i>substantive</i> incompatibility, not just the
+    /// target-only allow-list convention.</summary>
+    private static readonly byte[] Paver_1_18_Prev =
         [0x01, 0x00, 0x12, 0x00, 0x00, 0x00, 0x0f, 0x7c, 0x57, 0x28];
 
-    /// <summary>The previous patch's paver (1.17.00) — kept to pin that
-    /// it is flagged INCOMPATIBLE. 1.18 carries a <b>structural</b> iteminfo
-    /// drift (a <c>u32</c> added to every <c>MergedPrefabVisualData</c>
-    /// element), so — like the 1.15 → 1.16 drift and unlike the content-only
-    /// 1.14/1.15/1.17 patches — 1.17 data genuinely mis-decodes under this
-    /// build. The warning here is a <i>substantive</i> incompatibility, not
-    /// just the target-only allow-list convention.</summary>
-    private static readonly byte[] Paver_1_17_Prev =
-        [0x01, 0x00, 0x11, 0x00, 0x00, 0x00, 0x97, 0x4c, 0x5e, 0xd0];
+    /// <summary>Synthetic <c>1.00.xx</c> — a version that never shipped,
+    /// constructed so its <b>minor matches the 2.00 target's minor (0)</b>
+    /// while its major does not. This is the exact hole the major bump
+    /// opened: before <see cref="GameDataVersion.IsCompatibleWithParser"/>
+    /// gated on the major, these bytes would have been reported as
+    /// compatible with the 2.00 parser.</summary>
+    private static readonly byte[] Paver_1_00_SameMinorOtherMajor =
+        [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
 
     [Fact]
-    public void TryReadFromBytes_HappyPath_Returns_1_18_Live()
+    public void TryReadFromBytes_HappyPath_Returns_2_00_Live()
     {
         if (!File.Exists("crimson_rs.dll"))
         {
             return;
         }
-        var v = NativePaverReader.TryReadFromBytes(Paver_1_18_Live);
+        var v = NativePaverReader.TryReadFromBytes(Paver_2_00_Live);
         Assert.NotNull(v);
-        Assert.Equal(1, v!.Value.Major);
-        Assert.Equal(18, v.Value.Minor);
+        Assert.Equal(2, v!.Value.Major);
+        Assert.Equal(0, v.Value.Minor);
         Assert.Equal(0, v.Value.Patch);
-        Assert.Equal(0x28577c0fu, v.Value.Build);
+        Assert.Equal(0xb241d214u, v.Value.Build);
         Assert.True(v.Value.IsCompatibleWithParser,
-            "1.18.00 should be compatible with the current ParserTargetMinor=18");
-        Assert.Equal("1.18.00", v.Value.ShortVersionString);
-        Assert.Equal("1.18.00 build 0x28577c0f", v.Value.DisplayString);
+            "2.00.00 should be compatible with the current parser target 2.0");
+        Assert.Equal("2.00.00", v.Value.ShortVersionString);
+        Assert.Equal("2.00.00 build 0xb241d214", v.Value.DisplayString);
     }
 
     [Fact]
@@ -62,33 +75,61 @@ public sealed class NativePaverReaderTests
             return;
         }
         // These values are sourced from the crimson-rs C ABI
-        // (crimson_parser_target_gamedata_minor /
-        // crimson_parser_compatible_gamedata_minors), NOT a hand-coded C#
-        // constant. Pin the currently-vendored target (18) and that the
-        // target is always a member of the compatible set.
-        Assert.Equal(18, GameDataVersion.ParserTargetMinor);
-        Assert.Contains<ushort>(18, GameDataVersion.CompatibleMinors);
-        Assert.DoesNotContain<ushort>(17, GameDataVersion.CompatibleMinors);
+        // (crimson_parser_target_gamedata_major / _minor /
+        // crimson_parser_compatible_gamedata_minors), NOT hand-coded C#
+        // constants. Pin the currently-vendored target (2.00 → major 2,
+        // minor 0) and that the target minor is always a member of the
+        // compatible set.
+        Assert.Equal(2, GameDataVersion.ParserTargetMajor);
+        Assert.Equal(0, GameDataVersion.ParserTargetMinor);
+        Assert.Contains<ushort>(0, GameDataVersion.CompatibleMinors);
+        Assert.DoesNotContain<ushort>(18, GameDataVersion.CompatibleMinors);
     }
 
     [Fact]
-    public void TryReadFromBytes_PreviousMinor_FlagsIncompatible()
+    public void TryReadFromBytes_PreviousPatch_FlagsIncompatible()
     {
         if (!File.Exists("crimson_rs.dll"))
         {
             return;
         }
-        // 1.18 is a STRUCTURAL drift over 1.17: every MergedPrefabVisualData
-        // element gained a u32 between tribe_gender_list and the 3-byte flag
-        // tail, so every item that carries one shifts. 1.17 iteminfo really
-        // does mis-decode against this build — this is a substantive
-        // incompatibility (like 1.15-on-a-1.16-build), not merely the
+        // 2.00 carries two STRUCTURAL iteminfo drifts over 1.18: SubItem
+        // gained a payload-free type_id == 18 (every site that read 17 now
+        // reads 18), and a new always-zero u32 sits ahead of the 1.12-era
+        // unk_pre_max_endurance. 1.18 iteminfo really does mis-decode against
+        // this build — a substantive incompatibility, not merely the
         // target-only allow-list convention. Pin it.
-        var v = NativePaverReader.TryReadFromBytes(Paver_1_17_Prev);
+        var v = NativePaverReader.TryReadFromBytes(Paver_1_18_Prev);
         Assert.NotNull(v);
-        Assert.Equal(17, v!.Value.Minor);
+        Assert.Equal(1, v!.Value.Major);
+        Assert.Equal(18, v.Value.Minor);
         Assert.False(v.Value.IsCompatibleWithParser,
-            "1.17.00 must NOT be compatible — CompatibleMinors is {18}");
+            "1.18.00 must NOT be compatible — the parser targets 2.0");
+    }
+
+    [Fact]
+    public void TryReadFromBytes_SameMinorUnderOtherMajor_FlagsIncompatible()
+    {
+        if (!File.Exists("crimson_rs.dll"))
+        {
+            return;
+        }
+        // REGRESSION GUARD for the game-2.00 major bump. The minor is the
+        // schema-compatibility key only *within* a major, and 2.00 reset it
+        // from 18 to 0. So a hypothetical 1.00 install carries minor 0 — the
+        // very value CompatibleMinors holds — and the old minor-only check
+        // (Array.IndexOf(CompatibleMinors, Minor) >= 0) would have waved it
+        // straight through into a mis-decode. Assert the premise explicitly
+        // so this test still means something if CompatibleMinors changes.
+        var v = NativePaverReader.TryReadFromBytes(Paver_1_00_SameMinorOtherMajor);
+        Assert.NotNull(v);
+        Assert.Equal(1, v!.Value.Major);
+        Assert.Equal(GameDataVersion.ParserTargetMinor, v.Value.Minor);
+        Assert.Contains(v.Value.Minor, GameDataVersion.CompatibleMinors);
+        Assert.NotEqual(GameDataVersion.ParserTargetMajor, v.Value.Major);
+        Assert.False(v.Value.IsCompatibleWithParser,
+            "1.00.xx must NOT be compatible — matching minor under a "
+            + "different major says nothing about schema compatibility");
     }
 
     [Fact]
@@ -106,21 +147,23 @@ public sealed class NativePaverReaderTests
     }
 
     [Fact]
-    public void TryReadFromBytes_LegacyMinor_FlagsIncompatible()
+    public void TryReadFromBytes_LegacyVersion_FlagsIncompatible()
     {
         if (!File.Exists("crimson_rs.dll"))
         {
             return;
         }
-        // Synthetic 1.07.xx layout: minor = 7 is not in CompatibleMinors
-        // {18} — 1.07 used a different iteminfo layout.
+        // Synthetic 1.07.xx layout: major 1 is not the target major, and
+        // minor 7 is not in CompatibleMinors {0} either — 1.07 used a
+        // different iteminfo layout. Fails both halves of the gate.
         ReadOnlySpan<byte> bytes =
             [0x01, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
         var v = NativePaverReader.TryReadFromBytes(bytes);
         Assert.NotNull(v);
-        Assert.Equal(7, v!.Value.Minor);
+        Assert.Equal(1, v!.Value.Major);
+        Assert.Equal(7, v.Value.Minor);
         Assert.False(v.Value.IsCompatibleWithParser,
-            "1.07.xx must NOT be compatible — not in CompatibleMinors {18}");
+            "1.07.xx must NOT be compatible — wrong major AND wrong minor");
     }
 
     [Fact]
@@ -130,17 +173,18 @@ public sealed class NativePaverReaderTests
         {
             return;
         }
-        // Synthetic 1.19.xx layout: minor = 19 is past the validated set.
-        // The gate is an explicit allow-list, not "≥ target", so a future
-        // patch this build hasn't been validated against is flagged until
+        // Synthetic 2.01.xx layout: the right major, but a minor past the
+        // validated set. The gate is an explicit allow-list, not "≥ target",
+        // so the next patch inside this major is still flagged until
         // CompatibleMinors is extended (Rust-side, via the vendored parser).
         ReadOnlySpan<byte> bytes =
-            [0x01, 0x00, 0x13, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+            [0x02, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
         var v = NativePaverReader.TryReadFromBytes(bytes);
         Assert.NotNull(v);
-        Assert.Equal(19, v!.Value.Minor);
+        Assert.Equal(2, v!.Value.Major);
+        Assert.Equal(1, v.Value.Minor);
         Assert.False(v.Value.IsCompatibleWithParser,
-            "1.19.xx must NOT be compatible — not yet in CompatibleMinors {18}");
+            "2.01.xx must NOT be compatible — not yet in CompatibleMinors {0}");
     }
 
     [Fact]
@@ -154,7 +198,7 @@ public sealed class NativePaverReaderTests
     }
 
     [Fact]
-    public void TryReadFromInstall_LiveInstall_PinsCurrent()
+    public void TryReadFromInstall_LiveInstall_ParsesPlausibly()
     {
         if (!File.Exists("crimson_rs.dll"))
         {
@@ -183,10 +227,17 @@ public sealed class NativePaverReaderTests
         }
         var v = NativePaverReader.TryReadFromInstall(installRoot);
         Assert.NotNull(v);
-        // Pin the major (always 1 in shipped versions). Don't pin the
-        // minor — the live install on a developer's machine may not
-        // be 1.18 forever, and this test should survive a future
-        // game-data minor bump without being rewritten alongside.
-        Assert.Equal(1, v!.Value.Major);
+        // Deliberately pins nothing that moves. This used to assert
+        // Major == 1 "always 1 in shipped versions" — and game 2.00 broke
+        // exactly that assumption, which is the reason the whole
+        // major-aware gate exists. So assert only what a real paver can
+        // never violate: majors start at 1, so a successful read that
+        // yields 0 means we parsed something that isn't a version stamp.
+        Assert.True(v!.Value.Major >= 1,
+            $"a real install's paver major is >= 1, got {v.Value.Major}");
+        // The "is the dev box on the patch this build supports" canary
+        // lives Rust-side (c_abi::paver's live_install_paver_matches_parser_target),
+        // where it drives off the same constants. Duplicating it here would
+        // just add a second test that goes red on every game patch.
     }
 }
