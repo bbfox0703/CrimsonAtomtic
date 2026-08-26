@@ -8,11 +8,12 @@
 > the deep history behind a decision.
 >
 > Last updated: **2026-08-26** — the editor is aligned to game **2.00**,
-> Crimson Desert's **first major version bump**. Work is done and green
-> **locally**; nothing is committed, tagged or released yet, so the previous
-> release v1.18.01 (published 2026-08-15T10:58Z) is still the shipped one.
-> **Next concrete task: review the working tree, then decide whether to cut
-> v2.00.01** (see [release-process.md](release-process.md)).
+> Crimson Desert's **first major version bump**, and **v2.00.01 is tagged,
+> built and PUBLISHED** (2026-08-26T08:06:44Z, marked Latest). It supersedes
+> v1.18.01 (published 2026-08-15T10:58Z). There is **no open release work**;
+> the next milestone is whenever the game ships its next patch. The one
+> standing loose end is unchanged: crimson-rs still has no pushed version
+> tags (see the crimson-rs bullet).
 >
 > **The version model changed, and that matters more than either drift.**
 > `meta/0.paver`'s `minor` **resets across a major bump** — 1.18 → 2.00 is
@@ -40,18 +41,27 @@
 
 ## Current state
 
-- **Editor 2.00.01 — aligned and green LOCALLY, not committed or released.**
-  `VerMajor` 1 → **2**, `VerMinor` 18 → **0**, `VerPatch` reset to **1** per
-  the convention (both game-tracking components are **manual** build-identity
-  bumps; `ParserTargetMajor` / `ParserTargetMinor` are **ABI-sourced**). The
-  AOT publish stamps `2.0.1.17`, which the UI renders `v2.00.01.17` — the
-  `:D2` padding in `MainWindowViewModel.GetAppVersion` is what keeps a game
-  "2.00" from displaying as "2.0". Verified against the live 2.00 install:
-  **382 C# tests green, 0 skipped**; AOT publish clean with zero IL/trim
-  warnings (27.8 MB exe).
-  **Next concrete task: review the working tree and decide whether to cut
-  `v2.00.01`** — nothing is staged, committed or tagged yet, and the shipped
-  release is still v1.18.01. See [release-process.md](release-process.md).
+- **Editor v2.00.01 — tagged, built and PUBLISHED** (2026-08-26T08:06:44Z),
+  aligned to live game **2.00**. `VerMajor` 1 → **2**, `VerMinor` 18 → **0**,
+  `VerPatch` reset to **1** per the convention (both game-tracking components
+  are **manual** build-identity bumps; `ParserTargetMajor` /
+  `ParserTargetMinor` are **ABI-sourced**). The build stamps `2.0.1.17`, which
+  the UI renders `v2.00.01.17` — the `:D2` padding in
+  `MainWindowViewModel.GetAppVersion` is what keeps a game "2.00" from
+  displaying as "2.0". Verified locally (**382 C# tests green, 0 skipped**,
+  against the live 2.00 install; AOT publish clean with zero IL/trim
+  warnings), merged to `main` (PR #30, merge `bb78dd8`), then tagged
+  `v2.00.01` → CI built the single-file AOT exe (run `32945531894`) and
+  created the draft (`CrimsonAtomtic-v2.00.01-win-x64.zip`, **20,713,436 B**,
+  sha256 `555c63f1…`), whose notes were trimmed to the bilingual
+  `## Highlights` / `## 重點` sections; published and marked Latest.
+  **Release-artifact checks that the test suite cannot cover**: the
+  downloaded zip's sha256 matches its `.sha256`; the packaged exe is
+  29,124,608 B with FileVersion `2.0.1.17` and a ProductVersion embedding
+  `bb78dd8`; and the AOT binary **actually launches** — it came up with the
+  window title `CrimsonAtomtic v2.00.01.17`, which is the only end-to-end
+  proof that the `2.0.1.17` → `v2.00.01.17` rendering is right in a shipped
+  build. See [release-process.md](release-process.md).
 - **Dependency baseline refreshed 2026-08-18 (PR #28, merge `3b3aa5e`).**
   Avalonia 12.0.4 → **12.1.1**, DataGrid 12.0.0 → **12.1.2**,
   `Microsoft.Extensions`/`Bcl`/`System.*` 10.0.9 → **10.0.11**, Azure.Core
@@ -119,8 +129,8 @@
   `bbfox0703/crimson-rs` `main` (commit `0f2363b`, PR #91, merge `8e942d7`);
   `vendor/update_vendors.ps1` (which tracks `main`) refreshed the local copy
   to `8e942d7`, and `build_rust.ps1` rebuilt the c_abi cdylib from it. CI
-  clones `main`, so a release cut would ship the 2.00 parser. The
-  land-on-`main`-before-tagging order was followed this time.
+  clones `main`, so the v2.00.01 build shipped the 2.00 parser (CI cloned it
+  fresh at tag time). The land-on-`main`-before-tagging order was followed.
   **Still no version tags**, now for 1.18 *and* 2.00: the `v1.0.10.x`–
   `v1.0.17.x` tags exist **only in the local clone** at
   `D:\Github\crimson-rs` — `git ls-remote --tags` against the fork returns
@@ -428,8 +438,11 @@ One line per milestone; full detail in [status-archive.md](status-archive.md).
   run is not decidable from bytes** — 2.00's new `u32` round-trips
   byte-perfectly in three different placements, and only the neighbours' value
   distributions pick the right one. The stale-`.pyd` trap, flagged LIVE on
-  2026-08-18, is **cleared**. **Nothing is committed, tagged or released** —
-  v1.18.01 is still the shipped build.
+  2026-08-18, is **cleared**. Shipped the same day: commit `7179ee2` → PR #30
+  (merge `bb78dd8`) → annotated tag `v2.00.01` (`--cleanup=verbatim`, both
+  `## Highlights` and `## 重點` verified present before pushing) → CI run
+  `32945531894` → notes trimmed to the bilingual sections → **published
+  2026-08-26T08:06:44Z**, superseding v1.18.01.
 - **2026-08-18 — NuGet dependency refresh + status-doc housekeeping**:
   maintenance only, no game-data / parser / C ABI change. Avalonia core 12.0.4
   → **12.1.1** (Desktop, FreeDesktop, HarfBuzz, Themes.Fluent, Fonts.Inter),
