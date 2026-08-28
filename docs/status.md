@@ -7,13 +7,23 @@
 > **[status-archive.md](status-archive.md)** — look there only when you need
 > the deep history behind a decision.
 >
-> Last updated: **2026-08-26** — the editor is aligned to game **2.00**,
-> Crimson Desert's **first major version bump**, and **v2.00.01 is tagged,
-> built and PUBLISHED** (2026-08-26T08:06:44Z, marked Latest). It supersedes
-> v1.18.01 (published 2026-08-15T10:58Z). There is **no open release work**;
-> the next milestone is whenever the game ships its next patch. The one
-> standing loose end is unchanged: crimson-rs still has no pushed version
+> Last updated: **2026-08-28** — the editor is aligned to game **2.00**,
+> Crimson Desert's **first major version bump**, and **v2.00.02 is tagged,
+> built and PUBLISHED** (2026-08-28T07:33:26Z, marked Latest). It supersedes
+> v2.00.01 (published 2026-08-26T08:06:44Z). There is **no open release
+> work**; the next milestone is whenever the game ships its next patch. The
+> one standing loose end is unchanged: crimson-rs still has no pushed version
 > tags (see the crimson-rs bullet).
+>
+> **v2.00.02 is a socket-editor correctness release** — no game-version
+> change, so only `VerPatch` moved (1 → 2). Socket editing was producing
+> saves the *engine* rejects: every socket on an edited item read back
+> in-game as not-yet-opened. Three save-format invariants were being broken,
+> all measured against 22,019 socket-bearing blocks in four game-written
+> saves; an adversarial audit of the fix then caught a fourth defect the fix
+> itself introduced on the deferred Apply-Set path. Details in the session
+> changelog below, and the two rules the upstream reference doc had wrong are
+> corrected in crimson-rs (PR #92, merge `fa1e8da`).
 >
 > **The version model changed, and that matters more than either drift.**
 > `meta/0.paver`'s `minor` **resets across a major bump** — 1.18 → 2.00 is
@@ -41,8 +51,25 @@
 
 ## Current state
 
-- **Editor v2.00.01 — tagged, built and PUBLISHED** (2026-08-26T08:06:44Z),
-  aligned to live game **2.00**. `VerMajor` 1 → **2**, `VerMinor` 18 → **0**,
+- **Editor v2.00.02 — tagged, built and PUBLISHED** (2026-08-28T07:33:26Z,
+  marked Latest), aligned to live game **2.00**. A socket-editor correctness
+  release on top of v2.00.01: `VerMajor` / `VerMinor` unchanged (the game is
+  still 2.00), `VerPatch` **1 → 2**. Merged to `main` (PR #32, merge
+  `2a30d4c`), tagged `v2.00.02` → CI run `33151190235` built the single-file
+  AOT exe and created the draft
+  (`CrimsonAtomtic-v2.00.02-win-x64.zip`, **20,724,824 B**, sha256
+  `14809084…`), whose notes were trimmed to the bilingual `## Highlights` /
+  `## 重點` sections; published and marked Latest. **Release-artifact checks
+  the test suite cannot cover**: the downloaded zip's sha256 matches its
+  `.sha256`; the packaged exe is 29,145,088 B with FileVersion `2.0.2.25` and
+  a ProductVersion embedding `2a30d4c`; the bundle carries 4 files with **no**
+  `crimson_rs.dll` (folded into the exe via staticlib); and the AOT binary
+  **actually launches** — window title `CrimsonAtomtic v2.00.02.25`, the only
+  end-to-end proof that the `2.0.2.25` → `v2.00.02.25` rendering is right in a
+  shipped build. **394 C# tests green, 0 skipped**; AOT publish emits zero
+  IL/trim warnings.
+- **Editor v2.00.01 — superseded** (published 2026-08-26T08:06:44Z),
+  the alignment to live game **2.00**. `VerMajor` 1 → **2**, `VerMinor` 18 → **0**,
   `VerPatch` reset to **1** per the convention (both game-tracking components
   are **manual** build-identity bumps; `ParserTargetMajor` /
   `ParserTargetMinor` are **ABI-sourced**). The build stamps `2.0.1.17`, which
@@ -445,7 +472,7 @@ Each step should be green. If anything fails, fix it before touching new code
 
 One line per milestone; full detail in [status-archive.md](status-archive.md).
 
-- **2026-08-28 — socket editor was writing saves the engine rejects (fixed)**:
+- **2026-08-28 — socket editor was writing saves the engine rejects (fixed; shipped as v2.00.02)**:
   Reported symptom — edit an item's sockets in the editor, insert gems, and
   in-game every socket on that item reads back as **未開封 / not yet opened**;
   the save loads but the engine discards the item's socket state. Root-caused
