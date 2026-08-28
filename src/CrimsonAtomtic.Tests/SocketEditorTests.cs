@@ -843,6 +843,70 @@ public sealed class SocketEditorTests : IDisposable
         Assert.All(vm.Sockets, r => Assert.True(r.IsEquippable));
     }
 
+
+    /// <summary>
+    /// Every gem key in every built-in set must be a real gem.
+    /// </summary>
+    /// <remarks>
+    /// The save format accepts any <c>u32</c> as a socket's
+    /// <c>_itemKey</c>, so a mistyped built-in set would be written into
+    /// the user's save without a murmur — no FFI error, no validation,
+    /// just a wrong or non-existent gem in the slot. This pins each key
+    /// against the engine's own canonical gem marker
+    /// (<c>item_type == 74 &amp;&amp; category_info == 2501</c>), which
+    /// also makes it a drift alarm: if a game patch retires one of these
+    /// keys, this fails before a user hits it.
+    /// </remarks>
+    [Fact]
+    public void BuiltInGemSets_ContainOnlyRealGems()
+    {
+        // Pure-CPU part: shape invariants hold with or without game data.
+        Assert.NotEmpty(BuiltInGemSets.All);
+        Assert.All(BuiltInGemSets.All, set =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(set.Label));
+            Assert.NotEmpty(set.GemKeys);
+            Assert.True(set.GemKeys.Count <= GemSet.MaxGems,
+                $"{set.Label} has {set.GemKeys.Count} gems, cap is {GemSet.MaxGems}");
+            Assert.All(set.GemKeys, k => Assert.NotEqual(0u, k));
+        });
+        Assert.Equal(BuiltInGemSets.All.Count,
+            BuiltInGemSets.All.Select(s => s.Label).Distinct().Count());
+
+        var gameRoot = FindGameRoot();
+        if (!File.Exists("crimson_rs.dll") || gameRoot is null)
+        {
+            return;
+        }
+        var bytes = new NativePazExtractor().ExtractFile(
+            Path.Combine(gameRoot, "0008", "0.pamt"),
+            "gamedata/binary__/client/bin", "iteminfo.pabgb");
+        using var cat = NativeItemInfoCatalog.LoadFromBytes(bytes);
+
+        var canonical = new HashSet<uint>();
+        for (var i = 0; i < cat.CanonicalGemCount; i++)
+        {
+            if (cat.GetCanonicalGemKey(i) is { } g)
+            {
+                canonical.Add(g);
+            }
+        }
+        Assert.NotEmpty(canonical);
+
+        foreach (var set in BuiltInGemSets.All)
+        {
+            foreach (var key in set.GemKeys)
+            {
+                Assert.True(canonical.Contains(key),
+                    $"{set.Label}: {key} is not in the canonical gem set "
+                    + $"(string_key={cat.LookupStringKey(key) ?? "<not in iteminfo>"})");
+                // And it must have a readable durability cap, since the
+                // fill path writes exactly that value.
+                Assert.NotNull(cat.LookupSummary(key));
+            }
+        }
+    }
+
     /// <summary>
     /// The save has to survive a full write + reload round trip with the
     /// edits intact — the end-to-end proof that a length-changing
