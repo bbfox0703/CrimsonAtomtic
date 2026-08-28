@@ -34,7 +34,7 @@
   <sys:String x:Key="SetGameInstallFolderInvalidBody">選択したフォルダに必要なアセットファイル (0020\0.pamt) が見つかりません。ゲームの 0000\、0020\、… の各 pack group を含むディレクトリを選んでください — 通常は &lt;Steam library&gt;\steamapps\common\Crimson Desert、または Epic / Game Pass 用にコピーしたアセットフォルダです。</sys:String>
   <sys:String x:Key="MenuRenameMercenary">傭兵の名前を変更(_M)…</sys:String>
   <sys:String x:Key="MenuEditItemSockets">アイテムのソケットを編集(_S)…</sys:String>
-  <sys:String x:Key="SocketEditorHeader">スロット単位で Fill / Change / Clear します。Fill と Change の際は耐久値 (Endurance) を 65535 (最大) にリセットするので、新しい上位ジェムが古いスロットの消耗値を引き継ぎません。アイテムの現在の上限を超える index にジェムを入れると _validSocketCount が自動的に引き上げられます (ゲーム内でスロットが見えるようになります)。基底の list が事前確保しているスロット (通常 5 まで) は、ゲームデータ上の上限に関わらず埋められます。変更内容は次回の File → Save で書き込まれます。</sys:String>
+  <sys:String x:Key="SocketEditorHeader">スロット単位で Fill / Change / Clear します。ジェムはそのジェム自身のゲームデータ上の max_endurance — ゲーム本体が書き込むのと同じ値 — で書き込まれるため、耐久値は満タンから始まります。まだ開放されていないスロットを埋めるときは先に _validSocketCount を引き上げます (一度も開放されていないアイテムではこのフィールドを新規作成します)。これでジェムはエンジンが受け付ける開放済みの範囲に収まります。基底の list が事前確保しているスロット (通常 5 つ) は、ゲームデータ上の上限に関わらず埋められます。変更内容は次回の File → Save で書き込まれます。</sys:String>
   <sys:String x:Key="SocketEditorColBag">バッグ</sys:String>
   <sys:String x:Key="SocketEditorColItem">アイテム</sys:String>
   <sys:String x:Key="SocketEditorColItemKey">ItemKey</sys:String>
@@ -46,8 +46,8 @@
   <sys:String x:Key="SocketEditorChangeGem">変更…</sys:String>
   <sys:String x:Key="SocketEditorFillGem">セット…</sys:String>
   <sys:String x:Key="SocketEditorClearGem">クリア</sys:String>
-  <sys:String x:Key="SocketEditorChangeGemTip">ジェム選択ダイアログを開き、このスロットを上書きします。_currentEndurance を 65535 (最大) にリセットするので、上位ジェムは満タンから始まります。</sys:String>
-  <sys:String x:Key="SocketEditorFillGemTip">ジェム選択ダイアログを開き、この空きスロットを埋めます。必要に応じて親アイテムの _validSocketCount を自動的に引き上げ、ゲーム内でスロットを可視化します。</sys:String>
+  <sys:String x:Key="SocketEditorChangeGemTip">ジェム選択ダイアログを開き、このスロットを上書きします。_currentEndurance は新しいジェム自身の max_endurance にリセットされ、満タンから始まります。</sys:String>
+  <sys:String x:Key="SocketEditorFillGemTip">ジェム選択ダイアログを開き、この空きスロットを埋めます。アイテムがまだ開放していないスロットなら先に開放します (_validSocketCount を引き上げるか、新規作成します) 。これでゲーム内にスロットが見えます。</sys:String>
   <sys:String x:Key="SocketEditorClearGemTip">このソケットを空に戻します。_currentEndurance と _itemKey の両方が absent になり、mask は [0x00] に反転します。</sys:String>
   <sys:String x:Key="SocketEditorColState">状態</sys:String>
   <sys:String x:Key="SocketEditorApplySetItemLabel">適用先：</sys:String>
@@ -55,6 +55,8 @@
   <sys:String x:Key="SocketEditorApplySetApply">適用</sys:String>
   <sys:String x:Key="SocketEditorApplySetEditCustom">カスタムセットを編集…</sys:String>
   <sys:String x:Key="SocketEditorApplySetEditCustomTip">3 つのユーザーカスタムジェムセットを定義 / リネームします。settings.json に保存されます。</sys:String>
+  <sys:String x:Key="SocketEditorEquippableOnly">装備可能なアイテムのみ</sys:String>
+  <sys:String x:Key="SocketEditorEquippableOnlyTip">実際に身に着けられるアイテムだけを表示します — 武器、防具、兜、手袋、靴、指輪、イヤリング、ネックレス、マント、ランタン、ほうき、仮面。セーブ形式は金塊・食器・矢・食料などの一般アイテムにも 5 枠のソケットリストを与えているため、チェックを外すとそれらも表示されます。これはノイズ低減であって制限ではありません — エディタはどのアイテムにもジェムを入れられます。</sys:String>
   <sys:String x:Key="SocketEditorFilterLabel">フィルター：</sys:String>
   <sys:String x:Key="SocketEditorFilterWatermark">入力で絞り込み — アイテム名 / バッグ / item key は 5 スロット全てを表示。ジェム名 / gem key は一致するスロットだけに絞り込み…</sys:String>
 
@@ -789,9 +791,13 @@
   <sys:String x:Key="SocketApplySetFailed">セット適用：{0} — {1} スロット後にコミット失敗：{2}（コード {3}）。書き込まずに再読み込みすると元に戻せます。</sys:String>
   <sys:String x:Key="SocketApplySetNoChange">セット適用：{0} — 変更なし（対象の全スロットが既に一致）。</sys:String>
   <sys:String x:Key="JournalSocketApplySet">セット「{0}」を {1} に適用 — {2} スロット変更</sys:String>
+  <sys:String x:Key="SocketSnapshotStale">このリストを作成した後にセーブが別のウィンドウで変更されたため、各行が表示どおりのアイテムを指していない可能性があります。編集する前にツール → アイテムソケットの編集を一度閉じて開き直してください。</sys:String>
+  <sys:String x:Key="SocketNoIteminfo">ゲームデータ (iteminfo) が読み込まれていないため、ジェムの耐久値を取得できません。エディタにゲームのインストール先を設定してからこのダイアログを開き直してください。推測した耐久値を書き込むと、ゲームがそのアイテムのソケットを不正と判定します。</sys:String>
+  <sys:String x:Key="JournalSocketApplySetPartial">セット「{0}」を {1} に適用 — {2} スロット変更、{3} 件失敗</sys:String>
   <sys:String x:Key="SocketApplySetDone">セット「{0}」を {1} に適用：{2} スロット変更。</sys:String>
   <sys:String x:Key="SocketSameGem">現在の宝石と同じ — 書き込みは行われませんでした。</sys:String>
   <sys:String x:Key="SocketApplyFailed">適用に失敗（{0}、アイテム {1}、ソケット {2}）：{3}</sys:String>
+  <sys:String x:Key="SocketOpenFailed">{1} のソケット {0} を開放できませんでした：{2}（コード {3}）。宝石は書き込まれていません。</sys:String>
   <sys:String x:Key="JournalSocketSet">{0} のソケット {1} に宝石を設定 → {2}</sys:String>
   <sys:String x:Key="JournalSocketFilled">{0} のソケット {1} に宝石を充填 → {2}</sys:String>
   <sys:String x:Key="SocketSetDone">{0} のソケット {1} に宝石を設定：→ {2}。</sys:String>

@@ -20,7 +20,7 @@
          insensitive. Bound to SearchText; ApplyFilter runs on every
          change via the partial OnSearchTextChanged. -->
     <Grid DockPanel.Dock="Top"
-          ColumnDefinitions="Auto,*,Auto"
+          ColumnDefinitions="Auto,*,Auto,Auto"
           ColumnSpacing="8"
           Margin="0,0,0,8">
       <TextBlock Grid.Column="0"
@@ -31,7 +31,16 @@
                Text="{Binding SearchText, Mode=TwoWay}"
                PlaceholderText="{DynamicResource SocketEditorFilterWatermark}"
                HorizontalAlignment="Stretch" />
-      <TextBlock Grid.Column="2"
+      <!-- Equippable-only: on by default. The save gives a full 5-entry
+           socket list to gold bars, cups, arrows, food and other props,
+           which otherwise bury the actual gear. Uncheck to see them —
+           the filter is signal-to-noise, not permission. -->
+      <CheckBox Grid.Column="2"
+                IsChecked="{Binding EquippableOnly, Mode=TwoWay}"
+                Content="{DynamicResource SocketEditorEquippableOnly}"
+                ToolTip.Tip="{DynamicResource SocketEditorEquippableOnlyTip}"
+                VerticalAlignment="Center" />
+      <TextBlock Grid.Column="3"
                  Text="{Binding FilterCountText}"
                  VerticalAlignment="Center"
                  Opacity="0.6"
