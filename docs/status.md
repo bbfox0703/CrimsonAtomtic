@@ -207,6 +207,51 @@ window-restore quirks, etc.) is in
 
 - **Foundation-first.** When parsing produces wrong data, fix the parser or
   schema — never add a workaround in a consumer. (CLAUDE.md rule 12.)
+- **ABSENT is a value. `_validSocketCount` proves it.** The save's presence
+  mask is not just an "is this field written" optimisation — the game uses
+  absence *semantically*. `_validSocketCount` is **absent** on an item whose
+  sockets have never been opened, and the explicit value `0` does not occur
+  once across the 5,556 socket-capable items in four live saves — 5,278 have
+  it absent, and the present values are 1 ×27, 2 ×88, 3 ×73, 5 ×90. So "open the first socket" is a
+  presence **promotion** (`SetScalarFieldPresent`), not an in-place scalar
+  write — the in-place setter rejects an absent field with `NOT_SCALAR (-12)`
+  because it has no byte range. Before touching any scalar, check whether the
+  game ever writes its zero; if it doesn't, absent is the zero and the two
+  mutation surfaces are not interchangeable.
+- **A "sentinel" that is really just a data value.** Gem `_currentEndurance`
+  reads 65535 on most gems and 100 on the `AbyssGear_*_Special` family, and
+  the old note in
+  [socket-editor-scope.md](../vendor/crimson-rs/docs/socket-editor-scope.md)
+  framed 65535 as a *no-durability sentinel*. It isn't: `_currentEndurance`
+  is simply `iteminfo.max_endurance` for that gem key, and 65535 is what that
+  field happens to hold for durability-less gems. The 1:1 mapping holds on
+  every gem in every live save, with worn gems sitting *below* it (99 / 95),
+  never above. Treating it as a sentinel is what let the editor write 65535
+  into a gem capped at 100 — a value the engine rejects. When two values look
+  like "normal" and "sentinel", check whether one table already explains both.
+- **Inside a deferred batch, you cannot promote a field and then write
+  it in place.** `toggle_one_scalar_presence_in_place` says so in its own
+  comment — *"start/end are stale but the encoder ignores them; they'll be
+  refreshed by the re-decode"* — and in a `RunDeferred` batch that re-decode
+  only happens at commit. So a follow-up `set_scalar_field_path` on the field
+  computes `expected = end - start = 0`, and a 1-byte write fails
+  `LENGTH_MISMATCH`. Immediate mode re-decodes after every call and never
+  shows it, which is exactly why this reached a green test suite: single Fill
+  was covered, Apply-Set (the only `RunDeferred` caller) was not. The way out
+  is the presence surface, which writes from `init_bytes` and never reads
+  start/end — but `present(1)` on an already-present field is a documented
+  no-op, so it takes a `present(0)` + `present(1, value)` pair. **Generalise:
+  a deferred batch changes which mutation primitives are valid, not just how
+  fast they are. Any code path that only ever runs immediate is untested
+  against the deferred contract.**
+- **`(BlockIndex, BagIndex, ItemIndex)` does NOT identify an item.** One
+  top-level block hosts several item lists, so the equipped list and the
+  quick-use reserve list both address their first item as bag 0 / item 0 —
+  105 colliding socket rows on slot101 alone. Any item key must include both
+  descent **field** indices; `SocketRow.ItemIdentity` is the 5-tuple that
+  does. The collision is silent and cross-item: it let an Apply-Set write
+  gems into an item the user never selected, and let one item's socket-count
+  update mark a *different* item as already-opened.
 - **The paver `minor` RESETS on a major bump — never gate on it alone.**
   Game 2.00 took the major 1 → 2 and the minor 18 → **0**. Everything written
   before that (docs, code comments, the C# compatibility check) treated the
@@ -399,6 +444,81 @@ Each step should be green. If anything fails, fix it before touching new code
 ## Session changelog (newest first)
 
 One line per milestone; full detail in [status-archive.md](status-archive.md).
+
+- **2026-08-28 — socket editor was writing saves the engine rejects (fixed)**:
+  Reported symptom — edit an item's sockets in the editor, insert gems, and
+  in-game every socket on that item reads back as **未開封 / not yet opened**;
+  the save loads but the engine discards the item's socket state. Root-caused
+  against ground truth decoded from 22,019 socket-bearing `ItemSaveData`
+  blocks across four game-written saves (slot0 / 101 / 104 / 107), which
+  yielded three hard invariants the editor was breaking. **(1)**
+  `_validSocketCount` is *absent*, never an explicit 0, on a never-socketed
+  item — the editor opened sockets with an in-place `SetScalarField`, which
+  an absent field rejects with `NOT_SCALAR (-12)`, and the failure was
+  swallowed into `row.LastError`; the gem landed in a socket the engine
+  considers sealed. Now promoted via `SetScalarFieldPresent`, run *before*
+  the gem write so a failure can't strand an orphan gem. **(2)** A socket's
+  `_currentEndurance` is the gem's own `iteminfo.max_endurance` (100 for the
+  `AbyssGear_*_Special` durability family, 65535 for the rest), not the
+  blanket 65535 the editor wrote — which put durability gems above their own
+  cap. Now read through the existing
+  `LocalizationProvider.LookupItemInfoSummary`, so **no interop change was
+  needed**. **(3)** Items were keyed on `(BlockIndex, BagIndex, ItemIndex)`,
+  which collides across item lists inside one block (equipped vs quick-use
+  reserve, 105 colliding rows on slot101); that silently let Apply-Set write
+  into an unselected item and let one item's count update mark another as
+  already-opened. Replaced by `SocketRow.ItemIdentity`, a 5-tuple including
+  both descent field indices (0 collisions). Six regression tests in
+  `SocketEditorTests.cs` pin all three plus the ground-truth invariants
+  themselves, so a future schema drift trips them first.
+  **An adversarial audit of the fix (36 agents, 32 claims, 19 refuted) then
+  surfaced a defect the fix itself introduced**: Apply-Set runs inside
+  `RunDeferred`, where a presence promotion leaves the field's byte range at
+  `start == end == 0` until commit, so the in-place raise for the second slot
+  failed `LENGTH_MISMATCH` and every gem after the first was silently dropped
+  — reproducing the sealed-socket state on the one path the tests didn't
+  cover. `TryEnsureSocketOpened` now raises a stale-range field through a
+  `present(0)` + `present(1, value)` pair. Five more confirmed findings were
+  fixed alongside: `ApplyGemPick` returns a bool so Apply-Set stops counting
+  aborted slots as changed (it used to journal "5 slot(s) changed" for a run
+  that wrote nothing, and overwrite the per-slot error text with a success
+  line); `ResolveGemEndurance` now returns `null` rather than 65535 when the
+  iteminfo bridge failed to load, and the write is refused — collapsing
+  "catalog unloaded" into "unknown key" silently reinstated the blanket
+  sentinel on *every* gem; the same-gem short-circuit no longer skips the
+  socket repair that `StateLabel` advertises; the count write clamps upward
+  so a stale mirror can't lower it; writes are gated on
+  `GetMutationVersion` (the Tools dialogs are non-modal over a live main
+  window sharing one loader, and a length-changing edit there shifts every
+  later element index — a stale row would have dropped a gem into an
+  innocent item); and error footers name the item instead of `ItemIndex`,
+  which is pinned to 0 for every locator-addressed equipped item.
+  **392 C# tests green, 0 skipped**. Also fixed `scripts/setup_python_env.ps1`, which pointed
+  maturin's `CARGO_TARGET_DIR` at `vendor/crimson-rs/target-py` — outside the
+  crate's `/target` gitignore, so every Python-env build left the vendor
+  clone dirty and `update_vendors.ps1` refused to refresh it (the vendor was
+  stranded two commits behind at 1.18's `e4261be`). Now `target/py`, inside
+  the ignored tree. Two reported UI defects fixed in the same pass: the
+  Apply-Set target dropdown ignored the grid filter (702 entries however
+  narrow the filter), and `ApplyGemSet` collected its slots from the
+  *filtered* `Sockets` view — so with a filter active it silently applied to
+  fewer slots than the set, or none. The dropdown now republishes in lockstep
+  with the filter and drops a selection the filter hides; the apply reads
+  `_allSockets`. The dialog's header and tooltips still described the old
+  "reset endurance to 65535" behaviour and were rewritten in all three
+  languages. **Socket editor now defaults to a wearable-items-only
+  view.** The save format hands a full 5-entry `_socketSaveDataList` to
+  items that are not equipment at all, so the raw list was two-thirds
+  props — on slot101, 702 items / 3,510 slots collapses to **237 items /
+  1,185 slots**, dropping Gold Bar ×59, ores, food, arrows and beetles
+  while keeping every weapon / armour / helmet / gloves / boots / ring /
+  earring / necklace / cloak / lantern / broom / mask. The
+  discriminator is gamedata's `equip_type_info != 0`, deliberately
+  **not** `use_socket` / `socket_valid_count` — gamedata forbids sockets
+  on rings, yet force-modding them works in-game, so a
+  socket-capability test would hide items the user legitimately edits.
+  It is a checkbox, not a rule: the point is signal-to-noise, and
+  nothing it hides becomes unreachable.
 
 - **2026-08-26 — game 2.00 alignment (first MAJOR bump; local, unreleased)**:
   Crimson Desert went 1.18 → **2.00**, the first major-version bump since the

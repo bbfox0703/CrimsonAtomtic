@@ -27,7 +27,7 @@
   <sys:String x:Key="SetGameInstallFolderInvalidBody">The selected folder doesn't contain the required asset file (0020\0.pamt). Pick the directory that contains the game's 0000\, 0020\, … pack groups — typically &lt;Steam library&gt;\steamapps\common\Crimson Desert or the Epic / asset folder you copied out for Game Pass.</sys:String>
   <sys:String x:Key="MenuRenameMercenary">Rename _Mercenary…</sys:String>
   <sys:String x:Key="MenuEditItemSockets">Edit Item _Sockets…</sys:String>
-  <sys:String x:Key="SocketEditorHeader">Per-slot Fill / Change / Clear. Endurance is reset to 65535 (max) on Fill + Change so a fresh greater gem doesn't inherit the old slot's worn value. _validSocketCount auto-bumps when you fill a slot whose index is past the item's current cap (so the slot becomes visible in-game). You can fill any slot the underlying list pre-allocates (typically up to 5), regardless of the gamedata-defined limit. Saves to file on next File → Save.</sys:String>
+  <sys:String x:Key="SocketEditorHeader">Per-slot Fill / Change / Clear. A gem is written with its own gamedata max_endurance — the exact value the game itself writes — so it starts at full durability. Filling a slot the item hasn't opened yet raises _validSocketCount first (creating the field on an item that has never had a socket opened), so the gem lands inside the opened window the engine accepts. You can fill any slot the underlying list pre-allocates (typically 5), regardless of the gamedata-defined limit. Saves to file on next File → Save.</sys:String>
   <sys:String x:Key="SocketEditorColBag">Bag</sys:String>
   <sys:String x:Key="SocketEditorColItem">Item</sys:String>
   <sys:String x:Key="SocketEditorColItemKey">ItemKey</sys:String>
@@ -39,8 +39,8 @@
   <sys:String x:Key="SocketEditorChangeGem">Change…</sys:String>
   <sys:String x:Key="SocketEditorFillGem">Fill…</sys:String>
   <sys:String x:Key="SocketEditorClearGem">Clear</sys:String>
-  <sys:String x:Key="SocketEditorChangeGemTip">Open the gem picker and overwrite this filled slot. Resets _currentEndurance to 65535 (max) so greater gems start fresh.</sys:String>
-  <sys:String x:Key="SocketEditorFillGemTip">Open the gem picker and fill this empty slot. Auto-bumps _validSocketCount on the parent item if needed so the slot becomes visible in-game.</sys:String>
+  <sys:String x:Key="SocketEditorChangeGemTip">Open the gem picker and overwrite this filled slot. _currentEndurance is reset to the new gem's own max_endurance, so it starts at full durability.</sys:String>
+  <sys:String x:Key="SocketEditorFillGemTip">Open the gem picker and fill this empty slot. Opens the slot first if the item hasn't opened it yet (raising _validSocketCount, or creating it), so the gem is visible in-game.</sys:String>
   <sys:String x:Key="SocketEditorClearGemTip">Demote this socket back to empty. Both _currentEndurance and _itemKey become absent; mask flips to [0x00].</sys:String>
   <sys:String x:Key="SocketEditorColState">State</sys:String>
   <sys:String x:Key="SocketEditorApplySetItemLabel">Apply set to:</sys:String>
@@ -48,6 +48,8 @@
   <sys:String x:Key="SocketEditorApplySetApply">Apply</sys:String>
   <sys:String x:Key="SocketEditorApplySetEditCustom">Edit custom sets…</sys:String>
   <sys:String x:Key="SocketEditorApplySetEditCustomTip">Define / rename the three user-custom gem sets. Saved to settings.json.</sys:String>
+  <sys:String x:Key="SocketEditorEquippableOnly">Wearable items only</sys:String>
+  <sys:String x:Key="SocketEditorEquippableOnlyTip">Show only items that can actually be worn — weapons, armour, helmets, gloves, boots, rings, earrings, necklaces, cloaks, lanterns, brooms, masks. The save format hands a full 5-slot socket list to gold bars, cups, arrows, food and other props too; unchecking shows those as well. This is about noise, not permission — the editor still lets you socket anything.</sys:String>
   <sys:String x:Key="SocketEditorFilterLabel">Filter:</sys:String>
   <sys:String x:Key="SocketEditorFilterWatermark">Type to filter — item name / bag / item key shows all 5 slots; gem name / gem key narrows to matching slots only…</sys:String>
 
@@ -786,9 +788,13 @@
   <sys:String x:Key="SocketApplySetFailed">Apply Set: {0} — commit failed after {1} slot(s): {2} (code {3}). Reload the save without writing to revert.</sys:String>
   <sys:String x:Key="SocketApplySetNoChange">Apply Set: {0} — no changes (every targeted slot already matches).</sys:String>
   <sys:String x:Key="JournalSocketApplySet">Applied set "{0}" to {1} — {2} slot(s) changed</sys:String>
+  <sys:String x:Key="SocketSnapshotStale">The save was modified in another window since this list was built, so the rows may no longer point at the items they name. Close and reopen Tools → Edit Item Sockets before editing.</sys:String>
+  <sys:String x:Key="SocketNoIteminfo">Game data (iteminfo) isn't loaded, so a gem's durability can't be read. Point the editor at the game install and reopen this dialog — writing a guessed durability makes the game reject the item's sockets.</sys:String>
+  <sys:String x:Key="JournalSocketApplySetPartial">Applied set "{0}" to {1} — {2} slot(s) changed, {3} failed</sys:String>
   <sys:String x:Key="SocketApplySetDone">Applied set "{0}" to {1}: {2} slot(s) changed.</sys:String>
   <sys:String x:Key="SocketSameGem">Same gem as current — no write performed.</sys:String>
   <sys:String x:Key="SocketApplyFailed">Apply failed ({0}, item {1}, socket {2}): {3}</sys:String>
+  <sys:String x:Key="SocketOpenFailed">Could not open socket {0} on {1}: {2} (code {3}). Gem not written.</sys:String>
   <sys:String x:Key="JournalSocketSet">Set gem in {0} socket {1} → {2}</sys:String>
   <sys:String x:Key="JournalSocketFilled">Filled gem in {0} socket {1} → {2}</sys:String>
   <sys:String x:Key="SocketSetDone">Set gem in {0} socket {1}: → {2}.</sys:String>

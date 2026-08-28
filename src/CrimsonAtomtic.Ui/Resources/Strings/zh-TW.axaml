@@ -34,7 +34,7 @@
   <sys:String x:Key="SetGameInstallFolderInvalidBody">所選資料夾不包含必要的素材檔 (0020\0.pamt)。請選擇包含遊戲 0000\、0020\、… 各個 pack group 的目錄 — 通常是 &lt;Steam library&gt;\steamapps\common\Crimson Desert，或是 Epic / 為 Game Pass 拷貝出來的素材資料夾。</sys:String>
   <sys:String x:Key="MenuRenameMercenary">傭兵改名(_M)…</sys:String>
   <sys:String x:Key="MenuEditItemSockets">編輯物品插槽(_S)…</sys:String>
-  <sys:String x:Key="SocketEditorHeader">逐插槽填入 / 變更 / 清除。Fill 與 Change 操作會將耐久 (Endurance) 重設為 65535 (最大值)，避免新鑲入的高階寶石繼承舊插槽的耗損值。當你填入一個索引超過物品目前上限的插槽數時，_validSocketCount 會自動上修 (讓該插槽在遊戲中可見)。底層 list 預先配置的任何插槽都可以填 (一般是 5 個)，不受遊戲資料定義的上限限制。改動會在下一次存檔時寫回。</sys:String>
+  <sys:String x:Key="SocketEditorHeader">逐插槽填入 / 變更 / 清除。寶石會以它自己在遊戲資料中的 max_endurance 寫入 —— 也就是遊戲本身會寫的值 —— 因此耐久度從全滿開始。填入尚未開啟的插槽時，會先上修 _validSocketCount (該物品從未開過孔時則建立這個欄位)，讓寶石落在引擎接受的已開孔範圍內。底層 list 預先配置的任何插槽都可以填 (一般是 5 個)，不受遊戲資料定義的上限限制。改動會在下一次存檔時寫回。</sys:String>
   <sys:String x:Key="SocketEditorColBag">背包</sys:String>
   <sys:String x:Key="SocketEditorColItem">物品</sys:String>
   <sys:String x:Key="SocketEditorColItemKey">ItemKey</sys:String>
@@ -46,8 +46,8 @@
   <sys:String x:Key="SocketEditorChangeGem">變更…</sys:String>
   <sys:String x:Key="SocketEditorFillGem">填入…</sys:String>
   <sys:String x:Key="SocketEditorClearGem">清除</sys:String>
-  <sys:String x:Key="SocketEditorChangeGemTip">開啟寶石選擇器，覆寫這個已填入的插槽。會將 _currentEndurance 重設為 65535 (最大值)，讓高階寶石從耐久度全滿開始。</sys:String>
-  <sys:String x:Key="SocketEditorFillGemTip">開啟寶石選擇器，填入這個空插槽。必要時會自動上修 _validSocketCount，讓該插槽在遊戲中可見。</sys:String>
+  <sys:String x:Key="SocketEditorChangeGemTip">開啟寶石選擇器，覆寫這個已填入的插槽。_currentEndurance 會重設為新寶石自己的 max_endurance，從耐久度全滿開始。</sys:String>
+  <sys:String x:Key="SocketEditorFillGemTip">開啟寶石選擇器，填入這個空插槽。若該插槽尚未開啟，會先開孔 (上修 _validSocketCount，或在從未開孔的物品上建立這個欄位)，讓插槽在遊戲中可見。</sys:String>
   <sys:String x:Key="SocketEditorClearGemTip">把這個插槽退回成空。_currentEndurance 和 _itemKey 都會變成 absent；mask 翻成 [0x00]。</sys:String>
   <sys:String x:Key="SocketEditorColState">狀態</sys:String>
   <sys:String x:Key="SocketEditorApplySetItemLabel">套用組合至：</sys:String>
@@ -55,6 +55,8 @@
   <sys:String x:Key="SocketEditorApplySetApply">套用</sys:String>
   <sys:String x:Key="SocketEditorApplySetEditCustom">編輯自訂組合…</sys:String>
   <sys:String x:Key="SocketEditorApplySetEditCustomTip">定義 / 重新命名三組使用者自訂的寶石組合。儲存至 settings.json。</sys:String>
+  <sys:String x:Key="SocketEditorEquippableOnly">只顯示可裝備</sys:String>
+  <sys:String x:Key="SocketEditorEquippableOnlyTip">只列出真正能穿戴的道具 —— 武器、防具、頭盔、手套、鞋子、戒指、耳環、項鍊、披風、提燈、掃把、面具。存檔格式連金條、杯盤、箭矢、食物等一般道具也都配了完整的 5 格插槽清單；取消勾選就會一併顯示。這只是降低雜訊，不是權限限制 —— 編輯器仍然允許你對任何道具鑲嵌。</sys:String>
   <sys:String x:Key="SocketEditorFilterLabel">篩選：</sys:String>
   <sys:String x:Key="SocketEditorFilterWatermark">輸入文字以篩選 — 物品名稱 / 背包 / item key 會顯示全部 5 個插槽；寶石名稱 / gem key 則只顯示符合的插槽…</sys:String>
 
@@ -788,9 +790,13 @@
   <sys:String x:Key="SocketApplySetFailed">套用組合：{0} — 在 {1} 個槽後提交失敗：{2}（代碼 {3}）。不寫入直接重新載入即可回復。</sys:String>
   <sys:String x:Key="SocketApplySetNoChange">套用組合：{0} — 無變更（每個目標槽都已相符）。</sys:String>
   <sys:String x:Key="JournalSocketApplySet">已將組合「{0}」套用到 {1} — 變更了 {2} 個槽</sys:String>
+  <sys:String x:Key="SocketSnapshotStale">自本列表建立之後，存檔已在其他視窗中被修改，因此這些列可能已不再指向它們所標示的道具。請先關閉並重新開啟「工具 → 編輯物品插槽」再進行編輯。</sys:String>
+  <sys:String x:Key="SocketNoIteminfo">遊戲資料 (iteminfo) 未載入，無法讀取寶石的耐久度。請將編輯器指向遊戲安裝目錄後重新開啟本對話框 —— 若寫入猜測的耐久度，遊戲會判定該物品的插槽資料不正確。</sys:String>
+  <sys:String x:Key="JournalSocketApplySetPartial">已將組合「{0}」套用到 {1} — 變更了 {2} 個槽，{3} 個失敗</sys:String>
   <sys:String x:Key="SocketApplySetDone">已將組合「{0}」套用到 {1}：變更了 {2} 個槽。</sys:String>
   <sys:String x:Key="SocketSameGem">與目前寶石相同 — 未執行寫入。</sys:String>
   <sys:String x:Key="SocketApplyFailed">套用失敗（{0}，道具 {1}，插槽 {2}）：{3}</sys:String>
+  <sys:String x:Key="SocketOpenFailed">無法開啟 {1} 的插槽 {0}：{2}（代碼 {3}）。未寫入寶石。</sys:String>
   <sys:String x:Key="JournalSocketSet">已設定 {0} 插槽 {1} 的寶石 → {2}</sys:String>
   <sys:String x:Key="JournalSocketFilled">已填入 {0} 插槽 {1} 的寶石 → {2}</sys:String>
   <sys:String x:Key="SocketSetDone">已設定 {0} 插槽 {1} 的寶石：→ {2}。</sys:String>

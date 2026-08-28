@@ -24,21 +24,24 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 ///   <item><b>Fill</b> (empty → gem): both <c>_currentEndurance</c> +
 ///     <c>_itemKey</c> promoted absent → present via
 ///     <see cref="ISaveLoader.SetScalarFieldsPresentBatch"/>. Endurance
-///     defaults to <see cref="DefaultGemEndurance"/> (max u16) so
-///     greater (durability-bearing) gems start fresh.</item>
+///     is the gem's own <c>iteminfo.max_endurance</c> — see
+///     <see cref="ResolveGemEndurance"/>.</item>
 ///   <item><b>Change</b> (filled → different gem): in-place
 ///     <see cref="ISaveLoader.SetScalarField"/> on <c>_itemKey</c> +
-///     <c>_currentEndurance</c> reset to max (durability fix for
-///     greater gems — v1 left the old slot's worn value in place).</item>
+///     <c>_currentEndurance</c> reset to the new gem's max (durability
+///     fix for greater gems — v1 left the old slot's worn value in
+///     place).</item>
 ///   <item><b>Clear</b> (filled → empty): both fields demoted to
 ///     absent via <see cref="ISaveLoader.SetScalarFieldsPresentBatch"/>.</item>
 /// </list>
-/// Filling a slot whose index is past the current <c>_validSocketCount</c>
-/// auto-bumps the count so the slot becomes visible in-game. Per the
-/// user's request, the dialog lets you fill <i>any</i> slot up to the
-/// underlying <c>_socketSaveDataList</c>'s actual capacity (the engine
-/// pre-allocates 5 slots for socket-capable items) regardless of the
-/// gamedata-defined limit, so CE-bypassed slots are accepted.
+/// Every Fill first makes sure the slot is actually <i>open</i> — see
+/// <see cref="TryEnsureSocketOpened"/>, which raises
+/// <c>_validSocketCount</c> or promotes it from absent, and aborts the
+/// gem write if it can't. Within that window the dialog lets you fill
+/// <i>any</i> slot up to the underlying <c>_socketSaveDataList</c>'s
+/// actual capacity (the engine pre-allocates 5 slots for socket-capable
+/// items) regardless of the gamedata-defined limit, so CE-bypassed
+/// slots are accepted.
 /// </para>
 /// <para>
 /// Out of scope: socket-count unlock for items that ship with
@@ -55,26 +58,43 @@ public sealed partial class SocketEditorViewModel : ObservableObject
 
     /// <summary>
     /// Field name carrying the durability for greater (durability-
-    /// bearing) gems. u16; we reset to <see cref="DefaultGemEndurance"/>
-    /// on every Fill / Change so a fresh gem doesn't inherit the
-    /// previous slot's worn value.
+    /// bearing) gems. u16; reset to the gem's own
+    /// <c>iteminfo.max_endurance</c> on every Fill / Change so a fresh
+    /// gem doesn't inherit the previous slot's worn value.
     /// </summary>
     private const string EnduranceFieldName = "_currentEndurance";
 
     /// <summary>
     /// u8 field on the parent <c>ItemSaveData</c> capturing how many of
     /// the slot list's entries are currently "open" (usable in-game).
-    /// Filling a slot whose index is &gt;= this value auto-bumps it.
+    /// <b>Absent</b> — not 0 — is how the game encodes "none opened
+    /// yet", so opening the first socket is a presence promotion.
+    /// Filling a slot whose index is &gt;= this value raises it; see
+    /// <see cref="TryEnsureSocketOpened"/>.
     /// </summary>
     private const string ValidSocketCountFieldName = "_validSocketCount";
 
     /// <summary>
-    /// Sentinel "fresh gem" endurance. u16 max == 65535. Safe for
-    /// both durability-bearing greater gems ("full durability") and
-    /// no-durability gems (engine ignores the value). Conservative
-    /// default until an upstream <c>iteminfo</c> getter for per-gem
-    /// <c>max_endurance</c> ships.
+    /// Fallback "fresh gem" endurance, used only when the gem key is
+    /// absent from <c>iteminfo</c> (CE-invented keys) or the iteminfo
+    /// bridge isn't loaded. Normally the value comes from
+    /// <see cref="ResolveGemEndurance"/>.
     /// </summary>
+    /// <remarks>
+    /// 65535 is <b>not</b> a generic "fresh gem" sentinel — it is
+    /// simply what <c>max_endurance</c> happens to be for the
+    /// durability-less gems. Every socket the game itself writes
+    /// carries <c>_currentEndurance == iteminfo.max_endurance</c> of
+    /// the gem: 65535 for durability-less gems, but <b>100</b> for the
+    /// "AbyssGear_*_Special" family (item keys 1002862 / 1002969..
+    /// 1002982). Verified across all 734 filled sockets (54 distinct
+    /// gems) in four live saves — the mapping is 1:1 with zero
+    /// exceptions, and no gem ever mixes 65535 with a real durability
+    /// value. Writing a
+    /// blanket 65535 puts a durability gem above its own cap, which the
+    /// engine rejects: the whole item's socket block reads back as
+    /// not-yet-opened in-game.
+    /// </remarks>
     public const ushort DefaultGemEndurance = 0xFFFF;
 
     /// <summary>
@@ -91,6 +111,22 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         "Item_Stat_AbyssGear_",
         "Item_Skill_AbyssGear_",
     ];
+
+    /// <summary>
+    /// Non-zero while a <see cref="ISaveLoader.RunDeferred"/> batch is
+    /// open. Inside one, a presence promotion leaves the promoted
+    /// field's decoded byte range stale until the commit re-decodes, so
+    /// <see cref="TryEnsureSocketOpened"/> has to avoid the in-place
+    /// scalar setter for a field it promoted in the same batch.
+    /// </summary>
+    private int _deferredDepth;
+
+    /// <summary>
+    /// The loader's mutation version as of the snapshot every
+    /// <see cref="SocketRow"/> was built from, kept in step with this
+    /// dialog's own writes. See <see cref="IsSnapshotStale"/>.
+    /// </summary>
+    private ulong _snapshotVersion;
 
     private readonly ISaveLoader _loader;
     private readonly LocalizationProvider _localization;
@@ -141,6 +177,31 @@ public sealed partial class SocketEditorViewModel : ObservableObject
 
     partial void OnSearchTextChanged(string? value) => ApplyFilter();
 
+    /// <summary>
+    /// When true (the default), only items that can actually be worn
+    /// are listed — see <see cref="SocketRow.IsEquippable"/>.
+    /// </summary>
+    /// <remarks>
+    /// The save hands a full 5-entry <c>_socketSaveDataList</c> to a
+    /// great many items that are not equipment at all, so the raw list
+    /// is dominated by gold bars, cups, arrows, water, carrots, cooking
+    /// oil, horse feed and other props — on the maintainer's slot101,
+    /// 789 of 1,543 socket-bearing rows. None of them can carry a gem
+    /// in any meaningful sense, and they bury the gear you came for.
+    /// <para>
+    /// Kept as a toggle rather than a hard rule, because "gamedata says
+    /// no but the engine accepts it" is a real and supported case here
+    /// — rings can't legitimately be socketed and force-modding them
+    /// works fine. The filter is about signal-to-noise, not permission,
+    /// so nothing it hides becomes unreachable.
+    /// </para>
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FilterCountText))]
+    private bool _equippableOnly = true;
+
+    partial void OnEquippableOnlyChanged(bool value) => ApplyFilter();
+
     /// <summary>Status-bar text reflecting filter state.</summary>
     public string FilterCountText
     {
@@ -151,11 +212,14 @@ public sealed partial class SocketEditorViewModel : ObservableObject
             {
                 return string.Empty;
             }
-            if (string.IsNullOrWhiteSpace(SearchText))
+            // Any active filter — text or equippable-only — makes the
+            // "N of M" form the honest one; saying "3,510 slot(s)" while
+            // showing 754 is what made the old readout misleading.
+            if (Sockets.Count == total)
             {
                 return $"{total} slot(s).";
             }
-            return $"{Sockets.Count} of {total} slot(s) match.";
+            return $"{Sockets.Count} of {total} slot(s) shown.";
         }
     }
 
@@ -182,36 +246,75 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     {
         Sockets.Clear();
         var needle = SearchText;
-        if (string.IsNullOrWhiteSpace(needle))
+        var hasNeedle = !string.IsNullOrWhiteSpace(needle);
+
+        // Pass 1: collect item identities whose parent matches the
+        // needle, so every slot of a matching item surfaces (including
+        // the empty, fillable ones).
+        HashSet<(int, int, int, int, int)>? matchedItems = null;
+        if (hasNeedle)
         {
+            matchedItems = new HashSet<(int, int, int, int, int)>();
             foreach (var row in _allSockets)
             {
-                Sockets.Add(row);
-            }
-            OnPropertyChanged(nameof(FilterCountText));
-            return;
-        }
-
-        // Pass 1: collect item identities whose parent matches.
-        var matchedItems = new HashSet<(int Block, int Bag, int Item)>();
-        foreach (var row in _allSockets)
-        {
-            if (row.MatchesItemFilter(needle))
-            {
-                matchedItems.Add((row.BlockIndex, row.BagIndex, row.ItemIndex));
+                if (row.MatchesItemFilter(needle!))
+                {
+                    matchedItems.Add(row.ItemIdentity);
+                }
             }
         }
 
-        // Pass 2: emit every row whose item matched OR whose gem matches.
+        // Pass 2: emit the survivors, collecting the visible items as we
+        // go so the Apply-Set dropdown narrows in lockstep with the grid.
+        var visibleItems = new HashSet<(int, int, int, int, int)>();
         foreach (var row in _allSockets)
         {
-            if (matchedItems.Contains((row.BlockIndex, row.BagIndex, row.ItemIndex))
-                || row.MatchesSocketFilter(needle))
+            if (EquippableOnly && !row.IsEquippable)
             {
-                Sockets.Add(row);
+                continue;
             }
+            if (hasNeedle
+                && !matchedItems!.Contains(row.ItemIdentity)
+                && !row.MatchesSocketFilter(needle!))
+            {
+                continue;
+            }
+            Sockets.Add(row);
+            visibleItems.Add(row.ItemIdentity);
         }
+        PublishApplySetTargets(visibleItems);
         OnPropertyChanged(nameof(FilterCountText));
+    }
+
+    /// <summary>
+    /// Republish <see cref="ApplySetTargets"/> from
+    /// <see cref="_allApplySetTargets"/>, keeping only the items in
+    /// <paramref name="visibleItems"/> (pass <c>null</c> for "no filter
+    /// — show everything").
+    /// </summary>
+    /// <remarks>
+    /// The dropdown has to track the grid's filter: with 702 items in a
+    /// generous save, picking the one you just filtered down to means
+    /// scrolling past every other item, which defeats the filter. If the
+    /// current <see cref="SelectedTarget"/> falls outside the new list it
+    /// is cleared, so Apply can never run against an item the user can't
+    /// see.
+    /// </remarks>
+    private void PublishApplySetTargets(HashSet<(int, int, int, int, int)>? visibleItems)
+    {
+        ApplySetTargets.Clear();
+        foreach (var t in _allApplySetTargets)
+        {
+            if (visibleItems is null || visibleItems.Contains(t.ItemIdentity))
+            {
+                ApplySetTargets.Add(t);
+            }
+        }
+        if (SelectedTarget is { } sel
+            && !ApplySetTargets.Contains(sel))
+        {
+            SelectedTarget = null;
+        }
     }
 
     /// <summary>
@@ -221,6 +324,14 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     /// option so the user picks an item, not a slot.
     /// </summary>
     public ObservableCollection<GemSetTargetItem> ApplySetTargets { get; } = new();
+
+    /// <summary>
+    /// Unfiltered snapshot behind <see cref="ApplySetTargets"/>, built
+    /// once in <see cref="BuildApplySetState"/>.
+    /// <see cref="PublishApplySetTargets"/> republishes the visible
+    /// subset from it on every filter change.
+    /// </summary>
+    private readonly List<GemSetTargetItem> _allApplySetTargets = new();
 
     /// <summary>Full gem-set catalog (built-in + user-custom).</summary>
     public ObservableCollection<GemSetOption> AvailableGemSets { get; } = new();
@@ -284,6 +395,9 @@ public sealed partial class SocketEditorViewModel : ObservableObject
             return null;
         }
         vm.BuildApplySetState(customSets);
+        // CollectViaAllItems fills Sockets unfiltered; apply the default
+        // equippable-only view before anything reads the counts.
+        vm.ApplyFilter();
         var filledCount = 0;
         foreach (var r in vm.Sockets) if (r.IsFilled) filledCount++;
         vm.StatusMessage = UiText.Format("SocketHeaderStatus",
@@ -306,22 +420,23 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     /// </summary>
     private void BuildApplySetState(IReadOnlyList<CustomGemSet>? customSets)
     {
-        // Distinct items: collapse SocketRows sharing the same physical
-        // (block, bag, item) tuple into one entry. Preserve insertion
+        // Distinct items: collapse SocketRows sharing the same
+        // SocketRow.ItemIdentity into one entry. Preserve insertion
         // order so the dropdown matches the user's mental scroll order
         // in the main DataGrid.
-        var seen = new HashSet<(int Block, int Bag, int Item)>();
+        var seen = new HashSet<(int, int, int, int, int)>();
         foreach (var r in Sockets)
         {
-            var triple = (r.BlockIndex, r.BagIndex, r.ItemIndex);
-            if (seen.Add(triple))
+            if (seen.Add(r.ItemIdentity))
             {
-                ApplySetTargets.Add(new GemSetTargetItem(
-                    r.BlockIndex, r.BagIndex, r.ItemIndex,
+                _allApplySetTargets.Add(new GemSetTargetItem(
+                    r.BlockIndex, r.InventoryListFieldIdx, r.BagIndex,
+                    r.ItemListFieldIdx, r.ItemIndex,
                     DisplayName: $"{r.BagLabel} · {r.ItemName} ({r.MaxSocketCount} slot{(r.MaxSocketCount == 1 ? "" : "s")})",
                     MaxSocketCount: r.MaxSocketCount));
             }
         }
+        PublishApplySetTargets(null);
         // Built-in sets.
         foreach (var bi in BuiltInGemSets.All)
         {
@@ -388,15 +503,25 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         }
         // Find every SocketRow for this target — iterate in
         // SocketIndex order so the per-slot apply maps cleanly.
+        // Walk _allSockets, not the filtered Sockets view. A gem-set
+        // apply addresses the whole item, and a filter that hides some
+        // of its slots (e.g. searching a gem name, which matches only
+        // the filled ones) must not silently reduce the set to the
+        // visible slots.
         var rows = new SortedDictionary<int, SocketRow>();
-        foreach (var r in Sockets)
+        foreach (var r in _allSockets)
         {
-            if (r.BlockIndex == target.BlockIndex
-                && r.BagIndex == target.BagIndex
-                && r.ItemIndex == target.ItemIndex)
+            if (r.ItemIdentity == target.ItemIdentity)
             {
                 rows[r.SocketIndex] = r;
             }
+        }
+        // Gate the whole batch once, up front: inside RunDeferred the
+        // version doesn't move, so the per-slot check can't see a
+        // concurrent edit that landed before we began.
+        if (rows.Count > 0 && RejectIfSnapshotStale(rows.Values.First()))
+        {
+            return;
         }
         var applyCount = Math.Min(set.GemKeys.Count, target.MaxSocketCount);
         var changed = 0;
@@ -415,20 +540,41 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         // and commits the partial progress (matches the pre-batch
         // partial-success UX). A commit-time MUTATION_INVALID surfaces
         // as the outer try/catch falling through to the error footer.
+        var failed = 0;
         try
         {
             _loader.RunDeferred(() =>
             {
-                for (var i = 0; i < applyCount; i++)
+                _deferredDepth++;
+                try
                 {
-                    if (!rows.TryGetValue(i, out var row)) continue;
-                    var newKey = set.GemKeys[i];
-                    if (row.IsFilled && row.CurrentGemKey == newKey)
+                    for (var i = 0; i < applyCount; i++)
                     {
-                        continue; // already what we want
+                        if (!rows.TryGetValue(i, out var row)) continue;
+                        var newKey = set.GemKeys[i];
+                        if (row.IsFilled && row.CurrentGemKey == newKey)
+                        {
+                            continue; // already what we want
+                        }
+                        // Count only what actually landed. ApplyGemPick
+                        // swallows its own failures (socket-open abort,
+                        // CrimsonSaveException) and returns false;
+                        // incrementing regardless used to report "N
+                        // slot(s) changed" for a run that wrote nothing,
+                        // and overwrite the per-slot error text with it.
+                        if (ApplyGemPick(row, newKey))
+                        {
+                            changed++;
+                        }
+                        else
+                        {
+                            failed++;
+                        }
                     }
-                    ApplyGemPick(row, newKey);
-                    changed++;
+                }
+                finally
+                {
+                    _deferredDepth--;
                 }
             });
         }
@@ -438,6 +584,24 @@ public sealed partial class SocketEditorViewModel : ObservableObject
                 "Apply Set: {0} — commit failed after {1} slot(s): {2} (code {3}). "
                 + "Reload the save without writing to revert.",
                 set.Label, changed, commitEx.Message, commitEx.ErrorCode);
+            return;
+        }
+        // The commit re-decoded, so every promoted field has a fresh
+        // byte range again.
+        foreach (var r in _allSockets)
+        {
+            r.ValidSocketCountRangeStale = false;
+        }
+        ResyncSnapshotVersion();
+        if (failed > 0)
+        {
+            // Leave the per-slot failure text from ApplyGemPick standing
+            // — it names the slot and the native error — and only add the
+            // tally in the journal.
+            _journal.Log(UiText.Get("JournalCatSockets", "Sockets"),
+                UiText.Format("JournalSocketApplySetPartial",
+                    "Applied set \"{0}\" to {1} — {2} slot(s) changed, {3} failed",
+                    set.Label, target.DisplayName, changed, failed));
             return;
         }
         if (changed == 0)
@@ -458,10 +622,10 @@ public sealed partial class SocketEditorViewModel : ObservableObject
 
     private static int CountDistinctItems(IEnumerable<SocketRow> rows)
     {
-        var seen = new HashSet<(int Block, int Bag, int Item)>();
+        var seen = new HashSet<(int, int, int, int, int)>();
         foreach (var r in rows)
         {
-            seen.Add((r.BlockIndex, r.BagIndex, r.ItemIndex));
+            seen.Add(r.ItemIdentity);
         }
         return seen.Count;
     }
@@ -480,7 +644,12 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     private void CollectViaAllItems()
     {
         var detailsCache = new Dictionary<uint, BlockDetails>();
-        foreach (var rec in _loader.ListAllItems(out _))
+        // Stamp the snapshot BEFORE the walk, not inside it: an empty
+        // item list would otherwise leave _snapshotVersion at 0 and make
+        // IsSnapshotStale permanently true.
+        var records = _loader.ListAllItems(out var version);
+        _snapshotVersion = version;
+        foreach (var rec in records)
         {
             if (!rec.HasSocketData) continue;
             if (!_localization.IsPlayerEditableItem(rec)) continue;
@@ -558,6 +727,7 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         DecodedFieldRow? socketListField = null;
         int validSocketCountFieldIdx = -1;
         byte currentValidSocketCount = 0;
+        var validSocketCountPresent = false;
         foreach (var f in item.Fields)
         {
             if (string.Equals(f.Name, ItemKeyFieldName, StringComparison.Ordinal)
@@ -574,6 +744,14 @@ public sealed partial class SocketEditorViewModel : ObservableObject
             else if (string.Equals(f.Name, ValidSocketCountFieldName, StringComparison.Ordinal))
             {
                 validSocketCountFieldIdx = f.FieldIndex;
+                // The game encodes "no socket has ever been opened" as
+                // the field being ABSENT, never as an explicit 0 — the
+                // value 0 does not occur once across the 5,556
+                // socket-capable items in the reference saves (5,278 of
+                // them have it absent). Presence therefore decides
+                // whether opening a socket is an in-place scalar write
+                // or an absent → present promotion.
+                validSocketCountPresent = f.Present;
                 if (f.Present
                     && TryParseScalarUInt(f.Value, out var vsc)
                     && vsc <= byte.MaxValue)
@@ -586,6 +764,10 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         {
             return;
         }
+        // One iteminfo lookup per item, not per slot. Unknown key or an
+        // unloaded bridge => treat as equippable so nothing disappears.
+        var isEquippable = _localization.LookupItemInfoSummary(itemKey) is not { } gd
+                           || gd.EquipTypeInfo != 0;
         var (itemNameEn, itemNameSecondary) = ResolveItemNames(_localization, itemKey);
         var itemName = FormatCombinedName(itemNameEn, itemNameSecondary);
         // Capture the per-element field indices once from the first
@@ -621,6 +803,8 @@ public sealed partial class SocketEditorViewModel : ObservableObject
                 validSocketCountFieldIdx: validSocketCountFieldIdx,
                 maxSocketCount: sockets.Count,
                 currentValidSocketCount: currentValidSocketCount,
+                validSocketCountPresent: validSocketCountPresent,
+                isEquippable: isEquippable,
                 bagLabel: bagLabel,
                 itemKey: itemKey,
                 itemName: itemName,
@@ -694,12 +878,46 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     /// <c>_validSocketCount</c> when the slot index is past the
     /// current count so the slot becomes visible in-game.
     /// </summary>
-    public void ApplyGemPick(SocketRow row, uint newGemKey)
+    public bool ApplyGemPick(SocketRow row, uint newGemKey)
     {
+        if (RejectIfSnapshotStale(row))
+        {
+            return false;
+        }
+        // Open the slot FIRST. A gem sitting at an index the item's
+        // _validSocketCount doesn't cover is a state the game never
+        // writes (all 734 filled sockets in the reference saves sit
+        // inside their item's opened window) and the engine
+        // rejects it — the item comes back with every socket sealed.
+        // Doing the count before the gem means a failure here leaves
+        // the save consistent instead of stranding an orphan gem.
+        //
+        // This runs BEFORE the same-gem short-circuit on purpose: a slot
+        // that is filled but sits outside the window is exactly what
+        // StateLabel flags as "bump on next edit", and re-picking the
+        // gem already there is the obvious way a user tries to trigger
+        // that repair.
+        if (!TryEnsureSocketOpened(row))
+        {
+            return false;
+        }
         if (row.IsFilled && newGemKey == row.CurrentGemKey)
         {
             StatusMessage = UiText.Get("SocketSameGem", "Same gem as current — no write performed.");
-            return;
+            return false;
+        }
+        // A gem must carry its own gamedata max_endurance. Without
+        // iteminfo we cannot know it, and guessing reinstates exactly the
+        // above-the-cap value that makes the engine reject the item — so
+        // refuse rather than write something plausible-looking.
+        if (ResolveGemEndurance(newGemKey) is not { } endurance)
+        {
+            row.LastError = "iteminfo not loaded — gem durability unknown";
+            StatusMessage = UiText.Get("SocketNoIteminfo",
+                "Game data (iteminfo) isn't loaded, so a gem's durability can't be read. "
+                + "Point the editor at the game install and reopen this dialog — writing a "
+                + "guessed durability makes the game reject the item's sockets.");
+            return false;
         }
         var pathToSocket = new[]
         {
@@ -707,7 +925,7 @@ public sealed partial class SocketEditorViewModel : ObservableObject
             new PathStep((uint)row.ItemListFieldIdx, (uint)row.ItemIndex),
             new PathStep((uint)row.SocketListFieldIdx, (uint)row.SocketIndex),
         };
-        var enduranceBytes = BitConverter.GetBytes(DefaultGemEndurance);
+        var enduranceBytes = BitConverter.GetBytes(endurance);
         var keyBytes = BitConverter.GetBytes(newGemKey);
 
         try
@@ -739,15 +957,14 @@ public sealed partial class SocketEditorViewModel : ObservableObject
                 _loader.SetScalarField(row.BlockIndex, pathToSocket,
                     row.EnduranceFieldIdx, enduranceBytes);
             }
-            MaybeBumpValidSocketCount(row);
         }
         catch (CrimsonSaveException ex)
         {
             StatusMessage = UiText.Format("SocketApplyFailed",
                 "Apply failed ({0}, item {1}, socket {2}): {3}",
-                row.BagLabel, row.ItemIndex, row.SocketIndex, ex.Message);
+                row.BagLabel, row.ItemName, row.SocketIndex, ex.Message);
             row.LastError = ex.Message;
-            return;
+            return false;
         }
         // Mirror state back so the row UI repaints and a follow-up
         // edit of the same slot routes through the "filled" branch
@@ -770,6 +987,8 @@ public sealed partial class SocketEditorViewModel : ObservableObject
                 row.ItemName, row.SocketIndex, newGemName)
             : UiText.Format("SocketFilledDone", "Filled gem in {0} socket {1}: → {2}.",
                 row.ItemName, row.SocketIndex, newGemName);
+        ResyncSnapshotVersion();
+        return true;
     }
 
     /// <summary>
@@ -780,7 +999,7 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     /// </summary>
     internal void ApplyClear(SocketRow row)
     {
-        if (!row.IsFilled)
+        if (!row.IsFilled || RejectIfSnapshotStale(row))
         {
             return;
         }
@@ -807,7 +1026,7 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         {
             StatusMessage = UiText.Format("SocketClearFailed",
                 "Clear failed ({0}, item {1}, socket {2}): {3}",
-                row.BagLabel, row.ItemIndex, row.SocketIndex, ex.Message);
+                row.BagLabel, row.ItemName, row.SocketIndex, ex.Message);
             row.LastError = ex.Message;
             return;
         }
@@ -820,25 +1039,132 @@ public sealed partial class SocketEditorViewModel : ObservableObject
                 row.ItemName, row.SocketIndex, prevName));
         StatusMessage = UiText.Format("SocketClearDone", "Cleared gem in {0} socket {1} (was {2}).",
             row.ItemName, row.SocketIndex, prevName);
+        ResyncSnapshotVersion();
     }
 
     /// <summary>
-    /// When the just-edited slot's index is &gt;= the parent item's
-    /// current <c>_validSocketCount</c>, bump that count so the slot
-    /// is visible in-game. No-op when the field is already absent
-    /// from the schema (older items without the field) or the slot
-    /// is within the existing window.
+    /// Make sure the parent item's <c>_validSocketCount</c> covers
+    /// <paramref name="row"/>'s slot index, so the slot is actually
+    /// open in-game. Returns <c>true</c> when the slot is (now) open
+    /// and the caller may write the gem.
     /// </summary>
-    private void MaybeBumpValidSocketCount(SocketRow row)
+    /// <remarks>
+    /// <para>
+    /// Two distinct starting states, and getting them confused is what
+    /// broke socket editing outright:
+    /// </para>
+    /// <list type="bullet">
+    ///   <item><b>Field present</b> (the item has had at least one
+    ///     socket opened): an in-place
+    ///     <see cref="ISaveLoader.SetScalarField"/> raising the u8 is
+    ///     enough.</item>
+    ///   <item><b>Field ABSENT</b> (a never-socketed item — the game's
+    ///     encoding for "zero opened sockets"; it never writes an
+    ///     explicit 0): the field has no byte range, so the in-place
+    ///     setter fails with <c>NOT_SCALAR (-12)</c> and the count
+    ///     stays absent. It has to be promoted absent → present via
+    ///     <see cref="ISaveLoader.SetScalarFieldPresent"/>.</item>
+    /// </list>
+    /// <para>
+    /// The old code only ever did the in-place write and swallowed the
+    /// failure into <c>row.LastError</c>, so every fill on a
+    /// never-socketed item produced a gem in a socket the engine
+    /// considers unopened. The game treats that as bad data and
+    /// re-seals every socket on the item.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// True when the save has been mutated by something other than this
+    /// dialog since its rows were built, so every row's
+    /// <c>(bag, item)</c> element index may now address a different item.
+    /// </summary>
+    /// <remarks>
+    /// The Tools dialogs are non-modal over a live main window sharing
+    /// one loader handle, and a length-changing edit there (Remove
+    /// Element, or an item clone) shifts every later element index in
+    /// the same list. Writing through a stale row would then open a
+    /// socket and drop a gem into an item the user never selected — the
+    /// exact filled-but-sealed shape this editor exists to avoid, on an
+    /// innocent item and with no error raised. So writes are gated
+    /// rather than attempted. Required by
+    /// vendor/crimson-rs/docs/save-mutation-version.md, which names the
+    /// socket editor specifically.
+    /// </remarks>
+    private bool IsSnapshotStale
+    {
+        get
+        {
+            if (_deferredDepth > 0)
+            {
+                // A deferred batch bumps the version once, at commit, so
+                // mid-batch there is nothing new to compare against.
+                return false;
+            }
+            try
+            {
+                return _loader.GetMutationVersion() != _snapshotVersion;
+            }
+            catch (InvalidOperationException)
+            {
+                return false; // save unloaded under us — nothing to guard
+            }
+        }
+    }
+
+    /// <summary>
+    /// Re-baseline <see cref="_snapshotVersion"/> after this dialog's own
+    /// write, so our mutations don't read as somebody else's.
+    /// </summary>
+    private void ResyncSnapshotVersion()
+    {
+        if (_deferredDepth > 0)
+        {
+            return; // the commit bumps once; resync happens after it
+        }
+        try
+        {
+            _snapshotVersion = _loader.GetMutationVersion();
+        }
+        catch (InvalidOperationException)
+        {
+            // Save unloaded — leave the baseline alone.
+        }
+    }
+
+    /// <summary>
+    /// Refuse a write against a stale snapshot and tell the user why.
+    /// </summary>
+    private bool RejectIfSnapshotStale(SocketRow row)
+    {
+        if (!IsSnapshotStale)
+        {
+            return false;
+        }
+        row.LastError = "save changed elsewhere — reopen this dialog";
+        StatusMessage = UiText.Get("SocketSnapshotStale",
+            "The save was modified in another window since this list was built, so the "
+            + "rows may no longer point at the items they name. Close and reopen "
+            + "Tools → Edit Item Sockets before editing.");
+        return true;
+    }
+
+    private bool TryEnsureSocketOpened(SocketRow row)
     {
         if (row.ValidSocketCountFieldIdx < 0)
         {
-            return; // schema doesn't carry the field
+            // Schema doesn't carry the field at all — nothing to
+            // maintain, and nothing we can check. Let the write through
+            // (matches the pre-existing permissive contract).
+            return true;
         }
-        var needed = (byte)Math.Min(byte.MaxValue, row.SocketIndex + 1);
-        if (row.CurrentValidSocketCount >= needed)
+        // Clamp UP only. The write is absolute, so without the Max a
+        // stale mirror (two dialogs open over one loader) could LOWER the
+        // count and strand already-installed gems outside the window.
+        var needed = (byte)Math.Max(
+            row.CurrentValidSocketCount, Math.Min(byte.MaxValue, row.SocketIndex + 1));
+        if (row.ValidSocketCountPresent && row.CurrentValidSocketCount >= needed)
         {
-            return;
+            return true;
         }
         var pathToItem = new[]
         {
@@ -847,28 +1173,96 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         };
         try
         {
-            _loader.SetScalarField(row.BlockIndex, pathToItem,
-                row.ValidSocketCountFieldIdx, new[] { needed });
-        }
-        catch (CrimsonSaveException)
-        {
-            // Best-effort: the slot edit already landed; failing the
-            // bump leaves the slot edited-but-invisible. Surface in
-            // the row's error column but don't fail the parent flow.
-            row.LastError = $"_validSocketCount bump failed; in-game may not show slot {row.SocketIndex}";
-            return;
-        }
-        // Propagate the new value to every row of the same item so
-        // subsequent edits don't re-bump.
-        foreach (var r in Sockets)
-        {
-            if (r.BlockIndex == row.BlockIndex
-                && r.BagIndex == row.BagIndex
-                && r.ItemIndex == row.ItemIndex)
+            if (!row.ValidSocketCountPresent)
             {
-                r.CurrentValidSocketCount = needed;
+                _loader.SetScalarFieldPresent(row.BlockIndex, pathToItem,
+                    row.ValidSocketCountFieldIdx, makePresent: true, new[] { needed });
+                // Inside a deferred batch the promotion leaves the field's
+                // decoded byte range at start == end == 0 until the commit
+                // re-decodes, so a later in-place raise would compute
+                // expected = 0 and fail LENGTH_MISMATCH. Remember that.
+                row.ValidSocketCountRangeStale = _deferredDepth > 0;
+            }
+            else if (row.ValidSocketCountRangeStale)
+            {
+                // Stale range: the in-place setter is unusable. The
+                // presence surface writes the value from init_bytes and
+                // never reads start/end, but present(1) on an already-
+                // present field is a documented no-op — so clear it
+                // first. Both halves stay inside the same deferred batch,
+                // so the save is never observably missing the field.
+                _loader.SetScalarFieldPresent(row.BlockIndex, pathToItem,
+                    row.ValidSocketCountFieldIdx, makePresent: false, ReadOnlySpan<byte>.Empty);
+                _loader.SetScalarFieldPresent(row.BlockIndex, pathToItem,
+                    row.ValidSocketCountFieldIdx, makePresent: true, new[] { needed });
+            }
+            else
+            {
+                _loader.SetScalarField(row.BlockIndex, pathToItem,
+                    row.ValidSocketCountFieldIdx, new[] { needed });
             }
         }
+        catch (CrimsonSaveException ex)
+        {
+            // Hard-fail the whole edit: writing the gem anyway would
+            // leave a filled socket outside the opened window, which is
+            // exactly the shape the engine rejects.
+            row.LastError = ex.Message;
+            StatusMessage = UiText.Format("SocketOpenFailed",
+                "Could not open socket {0} on {1}: {2} (code {3}). Gem not written.",
+                row.SocketIndex, $"{row.BagLabel} · {row.ItemName}", ex.Message, ex.ErrorCode);
+            return false;
+        }
+        // Propagate to every row of the same item so subsequent edits
+        // see the new count and don't re-write it. Walk _allSockets,
+        // not the filtered Sockets view: with a filter active the
+        // hidden rows of this same item would otherwise keep a stale
+        // "not present" flag and try to promote an already-present
+        // field on the next edit.
+        foreach (var r in _allSockets)
+        {
+            if (r.ItemIdentity == row.ItemIdentity)
+            {
+                r.CurrentValidSocketCount = needed;
+                r.ValidSocketCountPresent = true;
+                r.ValidSocketCountRangeStale = row.ValidSocketCountRangeStale;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// The <c>_currentEndurance</c> a freshly-socketed
+    /// <paramref name="gemKey"/> must carry: the gem's own
+    /// <c>iteminfo.max_endurance</c>. <c>null</c> means the iteminfo
+    /// bridge isn't loaded, so the value is <b>unknowable</b> and the
+    /// caller must refuse the write.
+    /// </summary>
+    /// <remarks>
+    /// Not a heuristic — every gem the game itself socketed across the
+    /// reference saves carries exactly this value (100 for the
+    /// "AbyssGear_*_Special" durability family, 65535 for the rest),
+    /// and a worn gem only ever sits <i>below</i> it (99 / 95 observed).
+    /// <para>
+    /// The null case matters: <c>LookupItemInfoSummary</c> returns null
+    /// both for an unknown key <i>and</i> for a catalog that never
+    /// loaded (<c>LocalizationProvider.TryBootstrapItemInfo</c> swallows
+    /// a parse failure), and the dialog opens either way. Collapsing the
+    /// two into <see cref="DefaultGemEndurance"/> would silently
+    /// reinstate the blanket 65535 this fix removed — on every gem at
+    /// once. So the catalog is checked separately, and only a genuinely
+    /// unknown key inside a loaded catalog (a CE-invented gem, where
+    /// there is no cap to respect) takes the fallback.
+    /// </para>
+    /// </remarks>
+    private ushort? ResolveGemEndurance(uint gemKey)
+    {
+        if (_localization.ItemCount == 0)
+        {
+            return null; // iteminfo bridge absent — value unknowable
+        }
+        return _localization.LookupItemInfoSummary(gemKey)?.MaxEndurance
+               ?? DefaultGemEndurance;
     }
 
     /// <summary>
@@ -967,6 +1361,8 @@ public sealed partial class SocketRow : ObservableObject
         int validSocketCountFieldIdx,
         int maxSocketCount,
         byte currentValidSocketCount,
+        bool validSocketCountPresent,
+        bool isEquippable,
         string bagLabel,
         uint itemKey,
         string itemName,
@@ -989,6 +1385,8 @@ public sealed partial class SocketRow : ObservableObject
         ValidSocketCountFieldIdx = validSocketCountFieldIdx;
         MaxSocketCount = maxSocketCount;
         _currentValidSocketCount = currentValidSocketCount;
+        _validSocketCountPresent = validSocketCountPresent;
+        IsEquippable = isEquippable;
         BagLabel = bagLabel;
         ItemKey = itemKey;
         ItemName = itemName;
@@ -1107,6 +1505,32 @@ public sealed partial class SocketRow : ObservableObject
     public int ValidSocketCountFieldIdx { get; }
     public int MaxSocketCount { get; }
 
+    /// <summary>
+    /// Whether the parent item can actually be worn — gamedata's
+    /// <c>equip_type_info != 0</c>, i.e. it belongs to some equipment
+    /// slot family. Drives
+    /// <see cref="SocketEditorViewModel.EquippableOnly"/>.
+    /// </summary>
+    /// <remarks>
+    /// <c>equip_type_info</c> is the right discriminator here and
+    /// <c>use_socket</c> / <c>socket_valid_count</c> are the wrong ones:
+    /// gamedata forbids sockets on rings, yet force-modding them works
+    /// in-game, so a socket-capability test would drop items the user
+    /// legitimately wants to edit. Measured on the maintainer's slot101,
+    /// this splits the 1,543 socket-bearing rows into 754 wearable and
+    /// 789 not — the latter being gold bars, cups, arrows, water,
+    /// carrots, cooking oil and horse feed. Verified not to drop any
+    /// wearable class: the only <c>equip_type_info == 0</c> items whose
+    /// names look like gear are recipe books, notice papers and
+    /// collectibles (<c>CraftingRecipe_*</c>, <c>NoticePaper_*</c>,
+    /// <c>Collection_Prop_*</c>).
+    /// <para>
+    /// Defaults to <c>true</c> when iteminfo can't answer, so a missing
+    /// gamedata bridge shows everything rather than an empty list.
+    /// </para>
+    /// </remarks>
+    public bool IsEquippable { get; }
+
     public string BagLabel { get; }
     public uint ItemKey { get; }
     public string ItemName { get; }
@@ -1131,6 +1555,48 @@ public sealed partial class SocketRow : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StateLabel))]
     private byte _currentValidSocketCount;
+
+    /// <summary>
+    /// The full descent path down to the parent <c>ItemSaveData</c> —
+    /// the only tuple that identifies an item uniquely.
+    /// </summary>
+    /// <remarks>
+    /// <c>(BlockIndex, BagIndex, ItemIndex)</c> alone is <b>not</b>
+    /// unique: a single top-level block can host several item lists,
+    /// and the equipped list (<c>_list</c>) and the quick-use reserve
+    /// list both address their first item as bag 0 / item 0. On the
+    /// maintainer's slot101 that collapses 21 distinct items onto 10
+    /// keys. Collapsing them is not cosmetic — it lets an Apply-Set
+    /// write gems into an item the user never selected, and it lets a
+    /// socket-count update on one item mark a *different* item as
+    /// already-opened, which is exactly the state the engine rejects.
+    /// Including both descent field indices makes the key collision-free.
+    /// </remarks>
+    public (int Block, int ListField, int Bag, int ItemField, int Item) ItemIdentity =>
+        (BlockIndex, InventoryListFieldIdx, BagIndex, ItemListFieldIdx, ItemIndex);
+
+    /// <summary>
+    /// Whether the parent item's <c>_validSocketCount</c> field is
+    /// <b>present</b> in the save. Absent is the game's encoding for
+    /// "no socket ever opened" — it never writes an explicit 0 — so
+    /// this is what decides between an in-place scalar write and an
+    /// absent → present promotion when opening a slot. See
+    /// <see cref="SocketEditorViewModel.TryEnsureSocketOpened"/>.
+    /// </summary>
+    [ObservableProperty]
+    private bool _validSocketCountPresent;
+
+    /// <summary>
+    /// Set when this item's <c>_validSocketCount</c> was promoted
+    /// absent → present <b>inside an open deferred batch</b>, which
+    /// leaves its decoded byte range at <c>start == end == 0</c> until
+    /// the commit re-decodes. While that holds, the in-place scalar
+    /// setter rejects a write to it with <c>LENGTH_MISMATCH</c>, so
+    /// <see cref="SocketEditorViewModel.TryEnsureSocketOpened"/> must
+    /// raise the count through the presence surface instead.
+    /// </summary>
+    [ObservableProperty]
+    private bool _validSocketCountRangeStale;
 
     [ObservableProperty]
     private uint? _appliedGemKey;
@@ -1218,10 +1684,22 @@ public sealed partial class SocketRow : ObservableObject
 /// </summary>
 public sealed record GemSetTargetItem(
     int BlockIndex,
+    int InventoryListFieldIdx,
     int BagIndex,
+    int ItemListFieldIdx,
     int ItemIndex,
     string DisplayName,
-    int MaxSocketCount);
+    int MaxSocketCount)
+{
+    /// <summary>
+    /// Same collision-free item key as
+    /// <see cref="SocketRow.ItemIdentity"/> — routing an Apply-Set on
+    /// the bare <c>(block, bag, item)</c> triple would splash the set
+    /// onto a second, unrelated item sharing that triple.
+    /// </summary>
+    public (int Block, int ListField, int Bag, int ItemField, int Item) ItemIdentity =>
+        (BlockIndex, InventoryListFieldIdx, BagIndex, ItemListFieldIdx, ItemIndex);
+}
 
 /// <summary>
 /// Apply-Set "gem set" dropdown row. <see cref="DisplayName"/> is
