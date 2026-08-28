@@ -90,7 +90,14 @@ Write-Host "Building crimson_rs Python module from vendor/crimson-rs..." -Foregr
 # every c_abi P/Invoke failing with EntryPointNotFoundException (hit for real
 # at the 1.18 alignment). Separate dirs also stop the two feature sets from
 # forcing a full recompile of each other on every alternation.
-$PyTargetDir = Join-Path $VendorRs "target-py"
+#
+# It MUST be nested under crimson-rs's own `target/`: that path is covered by
+# the crate's `/target` .gitignore entry, so the build output stays invisible
+# to `git status` inside the vendor clone. A sibling dir (the earlier
+# `target-py/`) is untracked-but-not-ignored, which makes
+# vendor/update_vendors.ps1's dirty-tree guard refuse to refresh the vendor
+# until it is deleted by hand.
+$PyTargetDir = Join-Path $VendorRs "target\py"
 Push-Location $VendorRs
 $PrevTargetDir = $env:CARGO_TARGET_DIR
 try {
