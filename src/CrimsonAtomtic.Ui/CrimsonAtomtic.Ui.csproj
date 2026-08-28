@@ -44,7 +44,7 @@
     <!-- ============================================================ -->
     <VerMajor>2</VerMajor>
     <VerMinor>0</VerMinor>
-    <VerPatch>1</VerPatch>
+    <VerPatch>2</VerPatch>
     <BuildNumberFile>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\build_number.txt'))</BuildNumberFile>
     <VerBuild Condition="Exists('$(BuildNumberFile)')">$([System.IO.File]::ReadAllText('$(BuildNumberFile)').Trim())</VerBuild>
     <VerBuild Condition="'$(VerBuild)' == ''">0</VerBuild>
