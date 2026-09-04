@@ -14,14 +14,20 @@ the dependency state explicit and easy to reproduce.
 
 The single vendored dep is `crimson-rs`, **our own fork**. It is not
 published to PyPI or crates.io and we don't intend to publish it. The
-canonical source-of-truth lives at `D:\Github\crimson-rs`; this vendor
-folder is a refreshable snapshot.
+canonical source-of-truth is `bbfox0703/crimson-rs` on GitHub (developed locally
+at `D:\Github\crimson-rs`, landed on `main` via PR); this vendor folder is a
+refreshable snapshot of that `main`, and CI clones the same branch fresh.
+
+## Only clones live here
+
+`vendor/<name>/` is a **pristine clone and nothing else** - do not park project
+data beside it. Local game saves belong in `data/_saves/`, not `vendor/`.
 
 ## What is here
 
 | Name         | Source                  | Branch | Purpose                                                |
 | ------------ | ----------------------- | ------ | ------------------------------------------------------ |
-| `crimson-rs` | `D:\Github\crimson-rs`  | `dev`  | Rust core: PABGB / PAZ / PALOC parse, ChaCha20, etc.   |
+| `crimson-rs` | `bbfox0703/crimson-rs`  | `main` | Rust core: PABGB / PAZ / PALOC parse, ChaCha20, etc.   |
 
 ## Refreshing
 
@@ -33,15 +39,19 @@ folder is a refreshable snapshot.
 What it does:
 
 1. For each entry in the script's `$Vendors` table:
-   - If the target folder is missing → `git clone` from the local source path.
+   - If the target has no `.git` of its own → `git clone` from the source.
    - Otherwise → `git fetch origin && git checkout <branch> && git reset --hard origin/<branch>`.
 2. Refuses to discard uncommitted local changes unless `-Force` is passed.
+3. Verifies `git -C vendor/<name> rev-parse --show-toplevel` really is
+   `vendor/<name>` before mutating anything. A folder that exists but is not a
+   repo would otherwise make every `git -C` command walk up and hit the parent
+   project instead.
 
 ## Do not edit files inside `vendor/<name>/`
 
 If `crimson-rs` needs a change:
 
-1. Make and commit it in `D:\Github\crimson-rs`.
+1. Make and commit it in `D:\Github\crimson-rs`, then land it on `main`.
 2. Re-run `.\vendor\update_vendors.ps1` here.
 
 Otherwise the next vendor refresh will silently wipe your edits. The

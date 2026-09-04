@@ -457,6 +457,10 @@ dist/
 data/_mined/
 data/_raw/
 
+# Local copies of real game saves used while developing (never tracked).
+# Kept out of vendor/ - that folder is only for vendored dependency clones.
+data/_saves/
+
 # Save fixtures used for regression; tracked explicitly under tests/fixtures/
 # but not anywhere else
 **/save.save
