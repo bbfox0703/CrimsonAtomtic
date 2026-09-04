@@ -73,7 +73,23 @@ foreach ($v in $Vendors) {
         continue
     }
 
-    $exists = Test-Path $target
+    # A folder counts as an existing clone only when it holds its own .git.
+    # A leftover empty (or half-deleted) folder does NOT: every `git -C $target`
+    # below would then walk *up* and operate on the parent repository. That is
+    # exactly how this project's own origin/branches once got rewritten to
+    # crimson-rs. Treat such a folder as "not a clone" and clone into it.
+    $exists = Test-Path (Join-Path $target ".git")
+
+    if (-not $exists -and (Test-Path $target)) {
+        $leftover = @(Get-ChildItem -LiteralPath $target -Force -ErrorAction SilentlyContinue)
+        if ($leftover.Count -gt 0) {
+            Write-Warning "Target exists but is not a git clone, and is not empty."
+            Write-Warning "Refusing to touch it. Move or delete it, then re-run."
+            $failed += $name
+            continue
+        }
+        # Empty folder: git clone accepts it as the destination.
+    }
 
     if ($DryRun) {
         if ($exists) {
@@ -90,6 +106,17 @@ foreach ($v in $Vendors) {
             git clone --branch $branch -- "$source" "$target"
             if ($LASTEXITCODE -ne 0) { throw "git clone failed (exit $LASTEXITCODE)" }
         } else {
+            # Hard guard: never let `git -C` escape into a parent repository.
+            # Without this, a $target that is not itself a repo silently
+            # redirects fetch/checkout/reset --hard onto the parent project.
+            $top = git -C "$target" rev-parse --show-toplevel 2>$null
+            if ($LASTEXITCODE -ne 0 -or -not $top) { throw "not a git repository: $target" }
+            $topFull = (Resolve-Path -LiteralPath $top).Path
+            $wantFull = (Resolve-Path -LiteralPath $target).Path
+            if ($topFull -ne $wantFull) {
+                throw "refusing to run: 'git -C $target' resolves to '$topFull', not the vendor clone"
+            }
+
             # Safety: refuse to clobber uncommitted local changes
             $dirty = git -C "$target" status --porcelain
             if ($dirty -and -not $Force) {
