@@ -77,9 +77,22 @@ git push origin v1.10.01-fix
 
 1. CI builds the single-file AOT exe (links the freshly-cloned crimson-rs), zips
    `dist/win-x64`, writes a `.sha256`, and creates a **DRAFT** release with the notes.
-2. Download the zip from the draft (or the run artifact) and verify it loads against a
-   real save.
-3. Click **Publish release** in the GitHub UI — or, to redo, delete the draft + the tag,
+2. **Trim the notes to the bilingual highlights.** CI assembles
+   *tag message* + `## What's changed` + a compare link + a footer, but every published
+   release so far (v1.18.01, v2.00.01, v2.00.02, v2.01.01) carries **only**
+   `## Highlights` + `## 重點` — the auto sections are dropped, and the hard line
+   wrapping from the tag message is undone. Do it with:
+
+   ```sh
+   gh release edit v2.01.01 --notes-file notes-unwrapped.md
+   ```
+
+3. Download the zip from the draft (or the run artifact) and verify it loads against a
+   real save. Worth checking from the assets alone first: the `.sha256` matches, the zip
+   holds exactly four files with **no `crimson_rs.dll`** (the Rust core is linked into
+   the exe — see the staticlib pivot), and the exe's FileVersion is the expected
+   `<major>.<minor>.<patch>.<build>`.
+4. Click **Publish release** in the GitHub UI — or, to redo, delete the draft + the tag,
    fix, and re-tag.
 
 ## Undoing a tag

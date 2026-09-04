@@ -7,11 +7,28 @@
 > **[status-archive.md](status-archive.md)** — look there only when you need
 > the deep history behind a decision.
 >
-> Last updated: **2026-09-04** — the editor is aligned to game **2.01**.
-> **Not tagged or built yet**: `VerMinor` is bumped to 2.01.01 and the tree
-> is green, but no `v2.01.01` tag has been pushed, so nothing is published.
-> That is the next concrete task. The one standing loose end is unchanged:
-> crimson-rs still has no pushed version tags (see the crimson-rs bullet).
+> Last updated: **2026-09-04** — the editor is aligned to game **2.01**, and
+> **v2.01.01 is tagged and built**. The annotated tag points at `9e239c6`
+> (PR #36 merge); CI cloned crimson-rs `main` (`5dbeefb`, PR #93) fresh, built
+> the single-file AOT exe and created a **DRAFT** release. Verified from the
+> draft's own assets: sha256 matches, the zip holds exactly the four expected
+> files with **no `crimson_rs.dll`** (the Rust core is linked into the exe),
+> and the exe stamps `2.1.1.26` / product `2.1.1.26+9e239c6`. The release
+> notes were trimmed to the bilingual highlights only, matching v1.18.01 /
+> v2.00.01 / v2.00.02 — CI's auto `## What's changed` + footer are dropped at
+> publish time by convention. **The draft is not published**: that is the one
+> open item, and it wants a human load-a-real-save check first. The other
+> standing loose end is unchanged: crimson-rs still has no pushed version
+> tags (see the crimson-rs bullet).
+>
+> **The bug this release fixes had a green test suite.** Every individual
+> bridge had a live-install test, but nothing drove `LocalizationProvider` —
+> the production entry point — end to end, so "every extraction returns
+> NOT_FOUND because the archive layout moved" was invisible to CI. Closed by
+> `LocalizationProviderTests.Bootstrap_LiveInstall_ResolvesThroughWhicheverArchiveLayoutShips`,
+> which calls `TryBootstrapFromGameRoot` against the real install and asserts
+> iteminfo, the English PALOC, the language probe and a sibling table bridge
+> all resolved. Added after the tag — it changes no shipped code.
 >
 > **2.01 is a rename patch — and it broke the app outright.** Every gamedata
 > file moved (`gamedata/binary__/client/bin/<t>.pabgb`/`.pabgh` →
