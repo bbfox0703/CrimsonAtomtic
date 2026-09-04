@@ -92,7 +92,8 @@
   <sys:String x:Key="MenuUnlockMounts">解鎖坐騎 (符咒 + 龍)(_U)…</sys:String>
   <sys:String x:Key="MenuEditKnowledge">編輯知識 (依類別學習)(_K)…</sys:String>
   <sys:String x:Key="MenuEditFactionNodes">編輯勢力據點 (探索 / 設定狀態)(_F)…</sys:String>
-  <sys:String x:Key="MenuEditItemDyes">編輯物品染色(_D)…</sys:String>
+  <sys:String x:Key="MenuEditItemDyes">編輯物品染色(_D)…（2.01 尚未支援）</sys:String>
+  <sys:String x:Key="MenuEditItemDyesUnavailableTip">在紅漠（Crimson Desert）2.01 停用：每個染色槽位的 mask 從 3 bytes 擴大為 12 bytes，且內容已重新編碼。若依照舊格式讀取，約三分之一的槽位會顯示為空，並依錯誤資料寫回。等新的 mask 分組解析完成後會重新啟用。</sys:String>
   <sys:String x:Key="MenuVendorBuyback">商人回購清單(_V)…</sys:String>
   <sys:String x:Key="MenuReviewChanges">檢視待寫入的變更(_R)…</sys:String>
 

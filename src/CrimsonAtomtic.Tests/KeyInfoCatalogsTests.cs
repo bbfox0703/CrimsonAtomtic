@@ -27,29 +27,9 @@ namespace CrimsonAtomtic.Tests;
 /// </summary>
 public sealed class KeyInfoCatalogsTests
 {
-    private const string ItemInfoDirectory = "gamedata/binary__/client/bin";
-    private const string PalocDirectory    = "gamedata/stringtable/binary__";
-
-    private static string? FindGroupPamt(string group)
-    {
-        string[] candidates =
-        [
-            @"D:\SteamLibrary\steamapps\common\Crimson Desert",
-            @"C:\Program Files (x86)\Steam\steamapps\common\Crimson Desert",
-            @"C:\Program Files\Steam\steamapps\common\Crimson Desert",
-            @"E:\SteamLibrary\steamapps\common\Crimson Desert",
-            @"F:\SteamLibrary\steamapps\common\Crimson Desert",
-        ];
-        foreach (var root in candidates)
-        {
-            var p = Path.Combine(root, group, "0.pamt");
-            if (File.Exists(p))
-            {
-                return p;
-            }
-        }
-        return null;
-    }
+    // Archive directory + file extensions moved in 2.01, so tables are
+    // named by stem and resolved through LiveInstall.
+    private static string? FindGroupPamt(string group) => LiveInstall.FindGroupPamt(group);
 
     private static (NativePazExtractor Paz, string Group0008Pamt, string Group0020Pamt)? LiveOrSkip()
     {
@@ -60,10 +40,15 @@ public sealed class KeyInfoCatalogsTests
         return (new NativePazExtractor(), p0008, p0020);
     }
 
-    private static NativePalocCatalog LoadEnglishPaloc(NativePazExtractor paz, string p0020Pamt)
+    /// <summary>
+    /// English PALOC from group 0020 — one blob through 2.00, one file per
+    /// namespace from 2.01, so it comes back as the language's parts.
+    /// </summary>
+    private static PalocLanguage LoadEnglishPaloc(NativePazExtractor paz, string p0020Pamt)
     {
-        var bytes = paz.ExtractFile(p0020Pamt, PalocDirectory, "localizationstring_eng.paloc");
-        return NativePalocCatalog.LoadFromBytes(bytes);
+        var lang = LiveInstall.LoadPaloc(paz, p0020Pamt, "eng");
+        Assert.NotNull(lang);
+        return lang!;
     }
 
     // ── MissionInfo ─────────────────────────────────────────────────────────
@@ -75,7 +60,7 @@ public sealed class KeyInfoCatalogsTests
         if (live is null) return;
         var (paz, p0008, p0020) = live.Value;
 
-        var missionBytes = paz.ExtractFile(p0008, ItemInfoDirectory, "missioninfo.pabgb");
+        var missionBytes = LiveInstall.Body(paz, p0008, "missioninfo");
         using var cat = NativeMissionInfoCatalog.LoadFromBytes(missionBytes);
         Assert.True(cat.EntryCount > 1_000, $"expected >1k missions, got {cat.EntryCount}");
 
@@ -88,14 +73,17 @@ public sealed class KeyInfoCatalogsTests
         // Localized title via the hash hop. PALOC must be loaded.
         using var paloc = LoadEnglishPaloc(paz, p0020);
         Assert.Equal("Where the Wind Guides You",
-                     cat.LookupDisplayName(1000083, paloc));
+                     paloc.Display(part => cat.LookupDisplayName(1000083, part)));
 
-        // Also verify the very first prologue tutorial — second ground-truth row.
-        Assert.Equal("Unfamiliar Lands", cat.LookupDisplayName(1000157, paloc));
+        // Also verify the very first prologue tutorial — second ground-truth
+        // row. 2.01 reworded it "Unfamiliar Lands" -> "Unfamiliar Land"; a
+        // game-side text edit, not a parse drift (the 25-character title
+        // above resolves through the identical path and is unchanged).
+        Assert.Equal("Unfamiliar Land", paloc.Display(part => cat.LookupDisplayName(1000157, part)));
 
         // NOT_FOUND on an obviously invalid key.
         Assert.Null(cat.LookupStringKey(uint.MaxValue));
-        Assert.Null(cat.LookupDisplayName(uint.MaxValue, paloc));
+        Assert.Null(paloc.Display(part => cat.LookupDisplayName(uint.MaxValue, part)));
     }
 
     // ── QuestInfo (arc / region headings via lo32 = 0x100) ──────────────────
@@ -107,7 +95,7 @@ public sealed class KeyInfoCatalogsTests
         if (live is null) return;
         var (paz, p0008, _) = live.Value;
 
-        var bytes = paz.ExtractFile(p0008, ItemInfoDirectory, "questinfo.pabgb");
+        var bytes = LiveInstall.Body(paz, p0008, "questinfo");
         using var cat = NativeQuestInfoCatalog.LoadFromBytes(bytes);
         Assert.True(cat.EntryCount > 0);
         // We don't pin a specific quest-arc heading here because the
@@ -127,7 +115,7 @@ public sealed class KeyInfoCatalogsTests
         if (live is null) return;
         var (paz, p0008, _) = live.Value;
 
-        var bytes = paz.ExtractFile(p0008, ItemInfoDirectory, "stageinfo.pabgb");
+        var bytes = LiveInstall.Body(paz, p0008, "stageinfo");
         using var cat = NativeStageInfoCatalog.LoadFromBytes(bytes);
         // 57,094 identifiers per the upstream session.
         Assert.True(cat.EntryCount > 10_000,
@@ -144,7 +132,7 @@ public sealed class KeyInfoCatalogsTests
         if (live is null) return;
         var (paz, p0008, p0020) = live.Value;
 
-        var bytes = paz.ExtractFile(p0008, ItemInfoDirectory, "knowledgeinfo.pabgb");
+        var bytes = LiveInstall.Body(paz, p0008, "knowledgeinfo");
         using var cat = NativeKnowledgeInfoCatalog.LoadFromBytes(bytes);
         Assert.True(cat.EntryCount > 1_000,
                     $"expected >1k knowledge entries, got {cat.EntryCount}");
@@ -156,7 +144,7 @@ public sealed class KeyInfoCatalogsTests
                      cat.LookupStringKey(1002588));
         using var paloc = LoadEnglishPaloc(paz, p0020);
         Assert.Equal("Demenissian Ruins",
-                     cat.LookupDisplayName(1002588, paloc));
+                     paloc.Display(part => cat.LookupDisplayName(1002588, part)));
     }
 
     // ── QuestGaugeInfo (no PALOC chain) ─────────────────────────────────────
@@ -168,7 +156,7 @@ public sealed class KeyInfoCatalogsTests
         if (live is null) return;
         var (paz, p0008, _) = live.Value;
 
-        var bytes = paz.ExtractFile(p0008, ItemInfoDirectory, "questgaugeinfo.pabgb");
+        var bytes = LiveInstall.Body(paz, p0008, "questgaugeinfo");
         using var cat = NativeQuestGaugeInfoCatalog.LoadFromBytes(bytes);
         Assert.True(cat.EntryCount > 0);
         Assert.Null(cat.LookupStringKey(uint.MaxValue));
@@ -183,8 +171,8 @@ public sealed class KeyInfoCatalogsTests
         if (live is null) return;
         var (paz, p0008, _) = live.Value;
 
-        var pabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "skill.pabgh");
-        var pabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "skill.pabgb");
+        var pabgh = LiveInstall.Header(paz, p0008, "skill");
+        var pabgb = LiveInstall.Body(paz, p0008, "skill");
         using var cat = NativeSkillInfoCatalog.LoadFromBytes(pabgh, pabgb);
         // Upstream reports ~280 skills on 1.06.
         Assert.True(cat.EntryCount > 100,
@@ -201,7 +189,7 @@ public sealed class KeyInfoCatalogsTests
         if (live is null) return;
         var (paz, p0008, p0020) = live.Value;
 
-        var bytes = paz.ExtractFile(p0008, ItemInfoDirectory, "gimmickinfo.pabgb");
+        var bytes = LiveInstall.Body(paz, p0008, "gimmickinfo");
         using var cat = NativeGimmickInfoCatalog.LoadFromBytes(bytes);
         Assert.True(cat.EntryCount > 1_000,
                     $"expected >1k gimmicks, got {cat.EntryCount}");
@@ -211,7 +199,7 @@ public sealed class KeyInfoCatalogsTests
         // dispatch path; here we just smoke-test the bridge surface.
         using var paloc = LoadEnglishPaloc(paz, p0020);
         Assert.Null(cat.LookupStringKey(uint.MaxValue));
-        Assert.Null(cat.LookupDisplayName(uint.MaxValue, paloc));
+        Assert.Null(paloc.Display(part => cat.LookupDisplayName(uint.MaxValue, part)));
     }
 
     // ── CharacterInfo (cat-byte lo24 strip, PALOC chain at lo32=0x30) ───────
@@ -223,7 +211,7 @@ public sealed class KeyInfoCatalogsTests
         if (live is null) return;
         var (paz, p0008, p0020) = live.Value;
 
-        var bytes = paz.ExtractFile(p0008, ItemInfoDirectory, "characterinfo.pabgb");
+        var bytes = LiveInstall.Body(paz, p0008, "characterinfo");
         using var cat = NativeCharacterInfoCatalog.LoadFromBytes(bytes);
         Assert.True(cat.EntryCount > 100,
                     $"expected >100 character entries, got {cat.EntryCount}");
@@ -235,7 +223,7 @@ public sealed class KeyInfoCatalogsTests
         // surfaces.
         using var paloc = LoadEnglishPaloc(paz, p0020);
         Assert.Null(cat.LookupStringKey(uint.MaxValue));
-        Assert.Null(cat.LookupDisplayName(uint.MaxValue, paloc));
+        Assert.Null(paloc.Display(part => cat.LookupDisplayName(uint.MaxValue, part)));
 
         // GetEntry: two-call enumerate. First entry must yield a
         // non-empty internal name + non-zero key. Past-end returns null
@@ -269,12 +257,12 @@ public sealed class KeyInfoCatalogsTests
                     "non-empty count should produce a non-empty buffer");
 
         // Step 2: load characterinfo + English PALOC.
-        var charBytes = paz.ExtractFile(p0008, ItemInfoDirectory, "characterinfo.pabgb");
+        var charBytes = LiveInstall.Body(paz, p0008, "characterinfo");
         using var cat = NativeCharacterInfoCatalog.LoadFromBytes(charBytes);
         using var paloc = LoadEnglishPaloc(paz, p0020);
 
         // Step 3: bogus key returns null cleanly (no throw).
-        var miss = cat.ResolvePortrait(uint.MaxValue, paloc, portraitBuf);
+        var miss = paloc.FirstOrDefault(part => cat.ResolvePortrait(uint.MaxValue, part, portraitBuf));
         Assert.Null(miss);
 
         // Step 4: surface check on a representative character. The
@@ -282,7 +270,7 @@ public sealed class KeyInfoCatalogsTests
         // "Damiane / 德米安" (a main-story NPC); she's the most likely
         // to have a portrait shipped. Accept either a hit or a null —
         // we only assert structure when the matcher returns a result.
-        var damiane = cat.ResolvePortrait(4, paloc, portraitBuf);
+        var damiane = paloc.FirstOrDefault(part => cat.ResolvePortrait(4, part, portraitBuf));
         if (damiane is { } m)
         {
             Assert.False(string.IsNullOrEmpty(m.Path),
@@ -301,7 +289,7 @@ public sealed class KeyInfoCatalogsTests
         if (live is null) return;
         var (paz, p0008, _) = live.Value;
 
-        var bytes = paz.ExtractFile(p0008, ItemInfoDirectory, "sublevelinfo.pabgb");
+        var bytes = LiveInstall.Body(paz, p0008, "sublevelinfo");
         using var cat = NativeSubLevelInfoCatalog.LoadFromBytes(bytes);
         Assert.True(cat.EntryCount > 0);
         Assert.Null(cat.LookupStringKey(uint.MaxValue));
@@ -316,8 +304,8 @@ public sealed class KeyInfoCatalogsTests
         if (live is null) return;
         var (paz, p0008, _) = live.Value;
 
-        var pabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "dyecolorgroupinfo.pabgb");
-        var pabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "dyecolorgroupinfo.pabgh");
+        var pabgb = LiveInstall.Body(paz, p0008, "dyecolorgroupinfo");
+        var pabgh = LiveInstall.Header(paz, p0008, "dyecolorgroupinfo");
         using var cat = NativeDyeColorGroupInfoCatalog.LoadFromBytes(pabgb, pabgh);
         // Upstream survey pinned 10 rows in 1.07.
         Assert.True(cat.EntryCount >= 5,
@@ -344,8 +332,8 @@ public sealed class KeyInfoCatalogsTests
         if (live is null) return;
         var (paz, p0008, _) = live.Value;
 
-        var pabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "dyecolorgroupinfo.pabgb");
-        var pabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "dyecolorgroupinfo.pabgh");
+        var pabgb = LiveInstall.Body(paz, p0008, "dyecolorgroupinfo");
+        var pabgh = LiveInstall.Header(paz, p0008, "dyecolorgroupinfo");
         using var cat = NativeDyeColorGroupInfoCatalog.LoadFromBytes(pabgb, pabgh);
 
         // Pick the first row's key as the test theme.
@@ -390,10 +378,8 @@ public sealed class KeyInfoCatalogsTests
         if (live is null) return;
         var (paz, p0008, _) = live.Value;
 
-        var pabgb = paz.ExtractFile(p0008, ItemInfoDirectory,
-                                     "partprefabdyetexturepalleteinfo.pabgb");
-        var pabgh = paz.ExtractFile(p0008, ItemInfoDirectory,
-                                     "partprefabdyetexturepalleteinfo.pabgh");
+        var pabgb = LiveInstall.Body(paz, p0008, "partprefabdyetexturepalleteinfo");
+        var pabgh = LiveInstall.Header(paz, p0008, "partprefabdyetexturepalleteinfo");
         using var cat = NativePartPrefabDyeTexturePalleteCatalog.LoadFromBytes(pabgb, pabgh);
         Assert.True(cat.EntryCount >= 5,
                     $"expected ≥5 palette rows, got {cat.EntryCount}");
@@ -421,10 +407,8 @@ public sealed class KeyInfoCatalogsTests
         if (live is null) return;
         var (paz, p0008, _) = live.Value;
 
-        var pabgb = paz.ExtractFile(p0008, ItemInfoDirectory,
-                                     "partprefabdyeslotinfo.pabgb");
-        var pabgh = paz.ExtractFile(p0008, ItemInfoDirectory,
-                                     "partprefabdyeslotinfo.pabgh");
+        var pabgb = LiveInstall.Body(paz, p0008, "partprefabdyeslotinfo");
+        var pabgh = LiveInstall.Header(paz, p0008, "partprefabdyeslotinfo");
         using var cat = NativePartPrefabDyeSlotInfoCatalog.LoadFromBytes(pabgb, pabgh);
         // Upstream survey pinned 1,105 prefabs in 1.07.
         Assert.True(cat.EntryCount >= 100,
@@ -456,10 +440,8 @@ public sealed class KeyInfoCatalogsTests
         if (live is null) return;
         var (paz, p0008, _) = live.Value;
 
-        var pabgb = paz.ExtractFile(p0008, ItemInfoDirectory,
-                                     "partprefabdyeslotinfo.pabgb");
-        var pabgh = paz.ExtractFile(p0008, ItemInfoDirectory,
-                                     "partprefabdyeslotinfo.pabgh");
+        var pabgb = LiveInstall.Body(paz, p0008, "partprefabdyeslotinfo");
+        var pabgh = LiveInstall.Header(paz, p0008, "partprefabdyeslotinfo");
         using var cat = NativePartPrefabDyeSlotInfoCatalog.LoadFromBytes(pabgb, pabgh);
 
         // Every slot on every prefab has a well-defined extra-layer count
@@ -539,44 +521,44 @@ public sealed class KeyInfoCatalogsTests
         // LookupStringKey(known_key) == known_value assertions.
 
         // 1. HouseKey — 4 rows in 1.07.
-        var housePabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "houseinfo.pabgb");
-        var housePabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "houseinfo.pabgh");
+        var housePabgb = LiveInstall.Body(paz, p0008, "houseinfo");
+        var housePabgh = LiveInstall.Header(paz, p0008, "houseinfo");
         using var houseCat = NativeHouseInfoCatalog.LoadFromBytes(housePabgb, housePabgh);
         Assert.True(houseCat.EntryCount >= 4, $"expected ≥4 House entries, got {houseCat.EntryCount}");
         Assert.Equal("DefaultHouse_Lv1", houseCat.LookupStringKey(0x4247));
         Assert.Null(houseCat.LookupStringKey(uint.MaxValue));
 
         // 2. RoyalSupplyKey — 4 rows in 1.07.
-        var rsPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "royalsupply.pabgb");
-        var rsPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "royalsupply.pabgh");
+        var rsPabgb = LiveInstall.Body(paz, p0008, "royalsupply");
+        var rsPabgh = LiveInstall.Header(paz, p0008, "royalsupply");
         using var rsCat = NativeRoyalSupplyInfoCatalog.LoadFromBytes(rsPabgb, rsPabgh);
         Assert.True(rsCat.EntryCount >= 4, $"expected ≥4 RoyalSupply entries, got {rsCat.EntryCount}");
         Assert.Equal("RoyalSupply_Hernand", rsCat.LookupStringKey(0x4242));
 
         // 3. CraftToolKey — 17 rows in 1.07.
-        var ctPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "crafttoolinfo.pabgb");
-        var ctPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "crafttoolinfo.pabgh");
+        var ctPabgb = LiveInstall.Body(paz, p0008, "crafttoolinfo");
+        var ctPabgh = LiveInstall.Header(paz, p0008, "crafttoolinfo");
         using var ctCat = NativeCraftToolInfoCatalog.LoadFromBytes(ctPabgb, ctPabgh);
         Assert.True(ctCat.EntryCount >= 17, $"expected ≥17 CraftTool entries, got {ctCat.EntryCount}");
         Assert.Equal("CraftTool_Enchant", ctCat.LookupStringKey(28001));
 
         // 4. CraftToolGroupKey — 10 rows in 1.07.
-        var ctgPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "crafttoolgroupinfo.pabgb");
-        var ctgPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "crafttoolgroupinfo.pabgh");
+        var ctgPabgb = LiveInstall.Body(paz, p0008, "crafttoolgroupinfo");
+        var ctgPabgh = LiveInstall.Header(paz, p0008, "crafttoolgroupinfo");
         using var ctgCat = NativeCraftToolGroupInfoCatalog.LoadFromBytes(ctgPabgb, ctgPabgh);
         Assert.True(ctgCat.EntryCount >= 10, $"expected ≥10 CraftToolGroup entries, got {ctgCat.EntryCount}");
         Assert.Equal("CraftTool_Equip_Enchant", ctgCat.LookupStringKey(16960));
 
         // 5. TriggerRegionKey — 12 rows in 1.07.
-        var trPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "triggerregioninfo.pabgb");
-        var trPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "triggerregioninfo.pabgh");
+        var trPabgb = LiveInstall.Body(paz, p0008, "triggerregioninfo");
+        var trPabgh = LiveInstall.Header(paz, p0008, "triggerregioninfo");
         using var trCat = NativeTriggerRegionInfoCatalog.LoadFromBytes(trPabgb, trPabgh);
         Assert.True(trCat.EntryCount >= 12, $"expected ≥12 TriggerRegion entries, got {trCat.EntryCount}");
         Assert.Equal("Swamp", trCat.LookupStringKey(1000000));
 
         // 6. GamePlayVariableKey — 47 rows in 1.07.
-        var gpvPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "gameplayvariableinfo.pabgb");
-        var gpvPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "gameplayvariableinfo.pabgh");
+        var gpvPabgb = LiveInstall.Body(paz, p0008, "gameplayvariableinfo");
+        var gpvPabgh = LiveInstall.Header(paz, p0008, "gameplayvariableinfo");
         using var gpvCat = NativeGamePlayVariableInfoCatalog.LoadFromBytes(gpvPabgb, gpvPabgh);
         Assert.True(gpvCat.EntryCount >= 47, $"expected ≥47 GamePlayVariable entries, got {gpvCat.EntryCount}");
         Assert.Equal("CD_Live", gpvCat.LookupStringKey(1000041));
@@ -584,8 +566,8 @@ public sealed class KeyInfoCatalogsTests
         // 7. GlobalGameEventInfoKey — 103 rows in 1.07, 188 in 1.08.
         // Use a lower-bound rather than an exact count so the test
         // survives future game patches that add more events.
-        var ggePabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "globalgameevent.pabgb");
-        var ggePabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "globalgameevent.pabgh");
+        var ggePabgb = LiveInstall.Body(paz, p0008, "globalgameevent");
+        var ggePabgh = LiveInstall.Header(paz, p0008, "globalgameevent");
         using var ggeCat = NativeGlobalGameEventInfoCatalog.LoadFromBytes(ggePabgb, ggePabgh);
         Assert.True(ggeCat.EntryCount >= 103,
             $"expected ≥103 GlobalGameEvent entries, got {ggeCat.EntryCount}");
@@ -614,43 +596,43 @@ public sealed class KeyInfoCatalogsTests
         Assert.Null(ggeCat.LookupPalocKey(0xFFFFFFFFu));
 
         // 8. GlobalGameEventGroupKey — 7 rows in 1.07, 12 in 1.08.
-        var ggegPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "globalgameeventgroup.pabgb");
-        var ggegPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "globalgameeventgroup.pabgh");
+        var ggegPabgb = LiveInstall.Body(paz, p0008, "globalgameeventgroup");
+        var ggegPabgh = LiveInstall.Header(paz, p0008, "globalgameeventgroup");
         using var ggegCat = NativeGlobalGameEventGroupInfoCatalog.LoadFromBytes(ggegPabgb, ggegPabgh);
         Assert.True(ggegCat.EntryCount >= 7, $"expected ≥7 GlobalGameEventGroup entries, got {ggegCat.EntryCount}");
         Assert.Equal("WeatherEventGroup", ggegCat.LookupStringKey(0x4240));
 
         // 9. GameAdviceInfoKey — 461 rows in 1.07.
-        var gaPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "gameadviceinfo.pabgb");
-        var gaPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "gameadviceinfo.pabgh");
+        var gaPabgb = LiveInstall.Body(paz, p0008, "gameadviceinfo");
+        var gaPabgh = LiveInstall.Header(paz, p0008, "gameadviceinfo");
         using var gaCat = NativeGameAdviceInfoCatalog.LoadFromBytes(gaPabgb, gaPabgh);
         Assert.True(gaCat.EntryCount >= 461, $"expected ≥461 GameAdvice entries, got {gaCat.EntryCount}");
         Assert.Equal("Advice_Control_Move", gaCat.LookupStringKey(0x9cfd99b0));
 
         // 10. GameAdviceGroupKey — 8 rows in 1.07.
-        var gagPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "gameadvicegroupinfo.pabgb");
-        var gagPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "gameadvicegroupinfo.pabgh");
+        var gagPabgb = LiveInstall.Body(paz, p0008, "gameadvicegroupinfo");
+        var gagPabgh = LiveInstall.Header(paz, p0008, "gameadvicegroupinfo");
         using var gagCat = NativeGameAdviceGroupInfoCatalog.LoadFromBytes(gagPabgb, gagPabgh);
         Assert.True(gagCat.EntryCount >= 8, $"expected ≥8 GameAdviceGroup entries, got {gagCat.EntryCount}");
         Assert.Equal("GameAdviceGroup_ControlBasics", gagCat.LookupStringKey(1000008));
 
         // 11. ReserveSlotKey — 27 rows in 1.07.
-        var rsiPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "reserveslot.pabgb");
-        var rsiPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "reserveslot.pabgh");
+        var rsiPabgb = LiveInstall.Body(paz, p0008, "reserveslot");
+        var rsiPabgh = LiveInstall.Header(paz, p0008, "reserveslot");
         using var rsiCat = NativeReserveSlotInfoCatalog.LoadFromBytes(rsiPabgb, rsiPabgh);
         Assert.True(rsiCat.EntryCount >= 27, $"expected ≥27 ReserveSlot entries, got {rsiCat.EntryCount}");
         Assert.Equal("ArrowItem", rsiCat.LookupStringKey(1000000));
 
         // 12. RegionKey — 1,004 rows in 1.07.
-        var regPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "regioninfo.pabgb");
-        var regPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "regioninfo.pabgh");
+        var regPabgb = LiveInstall.Body(paz, p0008, "regioninfo");
+        var regPabgh = LiveInstall.Header(paz, p0008, "regioninfo");
         using var regCat = NativeRegionInfoCatalog.LoadFromBytes(regPabgb, regPabgh);
         Assert.True(regCat.EntryCount >= 1004, $"expected ≥1004 Region entries, got {regCat.EntryCount}");
         Assert.Equal("Region_Pywel", regCat.LookupStringKey(1));
 
         // 13. ItemGroupKey — 1,500 rows in 1.07.
-        var igPabgb = paz.ExtractFile(p0008, ItemInfoDirectory, "itemgroupinfo.pabgb");
-        var igPabgh = paz.ExtractFile(p0008, ItemInfoDirectory, "itemgroupinfo.pabgh");
+        var igPabgb = LiveInstall.Body(paz, p0008, "itemgroupinfo");
+        var igPabgh = LiveInstall.Header(paz, p0008, "itemgroupinfo");
         using var igCat = NativeItemGroupInfoCatalog.LoadFromBytes(igPabgb, igPabgh);
         Assert.True(igCat.EntryCount >= 1500, $"expected ≥1500 ItemGroup entries, got {igCat.EntryCount}");
         Assert.Equal("ItemGroup_Category_Equipment", igCat.LookupStringKey(18167));
@@ -665,7 +647,7 @@ public sealed class KeyInfoCatalogsTests
         if (live is null) return;
         var (paz, p0008, _) = live.Value;
 
-        var bytes = paz.ExtractFile(p0008, ItemInfoDirectory, "missioninfo.pabgb");
+        var bytes = LiveInstall.Body(paz, p0008, "missioninfo");
         var cat = NativeMissionInfoCatalog.LoadFromBytes(bytes);
         cat.Dispose();
         Assert.Throws<ObjectDisposedException>(() => cat.LookupStringKey(1000083));

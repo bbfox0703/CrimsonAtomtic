@@ -70,16 +70,30 @@ This narrows the C ABI surface we have to add: roughly a dozen functions, not th
 
 ## Extracting one file (cheat sheet)
 
+> **Paths moved in 2.01.** The gamedata tables live at
+> `gamedata/binarystaticinfo__/bin/<table>.staticinfobody` / `.staticinfoheader`
+> on 2.01+, and at `gamedata/binary__/client/bin/<table>.pabgb` / `.pabgh`
+> on 1.05 – 2.00; localization went from
+> `stringtable/binary__/localizationstring_<lang>.paloc` to
+> `stringtable/binary__/<lang>/<namespace>.paloc`. **Contents are identical
+> either way** — only the lookup path moved. Don't hardcode either shape:
+> resolve it through `tools/common/gamedata_layout.py` (Python) or
+> `GameDataLayout` (C#), both of which probe newest-first and fall back.
+
 From Python (already works today):
 
 ```python
 import crimson_rs
+from common.gamedata_layout import GAMEDATA_GROUP, resolve_bin_layout
+
+game_dir = "D:/SteamLibrary/steamapps/common/Crimson Desert"
+layout = resolve_bin_layout(game_dir)
 
 raw = crimson_rs.extract_file(
-    game_dir="D:/SteamLibrary/steamapps/common/Crimson Desert",
-    group="0008",
-    dir_path="gamedata/binary__/client/bin",
-    filename="iteminfo.pabgb",
+    game_dir=game_dir,
+    group=GAMEDATA_GROUP,
+    dir_path=layout.dir,
+    filename=layout.body("iteminfo"),
 )
 ```
 

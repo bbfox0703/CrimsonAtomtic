@@ -86,12 +86,15 @@ public sealed class LocalizationTypeByteDiscoveryTests(ITestOutputHelper output)
 
         // Extract the English PALOC and scan every entry.
         var extractor = new NativePazExtractor();
-        var bytes = extractor.ExtractFile(
-            pamt,
-            "gamedata/stringtable/binary__",
-            "localizationstring_eng.paloc");
-        using var cat = NativePalocCatalog.LoadFromBytes(bytes);
-        output.WriteLine($"PALOC entries: {cat.EntryCount:N0}");
+        using var eng = LiveInstall.LoadPaloc(extractor, pamt, "eng");
+        if (eng is null)
+        {
+            output.WriteLine("SKIP: no English PALOC in this install.");
+            return;
+        }
+        var cat = eng.Catalog;
+        output.WriteLine($"PALOC entries: {cat.EntryCount:N0}"
+                         + $" across {eng.PartCount} file(s)");
 
         // typeByte -> first 5 sample (upperKey, value) pairs + total count.
         var samplesByType = new Dictionary<byte, List<(uint Upper, string Value)>>();
@@ -265,9 +268,12 @@ public sealed class LocalizationTypeByteDiscoveryTests(ITestOutputHelper output)
         // Load English PALOC and build a (typeByte, upperKey) → value
         // lookup so probe queries are O(1).
         var extractor = new NativePazExtractor();
-        var palocBytes = extractor.ExtractFile(
-            pamt, "gamedata/stringtable/binary__", "localizationstring_eng.paloc");
-        using var cat = NativePalocCatalog.LoadFromBytes(palocBytes);
+        using var eng = LiveInstall.LoadPaloc(extractor, pamt, "eng");
+        if (eng is null)
+        {
+            return;
+        }
+        var cat = eng.Catalog;
         var byKey = new Dictionary<(byte TypeByte, uint Upper), string>(cat.EntryCount);
         for (var i = 0; i < cat.EntryCount; i++)
         {
@@ -398,9 +404,12 @@ public sealed class LocalizationTypeByteDiscoveryTests(ITestOutputHelper output)
         // Load PALOC + iteminfo so we can resolve item names just like
         // the UI does.
         var extractor = new NativePazExtractor();
-        var palocBytes = extractor.ExtractFile(
-            pamt, "gamedata/stringtable/binary__", "localizationstring_eng.paloc");
-        using var cat = NativePalocCatalog.LoadFromBytes(palocBytes);
+        using var eng = LiveInstall.LoadPaloc(extractor, pamt, "eng");
+        if (eng is null)
+        {
+            return;
+        }
+        var cat = eng.Catalog;
         var nameByItemKey = new Dictionary<uint, string>();
         for (var i = 0; i < cat.EntryCount; i++)
         {

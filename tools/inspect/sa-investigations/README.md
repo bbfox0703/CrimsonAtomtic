@@ -86,3 +86,11 @@ A future Pattern B v2 for multi-objective shapes would need:
 
 Both are out of scope for current work. Reference scripts stay here
 until someone picks that up.
+
+> **These scripts are pinned to the pre-2.01 archive layout** — they
+> hardcode `gamedata/binary__/client/bin/<table>.pabgb` and
+> `localizationstring_eng.paloc`, which 2.01 renamed. They will fail with
+> NOT_FOUND against a 2.01+ install. That is left as-is deliberately: they
+> are frozen probes from the 2026-05-17 investigation, not maintained
+> tools. Whoever revives them should route through
+> `tools/common/gamedata_layout.py` like `tools/analyze/` does.

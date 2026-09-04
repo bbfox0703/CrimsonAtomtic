@@ -7,13 +7,68 @@
 > **[status-archive.md](status-archive.md)** — look there only when you need
 > the deep history behind a decision.
 >
-> Last updated: **2026-08-28** — the editor is aligned to game **2.00**,
-> Crimson Desert's **first major version bump**, and **v2.00.02 is tagged,
-> built and PUBLISHED** (2026-08-28T07:33:26Z, marked Latest). It supersedes
-> v2.00.01 (published 2026-08-26T08:06:44Z). There is **no open release
-> work**; the next milestone is whenever the game ships its next patch. The
-> one standing loose end is unchanged: crimson-rs still has no pushed version
-> tags (see the crimson-rs bullet).
+> Last updated: **2026-09-04** — the editor is aligned to game **2.01**.
+> **Not tagged or built yet**: `VerMinor` is bumped to 2.01.01 and the tree
+> is green, but no `v2.01.01` tag has been pushed, so nothing is published.
+> That is the next concrete task. The one standing loose end is unchanged:
+> crimson-rs still has no pushed version tags (see the crimson-rs bullet).
+>
+> **2.01 is a rename patch — and it broke the app outright.** Every gamedata
+> file moved (`gamedata/binary__/client/bin/<t>.pabgb`/`.pabgh` →
+> `gamedata/binarystaticinfo__/bin/<t>.staticinfobody`/`.staticinfoheader`)
+> and each language's single `localizationstring_<lang>.paloc` blob became
+> one file per namespace under `stringtable/binary__/<lang>/`. **Not one byte
+> inside any file changed**, so no parser moved: Rust's only edit is
+> `PARSER_TARGET_GAMEDATA_MINOR` 0 → 1, and `CompatibleMinors = {1}` is the
+> target-only convention (2.00 data still parses byte-perfectly), not a real
+> incompatibility. But `LocalizationProvider` hardcoded the old directory and
+> all 40-odd filenames, so on a 2.01 install every bridge returned NOT_FOUND
+> and **no name resolved anywhere**. Both the app and the tests now go
+> through a new `GameDataLayout` (RustInterop): tables are named by *stem*
+> and the directory + extensions come from a newest-first probe of the
+> group-0008 manifest, so a kept pre-2.01 install still works. It mirrors
+> crimson-rs's `src/binary/gamedata_layout.rs`, which is `#[cfg(test)]` there
+> and therefore unreachable over the C ABI. Localization needed more than a
+> rename: `crimson_paloc_load_from_bytes` takes one blob, so a language is
+> held as its parts behind the new `MultiPalocCatalog`, and the
+> `*_lookup_display_name` bridges — each taking a single PALOC *native
+> handle* — are offered one part at a time (namespaces don't overlap, so at
+> most one answers). **395 C# tests green, 0 skipped** (45 were failing
+> against the live 2.01 install before this).
+>
+> **The Dye editor is greyed out.** 2.01 widened `partprefabdyeslotinfo`'s
+> per-slot `mask` 3 → **12** bytes *and re-encoded it* — in 5,572 of 6,555
+> comparable slot pairs the old three bytes appear nowhere as a contiguous
+> window inside the new twelve, so no sub-slice is the pre-2.01 field. The
+> twelve read as four groups of three and **which group a slot uses is not
+> yet RE'd**. Measured through the release dll over all 1,626 prefabs / 6,585
+> slots, the legacy 3-byte getter the editor calls reads all-zero on **2,196
+> slots (33.3%)** whose full field is non-zero — a third of the dye UI would
+> render blank and would write edits from that wrong reading. Foundation over
+> workaround: the menu item is disabled (reason in its tooltip, and
+> `MainWindowViewModel.IsDyeEditorAvailable` carries the measurement) until
+> the mask groups are decoded upstream and the editor moves to the new
+> `crimson_part_prefab_dye_slot_info_lookup_slot_{,extra_layer_}mask_full`
+> sized-buffer bridges. Nothing else about dyeing regressed — the table still
+> loads all 1,626 rows on 2.01.
+>
+> One soft pin moved, C# side only: `MissionKey 1000157`'s English title was
+> reworded **"Unfamiliar Lands" → "Unfamiliar Land"** — a game-side text
+> edit, not a parse drift (the 25-character `MissionKey 1000083` title
+> resolves unchanged through the identical path).
+>
+> **Also fixed this session (unrelated to 2.01):**
+> `vendor/update_vendors.ps1` could rewrite *this* repository. A leftover
+> `vendor/crimson-rs/` folder with no `.git` of its own passed the
+> `Test-Path` existence check, so every `git -C vendor/crimson-rs …` walked
+> up to the parent project — rewriting origin to `crimson-rs.git`, refetching
+> its refs and `reset --hard`-ing `main` onto crimson-rs's `main`. The script
+> now requires the target to hold its own `.git` and asserts
+> `rev-parse --show-toplevel` really resolves to the vendor path before any
+> mutating command. Local game saves also moved out of `vendor/` (which is
+> for dependency clones only) to `data/_saves/`.
+>
+> **Below this line is the 2.00 history, kept for context.**
 >
 > **v2.00.02 is a socket-editor correctness release** — no game-version
 > change, so only `VerPatch` moved (1 → 2). Socket editing was producing
@@ -147,27 +202,30 @@
   `CompatibleMinors` are all read from the crimson-rs C ABI
   (`crimson_parser_target_gamedata_major()` → 2;
   `crimson_parser_target_gamedata_minor()` → 0;
-  `crimson_parser_compatible_gamedata_minors()` → {0}) — not hand-coded.
-  Because 2.00 carries two real layout drifts, the warning shown to a 1.18
-  install is **substantive** (its iteminfo genuinely mis-decodes), not the
-  target-only convention it was at 1.14/1.15/1.17. Full per-version breakdown
-  in [game-versions.md](game-versions.md).
-- **crimson-rs 2.00 is on `main`, and vendored.** Merged to
-  `bbfox0703/crimson-rs` `main` (commit `0f2363b`, PR #91, merge `8e942d7`);
-  `vendor/update_vendors.ps1` (which tracks `main`) refreshed the local copy
-  to `8e942d7`, and `build_rust.ps1` rebuilt the c_abi cdylib from it. CI
-  clones `main`, so the v2.00.01 build shipped the 2.00 parser (CI cloned it
-  fresh at tag time). The land-on-`main`-before-tagging order was followed.
+  `crimson_parser_compatible_gamedata_minors()` → {1}) — not hand-coded.
+  2.01 is a **rename-only** patch, so the warning shown to a 2.00 install is
+  the target-only convention (2.00 data still parses byte-perfectly), unlike
+  the substantive 1.18 → 2.00 case. Full per-version breakdown in
+  [game-versions.md](game-versions.md).
+- **crimson-rs 2.01 is on `main`, and vendored.** Merged to
+  `bbfox0703/crimson-rs` `main` as PR #93 (merge `5dbeefb`), which also
+  carried PR #92's socket doc fix; `vendor/update_vendors.ps1` (which tracks
+  `main`) refreshed the local copy to `5dbeefb`, and `build_rust.ps1` rebuilt
+  the c_abi cdylib from it. CI clones `main`, so a `v2.01.01` tag would ship
+  the 2.01 parser (CI clones fresh at tag time). The
+  land-on-`main`-before-tagging order was followed.
   **Still no version tags**, now for 1.18 *and* 2.00: the `v1.0.10.x`–
   `v1.0.17.x` tags exist **only in the local clone** at
   `D:\Github\crimson-rs` — `git ls-remote --tags` against the fork returns
   **nothing**, so none were ever pushed. "Parity with 1.13–1.17" therefore
   means parity with local-only tags; decide whether to push the whole set,
   keep them local, or stop cutting them.
-- **Health:** full suite green this session (**382** C# tests, 0 skipped, 0
-  failures after the pin refresh — live-install + catalog tests parse the real
-  2.00 iteminfo, 6,810 items; the native lib was rebuilt from the vendored
-  2.00 crimson-rs so the ABI reports target major 2 / minor 0). The count went
+- **Health:** full suite green this session (**395** C# tests, 0 skipped, 0
+  failures — 45 of them were failing against the live 2.01 install before the
+  `GameDataLayout` rewire, all on the renamed archive paths. Live-install +
+  catalog tests parse the real 2.01 gamedata; the native lib was rebuilt from
+  the vendored 2.01 crimson-rs so the ABI reports target major 2 / minor 1).
+  The 2.00 count went
   381 → 382 because the 2.00 alignment added one test
   (`TryReadFromBytes_SameMinorUnderOtherMajor_FlagsIncompatible`). Two pin
   groups were red pre-fix: the `NativePaverReaderTests` version pins
@@ -190,6 +248,26 @@ mercenary-rename, browsers, 32 key-resolver bridges, …) is listed in the
 are in [status-archive.md](status-archive.md).
 
 ## Open work / backlog
+
+- **🔴 Dye editor is disabled on 2.01 — needs the mask-group RE.** 2.01
+  widened `partprefabdyeslotinfo`'s per-slot `mask` from 3 bytes to 12 and
+  **re-encoded the contents**: there is no "original three", so no sub-slice
+  of the new field is the pre-2.01 one. The twelve read as four groups of
+  three — exactly one group non-zero on 4,276 of 6,585 live slots, two on
+  1,254, three on 72, none on 983, never four — and **which group a given
+  slot uses is not yet reverse-engineered**. Until it is, the legacy
+  `..._lookup_slot_mask` / `..._lookup_slot_extra_layer_mask` bridges the
+  editor calls are a *partial* read: measured through the release dll over
+  all 1,626 prefabs / 6,585 slots, **2,196 slots (33.3%) come back all-zero
+  while the full field is non-zero**. The menu item is greyed out
+  (`MainWindowViewModel.IsDyeEditorAvailable`, reason in its tooltip) rather
+  than shipping an editor that renders a third of the UI blank and writes
+  edits from that reading. **To re-enable:** land the group-selection RE in
+  crimson-rs, move the C# bridge to the sized-buffer
+  `crimson_part_prefab_dye_slot_info_lookup_slot_{,extra_layer_}mask_full`
+  entry points (two-call: size with `buf_len = 0`, then fill), then flip the
+  flag. Upstream detail: `vendor/crimson-rs/docs/dye-editor-scope.md`,
+  "Cross-version drift (2.01)".
 
 - **✅ World Map parchment composite layer-alignment bug — OBSOLETE, not
   fixed.** This sat here as "still open" long after the code it describes was
@@ -471,6 +549,46 @@ Each step should be green. If anything fails, fix it before touching new code
 ## Session changelog (newest first)
 
 One line per milestone; full detail in [status-archive.md](status-archive.md).
+
+- **2026-09-04 — aligned to game 2.01 (rename patch); Dye editor greyed out; vendor script no longer eats this repo**:
+  2.01 moved every gamedata file without changing a byte inside it —
+  `gamedata/binary__/client/bin/<t>.pabgb`/`.pabgh` →
+  `gamedata/binarystaticinfo__/bin/<t>.staticinfobody`/`.staticinfoheader`,
+  and each language's single `localizationstring_<lang>.paloc` became one
+  file per namespace under `stringtable/binary__/<lang>/`. Rust needed only
+  `PARSER_TARGET_GAMEDATA_MINOR` 0 → 1 (vendored from `main`, PR #93, merge
+  `5dbeefb`), but the **app was hard-broken**: `LocalizationProvider`
+  hardcoded the old directory and all 40-odd filenames, so every bridge
+  returned NOT_FOUND on a 2.01 install and no name resolved anywhere — 45 of
+  395 tests failing. Fixed at the foundation with a new
+  `GameDataLayout` (RustInterop): tables are named by *stem*, and the
+  directory + extensions come from a newest-first probe of the group-0008
+  manifest, so a kept pre-2.01 install still resolves. Mirrors crimson-rs's
+  `src/binary/gamedata_layout.rs`, which is `#[cfg(test)]` upstream and so
+  unreachable over the C ABI. Localization needed more than a rename:
+  `crimson_paloc_load_from_bytes` takes one blob, so a language is now held
+  as its parts behind the new `MultiPalocCatalog`, and the
+  `*_lookup_display_name` bridges — each taking a single PALOC *native
+  handle* — are offered one part at a time (namespaces don't overlap, so at
+  most one answers). Tests share the same resolution through a new
+  `LiveInstall` helper. **395 tests green, 0 skipped**; one soft pin moved
+  (`MissionKey 1000157` reworded "Unfamiliar Lands" → "Unfamiliar Land", a
+  game-side text edit — the 25-character `1000083` title resolves unchanged
+  through the identical path). **The Dye editor is deliberately disabled**:
+  2.01 widened `partprefabdyeslotinfo`'s per-slot mask 3 → 12 bytes *and
+  re-encoded it* (in 5,572 of 6,555 comparable slot pairs the old three bytes
+  appear nowhere as a contiguous window inside the new twelve), the twelve
+  read as four groups of three, and which group a slot uses is not yet RE'd —
+  the legacy getter the editor calls reads all-zero on 2,196 of 6,585 live
+  slots (33.3%) whose full field is non-zero. Separately and unrelated to
+  2.01, `vendor/update_vendors.ps1` was found able to **rewrite this
+  repository**: a leftover `vendor/crimson-rs/` folder with no `.git` passed
+  its `Test-Path` check, so every `git -C vendor/crimson-rs …` walked up to
+  the parent and rewrote origin / refetched / `reset --hard` `main` onto
+  crimson-rs's `main`. It now demands the target hold its own `.git` and
+  asserts `rev-parse --show-toplevel` resolves to the vendor path before any
+  mutating command; local game saves moved out of `vendor/` to `data/_saves/`.
+  **Not tagged or built** — `v2.01.01` is the next concrete task.
 
 - **2026-08-28 — socket editor was writing saves the engine rejects (fixed; shipped as v2.00.02)**:
   Reported symptom — edit an item's sockets in the editor, insert gems, and
