@@ -7,24 +7,24 @@
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
 [![Avalonia](https://img.shields.io/badge/Avalonia-UI-8B5CF6)](https://avaloniaui.net/)
 [![Built with Claude Code](https://img.shields.io/badge/Built%20with-Claude%20Code-CC785C?logo=claude)](https://claude.ai/code)
-[![Game Version](https://img.shields.io/badge/Game-Crimson%20Desert%201.05%E2%80%932.00-D63B3B)](https://www.playcrimsondesert.com/)
+[![Game Version](https://img.shields.io/badge/Game-Crimson%20Desert%201.05%E2%80%932.01-D63B3B)](https://www.playcrimsondesert.com/)
 
 A clean, fast save editor + game-data toolchain for **Crimson Desert** (Pearl
 Abyss). Two things move independently here:
 
 - **Save read/write is version-agnostic.** Each save embeds its own schema, so
-  the editor reads and **re-saves any patch's save (1.05–2.00) in that save's
+  the editor reads and **re-saves any patch's save (1.05–2.01) in that save's
   own format** — no version conversion. Open a 1.05 save, edit it, save it
   back, and it stays a 1.05 save (the version stamp is preserved; the round-trip
   is byte-perfect). You never need to downgrade your install to open an older
   save.
-- **Item names / icons resolve against the installed game (currently 2.00).**
+- **Item names / icons resolve against the installed game (currently 2.01).**
   Name and icon lookup reads the live install's game-data, *not* the schema
   embedded in the save. So structural editing of an old save always works, but
-  if an item's key changed between that save's patch and 2.00 it may show as a
+  if an item's key changed between that save's patch and 2.01 it may show as a
   bare key instead of a name. This is also why the editor warns **once at
   startup** if your *installed game* isn't a version it can resolve names for
-  (right now: anything other than 2.00) — that warning is about your install,
+  (right now: anything other than 2.01) — that warning is about your install,
   not about which save you open.
 
 Cross-platform goal: Windows (primary), Linux, macOS.

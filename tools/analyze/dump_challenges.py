@@ -229,11 +229,16 @@ if hasattr(sys.stdout, "reconfigure"):
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from common.cli import require_args  # noqa: E402
+from common.gamedata_layout import (  # noqa: E402
+    GAMEDATA_GROUP,
+    paloc_files,
+    resolve_bin_layout,
+)
 from common.paths import discover_installs  # noqa: E402
 
 DLL_PATH = r"D:\Github\CrimsonAtomtic\vendor\crimson-rs\target\release\crimson_rs.dll"
-ITEMINFO_DIR = "gamedata/binary__/client/bin"
-PALOC_DIR = "gamedata/stringtable/binary__"
+MISSIONINFO_TABLE = "missioninfo"
+PALOC_GROUP = "0020"
 
 DEFAULT_PREFIXES = "Challenge_,Mission_MiniGame_"
 
@@ -449,23 +454,40 @@ def main() -> int:
 
     # Extract source files
     print("extracting missioninfo + paloc(eng)…", file=sys.stderr)
+    # 2.01 renamed the gamedata directory and every extension, and split
+    # each language's paloc blob into one file per namespace — resolve both
+    # rather than assuming either layout.
+    layout = resolve_bin_layout(game_dir)
     missioninfo = crimson_rs.extract_file(
-        str(game_dir), "0008", ITEMINFO_DIR, "missioninfo.pabgb")
-    paloc = crimson_rs.extract_file(
-        str(game_dir), "0020", PALOC_DIR, "localizationstring_eng.paloc")
+        str(game_dir), GAMEDATA_GROUP, layout.dir, layout.body(MISSIONINFO_TABLE))
+    located = paloc_files(game_dir, PALOC_GROUP, "eng")
+    if located is None:
+        print(f"no English paloc in group {PALOC_GROUP}", file=sys.stderr)
+        return 1
+    paloc_dir, paloc_names = located
 
     # Load bridges
     h_mi = c_void_p()
-    h_pl = c_void_p()
     rc = mi_load_bytes(missioninfo, len(missioninfo), byref(h_mi))
     if rc != OK:
         print(f"missioninfo load failed rc={rc}", file=sys.stderr)
         return 1
-    rc = pl_load_bytes(paloc, len(paloc), byref(h_pl))
-    if rc != OK:
-        print(f"paloc load failed rc={rc}", file=sys.stderr)
-        mi_free(h_mi)
-        return 1
+    # crimson_paloc_load_from_bytes takes one blob, so a split language
+    # becomes one handle per namespace file; the display-name lookup below
+    # tries them in turn. Namespaces don't overlap, so at most one answers.
+    h_pls: list[c_void_p] = []
+    for paloc_name in paloc_names:
+        blob = crimson_rs.extract_file(
+            str(game_dir), PALOC_GROUP, paloc_dir, paloc_name)
+        handle = c_void_p()
+        rc = pl_load_bytes(blob, len(blob), byref(handle))
+        if rc != OK:
+            print(f"paloc load failed for {paloc_name} rc={rc}", file=sys.stderr)
+            for opened in h_pls:
+                pl_free(opened)
+            mi_free(h_mi)
+            return 1
+        h_pls.append(handle)
 
     # Walk save (optional)
     save_states: dict[int, dict] = {}
@@ -530,11 +552,16 @@ def main() -> int:
             continue
         seen_keys.add(key)
 
-        # Hash-hop to localized title.
+        # Hash-hop to localized title. First paloc handle that answers wins.
         lo32 = 0x101  # individual challenge / mission title
-        rc_dn, dn_bytes = _two_call(
-            lambda buf, blen, req: mi_lookup_dn(h_mi, h_pl, key, lo32, buf, blen, req))
-        title_raw = dn_bytes.decode("utf-8", errors="replace") if rc_dn == OK else None
+        title_raw = None
+        for h_pl in h_pls:
+            rc_dn, dn_bytes = _two_call(
+                lambda buf, blen, req, h=h_pl:
+                    mi_lookup_dn(h_mi, h, key, lo32, buf, blen, req))
+            if rc_dn == OK and dn_bytes:
+                title_raw = dn_bytes.decode("utf-8", errors="replace")
+                break
         title = clean_title(title_raw)
 
         category_path, tier = split_internal_name(name)
@@ -636,7 +663,8 @@ def main() -> int:
                   file=sys.stderr)
 
     mi_free(h_mi)
-    pl_free(h_pl)
+    for handle in h_pls:
+        pl_free(handle)
     return 0
 
 

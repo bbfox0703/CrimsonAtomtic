@@ -106,8 +106,7 @@ public sealed class StringInfoCatalogTests
             return;
         }
         var extractor = new NativePazExtractor();
-        var bytes = extractor.ExtractFile(
-            pamt, "gamedata/binary__/client/bin", "stringinfo.pabgb");
+        var bytes = LiveInstall.Body(extractor, pamt, "stringinfo");
 
         using var cat = NativeStringInfoCatalog.LoadFromBytes(bytes);
         // 1.06 ships ~30,206 entries; 1.08 ships more. Sanity-check

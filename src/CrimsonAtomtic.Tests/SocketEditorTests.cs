@@ -191,9 +191,10 @@ public sealed class SocketEditorTests : IDisposable
     /// </summary>
     private static (uint Durable, uint Durationless)? PickGemPair(string gameRoot)
     {
-        var bytes = new NativePazExtractor().ExtractFile(
-            Path.Combine(gameRoot, "0008", "0.pamt"),
-            "gamedata/binary__/client/bin", "iteminfo.pabgb");
+        var bytes = LiveInstall.Body(
+            new NativePazExtractor(),
+            Path.Combine(gameRoot, GameDataLayout.GameDataGroup, "0.pamt"),
+            "iteminfo");
         using var cat = NativeItemInfoCatalog.LoadFromBytes(bytes);
         uint? durable = null;
         uint? durationless = null;
@@ -878,9 +879,10 @@ public sealed class SocketEditorTests : IDisposable
         {
             return;
         }
-        var bytes = new NativePazExtractor().ExtractFile(
-            Path.Combine(gameRoot, "0008", "0.pamt"),
-            "gamedata/binary__/client/bin", "iteminfo.pabgb");
+        var bytes = LiveInstall.Body(
+            new NativePazExtractor(),
+            Path.Combine(gameRoot, GameDataLayout.GameDataGroup, "0.pamt"),
+            "iteminfo");
         using var cat = NativeItemInfoCatalog.LoadFromBytes(bytes);
 
         var canonical = new HashSet<uint>();

@@ -85,7 +85,8 @@
   <sys:String x:Key="MenuUnlockMounts">Unlock Mo_unts (Sigils + Dragon)…</sys:String>
   <sys:String x:Key="MenuEditKnowledge">Edit _Knowledge (learn by category)…</sys:String>
   <sys:String x:Key="MenuEditFactionNodes">Edit _Faction Nodes (discover / set state)…</sys:String>
-  <sys:String x:Key="MenuEditItemDyes">Edit Item _Dyes…</sys:String>
+  <sys:String x:Key="MenuEditItemDyes">Edit Item _Dyes… (2.01 unsupported)</sys:String>
+  <sys:String x:Key="MenuEditItemDyesUnavailableTip">Disabled on Crimson Desert 2.01: the per-slot dye mask widened from 3 bytes to 12 and its contents were re-encoded, so the editor would read a third of all slots as empty and write edits from that wrong reading. Returns once the new mask groups are decoded.</sys:String>
   <sys:String x:Key="MenuVendorBuyback">_Vendor Buyback…</sys:String>
   <sys:String x:Key="MenuReviewChanges">_Review Pending Changes…</sys:String>
 

@@ -31,68 +31,59 @@ public sealed class LocalizationProvider : IDisposable
     /// <summary>The primary language. Always loaded when available.</summary>
     public const string DefaultLanguage = "eng";
 
-    private const string PalocDirectory = "gamedata/stringtable/binary__";
-    private const string ItemInfoDirectory = "gamedata/binary__/client/bin";
-    private const string ItemInfoFileName = "iteminfo.pabgb";
-    private const string StringInfoFileName = "stringinfo.pabgb";
-    // Sibling .pabgb files in the same `gamedata/binary__/client/bin/`
-    // directory, all under group 0008.
-    private const string MissionInfoFileName     = "missioninfo.pabgb";
-    private const string QuestInfoFileName       = "questinfo.pabgb";
-    private const string StageInfoFileName       = "stageinfo.pabgb";
-    private const string KnowledgeInfoFileName   = "knowledgeinfo.pabgb";
-    private const string QuestGaugeInfoFileName  = "questgaugeinfo.pabgb";
-    private const string GimmickInfoFileName     = "gimmickinfo.pabgb";
-    private const string CharacterInfoFileName   = "characterinfo.pabgb";
-    private const string SubLevelInfoFileName    = "sublevelinfo.pabgb";
-    private const string SkillPabgbFileName      = "skill.pabgb";
-    private const string SkillPabghFileName      = "skill.pabgh";
-    // Three dye gamedata tables, each .pabgb + .pabgh in the same
+    // Table stems only. Crimson Desert 2.01 renamed the gamedata directory
+    // AND every extension (.pabgb/.pabgh -> .staticinfobody/.staticinfoheader)
+    // without changing one byte of content, so the concrete directory and
+    // filenames come from the layout resolved against the live install at
+    // bootstrap (see GameDataLayout) rather than being spelled out here.
+    private const string ItemInfoTable = "iteminfo";
+    private const string StringInfoTable = "stringinfo";
+    // Sibling tables in the same group-0008 gamedata directory.
+    private const string MissionInfoTable     = "missioninfo";
+    private const string QuestInfoTable       = "questinfo";
+    private const string StageInfoTable       = "stageinfo";
+    private const string KnowledgeInfoTable   = "knowledgeinfo";
+    private const string QuestGaugeInfoTable  = "questgaugeinfo";
+    private const string GimmickInfoTable     = "gimmickinfo";
+    private const string CharacterInfoTable   = "characterinfo";
+    private const string SubLevelInfoTable    = "sublevelinfo";
+    private const string SkillTable           = "skill";
+    // Three dye gamedata tables, each a body + index pair in the same
     // group 0008 directory. Drive the Dye editor's color-group /
-    // material dropdowns + (future) per-prefab slot-count lookup.
-    private const string DyeColorGroupPabgbFileName = "dyecolorgroupinfo.pabgb";
-    private const string DyeColorGroupPabghFileName = "dyecolorgroupinfo.pabgh";
-    private const string DyeTexturePalletePabgbFileName = "partprefabdyetexturepalleteinfo.pabgb";
-    private const string DyeTexturePalletePabghFileName = "partprefabdyetexturepalleteinfo.pabgh";
-    private const string DyeSlotInfoPabgbFileName = "partprefabdyeslotinfo.pabgb";
-    private const string DyeSlotInfoPabghFileName = "partprefabdyeslotinfo.pabgh";
-    // storeinfo: two-file load (.pabgb body + .pabgh index, custom 6-byte
-    // shape). Resolves StoreKey → internal template name; drives the
-    // Vendor Buyback dialog.
-    private const string StoreInfoPabgbFileName  = "storeinfo.pabgb";
-    private const string StoreInfoPabghFileName  = "storeinfo.pabgh";
-    // 13 niche name-only bridges, all in group 0008 next to iteminfo.
-    // Order matches the new-session brief table. Five filenames drop the
+    // material dropdowns + per-prefab slot-count lookup.
+    private const string DyeColorGroupTable = "dyecolorgroupinfo";
+    private const string DyeTexturePalleteTable = "partprefabdyetexturepalleteinfo";
+    private const string DyeSlotInfoTable = "partprefabdyeslotinfo";
+    // storeinfo: two-file load (body + index, custom 6-byte shape).
+    // Resolves StoreKey -> internal template name; drives the Vendor
+    // Buyback dialog.
+    private const string StoreInfoTable  = "storeinfo";
+    // 14 niche name-only bridges, all in group 0008 next to iteminfo.
+    // Order matches the new-session brief table. Four stems drop the
     // "info" suffix (royalsupply, globalgameevent, globalgameeventgroup,
-    // reserveslot) — copy literally.
-    private const string FactionNodePabgbFileName            = "factionnode.pabgb";
-    private const string FactionNodePabghFileName            = "factionnode.pabgh";
-    private const string HouseInfoPabgbFileName              = "houseinfo.pabgb";
-    private const string HouseInfoPabghFileName              = "houseinfo.pabgh";
-    private const string RoyalSupplyPabgbFileName            = "royalsupply.pabgb";
-    private const string RoyalSupplyPabghFileName            = "royalsupply.pabgh";
-    private const string CraftToolInfoPabgbFileName          = "crafttoolinfo.pabgb";
-    private const string CraftToolInfoPabghFileName          = "crafttoolinfo.pabgh";
-    private const string CraftToolGroupInfoPabgbFileName     = "crafttoolgroupinfo.pabgb";
-    private const string CraftToolGroupInfoPabghFileName     = "crafttoolgroupinfo.pabgh";
-    private const string TriggerRegionInfoPabgbFileName      = "triggerregioninfo.pabgb";
-    private const string TriggerRegionInfoPabghFileName      = "triggerregioninfo.pabgh";
-    private const string GamePlayVariableInfoPabgbFileName   = "gameplayvariableinfo.pabgb";
-    private const string GamePlayVariableInfoPabghFileName   = "gameplayvariableinfo.pabgh";
-    private const string GlobalGameEventPabgbFileName        = "globalgameevent.pabgb";
-    private const string GlobalGameEventPabghFileName        = "globalgameevent.pabgh";
-    private const string GlobalGameEventGroupPabgbFileName   = "globalgameeventgroup.pabgb";
-    private const string GlobalGameEventGroupPabghFileName   = "globalgameeventgroup.pabgh";
-    private const string GameAdviceInfoPabgbFileName         = "gameadviceinfo.pabgb";
-    private const string GameAdviceInfoPabghFileName         = "gameadviceinfo.pabgh";
-    private const string GameAdviceGroupInfoPabgbFileName    = "gameadvicegroupinfo.pabgb";
-    private const string GameAdviceGroupInfoPabghFileName    = "gameadvicegroupinfo.pabgh";
-    private const string ReserveSlotPabgbFileName            = "reserveslot.pabgb";
-    private const string ReserveSlotPabghFileName            = "reserveslot.pabgh";
-    private const string RegionInfoPabgbFileName             = "regioninfo.pabgb";
-    private const string RegionInfoPabghFileName             = "regioninfo.pabgh";
-    private const string ItemGroupInfoPabgbFileName          = "itemgroupinfo.pabgb";
-    private const string ItemGroupInfoPabghFileName          = "itemgroupinfo.pabgh";
+    // reserveslot) - copy literally.
+    private const string FactionNodeTable            = "factionnode";
+    private const string HouseInfoTable              = "houseinfo";
+    private const string RoyalSupplyTable            = "royalsupply";
+    private const string CraftToolInfoTable          = "crafttoolinfo";
+    private const string CraftToolGroupInfoTable     = "crafttoolgroupinfo";
+    private const string TriggerRegionInfoTable      = "triggerregioninfo";
+    private const string GamePlayVariableInfoTable   = "gameplayvariableinfo";
+    private const string GlobalGameEventTable        = "globalgameevent";
+    private const string GlobalGameEventGroupTable   = "globalgameeventgroup";
+    private const string GameAdviceInfoTable         = "gameadviceinfo";
+    private const string GameAdviceGroupInfoTable    = "gameadvicegroupinfo";
+    private const string ReserveSlotTable            = "reserveslot";
+    private const string RegionInfoTable             = "regioninfo";
+    private const string ItemGroupInfoTable          = "itemgroupinfo";
+
+    /// <summary>
+    /// Which archive naming the live install ships. Resolved once per
+    /// bootstrap; defaults to the newest so a probe against a missing
+    /// install still has a well-defined answer (every caller bails on the
+    /// absent PAMT before it matters).
+    /// </summary>
+    private GameDataLayout _layout = GameDataLayout.Modern;
 
     /// <summary>
     /// Known PALOC language codes the game ships. Sourced authoritatively
@@ -132,13 +123,26 @@ public sealed class LocalizationProvider : IDisposable
 
     private readonly IPazExtractor _paz;
 
-    /// <summary>For each discovered language code, the (group, filename)
-    /// pair that holds it. Populated by Bootstrap.</summary>
-    private readonly Dictionary<string, (string Group, string FileName)> _languageSources =
+    /// <summary>For each discovered language code, the group plus the
+    /// archive directory and filename(s) holding it. One file through 2.00;
+    /// 2.01 split each language into one file per namespace inside a
+    /// per-language directory. Populated by Bootstrap.</summary>
+    private readonly Dictionary<string, (string Group, string Directory, IReadOnlyList<string> Files)> _languageSources =
         new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Loaded catalogs, keyed by language code.</summary>
-    private readonly Dictionary<string, NativePalocCatalog> _catalogs =
+    /// <summary>Loaded catalogs, keyed by language code. Owns them.</summary>
+    private readonly Dictionary<string, IPalocCatalog> _catalogs =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The same catalogs kept as their concrete parts, NOT owned (the
+    /// entry in <see cref="_catalogs"/> owns them). The
+    /// <c>*_lookup_display_name</c> bridges each take one PALOC <i>native
+    /// handle</i>, so a language split across files — every language from
+    /// 2.01 on — has to be offered to them one part at a time. See
+    /// <see cref="FirstDisplayName"/>.
+    /// </summary>
+    private readonly Dictionary<string, NativePalocCatalog[]> _palocParts =
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -523,6 +527,13 @@ public sealed class LocalizationProvider : IDisposable
         // degrades gracefully rather than crashing the whole app.
         GameDataVersion = NativePaverReader.TryReadFromInstall(gameRoot);
 
+        // ── Resolve which archive naming this install ships BEFORE any
+        // extraction. 2.01 renamed the gamedata directory and every file
+        // extension without touching the contents, so every bridge below
+        // keys off this one probe.
+        _layout = GameDataLayout.Resolve(
+            _paz, Path.Combine(gameRoot, GameDataLayout.GameDataGroup, "0.pamt"));
+
         // ── iteminfo bridge (group 0008). Required for any item-name
         // resolution to work. Failure here means we still load PALOC
         // (so the Browse Localization dialog works) but ResolveItemName
@@ -543,21 +554,21 @@ public sealed class LocalizationProvider : IDisposable
         // lookups also need the English PALOC to be loaded below, but
         // the bridge-load step can run before that since
         // LookupDisplayName only needs the paloc handle at call time.
-        TryBootstrapKeyInfoCatalog(gameRoot, MissionInfoFileName,
+        TryBootstrapKeyInfoCatalog(gameRoot, MissionInfoTable,
             NativeMissionInfoCatalog.LoadFromBytes, ref _missionInfo);
-        TryBootstrapKeyInfoCatalog(gameRoot, QuestInfoFileName,
+        TryBootstrapKeyInfoCatalog(gameRoot, QuestInfoTable,
             NativeQuestInfoCatalog.LoadFromBytes, ref _questInfo);
-        TryBootstrapKeyInfoCatalog(gameRoot, StageInfoFileName,
+        TryBootstrapKeyInfoCatalog(gameRoot, StageInfoTable,
             NativeStageInfoCatalog.LoadFromBytes, ref _stageInfo);
-        TryBootstrapKeyInfoCatalog(gameRoot, KnowledgeInfoFileName,
+        TryBootstrapKeyInfoCatalog(gameRoot, KnowledgeInfoTable,
             NativeKnowledgeInfoCatalog.LoadFromBytes, ref _knowledgeInfo);
-        TryBootstrapKeyInfoCatalog(gameRoot, QuestGaugeInfoFileName,
+        TryBootstrapKeyInfoCatalog(gameRoot, QuestGaugeInfoTable,
             NativeQuestGaugeInfoCatalog.LoadFromBytes, ref _questGaugeInfo);
-        TryBootstrapKeyInfoCatalog(gameRoot, GimmickInfoFileName,
+        TryBootstrapKeyInfoCatalog(gameRoot, GimmickInfoTable,
             NativeGimmickInfoCatalog.LoadFromBytes, ref _gimmickInfo);
-        TryBootstrapKeyInfoCatalog(gameRoot, CharacterInfoFileName,
+        TryBootstrapKeyInfoCatalog(gameRoot, CharacterInfoTable,
             NativeCharacterInfoCatalog.LoadFromBytes, ref _characterInfo);
-        TryBootstrapKeyInfoCatalog(gameRoot, SubLevelInfoFileName,
+        TryBootstrapKeyInfoCatalog(gameRoot, SubLevelInfoTable,
             NativeSubLevelInfoCatalog.LoadFromBytes, ref _subLevelInfo);
         TryBootstrapSkillInfo(gameRoot);
         TryBootstrapDyeGamedata(gameRoot);
@@ -586,7 +597,7 @@ public sealed class LocalizationProvider : IDisposable
         }
         try
         {
-            var bytes = _paz.ExtractFile(pamt, ItemInfoDirectory, ItemInfoFileName);
+            var bytes = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(ItemInfoTable));
             _itemInfo?.Dispose();
             _itemInfo = NativeItemInfoCatalog.LoadFromBytes(bytes);
         }
@@ -608,7 +619,7 @@ public sealed class LocalizationProvider : IDisposable
         }
         try
         {
-            var bytes = _paz.ExtractFile(pamt, ItemInfoDirectory, StringInfoFileName);
+            var bytes = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(StringInfoTable));
             _stringInfo?.Dispose();
             _stringInfo = NativeStringInfoCatalog.LoadFromBytes(bytes);
         }
@@ -632,7 +643,7 @@ public sealed class LocalizationProvider : IDisposable
     /// </summary>
     private void TryBootstrapKeyInfoCatalog<T>(
         string gameRoot,
-        string fileName,
+        string tableStem,
         Func<ReadOnlySpan<byte>, T> loader,
         ref T? slot)
         where T : class, IDisposable
@@ -644,7 +655,7 @@ public sealed class LocalizationProvider : IDisposable
         }
         try
         {
-            var bytes = _paz.ExtractFile(pamt, ItemInfoDirectory, fileName);
+            var bytes = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(tableStem));
             slot?.Dispose();
             slot = loader(bytes);
         }
@@ -672,8 +683,8 @@ public sealed class LocalizationProvider : IDisposable
         }
         try
         {
-            var pabgh = _paz.ExtractFile(pamt, ItemInfoDirectory, SkillPabghFileName);
-            var pabgb = _paz.ExtractFile(pamt, ItemInfoDirectory, SkillPabgbFileName);
+            var pabgh = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Header(SkillTable));
+            var pabgb = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(SkillTable));
             _skillInfo?.Dispose();
             _skillInfo = NativeSkillInfoCatalog.LoadFromBytes(pabgh, pabgb);
         }
@@ -699,12 +710,12 @@ public sealed class LocalizationProvider : IDisposable
         {
             return;
         }
-        TryLoadDyeBridge(pamt, DyeColorGroupPabgbFileName, DyeColorGroupPabghFileName,
+        TryLoadDyeBridge(pamt, DyeColorGroupTable,
             NativeDyeColorGroupInfoCatalog.LoadFromBytes, ref _dyeColorGroupInfo);
-        TryLoadDyeBridge(pamt, DyeTexturePalletePabgbFileName, DyeTexturePalletePabghFileName,
+        TryLoadDyeBridge(pamt, DyeTexturePalleteTable,
             NativePartPrefabDyeTexturePalleteCatalog.LoadFromBytes,
             ref _dyeTexturePalleteInfo);
-        TryLoadDyeBridge(pamt, DyeSlotInfoPabgbFileName, DyeSlotInfoPabghFileName,
+        TryLoadDyeBridge(pamt, DyeSlotInfoTable,
             NativePartPrefabDyeSlotInfoCatalog.LoadFromBytes, ref _dyeSlotInfo);
         TryLoadItemPartPrefabBridge(pamt);
     }
@@ -723,10 +734,10 @@ public sealed class LocalizationProvider : IDisposable
     {
         try
         {
-            var iteminfo = _paz.ExtractFile(pamt, ItemInfoDirectory, ItemInfoFileName);
-            var stringinfo = _paz.ExtractFile(pamt, ItemInfoDirectory, StringInfoFileName);
-            var pabgb = _paz.ExtractFile(pamt, ItemInfoDirectory, DyeSlotInfoPabgbFileName);
-            var pabgh = _paz.ExtractFile(pamt, ItemInfoDirectory, DyeSlotInfoPabghFileName);
+            var iteminfo = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(ItemInfoTable));
+            var stringinfo = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(StringInfoTable));
+            var pabgb = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(DyeSlotInfoTable));
+            var pabgh = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Header(DyeSlotInfoTable));
             _itemPartPrefab?.Dispose();
             _itemPartPrefab = NativeItemPartPrefabCatalog.LoadFromBytes(
                 iteminfo, stringinfo, pabgb, pabgh);
@@ -741,15 +752,15 @@ public sealed class LocalizationProvider : IDisposable
     /// per-bridge factory. Failures degrade silently per-bridge.
     /// </summary>
     private void TryLoadDyeBridge<T>(
-        string pamt, string pabgbName, string pabghName,
+        string pamt, string tableStem,
         Func<ReadOnlySpan<byte>, ReadOnlySpan<byte>, T> loader,
         ref T? slot)
         where T : class, IDisposable
     {
         try
         {
-            var pabgb = _paz.ExtractFile(pamt, ItemInfoDirectory, pabgbName);
-            var pabgh = _paz.ExtractFile(pamt, ItemInfoDirectory, pabghName);
+            var pabgb = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(tableStem));
+            var pabgh = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Header(tableStem));
             slot?.Dispose();
             slot = loader(pabgb, pabgh);
         }
@@ -773,8 +784,8 @@ public sealed class LocalizationProvider : IDisposable
         }
         try
         {
-            var pabgb = _paz.ExtractFile(pamt, ItemInfoDirectory, StoreInfoPabgbFileName);
-            var pabgh = _paz.ExtractFile(pamt, ItemInfoDirectory, StoreInfoPabghFileName);
+            var pabgb = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(StoreInfoTable));
+            var pabgh = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Header(StoreInfoTable));
             _storeInfo?.Dispose();
             _storeInfo = NativeStoreInfoCatalog.LoadFromBytes(pabgb, pabgh);
         }
@@ -797,33 +808,33 @@ public sealed class LocalizationProvider : IDisposable
         {
             return;
         }
-        TryLoadNicheBridge(pamt, FactionNodePabgbFileName, FactionNodePabghFileName,
+        TryLoadNicheBridge(pamt, FactionNodeTable,
             NativeFactionNodeInfoCatalog.LoadFromBytes, ref _factionNodeInfo);
-        TryLoadNicheBridge(pamt, HouseInfoPabgbFileName, HouseInfoPabghFileName,
+        TryLoadNicheBridge(pamt, HouseInfoTable,
             NativeHouseInfoCatalog.LoadFromBytes, ref _houseInfo);
-        TryLoadNicheBridge(pamt, RoyalSupplyPabgbFileName, RoyalSupplyPabghFileName,
+        TryLoadNicheBridge(pamt, RoyalSupplyTable,
             NativeRoyalSupplyInfoCatalog.LoadFromBytes, ref _royalSupplyInfo);
-        TryLoadNicheBridge(pamt, CraftToolInfoPabgbFileName, CraftToolInfoPabghFileName,
+        TryLoadNicheBridge(pamt, CraftToolInfoTable,
             NativeCraftToolInfoCatalog.LoadFromBytes, ref _craftToolInfo);
-        TryLoadNicheBridge(pamt, CraftToolGroupInfoPabgbFileName, CraftToolGroupInfoPabghFileName,
+        TryLoadNicheBridge(pamt, CraftToolGroupInfoTable,
             NativeCraftToolGroupInfoCatalog.LoadFromBytes, ref _craftToolGroupInfo);
-        TryLoadNicheBridge(pamt, TriggerRegionInfoPabgbFileName, TriggerRegionInfoPabghFileName,
+        TryLoadNicheBridge(pamt, TriggerRegionInfoTable,
             NativeTriggerRegionInfoCatalog.LoadFromBytes, ref _triggerRegionInfo);
-        TryLoadNicheBridge(pamt, GamePlayVariableInfoPabgbFileName, GamePlayVariableInfoPabghFileName,
+        TryLoadNicheBridge(pamt, GamePlayVariableInfoTable,
             NativeGamePlayVariableInfoCatalog.LoadFromBytes, ref _gamePlayVariableInfo);
-        TryLoadNicheBridge(pamt, GlobalGameEventPabgbFileName, GlobalGameEventPabghFileName,
+        TryLoadNicheBridge(pamt, GlobalGameEventTable,
             NativeGlobalGameEventInfoCatalog.LoadFromBytes, ref _globalGameEventInfo);
-        TryLoadNicheBridge(pamt, GlobalGameEventGroupPabgbFileName, GlobalGameEventGroupPabghFileName,
+        TryLoadNicheBridge(pamt, GlobalGameEventGroupTable,
             NativeGlobalGameEventGroupInfoCatalog.LoadFromBytes, ref _globalGameEventGroupInfo);
-        TryLoadNicheBridge(pamt, GameAdviceInfoPabgbFileName, GameAdviceInfoPabghFileName,
+        TryLoadNicheBridge(pamt, GameAdviceInfoTable,
             NativeGameAdviceInfoCatalog.LoadFromBytes, ref _gameAdviceInfo);
-        TryLoadNicheBridge(pamt, GameAdviceGroupInfoPabgbFileName, GameAdviceGroupInfoPabghFileName,
+        TryLoadNicheBridge(pamt, GameAdviceGroupInfoTable,
             NativeGameAdviceGroupInfoCatalog.LoadFromBytes, ref _gameAdviceGroupInfo);
-        TryLoadNicheBridge(pamt, ReserveSlotPabgbFileName, ReserveSlotPabghFileName,
+        TryLoadNicheBridge(pamt, ReserveSlotTable,
             NativeReserveSlotInfoCatalog.LoadFromBytes, ref _reserveSlotInfo);
-        TryLoadNicheBridge(pamt, RegionInfoPabgbFileName, RegionInfoPabghFileName,
+        TryLoadNicheBridge(pamt, RegionInfoTable,
             NativeRegionInfoCatalog.LoadFromBytes, ref _regionInfo);
-        TryLoadNicheBridge(pamt, ItemGroupInfoPabgbFileName, ItemGroupInfoPabghFileName,
+        TryLoadNicheBridge(pamt, ItemGroupInfoTable,
             NativeItemGroupInfoCatalog.LoadFromBytes, ref _itemGroupInfo);
     }
 
@@ -835,15 +846,15 @@ public sealed class LocalizationProvider : IDisposable
     /// per-bridge (a missing file just blanks the corresponding column).
     /// </summary>
     private void TryLoadNicheBridge<T>(
-        string pamt, string pabgbName, string pabghName,
+        string pamt, string tableStem,
         Func<ReadOnlySpan<byte>, ReadOnlySpan<byte>, T> loader,
         ref T? slot)
         where T : class, IDisposable
     {
         try
         {
-            var pabgb = _paz.ExtractFile(pamt, ItemInfoDirectory, pabgbName);
-            var pabgh = _paz.ExtractFile(pamt, ItemInfoDirectory, pabghName);
+            var pabgb = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(tableStem));
+            var pabgh = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Header(tableStem));
             slot?.Dispose();
             slot = loader(pabgb, pabgh);
         }
@@ -868,28 +879,16 @@ public sealed class LocalizationProvider : IDisposable
                 {
                     continue; // first hit wins
                 }
-                var fileName = $"localizationstring_{code}.paloc";
-                try
+                // Probe by listing rather than extracting: the resolver
+                // reports whichever layout this install ships (one blob per
+                // language through 2.00, one file per namespace from 2.01)
+                // and returns null when the language isn't in this group.
+                // We deliberately do NOT read the bytes here — caching all
+                // 14 language catalogs eagerly would consume ~350 MB; they
+                // are extracted lazily on first request in TryLoadCatalog.
+                if (GameDataLayout.ResolvePalocFiles(_paz, pamt, code) is { } found)
                 {
-                    // Probe by attempting the extract — `crimson_paz_extract_file`
-                    // returns NOT_FOUND fast when the file isn't in this PAMT.
-                    // On success we *discard* the bytes here: caching all 14
-                    // language catalogs eagerly would consume ~350 MB. The
-                    // catalogs are re-extracted lazily on first request
-                    // through TryLoadCatalog below.
-                    _ = _paz.ExtractFile(pamt, PalocDirectory, fileName);
-                    _languageSources[code] = (group, fileName);
-                }
-                catch (CrimsonSaveException ex) when (ex.ErrorCode == -16) // NOT_FOUND
-                {
-                    // file not in this group — keep probing
-                }
-                catch (CrimsonSaveException)
-                {
-                    // Other extraction failures: skip this candidate.
-                }
-                catch (IOException)
-                {
+                    _languageSources[code] = (group, found.Directory, found.Files);
                 }
             }
         }
@@ -908,9 +907,32 @@ public sealed class LocalizationProvider : IDisposable
         try
         {
             var pamt = Path.Combine(_gameRoot, src.Group, "0.pamt");
-            var bytes = _paz.ExtractFile(pamt, PalocDirectory, src.FileName);
-            var cat = NativePalocCatalog.LoadFromBytes(bytes);
+            var parts = new NativePalocCatalog[src.Files.Count];
+            var built = 0;
+            try
+            {
+                for (; built < parts.Length; built++)
+                {
+                    var bytes = _paz.ExtractFile(pamt, src.Directory, src.Files[built]);
+                    parts[built] = NativePalocCatalog.LoadFromBytes(bytes);
+                }
+            }
+            catch
+            {
+                // Partial load: nothing is registered yet, so the handles
+                // opened so far would leak. Close them before rethrowing
+                // into the per-language degrade-gracefully catches below.
+                for (var i = 0; i < built; i++)
+                {
+                    parts[i].Dispose();
+                }
+                throw;
+            }
+            // A single-file language is its own catalog; a split one is
+            // queried part by part. Either way _catalogs owns the result.
+            IPalocCatalog cat = parts.Length == 1 ? parts[0] : new MultiPalocCatalog(parts);
             _catalogs[langCode] = cat;
+            _palocParts[langCode] = parts;
             // Pre-walk the catalog to build the (typeByte, key) → name
             // map for the type bytes we care about. One-time per-language
             // cost; turns every subsequent name resolution into an O(1)
@@ -936,7 +958,7 @@ public sealed class LocalizationProvider : IDisposable
     /// entries on the English table; the walk costs ~1-2 s per language
     /// on SSD.
     /// </summary>
-    private static Dictionary<(byte, uint), string> BuildNameMap(NativePalocCatalog cat)
+    private static Dictionary<(byte, uint), string> BuildNameMap(IPalocCatalog cat)
     {
         // Each captured type byte contributes ~6k entries in 1.06's
         // English table; capacity hint stays generous to avoid rehash
@@ -1275,9 +1297,8 @@ public sealed class LocalizationProvider : IDisposable
     public string? LookupCharacterDisplayName(uint characterKey, string langCode)
     {
         if (_characterInfo is null) return null;
-        return _catalogs.TryGetValue(langCode, out var paloc)
-            ? _characterInfo.LookupDisplayName(characterKey, paloc)
-            : null;
+        var bridge = _characterInfo;
+        return FirstDisplayName(langCode, paloc => bridge.LookupDisplayName(characterKey, paloc));
     }
 
     /// <summary>
@@ -1680,11 +1701,22 @@ public sealed class LocalizationProvider : IDisposable
         {
             return null;
         }
-        if (!_catalogs.TryGetValue(DefaultLanguage, out var paloc))
+        if (!_palocParts.TryGetValue(DefaultLanguage, out var parts))
         {
             return null;
         }
-        return _characterInfo.ResolvePortrait(characterKey, paloc, portraitListBuffer);
+        // Best score across the language's parts. Pre-2.01 that is a
+        // single part, so this reduces to the old single call.
+        (string Path, int Score)? best = null;
+        foreach (var part in parts)
+        {
+            var hit = _characterInfo.ResolvePortrait(characterKey, part, portraitListBuffer);
+            if (hit is { } h && (best is null || h.Score > best.Value.Score))
+            {
+                best = h;
+            }
+        }
+        return best;
     }
 
     /// <summary>
@@ -1718,20 +1750,20 @@ public sealed class LocalizationProvider : IDisposable
 
     private string? ResolveKeyTableOne(string typeName, uint key, string langCode)
     {
-        _catalogs.TryGetValue(langCode, out var paloc);
+        _palocParts.TryGetValue(langCode, out var paloc);
         return typeName switch
         {
-            "MissionKey"    => DisplayOrFallback(_missionInfo, key, paloc,
-                                                bridge => bridge.LookupDisplayName(key, paloc!),
+            "MissionKey"    => DisplayOrFallback(_missionInfo, paloc,
+                                                (bridge, part) => bridge.LookupDisplayName(key, part),
                                                 bridge => bridge.LookupStringKey(key)),
-            "QuestKey"      => DisplayOrFallback(_questInfo, key, paloc,
-                                                bridge => bridge.LookupDisplayName(key, paloc!),
+            "QuestKey"      => DisplayOrFallback(_questInfo, paloc,
+                                                (bridge, part) => bridge.LookupDisplayName(key, part),
                                                 bridge => bridge.LookupStringKey(key)),
-            "StageKey"      => DisplayOrFallback(_stageInfo, key, paloc,
-                                                bridge => bridge.LookupDisplayName(key, paloc!),
+            "StageKey"      => DisplayOrFallback(_stageInfo, paloc,
+                                                (bridge, part) => bridge.LookupDisplayName(key, part),
                                                 bridge => bridge.LookupStringKey(key)),
-            "KnowledgeKey"  => DisplayOrFallback(_knowledgeInfo, key, paloc,
-                                                bridge => bridge.LookupDisplayName(key, paloc!),
+            "KnowledgeKey"  => DisplayOrFallback(_knowledgeInfo, paloc,
+                                                (bridge, part) => bridge.LookupDisplayName(key, part),
                                                 bridge => bridge.LookupStringKey(key)),
             // Gauge + Skill: no PALOC chain. Internal name only, same
             // value across all languages (so secondary-language columns
@@ -1744,19 +1776,19 @@ public sealed class LocalizationProvider : IDisposable
             // Mission/Quest/Stage/Knowledge. If the bridge returns
             // nothing, ResolveByFieldTypeName falls through to the
             // legacy PALOC-byte-0x00 path (the scene-object slice).
-            "GimmickInfoKey"                 => DisplayOrFallback(_gimmickInfo, key, paloc,
-                                                bridge => bridge.LookupDisplayName(key, paloc!),
+            "GimmickInfoKey"                 => DisplayOrFallback(_gimmickInfo, paloc,
+                                                (bridge, part) => bridge.LookupDisplayName(key, part),
                                                 bridge => bridge.LookupStringKey(key)),
-            "LevelGimmickSceneObjectInfoKey" => DisplayOrFallback(_gimmickInfo, key, paloc,
-                                                bridge => bridge.LookupDisplayName(key, paloc!),
+            "LevelGimmickSceneObjectInfoKey" => DisplayOrFallback(_gimmickInfo, paloc,
+                                                (bridge, part) => bridge.LookupDisplayName(key, part),
                                                 bridge => bridge.LookupStringKey(key)),
             // SubLevel: Pattern A only — internal name is the label.
             "SubLevelKey"   => _subLevelInfo?.LookupStringKey(key),
             // Character: lo24 cat-byte strip + PALOC chain at lo32=0x30
             // (NO hash hop unlike Mission/Quest/Stage/Knowledge). Bridge
             // does the strip internally; we pass the raw u32 in.
-            "CharacterKey"  => DisplayOrFallback(_characterInfo, key, paloc,
-                                                bridge => bridge.LookupDisplayName(key, paloc!),
+            "CharacterKey"  => DisplayOrFallback(_characterInfo, paloc,
+                                                (bridge, part) => bridge.LookupDisplayName(key, part),
                                                 bridge => bridge.LookupStringKey(key)),
             // Store: internal name only — no PALOC chain yet for stores.
             // Same convention as QuestGauge / Skill (secondary language
@@ -1799,9 +1831,8 @@ public sealed class LocalizationProvider : IDisposable
     /// </summary>
     private static string? DisplayOrFallback<TBridge>(
         TBridge? bridge,
-        uint key,
-        NativePalocCatalog? paloc,
-        Func<TBridge, string?> displayLookup,
+        NativePalocCatalog[]? palocParts,
+        Func<TBridge, NativePalocCatalog, string?> displayLookup,
         Func<TBridge, string?> internalLookup)
         where TBridge : class
     {
@@ -1809,15 +1840,48 @@ public sealed class LocalizationProvider : IDisposable
         {
             return null;
         }
-        if (paloc is not null)
+        if (palocParts is not null)
         {
-            var display = displayLookup(bridge);
-            if (!string.IsNullOrEmpty(display))
+            foreach (var part in palocParts)
             {
-                return display;
+                var display = displayLookup(bridge, part);
+                if (!string.IsNullOrEmpty(display))
+                {
+                    return display;
+                }
             }
         }
         return internalLookup(bridge);
+    }
+
+    /// <summary>
+    /// Run <paramref name="lookup"/> against each PALOC part of
+    /// <paramref name="langCode"/> in load order and return the first
+    /// non-empty answer.
+    ///
+    /// <para>
+    /// The <c>*_lookup_display_name</c> C ABI bridges take a single PALOC
+    /// native handle, so a language the install splits across files (2.01
+    /// onwards) cannot be handed over as one object. Namespaces don't
+    /// overlap, so at most one part answers; pre-2.01 there is only one
+    /// part and this is the old single call.
+    /// </para>
+    /// </summary>
+    private string? FirstDisplayName(string langCode, Func<NativePalocCatalog, string?> lookup)
+    {
+        if (!_palocParts.TryGetValue(langCode, out var parts))
+        {
+            return null;
+        }
+        foreach (var part in parts)
+        {
+            var hit = lookup(part);
+            if (!string.IsNullOrEmpty(hit))
+            {
+                return hit;
+            }
+        }
+        return null;
     }
 
     /// <summary>
@@ -1898,6 +1962,7 @@ public sealed class LocalizationProvider : IDisposable
         _reserveSlotInfo?.Dispose(); _reserveSlotInfo = null;
         _regionInfo?.Dispose(); _regionInfo = null;
         _itemGroupInfo?.Dispose(); _itemGroupInfo = null;
+        _palocParts.Clear();
         foreach (var cat in _catalogs.Values)
         {
             cat.Dispose();

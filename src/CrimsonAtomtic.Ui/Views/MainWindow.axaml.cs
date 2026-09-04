@@ -1012,7 +1012,11 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void OnEditItemDyesClick(object? sender, RoutedEventArgs e)
     {
+        // IsDyeEditorAvailable also gates the menu item's IsEnabled; re-check
+        // here so no accelerator or future call path can open an editor that
+        // would mis-read 2.01 dye masks.
         if (DataContext is not MainWindowViewModel vm
+            || !vm.IsDyeEditorAvailable
             || vm.LoadedPath is not { } loadedPath
             || vm.Summary is null)
         {

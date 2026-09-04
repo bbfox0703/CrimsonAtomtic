@@ -63,6 +63,11 @@ from typing import Any, TextIO
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from common.cli import require_args  # noqa: E402
+from common.gamedata_layout import (  # noqa: E402
+    GAMEDATA_GROUP,
+    paloc_files,
+    resolve_bin_layout,
+)
 from common.paths import discover_installs  # noqa: E402
 
 # language code -> (PAZ group dir, paloc file name). Mirrors
@@ -87,9 +92,7 @@ LANG_TO_GROUP: dict[str, str] = {
 
 CATALOG_CHOICES = ("iteminfo", "paloc")
 
-ITEMINFO_VFS_DIR = "gamedata/binary__/client/bin"
-ITEMINFO_FILE_NAME = "iteminfo.pabgb"
-PALOC_VFS_DIR = "gamedata/stringtable/binary__"
+ITEMINFO_TABLE = "iteminfo"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -186,8 +189,10 @@ def dump_iteminfo(crimson_rs: Any, game_dir: Path, out_path: Path, force: bool) 
         )
         return -1
 
+    # 2.01 renamed the directory and every extension; resolve, don't assume.
+    layout = resolve_bin_layout(game_dir)
     raw = crimson_rs.extract_file(
-        str(game_dir), "0008", ITEMINFO_VFS_DIR, ITEMINFO_FILE_NAME
+        str(game_dir), GAMEDATA_GROUP, layout.dir, layout.body(ITEMINFO_TABLE)
     )
     items = crimson_rs.parse_iteminfo_from_bytes(raw)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -222,9 +227,22 @@ def dump_paloc(
         )
         return -1
 
-    file_name = f"localizationstring_{lang}.paloc"
-    raw = crimson_rs.extract_file(str(game_dir), group, PALOC_VFS_DIR, file_name)
-    entries = crimson_rs.parse_paloc_bytes(raw)
+    # One blob through 2.00; 2.01 split each language into one file per
+    # namespace. The container is a flat entry list and the namespace is
+    # already encoded in every key, so concatenating the parts in load
+    # order reproduces the pre-2.01 whole.
+    located = paloc_files(game_dir, group, lang)
+    if located is None:
+        print(
+            f"no {lang!r} paloc in group {group} under {game_dir}",
+            file=sys.stderr,
+        )
+        return -1
+    vfs_dir, file_names = located
+    entries: list[dict[str, Any]] = []
+    for file_name in file_names:
+        raw = crimson_rs.extract_file(str(game_dir), group, vfs_dir, file_name)
+        entries.extend(crimson_rs.parse_paloc_bytes(raw))
     out_path.parent.mkdir(parents=True, exist_ok=True)
     written = 0
     with out_path.open("w", encoding="utf-8") as f:

@@ -1095,6 +1095,40 @@ public sealed partial class MainWindowViewModel(
     public ObservableCollection<BlockSummary> VisibleBlocks { get; } = [];
 
     public bool HasSave => Summary is not null;
+
+    /// <summary>
+    /// Whether the Dye editor may be opened. Hard <c>false</c> since game
+    /// 2.01.
+    ///
+    /// <para>
+    /// 2.01 widened <c>partprefabdyeslotinfo</c>'s per-slot mask from 3
+    /// bytes to 12 <i>and re-encoded its contents</i> — the old three are
+    /// not a prefix or any contiguous window of the new twelve. The twelve
+    /// read as four groups of three, and which group a given slot uses is
+    /// not yet reverse-engineered. Measured through the release dll over
+    /// all 1,626 prefabs / 6,585 slots on live 2.01, the legacy 3-byte
+    /// getter the editor calls reads all-zero on 2,196 slots (33.3%) whose
+    /// full field is non-zero — i.e. a third of the dye UI would render
+    /// blank, and edits made on that reading would be wrong.
+    /// </para>
+    ///
+    /// <para>
+    /// Per the foundation-over-workaround rule this stays off until the
+    /// mask groups are decoded upstream and the editor moves to the
+    /// <c>..._lookup_slot_mask_full</c> bridges; the alternative is an
+    /// editor that silently corrupts appearance data. See
+    /// <c>vendor/crimson-rs/docs/dye-editor-scope.md</c>, "Cross-version
+    /// drift (2.01)".
+    /// </para>
+    /// </summary>
+#pragma warning disable CA1822 // must stay an instance member: the menu
+                              // item binds it via compiled {Binding},
+                              // which resolves against the DataContext
+                              // instance, and a binding that fails to
+                              // resolve leaves IsEnabled at its default
+                              // (true) — the exact failure this guards.
+    public bool IsDyeEditorAvailable => false;
+#pragma warning restore CA1822
     public bool HasSelectedBlock => SelectedBlock is not null;
 
     public string SchemaTypeCountText => Summary is null ? "" : Summary.SchemaTypeCount.ToString("N0");

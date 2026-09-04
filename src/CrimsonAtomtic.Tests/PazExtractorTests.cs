@@ -146,17 +146,16 @@ public sealed class PazExtractorTests
         }
 
         var extractor = new NativePazExtractor();
-        var bytes = extractor.ExtractFile(
-            pamt,
-            "gamedata/stringtable/binary__",
-            "localizationstring_eng.paloc");
+        // One blob through 2.00; 2.01 split each language into one file per
+        // namespace, so ask for the language rather than a filename.
+        using var eng = LiveInstall.LoadPaloc(extractor, pamt, "eng");
+        Assert.NotNull(eng);
 
-        Assert.NotEmpty(bytes);
-        // The extracted bytes must parse as a PALOC and yield a
+        // The extracted bytes must parse as PALOC and yield a
         // plausibly-populated catalog (1.06 ships ~100k entries).
-        using var cat = NativePalocCatalog.LoadFromBytes(bytes);
-        Assert.True(cat.EntryCount > 10_000,
-            $"expected >10k English PALOC entries, got {cat.EntryCount}");
+        Assert.True(eng!.EntryCount > 10_000,
+            $"expected >10k English PALOC entries across {eng.PartCount} "
+            + $"file(s), got {eng.EntryCount}");
     }
 
     [Fact]
@@ -246,17 +245,16 @@ public sealed class PazExtractorTests
             return;
         }
         var extractor = new NativePazExtractor();
-        var bytes = extractor.ExtractFile(
-            pamt,
-            "gamedata/stringtable/binary__",
-            $"localizationstring_{code}.paloc");
-        Assert.NotEmpty(bytes);
-        using var cat = NativePalocCatalog.LoadFromBytes(bytes);
-        // Each translated table is on the order of 100k+ entries —
-        // anything significantly smaller probably means the wrong file
-        // was extracted (truncated, wrong format, etc).
-        Assert.True(cat.EntryCount > 50_000,
-            $"localizationstring_{code}.paloc: expected >50k entries, got {cat.EntryCount}");
+        using var lang = LiveInstall.LoadPaloc(extractor, pamt, code);
+        Assert.NotNull(lang);
+        // Each translated language is on the order of 100k+ entries —
+        // anything significantly smaller probably means the wrong files
+        // were extracted (truncated, wrong format, a missed namespace).
+        // Counted across the language's parts, so the bar is the same
+        // either side of the 2.01 split.
+        Assert.True(lang!.EntryCount > 50_000,
+            $"{code}: expected >50k entries across {lang.PartCount} file(s), "
+            + $"got {lang.EntryCount}");
     }
 
     /// <summary>

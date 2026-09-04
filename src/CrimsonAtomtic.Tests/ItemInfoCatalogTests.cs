@@ -47,8 +47,7 @@ public sealed class ItemInfoCatalogTests
             return;
         }
         var extractor = new NativePazExtractor();
-        var bytes = extractor.ExtractFile(
-            pamt, "gamedata/binary__/client/bin", "iteminfo.pabgb");
+        var bytes = LiveInstall.Body(extractor, pamt, "iteminfo");
 
         using var cat = NativeItemInfoCatalog.LoadFromBytes(bytes);
         // 1.05 had ~6,236; 1.06 has ~6,400. Just assert plausibly populated.
@@ -102,8 +101,7 @@ public sealed class ItemInfoCatalogTests
         var pamt = FindIteminfoPamt();
         if (pamt is null) return;
         var extractor = new NativePazExtractor();
-        var bytes = extractor.ExtractFile(
-            pamt, "gamedata/binary__/client/bin", "iteminfo.pabgb");
+        var bytes = LiveInstall.Body(extractor, pamt, "iteminfo");
         using var cat = NativeItemInfoCatalog.LoadFromBytes(bytes);
 
         // Unknown item → null (the LookupSocketCaps NOT_FOUND path).
@@ -154,8 +152,7 @@ public sealed class ItemInfoCatalogTests
         var pamt = FindIteminfoPamt();
         if (pamt is null) return;
         var extractor = new NativePazExtractor();
-        var bytes = extractor.ExtractFile(
-            pamt, "gamedata/binary__/client/bin", "iteminfo.pabgb");
+        var bytes = LiveInstall.Body(extractor, pamt, "iteminfo");
         using var cat = NativeItemInfoCatalog.LoadFromBytes(bytes);
 
         // Unknown key → null (NOT_FOUND path).
@@ -214,8 +211,7 @@ public sealed class ItemInfoCatalogTests
             return;
         }
         var extractor = new NativePazExtractor();
-        var bytes = extractor.ExtractFile(
-            pamt, "gamedata/binary__/client/bin", "iteminfo.pabgb");
+        var bytes = LiveInstall.Body(extractor, pamt, "iteminfo");
         var cat = NativeItemInfoCatalog.LoadFromBytes(bytes);
         cat.Dispose();
         Assert.Throws<ObjectDisposedException>(() => cat.LookupStringKey(0));

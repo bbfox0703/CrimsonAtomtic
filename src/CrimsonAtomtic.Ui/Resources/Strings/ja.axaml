@@ -92,7 +92,8 @@
   <sys:String x:Key="MenuUnlockMounts">騎乗をアンロック (シジル + ドラゴン)(_U)…</sys:String>
   <sys:String x:Key="MenuEditKnowledge">ナレッジを編集 (カテゴリ別に習得)(_K)…</sys:String>
   <sys:String x:Key="MenuEditFactionNodes">勢力拠点を編集 (発見 / 状態設定)(_F)…</sys:String>
-  <sys:String x:Key="MenuEditItemDyes">アイテムの染色を編集(_D)…</sys:String>
+  <sys:String x:Key="MenuEditItemDyes">アイテムの染色を編集(_D)…（2.01 未対応）</sys:String>
+  <sys:String x:Key="MenuEditItemDyesUnavailableTip">Crimson Desert 2.01 では無効：スロットごとの染色 mask が 3 バイトから 12 バイトに拡張され、内容も再エンコードされました。旧形式で読むと約 3 分の 1 のスロットが空に見え、誤った値を書き戻します。新しい mask グループの解析後に再有効化されます。</sys:String>
   <sys:String x:Key="MenuVendorBuyback">商人の買い戻しリスト(_V)…</sys:String>
   <sys:String x:Key="MenuReviewChanges">未保存の変更を確認(_R)…</sys:String>
 

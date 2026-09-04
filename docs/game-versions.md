@@ -2,7 +2,7 @@
 
 ## Current install
 
-`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 2.00**
+`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 2.01**
 
 Top-level layout:
 
@@ -11,7 +11,7 @@ Crimson Desert/
 ├── 0000/ ... 0035/      # 36 asset pack groups, each contains *.paz + 0.pamt
 ├── bin64/               # CrimsonDesert.exe, DX12, DLSS/FSR/XeSS, Steam, Sentry
 ├── CDMods/              # cdumm.db (SQLite mod registry) + vanilla/ unpack cache
-├── gamedata/            # localizationstring_eng.paloc
+├── gamedata/            # <lang>/*.paloc (2.01; one blob per language before)
 ├── meta/                # 0.papgt (master pack tree), 0.pathc, 0.paver (version stamp)
 ├── mods/                # _enabled/, _asi/, _lang/ (user mods)
 └── config.json
@@ -28,9 +28,10 @@ Crimson Desert/
   patch. **Game 2.00 is the first major bump, and it RESETS the minor**
   (1.18 → 2.00 is `18` → `0`), so a bare minor no longer identifies a schema:
   minor `0` means 2.00 today and would have meant a hypothetical 1.00
-  yesterday. Live 2.00.00 install:
-  `02 00 00 00 00 00 14 d2 41 b2` → major 2, minor 0, patch 0,
-  build `0xb241d214`. (1.18.00 was `01 00 12 00 00 00 0f 7c 57 28`,
+  yesterday. Live 2.01.00 install:
+  `02 00 01 00 00 00 cb 5f 1e a3` → major 2, minor 1, patch 0,
+  build `0xa31e5fcb`. (2.00.00 was `02 00 00 00 00 00 14 d2 41 b2`,
+  build `0xb241d214`; 1.18.00 was `01 00 12 00 00 00 0f 7c 57 28`,
   build `0x28577c0f`; 1.17.00 was `01 00 11 00 00 00 97 4c 5e d0`,
   build `0xd05e4c97`; 1.16.00 was `01 00 10 00 00 00 e1 6d 1d 8d`,
   build `0x8d1d6de1`; 1.15.00 was `01 00 0f 00 00 00 e1 88 84 6a`,
@@ -169,3 +170,26 @@ The version-model change matters more than either drift. `meta/0.paver`'s **`min
 Soft pins bumped Rust-side: `gameadviceinfo` 472→478, `gameplayvariableinfo` 56→59, `globalgameevent` 188→191, `IS_EQUIP_QUICK_SLOT_VISIBLE` 1006→1008. One pin was **re-shaped rather than re-numbered** on both sides: the whole `globalgameevent` 188 → 191 delta is 2.00 removing `RoyalSupply` (`0x424a`) and adding four per-faction rows `RoyalSupply_{Her,Dem,Del,Var}` (`0x4308`–`0x430b`), all still group `0x4241` with `paloc_key = 0` — so Rust's `KNOWN_BODY` triple and the C# `NicheBridges_LiveInstall_LoadAllAndResolveKnownKeys` assertion were each replaced one-for-four. That C# assertion was the **only** count/value pin that moved this side; unlike 1.17/1.18 it did move, because the row it named no longer exists.
 
 `CompatibleMinors` = `{0}` (read as "minor 0 within major 2"); like 1.16 and 1.18 this is a **genuine** incompatibility rather than the target-only convention, since 1.18 iteminfo really does mis-decode. On the editor side the alignment cost the manual `VerMajor` 1→2 / `VerMinor` 18→0 lock-step bump (`VerPatch` back to 1), the new `ParserTargetGamedataMajor` `LibraryImport` and the major-aware compatibility gate, the mismatch-dialog prefix fix, and the paver + RoyalSupply pin refreshes — 382 C# tests green, 0 skipped.
+
+**2.00 → 2.01 is a RENAME PATCH: every gamedata file moved and not one byte inside them changed.** Vendored from `crimson-rs` `main` (PR #93, merge `5dbeefb`), validated against the live 2.01 install (paver `2/1/0/0xa31e5fcb`, 2026-09-04).
+
+The archive layer moved wholesale:
+
+| | 1.05 – 2.00 | 2.01+ |
+|---|---|---|
+| table directory | `gamedata/binary__/client/bin` | `gamedata/binarystaticinfo__/bin` |
+| table body | `<table>.pabgb` | `<table>.staticinfobody` |
+| table index | `<table>.pabgh` | `<table>.staticinfoheader` |
+| misc blob | `<table>.pabgm` | `<table>.staticinfomisc` (in `bin/misc`) |
+| gimmick charts | `binarygimmickchart__/bin/*.pabgb` | `binarygimmickchart__/bin/*.binarygimmick` |
+| localization | `stringtable/binary__/localizationstring_<lang>.paloc` | `stringtable/binary__/<lang>/<namespace>.paloc` |
+
+Contents are byte-identical either way, so **no parser changed** — `PARSER_TARGET_GAMEDATA_MINOR` 0 → 1 is the only Rust-side edit, and `CompatibleMinors` = `{1}` is the *target-only convention* (as with 1.14 / 1.15 / 1.17), not a real incompatibility: 2.00 data still parses byte-perfectly against this build.
+
+Editor-side the rename was the whole job, and it was **not** cosmetic: `LocalizationProvider` hardcoded the pre-2.01 directory and all 40-odd filenames, so on a 2.01 install every bridge returned NOT_FOUND and the app resolved no names at all. Both sides now go through a new `GameDataLayout` (mirroring crimson-rs's `gamedata_layout.rs`, which is `#[cfg(test)]` there and so unreachable over the C ABI): tables are named by *stem* and the directory + extensions come from a newest-first probe of the group-0008 manifest, so a kept pre-2.01 install still works. Localization needed more than a rename — 2.01 splits a language into one file per namespace, and `crimson_paloc_load_from_bytes` takes one blob — so a language is now held as its parts behind `MultiPalocCatalog`, and the `*_lookup_display_name` bridges (which each take a single PALOC *native handle*) are offered one part at a time. Namespaces don't overlap, so at most one part answers.
+
+One soft pin moved, on the C# side only: `MissionKey 1000157`'s English title was reworded **"Unfamiliar Lands" → "Unfamiliar Land"**. A game-side text edit, not a parse drift — the 25-character `MissionKey 1000083` title resolves unchanged through the identical path.
+
+**The Dye editor is greyed out as of this alignment.** 2.01 widened `partprefabdyeslotinfo`'s per-slot `mask` from 3 bytes to **12** *and re-encoded the contents* — in 5,572 of 6,555 comparable slot pairs the old three bytes do not appear as a contiguous window anywhere inside the new twelve, so no sub-slice is the pre-2.01 field. The twelve read as four groups of three, and **which group a slot uses is not yet RE'd**. Measured through the release dll over all 1,626 prefabs / 6,585 slots, the legacy 3-byte getter the editor calls reads all-zero on **2,196 slots (33.3%)** whose full field is non-zero — a third of the dye UI would render blank and write edits from that wrong reading. Per the foundation-over-workaround rule the menu item is disabled (with the reason in its tooltip) until the mask groups are decoded upstream and the editor moves to the new `crimson_part_prefab_dye_slot_info_lookup_slot_{,extra_layer_}mask_full` sized-buffer bridges. Everything else about dyeing still parses: the table loads all 1,626 rows on 2.01.
+
+On the editor side the alignment cost the manual `VerMinor` 0→1 lock-step bump (`VerPatch` back to 1), the `GameDataLayout` + `MultiPalocCatalog` additions, the paver pin refresh, and the one mission-title pin — 395 C# tests green, 0 skipped.
