@@ -8,7 +8,7 @@
 > the deep history behind a decision.
 >
 > Last updated: **2026-09-11** — the editor is aligned to game **2.02**
-> and **merged to `main`; not yet tagged or built by CI**. 2.02
+> and **v2.02.01 is tagged, built and PUBLISHED** (2026-09-11T14:42:44Z, marked Latest). 2.02
 > (paver `2/2/0/0xc8925c58`) is content-only for everything crimson-rs
 > parses — `iteminfo` and `skill` byte-identical to 2.01, 17 of 269 gamedata
 > files changed as pure content, no save-body drift — so the editor side was
@@ -18,15 +18,32 @@
 > suite failed exactly the four paver pins. AOT publish emits zero IL/trim
 > warnings, and the local single-file exe (28,965,888 B, 4-file bundle, no
 > `crimson_rs.dll`) stamps `2.2.1.27` and **launches** with the window title
-> `CrimsonAtomtic v2.02.01.27`. **Next concrete task: tag `v2.02.01`** on
-> `main` (annotated, bilingual — see [release-process.md](release-process.md)),
-> then verify the CI draft and publish it.
+> `CrimsonAtomtic v2.02.01.27`.
+>
+> **Release v2.02.01 (2026-09-11).** PR #38 (merge `f5a645a`) → annotated
+> tag `v2.02.01` (`--cleanup=verbatim`, both headings verified before the
+> push) → CI run `34608782045` (5 m 13 s; runner SDK 10.0.401, no NU1109;
+> crimson-rs `main` `1753d71`) → **DRAFT** "CrimsonAtomtic v2.02.01". Its
+> body was replaced with the bilingual player-facing notes only, matching
+> earlier releases. Verified without downloading anything: the zip asset
+> (`CrimsonAtomtic-v2.02.01-win-x64.zip`, 20,647,100 B) carries GitHub
+> digest `sha256:2bfa5407…`, identical to the hash CI printed when it
+> packaged it, and CI's bundle check reported 4 files with no
+> `crimson_rs.dll`. **Published 2026-09-11T14:42:44Z on the user's word,
+> marked Latest** (superseding v2.01.01). Not run before publishing: the
+> binary checks on the release zip itself (download, FileVersion, launch —
+> the launch check was done on a local AOT build of the same source) and a
+> load-a-real-save check. The whole sequence is now the 「啟動 release CI」
+> runbook in [release-process.md](release-process.md). **No release work is
+> pending; the next task is the backlog below** (the Dye editor's mask-group
+> RE first).
 >
 > **Nothing built until the SDK pin moved.** The .NET SDK had updated to
 > 10.0.401 (runtime 10.0.12) since the last session, so restore failed with
 > NU1109 before a single test could run — the ILCompiler central pin went
 > 10.0.11 → 10.0.12 (see gotchas). CI's `setup-dotnet` asks for `10.0.x`,
-> so the release build needs the same pin.
+> so the release build needed the same pin — the runner got 10.0.401 and
+> restored cleanly.
 >
 > **The quest-key lookups have no UI consumer yet.** crimson-rs reconciled
 > its curated main-/side-quest tables against the live 2.02 PALOC and keyed
@@ -45,8 +62,8 @@
 > **Below this line is the 2.01 history, kept for context.**
 >
 > The editor was aligned to game **2.01** on 2026-09-04 and **v2.01.01 was
-> tagged, built and published** the same day (2026-09-04T10:21:31Z, Latest —
-> this doc called it an unpublished draft until 2026-09-11). The annotated
+> tagged, built and published** the same day (2026-09-04T10:21:31Z; Latest
+> until v2.02.01 — this doc called it an unpublished draft until 2026-09-11). The annotated
 > tag points at `9e239c6` (PR #36 merge); CI cloned crimson-rs `main`
 > (`5dbeefb`, PR #93) fresh and built the single-file AOT exe. Verified from
 > the release's own assets: sha256 matches, the zip holds exactly the four
@@ -160,16 +177,17 @@
 
 ## Current state
 
-- **Editor aligned to game 2.02 — merged to `main` (2026-09-11); not
-  tagged or built by CI.** `VerMinor` 1 → **2** (`VerPatch` stays 1), so the
+- **Editor v2.02.01 — tagged, built and PUBLISHED** (2026-09-11T14:42:44Z,
+  marked Latest). Tag → `f5a645a` (PR #38 merge), CI run `34608782045`, zip
+  20,647,100 B (`sha256:2bfa5407…`), body = the bilingual notes only. `VerMinor` 1 → **2** (`VerPatch` stays 1), so the
   build stamps `2.2.1.<build>` and the UI renders `v2.02.01.<build>`. 2.02 is
   content-only for everything crimson-rs parses (full breakdown in
   [game-versions.md](game-versions.md)); the C# cost was the version bump,
   the paver pin refresh, seven additive quest-key lookups, version-neutral
   Dye-menu text, and an SDK-driven ILCompiler pin bump. **401 C# tests green,
   0 skipped**; AOT publish zero IL/trim warnings.
-- **Editor v2.01.01 — tagged, built and PUBLISHED** (2026-09-04T10:21:31Z,
-  marked Latest), aligned to live game **2.01**. Tag `v2.01.01` → `9e239c6`
+- **Editor v2.01.01 — tagged, built and published** (2026-09-04T10:21:31Z;
+  superseded by v2.02.01), aligned to live game **2.01**. Tag `v2.01.01` → `9e239c6`
   (PR #36 merge); the zip's sha256 matched, it held the four expected files
   with no `crimson_rs.dll`, and the exe stamped `2.1.1.26`. This doc
   described it as an unpublished draft until 2026-09-11 — `gh release view`
@@ -630,7 +648,7 @@ Each step should be green. If anything fails, fix it before touching new code
 
 One line per milestone; full detail in [status-archive.md](status-archive.md).
 
-- **2026-09-11 — aligned to game 2.02 (content-only; merged to `main`, not tagged)**:
+- **2026-09-11 — aligned to game 2.02 (content-only); v2.02.01 released**:
   2.02 (paver `2/2/0/0xc8925c58`) changed the layout of nothing crimson-rs
   parses: `iteminfo` and `skill` byte-identical to 2.01, 17 of 269 gamedata
   files changed as pure content (a file-by-file SHA256 compare of the kept
@@ -659,6 +677,12 @@ One line per milestone; full detail in [status-archive.md](status-archive.md).
   them. The Python module was stale again (a 2.01-era `.pyd`) and was
   rebuilt; it round-trips the live 2.02 `iteminfo` byte-identical. Also
   corrected here: v2.01.01 was published 2026-09-04, not left as a draft.
+  Shipped the same day: PR #38 (merge `f5a645a`) → tag `v2.02.01` → CI run
+  `34608782045` → draft, with the bilingual player-facing notes swapped in
+  for CI's assembled body → published 2026-09-11T14:42:44Z, marked Latest.
+  The sequence is now written up as the
+  「啟動 release CI」 runbook in [release-process.md](release-process.md),
+  with a pointer in the root CLAUDE.md so the phrase alone is enough.
 
 - **2026-09-04 — aligned to game 2.01 (rename patch); Dye editor greyed out; vendor script no longer eats this repo**:
   2.01 moved every gamedata file without changing a byte inside it —
