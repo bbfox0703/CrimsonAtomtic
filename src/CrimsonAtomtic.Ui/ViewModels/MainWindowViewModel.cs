@@ -1109,7 +1109,8 @@ public sealed partial class MainWindowViewModel(
     /// all 1,626 prefabs / 6,585 slots on live 2.01, the legacy 3-byte
     /// getter the editor calls reads all-zero on 2,196 slots (33.3%) whose
     /// full field is non-zero — i.e. a third of the dye UI would render
-    /// blank, and edits made on that reading would be wrong.
+    /// blank, and edits made on that reading would be wrong. 2.02 ships
+    /// the table byte-identical (body and header), so the figure stands.
     /// </para>
     ///
     /// <para>

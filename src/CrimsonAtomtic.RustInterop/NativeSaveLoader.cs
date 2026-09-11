@@ -2186,11 +2186,37 @@ internal static partial class NativeMethods
     public static unsafe partial int MainQuestArcForMission(
         string missionTitle, byte* buf, nuint bufLen, out nuint required);
 
+    // Key lookups (crimson-rs 2.02 reconciliation). Every curated row now
+    // records the game row its title comes from, so the MissionKey /
+    // QuestKey a save stores resolves without going through a display
+    // string — it survives a retitle and is exact for the repeated titles.
+    // The two key spaces overlap numerically, hence one entry point per
+    // kind. Kind codes from *_get_entry_keys: 0 unresolved, 1 MissionKey,
+    // 2 QuestKey (see QuestRollupKeyKind).
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_main_quest_chapter_for_mission_key")]
+    public static unsafe partial int MainQuestChapterForMissionKey(
+        uint missionKey, byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_main_quest_arc_for_mission_key")]
+    public static unsafe partial int MainQuestArcForMissionKey(
+        uint missionKey, byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_main_quest_chapter_for_quest_key")]
+    public static unsafe partial int MainQuestChapterForQuestKey(
+        uint questKey, byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_main_quest_table_get_entry_keys")]
+    public static partial int MainQuestTableGetEntryKeys(
+        uint idx,
+        out uint outArcKind, out uint outArcKey,
+        out uint outEntryKind, out uint outEntryKey);
+
     // ── Side quest faction rollup (curated static table) ────────────────────
     //
     // Sibling of main_quest_chapter — flat (quest_title, faction_name)
     // rollup from vendor/crimson-rs/docs/ref-gamedata/side-quest-list.md.
-    // 84 quests across 22 factions.
+    // 84 rows across 23 factions.
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_side_quest_table_entry_count")]
     public static partial int SideQuestTableEntryCount(out uint outCount);
@@ -2216,6 +2242,21 @@ internal static partial class NativeMethods
     public static unsafe partial int SideQuestQuestAtForFaction(
         string factionName, uint idx,
         byte* buf, nuint bufLen, out nuint required);
+
+    // Key lookups — same contract as the main-quest ones above. Every
+    // side-quest row resolves (kind 1 or 2); 64 of the 84 are missions.
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_side_quest_faction_for_mission_key")]
+    public static unsafe partial int SideQuestFactionForMissionKey(
+        uint missionKey, byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_side_quest_faction_for_quest_key")]
+    public static unsafe partial int SideQuestFactionForQuestKey(
+        uint questKey, byte* buf, nuint bufLen, out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_side_quest_table_get_entry_key")]
+    public static partial int SideQuestTableGetEntryKey(
+        uint idx, out uint outKind, out uint outKey);
 
     // ── ItemInfo bridge (iteminfo.pabgb) ────────────────────────────────────
 

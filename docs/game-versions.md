@@ -2,7 +2,7 @@
 
 ## Current install
 
-`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 2.01**
+`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 2.02**
 
 Top-level layout:
 
@@ -28,9 +28,10 @@ Crimson Desert/
   patch. **Game 2.00 is the first major bump, and it RESETS the minor**
   (1.18 → 2.00 is `18` → `0`), so a bare minor no longer identifies a schema:
   minor `0` means 2.00 today and would have meant a hypothetical 1.00
-  yesterday. Live 2.01.00 install:
-  `02 00 01 00 00 00 cb 5f 1e a3` → major 2, minor 1, patch 0,
-  build `0xa31e5fcb`. (2.00.00 was `02 00 00 00 00 00 14 d2 41 b2`,
+  yesterday. Live 2.02.00 install:
+  `02 00 02 00 00 00 58 5c 92 c8` → major 2, minor 2, patch 0,
+  build `0xc8925c58`. (2.01.00 was `02 00 01 00 00 00 cb 5f 1e a3`,
+  build `0xa31e5fcb`; 2.00.00 was `02 00 00 00 00 00 14 d2 41 b2`,
   build `0xb241d214`; 1.18.00 was `01 00 12 00 00 00 0f 7c 57 28`,
   build `0x28577c0f`; 1.17.00 was `01 00 11 00 00 00 97 4c 5e d0`,
   build `0xd05e4c97`; 1.16.00 was `01 00 10 00 00 00 e1 6d 1d 8d`,
@@ -46,7 +47,7 @@ Crimson Desert/
   install's `(major, minor)` isn't one the parser can load —
   `GameDataVersion.IsCompatibleWithParser` now gates on
   `Major == ParserTargetMajor` **and** `Minor ∈ CompatibleMinors`
-  (currently `2` and `{0}`). The major half was added at the 2.00 alignment
+  (currently `2` and `{2}`). The major half was added at the 2.00 alignment
   and is not cosmetic: with the minor reset to `0`, the old minor-only test
   would have reported a hypothetical `1.00.xx` install as compatible with the
   2.00 parser. **2.00 carries two iteminfo layout drifts** (crimson-rs commit
@@ -193,3 +194,13 @@ One soft pin moved, on the C# side only: `MissionKey 1000157`'s English title wa
 **The Dye editor is greyed out as of this alignment.** 2.01 widened `partprefabdyeslotinfo`'s per-slot `mask` from 3 bytes to **12** *and re-encoded the contents* — in 5,572 of 6,555 comparable slot pairs the old three bytes do not appear as a contiguous window anywhere inside the new twelve, so no sub-slice is the pre-2.01 field. The twelve read as four groups of three, and **which group a slot uses is not yet RE'd**. Measured through the release dll over all 1,626 prefabs / 6,585 slots, the legacy 3-byte getter the editor calls reads all-zero on **2,196 slots (33.3%)** whose full field is non-zero — a third of the dye UI would render blank and write edits from that wrong reading. Per the foundation-over-workaround rule the menu item is disabled (with the reason in its tooltip) until the mask groups are decoded upstream and the editor moves to the new `crimson_part_prefab_dye_slot_info_lookup_slot_{,extra_layer_}mask_full` sized-buffer bridges. Everything else about dyeing still parses: the table loads all 1,626 rows on 2.01.
 
 On the editor side the alignment cost the manual `VerMinor` 0→1 lock-step bump (`VerPatch` back to 1), the `GameDataLayout` + `MultiPalocCatalog` additions, the paver pin refresh, and the one mission-title pin — 395 C# tests green, 0 skipped.
+
+**2.01 → 2.02 is CONTENT-ONLY — nothing crimson-rs parses changed layout.** Vendored from `crimson-rs` `main` at `1753d71` (the 2.02 work is PR #95, merge `3296b5c`: commits `03d91e2` + `04047a2`), validated against the live 2.02 install (paver `2/2/0/0xc8925c58`, 2026-09-11). The archive layout is the 2.01 one, unchanged.
+
+*Data.* `iteminfo` and `skill` (body and header) are byte-identical to 2.01 — iteminfo is still 6,813 items / 6,450,232 B / SHA256 `e646e4a0…`, and the refreshed Python module round-trips the live file byte-identical. Of the 269 extracted gamedata files, 252 are byte-identical to the kept `gamedata-bin/2.01`; the 17 that changed are `conditioninfo`, `gameversiondatainfo`, `gimmickgroupinfo`, `knowledgegroupinfo`, `knowledgeinfo`, `localstringinfo`, `missioninfo` and `stringinfo` (body + header each) plus `gimmickinfo` (body only), and crimson-rs's row-level diff accounts for every byte as content — one knowledge entry removed, a `patch_2_02_00` version row, one mission, one condition, a few dozen gimmick rows — with every header shape intact. Gamedata keys: 30 tables / 97,118, 29 key-identical to 2.01 (`knowledgeinfo` −1). The save body did not drift (crimson-rs: 0 undecoded bytes on all 12 live saves, two of them 2.02-written). One number looked like drift and wasn't: slot107's `trailing_pad` total moved 236 → 237, and the new `_probe_save_trailing_pad_census` shows it tracks save content — the 2.01 slot0 and its 2.02 re-save pad class-for-class identically.
+
+`partprefabdyeslotinfo` is byte-identical too (body and header), so the 2.01 Dye-editor measurement — 2,196 of 6,585 slots reading all-zero through the legacy 3-byte mask getter — still stands, and the editor stays disabled.
+
+*Parser and C ABI.* The only parser change is `PARSER_TARGET_GAMEDATA_MINOR` 1 → 2; `CompatibleMinors` = `{2}` is the target-only convention again (2.01 data parses byte-perfectly). The C ABI only **grew**: the curated quest tables (`main_quest_chapter`, `side_quest_faction`, transcribed from a wiki) were checked against the live English PALOC for the first time, the rows whose titles had drifted were re-paired with their game rows, and every row now carries its `MissionKey` / `QuestKey` behind seven additive entry points — `crimson_main_quest_{chapter_for_mission_key, arc_for_mission_key, chapter_for_quest_key, table_get_entry_keys}` and `crimson_side_quest_{faction_for_mission_key, faction_for_quest_key, table_get_entry_key}`. The title lookups are unchanged. The side-quest table turned out to be mostly missions (64 of 84 rows), not quests.
+
+*Editor side.* The manual `VerMinor` 1 → 2 lock-step bump (`VerPatch` stays 1), the paver pin refresh, the seven key lookups wired through `NativeMainQuestChapter` / `NativeSideQuestFaction` (kind + key as `QuestRollupKey`), and version-neutral Dye-menu text ("unsupported since 2.01" rather than "2.01 unsupported", which read wrong on a 2.02 install). Unrelated to the patch, the SDK moved to 10.0.401 and the ILCompiler central pin had to follow (10.0.11 → 10.0.12) before anything would restore. **No count/value pin moved on the C# side**: the untouched suite failed exactly the four paver pins, and after the bump 401 C# tests are green, 0 skipped.

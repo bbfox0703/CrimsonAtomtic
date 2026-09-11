@@ -9,6 +9,14 @@ namespace CrimsonAtomtic.Tests;
 /// <see cref="NativeSideQuestFaction"/>). Both are static
 /// no-handle / no-file lookups so the tests skip cleanly only when
 /// the C ABI DLL itself is absent.
+///
+/// <para>
+/// Whether each curated title still matches the live game is checked
+/// Rust-side (<c>curated_titles_match_live_install</c>, one per bridge),
+/// so nothing here reads the install. What these pin is the C# half of
+/// the contract: the P/Invoke signatures (out-parameter order included)
+/// and that the key and title surfaces agree row by row.
+/// </para>
 /// </summary>
 public sealed class QuestRollupBridgeTests
 {
@@ -21,7 +29,7 @@ public sealed class QuestRollupBridgeTests
     {
         if (!DllPresent) return;
         var count = NativeMainQuestChapter.EntryCount;
-        // Vendor side advertises ~170 rows across Prologue + 12
+        // Vendor side advertises 170 rows across Prologue + 12
         // chapters + Epilogue. Lower bound asserts the table is loaded;
         // upper bound catches accidental ROW append explosions.
         Assert.InRange(count, 100, 400);
@@ -80,6 +88,85 @@ public sealed class QuestRollupBridgeTests
         Assert.Equal(row.Value.Chapter, resolved);
     }
 
+    [Fact]
+    public void MainQuest_KeyLookups_AgreeWithTableOnEveryRow()
+    {
+        if (!DllPresent) return;
+        // Every resolved row's key must lead back to that row's own chapter
+        // and arc — including the titles that repeat across chapters, where
+        // a title lookup can only ever answer with the first. Walking all
+        // rows also pins get_entry_keys' out-parameter order: swapped
+        // kind/key outputs would read a key as a kind and trip FromAbi.
+        var count = NativeMainQuestChapter.EntryCount;
+        var unresolved = 0;
+        for (var i = 0; i < count; i++)
+        {
+            var row = NativeMainQuestChapter.GetEntry(i);
+            var keys = NativeMainQuestChapter.GetEntryKeys(i);
+            Assert.NotNull(row);
+            Assert.NotNull(keys);
+            var (arc, entry) = keys.Value;
+            switch (entry.Kind)
+            {
+                case QuestRollupKeyKind.Mission:
+                    Assert.Equal(row.Value.Chapter, NativeMainQuestChapter.ChapterForMissionKey(entry.Key));
+                    Assert.Equal(row.Value.Arc, NativeMainQuestChapter.ArcForMissionKey(entry.Key));
+                    break;
+                case QuestRollupKeyKind.Quest:
+                    Assert.Equal(row.Value.Chapter, NativeMainQuestChapter.ChapterForQuestKey(entry.Key));
+                    break;
+                default:
+                    Assert.Equal(0u, entry.Key);
+                    unresolved++;
+                    break;
+            }
+            if (string.IsNullOrEmpty(row.Value.Arc))
+            {
+                // Prologue: no arc, so no arc key either.
+                Assert.Equal(QuestRollupKeyKind.Unresolved, arc.Kind);
+            }
+            else if (arc.Kind == QuestRollupKeyKind.Quest)
+            {
+                Assert.Equal(row.Value.Chapter, NativeMainQuestChapter.ChapterForQuestKey(arc.Key));
+            }
+        }
+        // Upstream keeps a handful of wiki-only titles with no live
+        // counterpart (5 at the 2.02 reconciliation). Far more than that
+        // means the table lost its keys, not that the game changed.
+        Assert.InRange(unresolved, 0, 10);
+    }
+
+    [Fact]
+    public void MainQuest_KeyLookup_IsExactWhereTitleLookupIsNot()
+    {
+        if (!DllPresent) return;
+        // "In Ashes" is two different missions: 1000160 in the Prologue and
+        // 1000783 in Chapter 6. The title lookup can only return the first;
+        // the key lookups answer each one exactly — the reason they exist.
+        var byTitle = NativeMainQuestChapter.ChapterForMission("In Ashes");
+        var prologue = NativeMainQuestChapter.ChapterForMissionKey(1_000_160);
+        var chapter6 = NativeMainQuestChapter.ChapterForMissionKey(1_000_783);
+        Assert.NotNull(prologue);
+        Assert.NotNull(chapter6);
+        Assert.NotEqual(prologue, chapter6);
+        Assert.Equal(prologue, byTitle);
+        Assert.Contains("Prologue", prologue, StringComparison.Ordinal);
+        Assert.StartsWith("Chapter 6", chapter6, StringComparison.Ordinal);
+        Assert.Equal(string.Empty, NativeMainQuestChapter.ArcForMissionKey(1_000_160));
+    }
+
+    [Fact]
+    public void MainQuest_UnknownKeys_ReturnNull()
+    {
+        if (!DllPresent) return;
+        // 0 is the key an Unresolved row reports; it must never resolve.
+        Assert.Null(NativeMainQuestChapter.ChapterForMissionKey(0));
+        Assert.Null(NativeMainQuestChapter.ArcForMissionKey(0));
+        Assert.Null(NativeMainQuestChapter.ChapterForQuestKey(0));
+        Assert.Null(NativeMainQuestChapter.ChapterForMissionKey(uint.MaxValue));
+        Assert.Null(NativeMainQuestChapter.GetEntryKeys(NativeMainQuestChapter.EntryCount + 10));
+    }
+
     // ── side_quest_faction ──────────────────────────────────────────────────
 
     [Fact]
@@ -87,7 +174,7 @@ public sealed class QuestRollupBridgeTests
     {
         if (!DllPresent) return;
         var count = NativeSideQuestFaction.EntryCount;
-        // Vendor side advertises ~84 quests across 22 factions.
+        // Vendor side advertises 84 rows across 23 factions.
         Assert.InRange(count, 50, 200);
     }
 
@@ -141,5 +228,45 @@ public sealed class QuestRollupBridgeTests
         if (!DllPresent) return;
         Assert.Equal(0, NativeSideQuestFaction.QuestCountForFaction("__no such faction__"));
         Assert.Null(NativeSideQuestFaction.QuestAtForFaction("__no such faction__", 0));
+    }
+
+    [Fact]
+    public void SideQuest_KeyLookups_AgreeWithTableOnEveryRow()
+    {
+        if (!DllPresent) return;
+        // Every side-quest row resolves to a live mission or quest, and its
+        // key must lead back to its own faction without the title.
+        var count = NativeSideQuestFaction.EntryCount;
+        var missions = 0;
+        for (var i = 0; i < count; i++)
+        {
+            var row = NativeSideQuestFaction.GetEntry(i);
+            var key = NativeSideQuestFaction.GetEntryKey(i);
+            Assert.NotNull(row);
+            Assert.NotNull(key);
+            Assert.True(key.Value.Kind != QuestRollupKeyKind.Unresolved,
+                $"side-quest row {i} ('{row.Value.Quest}') carries no game key");
+            var resolved = key.Value.Kind == QuestRollupKeyKind.Mission
+                ? NativeSideQuestFaction.FactionForMissionKey(key.Value.Key)
+                : NativeSideQuestFaction.FactionForQuestKey(key.Value.Key);
+            Assert.Equal(row.Value.Faction, resolved);
+            if (key.Value.Kind == QuestRollupKeyKind.Mission)
+            {
+                missions++;
+            }
+        }
+        // The source MD called every row a quest; most are missions (64 of
+        // 84 at the 2.02 reconciliation). Zero would mean the kinds were
+        // read back wrong.
+        Assert.True(missions > 0, "expected mission-kind side-quest rows");
+    }
+
+    [Fact]
+    public void SideQuest_UnknownKeys_ReturnNull()
+    {
+        if (!DllPresent) return;
+        Assert.Null(NativeSideQuestFaction.FactionForMissionKey(0));
+        Assert.Null(NativeSideQuestFaction.FactionForQuestKey(0));
+        Assert.Null(NativeSideQuestFaction.GetEntryKey(NativeSideQuestFaction.EntryCount + 10));
     }
 }

@@ -7,19 +7,56 @@
 > **[status-archive.md](status-archive.md)** — look there only when you need
 > the deep history behind a decision.
 >
-> Last updated: **2026-09-04** — the editor is aligned to game **2.01**, and
-> **v2.01.01 is tagged and built**. The annotated tag points at `9e239c6`
-> (PR #36 merge); CI cloned crimson-rs `main` (`5dbeefb`, PR #93) fresh, built
-> the single-file AOT exe and created a **DRAFT** release. Verified from the
-> draft's own assets: sha256 matches, the zip holds exactly the four expected
-> files with **no `crimson_rs.dll`** (the Rust core is linked into the exe),
-> and the exe stamps `2.1.1.26` / product `2.1.1.26+9e239c6`. The release
-> notes were trimmed to the bilingual highlights only, matching v1.18.01 /
-> v2.00.01 / v2.00.02 — CI's auto `## What's changed` + footer are dropped at
-> publish time by convention. **The draft is not published**: that is the one
-> open item, and it wants a human load-a-real-save check first. The other
-> standing loose end is unchanged: crimson-rs still has no pushed version
-> tags (see the crimson-rs bullet).
+> Last updated: **2026-09-11** — the editor is aligned to game **2.02**
+> and **merged to `main`; not yet tagged or built by CI**. 2.02
+> (paver `2/2/0/0xc8925c58`) is content-only for everything crimson-rs
+> parses — `iteminfo` and `skill` byte-identical to 2.01, 17 of 269 gamedata
+> files changed as pure content, no save-body drift — so the editor side was
+> the manual `VerMinor` 1 → 2 bump, the paver pin refresh, and wiring the
+> seven additive quest-key lookups the vendored crimson-rs (`main`
+> `1753d71`) now exports. **401 C# tests green, 0 skipped**; the untouched
+> suite failed exactly the four paver pins. AOT publish emits zero IL/trim
+> warnings, and the local single-file exe (28,965,888 B, 4-file bundle, no
+> `crimson_rs.dll`) stamps `2.2.1.27` and **launches** with the window title
+> `CrimsonAtomtic v2.02.01.27`. **Next concrete task: tag `v2.02.01`** on
+> `main` (annotated, bilingual — see [release-process.md](release-process.md)),
+> then verify the CI draft and publish it.
+>
+> **Nothing built until the SDK pin moved.** The .NET SDK had updated to
+> 10.0.401 (runtime 10.0.12) since the last session, so restore failed with
+> NU1109 before a single test could run — the ILCompiler central pin went
+> 10.0.11 → 10.0.12 (see gotchas). CI's `setup-dotnet` asks for `10.0.x`,
+> so the release build needs the same pin.
+>
+> **The quest-key lookups have no UI consumer yet.** crimson-rs reconciled
+> its curated main-/side-quest tables against the live 2.02 PALOC and keyed
+> every row by `MissionKey` / `QuestKey` (additive C ABI; the title lookups
+> are unchanged, and upstream's advice is "C# editor: prefer the key
+> lookups"). They are wired through `NativeMainQuestChapter` /
+> `NativeSideQuestFaction` and pinned by five new tests, but nothing in the
+> app calls either class, so under `TrimMode=full` the AOT link never sees
+> them — the tests, through the cdylib, are what exercise them.
+>
+> **The Dye editor stays disabled**: `partprefabdyeslotinfo` is
+> byte-identical in 2.02 (body and header), so the 2.01 measurement stands.
+> The menu now reads "unsupported since 2.01" instead of "2.01 unsupported",
+> which read wrong on a 2.02 install.
+>
+> **Below this line is the 2.01 history, kept for context.**
+>
+> The editor was aligned to game **2.01** on 2026-09-04 and **v2.01.01 was
+> tagged, built and published** the same day (2026-09-04T10:21:31Z, Latest —
+> this doc called it an unpublished draft until 2026-09-11). The annotated
+> tag points at `9e239c6` (PR #36 merge); CI cloned crimson-rs `main`
+> (`5dbeefb`, PR #93) fresh and built the single-file AOT exe. Verified from
+> the release's own assets: sha256 matches, the zip holds exactly the four
+> expected files with **no `crimson_rs.dll`** (the Rust core is linked into
+> the exe), and the exe stamps `2.1.1.26` / product `2.1.1.26+9e239c6`. The
+> release notes were trimmed to the bilingual highlights only, matching
+> v1.18.01 / v2.00.01 / v2.00.02 — CI's auto `## What's changed` + footer
+> are dropped at publish time by convention. The standing loose end is
+> unchanged: crimson-rs still has no pushed version tags (see the
+> crimson-rs bullet).
 >
 > **The bug this release fixes had a green test suite.** Every individual
 > bridge had a live-install test, but nothing drove `LocalizationProvider` —
@@ -123,8 +160,22 @@
 
 ## Current state
 
-- **Editor v2.00.02 — tagged, built and PUBLISHED** (2026-08-28T07:33:26Z,
-  marked Latest), aligned to live game **2.00**. A socket-editor correctness
+- **Editor aligned to game 2.02 — merged to `main` (2026-09-11); not
+  tagged or built by CI.** `VerMinor` 1 → **2** (`VerPatch` stays 1), so the
+  build stamps `2.2.1.<build>` and the UI renders `v2.02.01.<build>`. 2.02 is
+  content-only for everything crimson-rs parses (full breakdown in
+  [game-versions.md](game-versions.md)); the C# cost was the version bump,
+  the paver pin refresh, seven additive quest-key lookups, version-neutral
+  Dye-menu text, and an SDK-driven ILCompiler pin bump. **401 C# tests green,
+  0 skipped**; AOT publish zero IL/trim warnings.
+- **Editor v2.01.01 — tagged, built and PUBLISHED** (2026-09-04T10:21:31Z,
+  marked Latest), aligned to live game **2.01**. Tag `v2.01.01` → `9e239c6`
+  (PR #36 merge); the zip's sha256 matched, it held the four expected files
+  with no `crimson_rs.dll`, and the exe stamped `2.1.1.26`. This doc
+  described it as an unpublished draft until 2026-09-11 — `gh release view`
+  says `draft: false`.
+- **Editor v2.00.02 — tagged, built and published** (2026-08-28T07:33:26Z;
+  superseded by v2.01.01), aligned to live game **2.00**. A socket-editor correctness
   release on top of v2.00.01: `VerMajor` / `VerMinor` unchanged (the game is
   still 2.00), `VerPatch` **1 → 2**. Merged to `main` (PR #32, merge
   `2a30d4c`), tagged `v2.00.02` → CI run `33151190235` built the single-file
@@ -218,30 +269,34 @@
   `GameDataVersion.ParserTargetMajor`, `ParserTargetMinor` and
   `CompatibleMinors` are all read from the crimson-rs C ABI
   (`crimson_parser_target_gamedata_major()` → 2;
-  `crimson_parser_target_gamedata_minor()` → 0;
-  `crimson_parser_compatible_gamedata_minors()` → {1}) — not hand-coded.
-  2.01 is a **rename-only** patch, so the warning shown to a 2.00 install is
-  the target-only convention (2.00 data still parses byte-perfectly), unlike
-  the substantive 1.18 → 2.00 case. Full per-version breakdown in
+  `crimson_parser_target_gamedata_minor()` → 2;
+  `crimson_parser_compatible_gamedata_minors()` → {2}) — not hand-coded.
+  2.02 is **content-only** over 2.01 (as 2.01 was a rename-only patch over
+  2.00), so the warning shown to a 2.01 install is the target-only convention
+  (2.01 data still parses byte-perfectly), unlike the substantive 1.18 → 2.00
+  case. Full per-version breakdown in
   [game-versions.md](game-versions.md).
-- **crimson-rs 2.01 is on `main`, and vendored.** Merged to
-  `bbfox0703/crimson-rs` `main` as PR #93 (merge `5dbeefb`), which also
-  carried PR #92's socket doc fix; `vendor/update_vendors.ps1` (which tracks
-  `main`) refreshed the local copy to `5dbeefb`, and `build_rust.ps1` rebuilt
-  the c_abi cdylib from it. CI clones `main`, so a `v2.01.01` tag would ship
-  the 2.01 parser (CI clones fresh at tag time). The
-  land-on-`main`-before-tagging order was followed.
-  **Still no version tags**, now for 1.18 *and* 2.00: the `v1.0.10.x`–
+- **crimson-rs 2.02 is on `main`, and vendored.** The 2.02 support is PR #95
+  (merge `3296b5c`: `03d91e2` — `PARSER_TARGET_GAMEDATA_MINOR` 1 → 2 — and
+  `04047a2`, the keyed quest tables), and `main` has since moved to `1753d71`
+  (PR #96, an extractor `--paloc` flag; scripts only). The vendor copy sits at
+  `1753d71`; `build_rust.ps1` rebuilt the c_abi dll + staticlib from it and
+  `setup_python_env.ps1` the Python module. CI clones `main` fresh at tag
+  time, so a `v2.02.01` tag ships the 2.02 parser as things stand.
+  **Still no version tags**, now for 1.18 through 2.02: the `v1.0.10.x`–
   `v1.0.17.x` tags exist **only in the local clone** at
   `D:\Github\crimson-rs` — `git ls-remote --tags` against the fork returns
   **nothing**, so none were ever pushed. "Parity with 1.13–1.17" therefore
   means parity with local-only tags; decide whether to push the whole set,
   keep them local, or stop cutting them.
-- **Health:** full suite green this session (**395** C# tests, 0 skipped, 0
-  failures — 45 of them were failing against the live 2.01 install before the
-  `GameDataLayout` rewire, all on the renamed archive paths. Live-install +
-  catalog tests parse the real 2.01 gamedata; the native lib was rebuilt from
-  the vendored 2.01 crimson-rs so the ABI reports target major 2 / minor 1).
+- **Health:** full suite green this session (**401** C# tests, 0 skipped, 0
+  failures) against the live 2.02 install, with the native lib rebuilt from
+  the vendored 2.02 crimson-rs so the ABI reports target major 2 / minor 2.
+  The untouched suite (396) failed exactly the four `NativePaverReaderTests`
+  pins; the five added tests are the quest-key checks. At 2.01 the count was
+  **395** (396 once the `LocalizationProvider` bootstrap test landed), 45 of
+  which had been failing against the live 2.01 install before the
+  `GameDataLayout` rewire, all on the renamed archive paths.
   The 2.00 count went
   381 → 382 because the 2.00 alignment added one test
   (`TryReadFromBytes_SameMinorUnderOtherMajor_FlagsIncompatible`). Two pin
@@ -266,7 +321,9 @@ are in [status-archive.md](status-archive.md).
 
 ## Open work / backlog
 
-- **🔴 Dye editor is disabled on 2.01 — needs the mask-group RE.** 2.01
+- **🔴 Dye editor is disabled since 2.01 — needs the mask-group RE.** (Still
+  true on 2.02, which ships `partprefabdyeslotinfo` byte-identical — body and
+  header — so every figure below stands.) 2.01
   widened `partprefabdyeslotinfo`'s per-slot `mask` from 3 bytes to 12 and
   **re-encoded the contents**: there is no "original three", so no sub-slice
   of the new field is the pre-2.01 one. The twelve read as four groups of
@@ -482,8 +539,9 @@ window-restore quirks, etc.) is in
   SDK auto-injects a newer `Microsoft.DotNet.ILCompiler`, which then demands
   `runtime.win-x64.Microsoft.DotNet.ILCompiler >=` that version → **NU1109 at
   restore**, blocking every build. Bumped 10.0.8 → 10.0.9 (1.11) → 10.0.10
-  (1.14) → **10.0.11** (1.18, SDK 10.0.400). Expect this every time the SDK
-  moves; it is not related to the game patch.
+  (1.14) → 10.0.11 (1.18, SDK 10.0.400) → **10.0.12** (2.02, SDK 10.0.401 —
+  it failed even the untouched pre-edit baseline test run). Expect this every
+  time the SDK moves; it is not related to the game patch.
 - **A vendor refresh does NOT rebuild the Python `crimson_rs` module.**
   `maturin develop` installs *editable* (a `.pth` pointing at
   `vendor/crimson-rs/python`), so after `update_vendors.ps1` the in-tree source
@@ -506,7 +564,11 @@ window-restore quirks, etc.) is in
   machine. Verified by round-tripping the live 2.00 `iteminfo.pabgb` through
   the module: 6,446,719 B / 6,810 items, byte-identical. Expect the trap to
   come back at the next vendor refresh; it recurs because documenting it does
-  not run the script.
+  not run the script. **It did, at 2.02**: after the vendor refresh the
+  in-tree `.pyd` was still the 2026-09-04 (2.01-era) build. Re-running
+  `setup_python_env.ps1` made it **1,272,320 B dated 2026-09-11 21:39**, and
+  the live 2.02 `iteminfo` then round-tripped byte-identical (6,450,232 B,
+  6,813 items, SHA256 `e646e4a0…`).
 - **…and until 1.18, that Python rebuild CLOBBERED the C# native lib.**
   `maturin develop` builds the same crate with the **default** features (PyO3,
   no `c_abi`), so it shared `vendor/crimson-rs/target/release/crimson_rs.dll`
@@ -519,10 +581,11 @@ window-restore quirks, etc.) is in
   find an entry point named 'crimson_…'`, check the dll's **size** before
   suspecting the ABI. The two builds differ by roughly 150 KB, and that gap —
   not any absolute number — is the tell: **don't memorise the byte counts,
-  they move with every patch.** At 2.00 the c_abi build is **1,114,112 B** and
-  the PyO3 one **1,272,832 B** (they were 1,097,216 / 1,274,368 at 1.18).
+  they move with every patch.** At 2.02 the c_abi build is **1,136,640 B** and
+  the PyO3 one **1,272,320 B** (1,114,112 / 1,272,832 at 2.00; 1,097,216 /
+  1,274,368 at 1.18 — the gap has narrowed to ~136 KB).
   Windows Explorer and `Get-Item .Length/1KB` divide by 1024, so they show the
-  2.00 pair as **1,088 KB** and **1,243 KB** — don't be thrown when those
+  2.02 pair as **1,110 KB** and **1,243 KB** — don't be thrown when those
   disagree with decimal-KB (÷1000) figures.
 - **Avalonia 12 quirks**: DataGrid is at **12.1.2 and now *leads* core
   (12.1.1)** — it ships on its own cadence, so a version mismatch between the
@@ -566,6 +629,36 @@ Each step should be green. If anything fails, fix it before touching new code
 ## Session changelog (newest first)
 
 One line per milestone; full detail in [status-archive.md](status-archive.md).
+
+- **2026-09-11 — aligned to game 2.02 (content-only; merged to `main`, not tagged)**:
+  2.02 (paver `2/2/0/0xc8925c58`) changed the layout of nothing crimson-rs
+  parses: `iteminfo` and `skill` byte-identical to 2.01, 17 of 269 gamedata
+  files changed as pure content (a file-by-file SHA256 compare of the kept
+  `gamedata-bin/2.01` vs `2.02` confirms upstream's count),
+  `partprefabdyeslotinfo` untouched, no save-body drift. Vendored crimson-rs
+  `main` at `1753d71` (PR #95: `PARSER_TARGET_GAMEDATA_MINOR` 1 → 2, plus the
+  curated quest tables reconciled against the live 2.02 PALOC and keyed by
+  `MissionKey` / `QuestKey` behind seven additive C ABI entry points). Before
+  anything built, the SDK had moved to 10.0.401 and NU1109 blocked restore —
+  ILCompiler central pin 10.0.11 → **10.0.12**. The untouched suite then
+  failed exactly the four `NativePaverReaderTests` pins (of 396). Editor
+  changes: `VerMinor` 1 → 2; paver pins moved to 2.02 (previous-patch guard
+  2.01, same-minor-other-major guard `1.02.xx`, future guard 2.03); the seven
+  key lookups wired through `NativeMainQuestChapter` /
+  `NativeSideQuestFaction` with a strict `QuestRollupKey` (an unknown kind
+  code throws instead of becoming an enum value no `switch` expects) and five
+  new tests that walk every row checking the key and title surfaces agree —
+  including "In Ashes", two different missions the title lookup cannot tell
+  apart; stale wrapper docs fixed (22 → 23 factions, the "Encirlement" caveat
+  resolved upstream, 64 of the 84 side-quest rows are missions); the Dye menu
+  reads "unsupported since 2.01" instead of "2.01 unsupported". **401 tests
+  green, 0 skipped**; AOT publish zero IL/trim warnings, 4-file bundle with
+  no `crimson_rs.dll`, exe 28,965,888 B stamping `2.2.1.27` that launches as
+  `CrimsonAtomtic v2.02.01.27`. The key lookups have no UI consumer, so the
+  AOT link trims them away; the tests (through the cdylib) are what exercise
+  them. The Python module was stale again (a 2.01-era `.pyd`) and was
+  rebuilt; it round-trips the live 2.02 `iteminfo` byte-identical. Also
+  corrected here: v2.01.01 was published 2026-09-04, not left as a draft.
 
 - **2026-09-04 — aligned to game 2.01 (rename patch); Dye editor greyed out; vendor script no longer eats this repo**:
   2.01 moved every gamedata file without changing a byte inside it —
