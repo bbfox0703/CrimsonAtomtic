@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Globalization;
 using System.Text;
 
 namespace CrimsonAtomtic.RustInterop;
@@ -8,7 +9,8 @@ namespace CrimsonAtomtic.RustInterop;
 /// the crimson-rs C ABI's <c>side_quest_faction</c> bridge — a static
 /// lookup table sourced from
 /// <c>vendor/crimson-rs/docs/ref-gamedata/side-quest-list.md</c>
-/// (84 quests across 22 factions).
+/// (84 rows across 23 factions). Every row also records the game row its
+/// title comes from — see <see cref="GetEntryKey"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,12 +20,17 @@ namespace CrimsonAtomtic.RustInterop;
 /// quests.
 /// </para>
 /// <para>
-/// <b>Caveat</b>: the source MD contains one preserved typo
-/// ("Encirlement on the Cliff" — canonical English is
-/// "Encirclement"). If a live PALOC cross-check returns the correct
-/// spelling, the row needs a one-character fix at the vendor side.
-/// User-curated list — completeness vs. shipped game content not
-/// guaranteed; quests outside the MD return <c>null</c>.
+/// Despite the table's name, most rows are <i>missions</i>
+/// (<c>missioninfo</c>, PALOC <c>lo32 = 0x101</c>) — 64 of the 84 at the
+/// 2.02 reconciliation — and the rest are quests; the title column holds
+/// whichever the row is. <b>Prefer the key lookups</b>:
+/// <see cref="FactionForMissionKey"/> / <see cref="FactionForQuestKey"/>
+/// take the key a save stores and keep answering when a patch retitles
+/// the row. The titles were reconciled against the live 2.02 English
+/// PALOC upstream, which also settled the old "Encirlement on the Cliff"
+/// transcription typo as "Encirclement". User-curated list —
+/// completeness vs. shipped game content not guaranteed; quests outside
+/// the MD return <c>null</c>.
 /// </para>
 /// </remarks>
 public static class NativeSideQuestFaction
@@ -96,8 +103,32 @@ public static class NativeSideQuestFaction
     }
 
     /// <summary>
-    /// Resolve a side-quest display title to its faction (1:1). Returns
-    /// null when the quest isn't in the curated set.
+    /// Read row <paramref name="index"/>'s game key — the companion of
+    /// <see cref="GetEntry"/>, which returns its strings. Every side-quest
+    /// row resolves, so the kind is <see cref="QuestRollupKeyKind.Mission"/>
+    /// or <see cref="QuestRollupKeyKind.Quest"/>. Returns null when
+    /// <paramref name="index"/> is out of range.
+    /// </summary>
+    public static QuestRollupKey? GetEntryKey(int index)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(index);
+        var rc = NativeMethods.SideQuestTableGetEntryKey((uint)index, out var kind, out var key);
+        if (rc == NativeMethods.OUT_OF_RANGE)
+        {
+            return null;
+        }
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_side_quest_table_get_entry_key({index}) failed: {ErrorName(rc)}");
+        }
+        return QuestRollupKey.FromAbi(kind, key);
+    }
+
+    /// <summary>
+    /// Resolve a side-quest row's display title (a mission or quest title —
+    /// see the remarks) to its faction (1:1). Returns null when the title
+    /// isn't in the curated set.
     /// </summary>
     public static string? FactionForQuest(string questTitle)
     {
@@ -135,6 +166,38 @@ public static class NativeSideQuestFaction
             {
                 ArrayPool<byte>.Shared.Return(rented);
             }
+        }
+    }
+
+    /// <summary>
+    /// Resolve a <c>MissionKey</c> — the key a save stores — to its
+    /// faction, independent of the display title. Returns null when no
+    /// curated row is that mission.
+    /// </summary>
+    public static string? FactionForMissionKey(uint missionKey)
+    {
+        unsafe
+        {
+            nuint req = 0;
+            var rc = NativeMethods.SideQuestFactionForMissionKey(missionKey, null, 0, out req);
+            return DecodeKeyLookup(rc, req, missionKey, "crimson_side_quest_faction_for_mission_key",
+                (buf, len) => NativeMethods.SideQuestFactionForMissionKey(missionKey, buf, len, out _));
+        }
+    }
+
+    /// <summary>
+    /// Resolve a <c>QuestKey</c> to its faction. Same contract as
+    /// <see cref="FactionForMissionKey"/>; the two key spaces overlap
+    /// numerically, which is why they are separate entry points.
+    /// </summary>
+    public static string? FactionForQuestKey(uint questKey)
+    {
+        unsafe
+        {
+            nuint req = 0;
+            var rc = NativeMethods.SideQuestFactionForQuestKey(questKey, null, 0, out req);
+            return DecodeKeyLookup(rc, req, questKey, "crimson_side_quest_faction_for_quest_key",
+                (buf, len) => NativeMethods.SideQuestFactionForQuestKey(questKey, buf, len, out _));
         }
     }
 
@@ -202,6 +265,48 @@ public static class NativeSideQuestFaction
             {
                 ArrayPool<byte>.Shared.Return(rented);
             }
+        }
+    }
+
+    private unsafe delegate int FillCallback(byte* buf, nuint bufLen);
+
+    /// <summary>Two-call decode shared by the key lookups: NOT_FOUND →
+    /// null, otherwise size, fill and decode the faction name.</summary>
+    private static unsafe string? DecodeKeyLookup(
+        int probeRc, nuint required, uint key, string apiName, FillCallback fill)
+    {
+        if (probeRc == NativeMethods.NOT_FOUND)
+        {
+            return null;
+        }
+        var keyText = key.ToString(CultureInfo.InvariantCulture);
+        if (probeRc != NativeMethods.BUFFER_TOO_SMALL && probeRc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(probeRc,
+                $"{apiName}({keyText}) size query failed: {ErrorName(probeRc)}");
+        }
+        if (required <= 1)
+        {
+            return string.Empty;
+        }
+        var rented = ArrayPool<byte>.Shared.Rent((int)required);
+        try
+        {
+            int fillRc;
+            fixed (byte* b = rented)
+            {
+                fillRc = fill(b, (nuint)rented.Length);
+            }
+            if (fillRc != NativeMethods.OK)
+            {
+                throw new CrimsonSaveException(fillRc,
+                    $"{apiName}({keyText}) fill failed: {ErrorName(fillRc)}");
+            }
+            return Encoding.UTF8.GetString(rented, 0, (int)required - 1);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
         }
     }
 

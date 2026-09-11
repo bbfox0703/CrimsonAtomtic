@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Globalization;
 using System.Text;
 
 namespace CrimsonAtomtic.RustInterop;
@@ -8,7 +9,9 @@ namespace CrimsonAtomtic.RustInterop;
 /// Backed by the crimson-rs C ABI's <c>main_quest_chapter</c> bridge —
 /// a static lookup table sourced from
 /// <c>vendor/crimson-rs/docs/ref-gamedata/main-quest-list.md</c>
-/// (~170 rows across Prologue + 12 chapters + Epilogue).
+/// (170 rows across Prologue + 12 chapters + Epilogue). Every row also
+/// records the game row its title comes from — see
+/// <see cref="GetEntryKeys"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -24,11 +27,18 @@ namespace CrimsonAtomtic.RustInterop;
 /// <c>crimson_questinfo_lookup_display_name</c>.
 /// </para>
 /// <para>
-/// Three mission titles repeat across chapters ("In Ashes",
-/// "Reclamation", "The Counterattack"); first-match-by-table-order
-/// wins for <see cref="ChapterForMission"/> + <see cref="ArcForMission"/>.
-/// Disambiguate by resolving the mission's arc separately and routing
-/// through <see cref="ChapterForArc"/>.
+/// <b>Prefer the key lookups.</b> <see cref="ChapterForMissionKey"/>,
+/// <see cref="ArcForMissionKey"/> and <see cref="ChapterForQuestKey"/>
+/// take the <c>MissionKey</c> / <c>QuestKey</c> a save stores, so they
+/// keep answering when a patch retitles a mission and they are exact
+/// where the title lookups are not: three mission titles repeat across
+/// chapters ("In Ashes", "Reclamation", "The Counterattack"), and for
+/// those <see cref="ChapterForMission"/> + <see cref="ArcForMission"/>
+/// can only return the first match by table order. The titles were
+/// reconciled against the live 2.02 English PALOC upstream; the few
+/// wiki-only titles with no live counterpart stay
+/// <see cref="QuestRollupKeyKind.Unresolved"/> — the title lookups still
+/// answer for them, the key lookups cannot.
 /// </para>
 /// </remarks>
 public static class NativeMainQuestChapter
@@ -109,6 +119,36 @@ public static class NativeMainQuestChapter
     }
 
     /// <summary>
+    /// Read row <paramref name="index"/>'s game keys — the companion of
+    /// <see cref="GetEntry"/>, which returns its strings. <c>Arc</c> is
+    /// <see cref="QuestRollupKeyKind.Unresolved"/> for Prologue rows (they
+    /// have no arc) and a <see cref="QuestRollupKeyKind.Mission"/> only for
+    /// "Cradle of Defense", whose heading is a mission title; every other
+    /// arc is a <see cref="QuestRollupKeyKind.Quest"/>. <c>Entry</c> is
+    /// <see cref="QuestRollupKeyKind.Unresolved"/> for the wiki-only titles
+    /// with no live counterpart. Returns null when <paramref name="index"/>
+    /// is out of range.
+    /// </summary>
+    public static (QuestRollupKey Arc, QuestRollupKey Entry)? GetEntryKeys(int index)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(index);
+        var rc = NativeMethods.MainQuestTableGetEntryKeys(
+            (uint)index,
+            out var arcKind, out var arcKey,
+            out var entryKind, out var entryKey);
+        if (rc == NativeMethods.OUT_OF_RANGE)
+        {
+            return null;
+        }
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_main_quest_table_get_entry_keys({index}) failed: {ErrorName(rc)}");
+        }
+        return (QuestRollupKey.FromAbi(arcKind, arcKey), QuestRollupKey.FromAbi(entryKind, entryKey));
+    }
+
+    /// <summary>
     /// Resolve a quest arc display title (bold bullets in the source MD —
     /// e.g. "Trials of Kindness", "Journey's End") to its chapter heading.
     /// Returns null when the arc isn't in the curated set.
@@ -129,9 +169,9 @@ public static class NativeMainQuestChapter
     /// Resolve a mission display title (e.g. "Where Rumors Gather") to its
     /// chapter heading. Returns null when the mission isn't in the curated
     /// set. First-match-by-table-order for the three repeated titles
-    /// ("In Ashes", "Reclamation", "The Counterattack") — disambiguate
-    /// by pairing with the arc title and routing through
-    /// <see cref="ChapterForArc"/>.
+    /// ("In Ashes", "Reclamation", "The Counterattack") — a caller holding
+    /// the <c>MissionKey</c> should use <see cref="ChapterForMissionKey"/>,
+    /// which is exact.
     /// </summary>
     public static string? ChapterForMission(string missionTitle)
     {
@@ -159,6 +199,60 @@ public static class NativeMainQuestChapter
             var rc = NativeMethods.MainQuestArcForMission(missionTitle, null, 0, out req);
             return DecodeLookupResult(rc, req, missionTitle, nameof(NativeMethods.MainQuestArcForMission),
                 (buf, len) => NativeMethods.MainQuestArcForMission(missionTitle, buf, len, out _));
+        }
+    }
+
+    /// <summary>
+    /// Resolve a <c>MissionKey</c> — the key a save stores — to its chapter
+    /// heading. Unlike <see cref="ChapterForMission"/> this never goes
+    /// through the display title, so it survives a retitle and is exact
+    /// for the repeated titles ("In Ashes" is 1000160 in the Prologue and
+    /// 1000783 in Chapter 6). Returns null when the key isn't in the
+    /// curated set.
+    /// </summary>
+    public static string? ChapterForMissionKey(uint missionKey)
+    {
+        unsafe
+        {
+            nuint req = 0;
+            var rc = NativeMethods.MainQuestChapterForMissionKey(missionKey, null, 0, out req);
+            return DecodeLookupResult(rc, req, KeyForErr(missionKey), nameof(NativeMethods.MainQuestChapterForMissionKey),
+                (buf, len) => NativeMethods.MainQuestChapterForMissionKey(missionKey, buf, len, out _));
+        }
+    }
+
+    /// <summary>
+    /// Resolve a <c>MissionKey</c> to its quest arc title — the empty
+    /// string for Prologue missions, as with <see cref="ArcForMission"/>.
+    /// Returns null when the key isn't in the curated set.
+    /// </summary>
+    public static string? ArcForMissionKey(uint missionKey)
+    {
+        unsafe
+        {
+            nuint req = 0;
+            var rc = NativeMethods.MainQuestArcForMissionKey(missionKey, null, 0, out req);
+            return DecodeLookupResult(rc, req, KeyForErr(missionKey), nameof(NativeMethods.MainQuestArcForMissionKey),
+                (buf, len) => NativeMethods.MainQuestArcForMissionKey(missionKey, buf, len, out _));
+        }
+    }
+
+    /// <summary>
+    /// Resolve a <c>QuestKey</c> to its chapter heading: the key of an
+    /// arc's quest (e.g. 1000027 <c>Quest_MeetAlustain_Test</c>, "Trials
+    /// of Kindness") or of a quest-kind row (10001 <c>Quest_Intro</c>, the
+    /// Prologue's "Ambush"). Returns null when the key isn't in the curated
+    /// set. <c>MissionKey</c> and <c>QuestKey</c> overlap numerically,
+    /// which is why this is its own entry point.
+    /// </summary>
+    public static string? ChapterForQuestKey(uint questKey)
+    {
+        unsafe
+        {
+            nuint req = 0;
+            var rc = NativeMethods.MainQuestChapterForQuestKey(questKey, null, 0, out req);
+            return DecodeLookupResult(rc, req, KeyForErr(questKey), nameof(NativeMethods.MainQuestChapterForQuestKey),
+                (buf, len) => NativeMethods.MainQuestChapterForQuestKey(questKey, buf, len, out _));
         }
     }
 
@@ -200,6 +294,8 @@ public static class NativeMainQuestChapter
             ArrayPool<byte>.Shared.Return(rented);
         }
     }
+
+    private static string KeyForErr(uint key) => key.ToString(CultureInfo.InvariantCulture);
 
     private static string DecodeNulTerminated(byte[] buf, nuint required)
     {
