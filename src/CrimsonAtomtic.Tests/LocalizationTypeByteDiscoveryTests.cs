@@ -481,31 +481,9 @@ public sealed class LocalizationTypeByteDiscoveryTests(ITestOutputHelper output)
         }
     }
 
-    private static string? FindLiveSave()
-    {
-        // Mirror NativeSaveLoaderTests.FindLiveSave — same probe order
-        // so a missing save here means a missing save there too.
-        var local = Environment.GetEnvironmentVariable("LOCALAPPDATA");
-        if (string.IsNullOrEmpty(local))
-        {
-            return null;
-        }
-        var root = Path.Combine(local, "Pearl Abyss", "CD", "save");
-        if (!Directory.Exists(root))
-        {
-            return null;
-        }
-        foreach (var user in Directory.EnumerateDirectories(root))
-        {
-            foreach (var slot in new[] { "slot0", "slot1", "slot2" })
-            {
-                var p = Path.Combine(user, slot, "save.save");
-                if (File.Exists(p))
-                {
-                    return p;
-                }
-            }
-        }
-        return null;
-    }
+    // The newest save, same as NativeSaveLoaderTests — so a missing save
+    // here means a missing save there too, and after a patch these probes
+    // (Probe_InventoryKeyContainers in particular) read what the new game
+    // writes rather than an older slot.
+    private static string? FindLiveSave() => LiveSaves.Newest();
 }

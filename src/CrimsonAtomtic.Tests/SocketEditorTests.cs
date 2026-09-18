@@ -64,34 +64,6 @@ public sealed class SocketEditorTests : IDisposable
         return null;
     }
 
-    /// <summary>Every live <c>save.save</c> under the user's save root.</summary>
-    private static List<string> FindLiveSaves()
-    {
-        var local = Environment.GetEnvironmentVariable("LOCALAPPDATA");
-        if (string.IsNullOrEmpty(local))
-        {
-            return [];
-        }
-        var root = Path.Combine(local, "Pearl Abyss", "CD", "save");
-        if (!Directory.Exists(root))
-        {
-            return [];
-        }
-        var found = new List<string>();
-        foreach (var user in Directory.EnumerateDirectories(root))
-        {
-            foreach (var slot in Directory.EnumerateDirectories(user))
-            {
-                var p = Path.Combine(slot, "save.save");
-                if (File.Exists(p))
-                {
-                    found.Add(p);
-                }
-            }
-        }
-        return found;
-    }
-
     /// <summary>Copy a live save into a scratch dir so tests never write user data.</summary>
     private string CopyToScratch(string savePath)
     {
@@ -111,9 +83,11 @@ public sealed class SocketEditorTests : IDisposable
         string SavePath);
 
     /// <summary>
-    /// Load the first live save into a scratch copy and build a real
-    /// <see cref="SocketEditorViewModel"/> over it. Returns <c>null</c>
-    /// when the machine has no game install / no save — callers skip.
+    /// Load the newest live save that has sockets into a scratch copy and
+    /// build a real <see cref="SocketEditorViewModel"/> over it — newest,
+    /// so the write path is exercised against the format the installed game
+    /// writes today. Returns <c>null</c> when the machine has no game
+    /// install / no such save — callers skip.
     /// </summary>
     private Harness? TryBuildHarness()
     {
@@ -122,7 +96,7 @@ public sealed class SocketEditorTests : IDisposable
             return null;
         }
         var gameRoot = FindGameRoot();
-        var saves = FindLiveSaves();
+        var saves = LiveSaves.All();
         if (gameRoot is null || saves.Count == 0)
         {
             return null;
@@ -247,7 +221,7 @@ public sealed class SocketEditorTests : IDisposable
     public void GameWrittenSaves_NeverEncodeZeroOrOverfilledSocketCounts()
     {
         var gameRoot = FindGameRoot();
-        var saves = FindLiveSaves();
+        var saves = LiveSaves.All();
         if (!File.Exists("crimson_rs.dll") || gameRoot is null || saves.Count == 0)
         {
             return;

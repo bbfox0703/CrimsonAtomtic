@@ -41,13 +41,26 @@
 > recorded below were made somewhere else (no worktree remains to check).
 > Compare artifact **mtimes** against the vendor HEAD before trusting a run.
 >
-> **The C# suite never loads a 2.03-written save.** `NativeSaveLoaderTests`
-> takes the first of slot0/1/2 — all 2.01-era on this machine; the only
-> 2.03-written saves are slot107 and slot102. Both were checked through the
-> editor's own `NativeSaveLoader` with a throwaway probe: HMAC ok, every
-> field decoded, 0 undecoded bytes, and a write → reload that decodes
-> identically — matching upstream's Rust-side result. Making that permanent
-> (load the newest save) would close the gap.
+> **The C# live-save tests now follow the newest save.** They used to take
+> the first of slot0/1/2 — all 2.01-era on this machine, while the only
+> 2.03-written saves are slot107 and slot102 — so no C# test exercised the
+> format the installed game writes. A new test helper, `LiveSaves`, lists
+> every live save newest-first by last-write time: all 43 live-save tests in
+> `NativeSaveLoaderTests`, the socket-editor write-path harness and the
+> type-byte probes now take the newest save;
+> `Load_EveryLiveSave_ReturnsConsistentSummary` checks every save on the
+> machine (12 here); and the new
+> `NewestSave_DecodesCompletelyAndRewritesIdentically` asserts 0 undecoded
+> bytes at every nesting depth plus a decode-identical write → reload.
+> **402 tests green, 0 skipped**, about +6 s on a ~180 s suite (A/B on the
+> same machine).
+>
+> **Doing that exposed a real bug: Mount-Unlock's dragon fails on every
+> save written since game 2.00.** Its test had been pinned to slot105, a
+> June save, and on any newer save the insert returns `MUTATION_INVALID`,
+> because the embedded 1.09-era element no longer matches
+> `MercenarySaveData`'s field order. Not fixed here — see the 🔴 backlog
+> item. The test stays on slot105, with a comment saying why.
 >
 > **Below this line is the 2.02 history, kept for context.**
 >
@@ -363,8 +376,9 @@
   **nothing**, so none were ever pushed. "Parity with 1.13–1.17" therefore
   means parity with local-only tags; decide whether to push the whole set,
   keep them local, or stop cutting them.
-- **Health:** full suite green this session (**401** C# tests, 0 skipped, 0
-  failures) against the live 2.03 install, with the native lib rebuilt from
+- **Health:** full suite green this session (**402** C# tests, 0 skipped, 0
+  failures — 401 for the 2.03 alignment, plus the newest-save rewrite test)
+  against the live 2.03 install, with the native lib rebuilt from
   the vendored 2.03 crimson-rs so the ABI reports target major 2 / minor 3.
   The untouched suite (401) failed exactly five: the four
   `NativePaverReaderTests` pins and the `MissionKey 1000157` title. At 2.02
@@ -462,13 +476,28 @@ are in [status-archive.md](status-archive.md).
   missing one is `ara` in group 0033: 39 files, and all of them parse through
   the same loader on 2.03. Adding it is feature work (a right-to-left script
   in the grids, plus a language-menu entry), not an alignment fix.
-- **No C# test loads a save the current game wrote.**
-  `NativeSaveLoaderTests.FindLiveSave` takes the first of slot0/1/2, which on
-  this machine are 2.01-era saves; the 2.03-written ones are slot107 and
-  slot102. A save-body drift would reach the editor before the C# suite
-  noticed (crimson-rs's own tests do cover it). At 2.03 the two were checked
-  by a throwaway probe; picking the newest save by mtime would make that
-  permanent.
+- **🔴 Mount-Unlock's dragon fails on every save written since game 2.00.**
+  `MountCatalog.DragonElementHex` is a 1.09-era capture (2026-05-31) of the
+  dragon's `_mercenaryDataList` element, and inserting it assumes the target
+  save's `MercenarySaveData` has the field order it was captured from. It no
+  longer does: `_occupationState` (field 35) left that class's schema
+  somewhere between 1.12 and 2.00, 2.01 appended `_shipStationSaveList`, and
+  `ExperienceLevelSaveData` gained `_shareKnowledgeRewardDailyCountData`. The
+  element's presence mask still marks field 35 present as a 1-byte enum,
+  which on a 2.00+ save is `_customizationSaveData` (an 8-byte object
+  pointer), so the re-parse after the insert fails and `ListInsertElement`
+  returns `MUTATION_INVALID` (−19) and rolls back. Measured over all 12
+  local saves: the four written in June (up to 1.12) take the insert; all
+  eight written 2026-08-27 or later (2.00–2.03) fail. The app fails safe —
+  the loaded save is left untouched and the unlock reports the error — but
+  the dragon cannot be unlocked on any current save. The type-index remap
+  fixes class numbers, not field order. **Fix direction:** build the element
+  for the target save's schema — map the captured fields by name onto the
+  target's field list (drop fields it no longer has, leave new ones absent,
+  rebuild the mask) — rather than re-capturing from a current save, which
+  would break again at the next schema change. `MountUnlockMechanicsTests`
+  stays pinned to slot105 (a June save that still matches), with a comment
+  saying why; move it to `LiveSaves` together with the fix.
 
 ## Gotchas — don't relearn these
 
@@ -583,6 +612,17 @@ window-restore quirks, etc.) is in
 - **Old saves are the same format** (`version=2 / flags=0x0080`, HMAC ok,
   0 undecoded bytes). Block-count drift across slots is gameplay-driven, not
   format-driven.
+- **"No save-body drift" is about the format, not the schema.** Each save
+  embeds its own schema, so the decoder follows a class gaining or losing
+  fields for free — but anything that carries *captured bytes* from one save
+  into another is pinned to the schema they came from. `MercenarySaveData`
+  lost `_occupationState` between 1.12 and 2.00 and gained
+  `_shipStationSaveList` in 2.01 while every alignment reported "no
+  save-body drift", and `MountCatalog.DragonElementHex` broke without a
+  sound because its only test ran on a June save. Remapping type indices by
+  class name is not enough; fields have to be mapped by name too. And a
+  live-save test pinned to a slot tests that slot's patch, not the game —
+  use `LiveSaves` (newest first).
 - **Scalar-only mutation + length-changing ops.** The C ABI mutates
   fixed-size scalars in place; list clone/insert/remove and inline-bytes
   resize are supported via the dedicated ops (incl. the `marker_run_plus_zeros`
@@ -728,6 +768,24 @@ Each step should be green. If anything fails, fix it before touching new code
 
 One line per milestone; full detail in [status-archive.md](status-archive.md).
 
+- **2026-09-18 — live-save tests follow the newest save; the dragon unlock is broken on 2.00+ saves (found, not fixed)**:
+  a new `LiveSaves` test helper (newest-first by last-write time) replaces
+  four copies of save discovery. `NativeSaveLoaderTests`, the socket-editor
+  harness and the type-byte probes now run on the newest save (slot102,
+  written by 2.03) instead of a 2.01-era slot0;
+  `Load_EveryLiveSave_ReturnsConsistentSummary` covers all 12 local saves
+  (collecting problems across them, 4-way parallel);
+  `NewestSave_DecodesCompletelyAndRewritesIdentically` adds the deep checks
+  the summary can't see — undecoded bytes inside nested objects, and a
+  field-by-field decode comparison after an unmodified write → reload (both
+  decodes run side by side; one pass over a late-game save is ~9 s, mostly
+  `QuestSaveData` and `FieldSaveData`). 402 tests green, 0 skipped, about
+  +6 s on the suite. Pointing `MountUnlockMechanicsTests` at the newest save
+  failed with `MUTATION_INVALID`, and a sweep of all 12 saves showed the
+  dragon insert failing on every save since 2.00: the embedded element
+  predates a `MercenarySaveData` schema change (see the 🔴 backlog item).
+  That test stays on slot105 with the reason in a comment.
+
 - **2026-09-18 — aligned to game 2.03 (one iteminfo drift + a PALOC container); local, not yet shipped**:
   2.03 (paver `2/3/0/0x03045138`) makes two format changes, both absorbed in
   crimson-rs `main` (PR #97, `e932797`; vendored at `234b289`): iteminfo's
@@ -756,9 +814,9 @@ One line per milestone; full detail in [status-archive.md](status-archive.md).
   decode-identical. **401 tests green, 0 skipped**; AOT publish zero IL/trim
   warnings, 4-file bundle with no `crimson_rs.dll`, exe 28,966,912 B
   stamping `2.3.1.27` that launches as `CrimsonAtomtic v2.03.01.27` with no
-  mismatch dialog. Found in passing, not fixed: Arabic is never offered as a
-  language, and no C# test loads a save the current game wrote (both in the
-  backlog).
+  mismatch dialog. Found in passing: Arabic is never offered as a language
+  (backlog), and no C# test loaded a save the current game wrote (closed the
+  same day — see the entry above).
 
 - **2026-09-11 — aligned to game 2.02 (content-only); v2.02.01 released**:
   2.02 (paver `2/2/0/0xc8925c58`) changed the layout of nothing crimson-rs

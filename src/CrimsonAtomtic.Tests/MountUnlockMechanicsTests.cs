@@ -40,6 +40,15 @@ public sealed class MountUnlockMechanicsTests
         }
         foreach (var user in Directory.EnumerateDirectories(root))
         {
+            // Deliberately NOT LiveSaves.Newest(). DragonElementHex is a
+            // 1.09-era capture and only fits MercenarySaveData's old field
+            // layout: _occupationState (field 35) left the schema between
+            // 1.12 and 2.00 and 2.01 appended _shipStationSaveList, so on
+            // any save written since 2.00 the insert fails MUTATION_INVALID.
+            // That is a known bug in the dragon unlock (docs/status.md
+            // backlog), not a test problem. slot105 is the pristine June save
+            // that still matches; the later fallbacks may not. Move this to
+            // LiveSaves once the element is built for the target save.
             foreach (var slot in new[] { "slot105", "slot100", "slot0", "slot1", "slot2" })
             {
                 var p = Path.Combine(user, slot, "save.save");
