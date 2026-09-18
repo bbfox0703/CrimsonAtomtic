@@ -102,9 +102,11 @@ set of Tools-menu bulk operations. Highlights:
   Rock Tusk Warthog, Phoenix) are unlocked the game-legitimate way: the
   matching *Sigil of Solidarity* is granted into Quest Artifacts; you use
   it in-game and the engine does the rest. The **Dragon (Blackstar)** is
-  unlocked fully in-editor — its real mercenary element (a 212-byte captured
-  blob whose schema type-indices are remapped onto your save by class name)
-  is inserted, its 187-key riding knowledge injected, and its HP filled — no
+  unlocked fully in-editor — its real mercenary element, embedded as a
+  name-keyed element template, is rebuilt under your save's own schema (so
+  it fits whichever game patch wrote the save) and inserted with a fresh
+  mercenary number, without displacing your active mount; its 187-key
+  summon/riding knowledge is injected and its HP filled to 2500 — no
   whole-save donor required.
 - **Knowledge editor** — Tools → **Edit Knowledge**. Every `knowledgeinfo`
   entry bucketed into 16 curated categories, with search + learned/unlearned
