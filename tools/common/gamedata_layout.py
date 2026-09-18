@@ -14,6 +14,10 @@ The file *contents* did not change, so every parser is untouched and only
 the lookup path moved. Resolution is newest-layout-first with a fallback,
 so a kept pre-2.01 install still works.
 
+2.03 then wrapped every paloc file in an LZ4 container around the
+unchanged entry list. `crimson_rs.parse_paloc_bytes` unwraps it, so the
+files resolved here are passed through exactly as extracted.
+
 Mirrors `vendor/crimson-rs/scripts/gamedata_layout.py` (upstream's own
 test helper) and `src/CrimsonAtomtic.RustInterop/GameDataLayout.cs`.
 """

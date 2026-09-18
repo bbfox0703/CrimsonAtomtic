@@ -694,4 +694,46 @@ public interface ISaveLoader
         int fieldIndex,
         int insertAt,
         ReadOnlySpan<byte> bytes);
+
+    /// <summary>
+    /// Export one <c>object_list</c> element as a name-keyed element
+    /// template (<c>crimson_save_export_element_template</c>): its class,
+    /// wrapper bytes and every present field by NAME, recursively — the
+    /// portable form <see cref="ListInsertElementTemplate"/> can rebuild
+    /// under another save's schema.
+    /// </summary>
+    /// <remarks>
+    /// Throws <see cref="CrimsonSaveException"/> with <c>BODY_PARSE (-9)</c>
+    /// when the element isn't fully decoded under the absence-marker rule
+    /// (its values could not be trusted), <c>NOT_OBJECT_LIST (-23)</c> when
+    /// the field isn't a present list, <c>OUT_OF_RANGE (-10)</c> for a bad
+    /// index.
+    /// </remarks>
+    byte[] ExportElementTemplate(
+        int blockIndex,
+        ReadOnlySpan<PathStep> path,
+        int fieldIndex,
+        int elementIndex);
+
+    /// <summary>
+    /// Build a list element from a template under THIS save's schema and
+    /// insert it at <paramref name="insertAt"/>
+    /// (<c>crimson_save_list_insert_element_template</c>). Fields match by
+    /// name; ones the target class no longer has are dropped, new ones
+    /// stay absent (inline objects get an empty child of the class this
+    /// save uses for them), and a changed kind or size throws
+    /// <c>TEMPLATE_MISMATCH (-25)</c> instead of being reinterpreted.
+    /// Returns how many template fields were dropped.
+    /// </summary>
+    /// <remarks>
+    /// Raw element bytes (<see cref="ListInsertElement"/>) are only valid
+    /// under the schema that wrote them; this is the cross-patch path.
+    /// On any error the save is untouched.
+    /// </remarks>
+    int ListInsertElementTemplate(
+        int blockIndex,
+        ReadOnlySpan<PathStep> path,
+        int fieldIndex,
+        int insertAt,
+        ReadOnlySpan<byte> templateBytes);
 }

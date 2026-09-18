@@ -2,7 +2,7 @@
 
 ## Current install
 
-`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 2.02**
+`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 2.03**
 
 Top-level layout:
 
@@ -28,9 +28,10 @@ Crimson Desert/
   patch. **Game 2.00 is the first major bump, and it RESETS the minor**
   (1.18 → 2.00 is `18` → `0`), so a bare minor no longer identifies a schema:
   minor `0` means 2.00 today and would have meant a hypothetical 1.00
-  yesterday. Live 2.02.00 install:
-  `02 00 02 00 00 00 58 5c 92 c8` → major 2, minor 2, patch 0,
-  build `0xc8925c58`. (2.01.00 was `02 00 01 00 00 00 cb 5f 1e a3`,
+  yesterday. Live 2.03.00 install:
+  `02 00 03 00 00 00 38 51 04 03` → major 2, minor 3, patch 0,
+  build `0x03045138`. (2.02.00 was `02 00 02 00 00 00 58 5c 92 c8`,
+  build `0xc8925c58`; 2.01.00 was `02 00 01 00 00 00 cb 5f 1e a3`,
   build `0xa31e5fcb`; 2.00.00 was `02 00 00 00 00 00 14 d2 41 b2`,
   build `0xb241d214`; 1.18.00 was `01 00 12 00 00 00 0f 7c 57 28`,
   build `0x28577c0f`; 1.17.00 was `01 00 11 00 00 00 97 4c 5e d0`,
@@ -47,7 +48,7 @@ Crimson Desert/
   install's `(major, minor)` isn't one the parser can load —
   `GameDataVersion.IsCompatibleWithParser` now gates on
   `Major == ParserTargetMajor` **and** `Minor ∈ CompatibleMinors`
-  (currently `2` and `{2}`). The major half was added at the 2.00 alignment
+  (currently `2` and `{3}`). The major half was added at the 2.00 alignment
   and is not cosmetic: with the minor reset to `0`, the old minor-only test
   would have reported a hypothetical `1.00.xx` install as compatible with the
   2.00 parser. **2.00 carries two iteminfo layout drifts** (crimson-rs commit
@@ -204,3 +205,17 @@ On the editor side the alignment cost the manual `VerMinor` 0→1 lock-step bump
 *Parser and C ABI.* The only parser change is `PARSER_TARGET_GAMEDATA_MINOR` 1 → 2; `CompatibleMinors` = `{2}` is the target-only convention again (2.01 data parses byte-perfectly). The C ABI only **grew**: the curated quest tables (`main_quest_chapter`, `side_quest_faction`, transcribed from a wiki) were checked against the live English PALOC for the first time, the rows whose titles had drifted were re-paired with their game rows, and every row now carries its `MissionKey` / `QuestKey` behind seven additive entry points — `crimson_main_quest_{chapter_for_mission_key, arc_for_mission_key, chapter_for_quest_key, table_get_entry_keys}` and `crimson_side_quest_{faction_for_mission_key, faction_for_quest_key, table_get_entry_key}`. The title lookups are unchanged. The side-quest table turned out to be mostly missions (64 of 84 rows), not quests.
 
 *Editor side.* The manual `VerMinor` 1 → 2 lock-step bump (`VerPatch` stays 1), the paver pin refresh, the seven key lookups wired through `NativeMainQuestChapter` / `NativeSideQuestFaction` (kind + key as `QuestRollupKey`), and version-neutral Dye-menu text ("unsupported since 2.01" rather than "2.01 unsupported", which read wrong on a 2.02 install). Unrelated to the patch, the SDK moved to 10.0.401 and the ILCompiler central pin had to follow (10.0.11 → 10.0.12) before anything would restore. **No count/value pin moved on the C# side**: the untouched suite failed exactly the four paver pins, and after the bump 401 C# tests are green, 0 skipped.
+
+**2.02 → 2.03 ships ONE iteminfo drift and a new container around every PALOC file.** Vendored from `crimson-rs` `main` at `234b289` (the 2.03 work is PR #97, merge `332c47b`: commit `e932797`; PR #98 on top touches scripts only), validated against the live 2.03 install (paver `2/3/0/0x03045138`, 2026-09-18). The gamedata archive layout is the 2.01 one, unchanged.
+
+*iteminfo* (6,813 → **6,816** items — three `Dev_QA_dlc_Ocean_*` keys 1006028–1006030, none removed; 6,450,232 → 6,465,724 B, SHA256 `87a1bbcd…`): `inventory_info_list` widened `[u16; 9]` → `[u16; 10]`, so every carried-over item is exactly +2 B. The new slot reads `0xFF` except on the 59 `Trade_*_PackedInVehicle` items, where it is 21 (`Ship`) — the same sentinel and the same 59 items that placed slot 8 at 1.16, and what pins the new slot after it. The refreshed Python module round-trips the live file byte-identical, with all 6,816 items carrying 10 slots. `CrimsonItemInfoSummary.inventory_info` is still slot 0, so the C ABI and the 80-byte struct pin are unchanged.
+
+*PALOC*: all 585 `.paloc` files (15 languages × 39 namespaces) are now wrapped in a 0x200-byte header (`"paloc"`, `u32` 0, `u32` LZ4-block length, `u32` decompressed length, zero padding) plus one LZ4 block around the **unchanged** entry list; the PAMT stores them uncompressed. Unfixed, this would have blanked every name in the editor — `parse_paloc_bytes` and both C-ABI loaders failed on every file. crimson-rs now unwraps inside `crimson_paloc_load_from_bytes` / `_from_file` (and Python's `parse_paloc_bytes`) and accepts both layouts, so **the editor's PALOC path needed no code change**: it still extracts each file and hands it to `NativePalocCatalog.LoadFromBytes` as-is. Live: 585/585 files carry the container and parse; English is 191,070 entries.
+
+*Other tables*: skill 2,061 → **2,069** (probe 2,069/2,069, format still `WithField58`). Gamedata keys: 30 tables / 97,398, 23 key-identical to 2.02 (stageinfo +221/−2, gimmickinfo +36/−1, partprefabdyeslotinfo +19, skill +8, itemgroupinfo +2, questinfo +1/−1, gameplayvariableinfo −3). The C# count pins are all floors, so none moved. `partprefabdyeslotinfo` grew to 1,645 prefabs / 6,634 slots with the 12-byte mask shape unchanged; re-measured through the rebuilt dll, the legacy 3-byte getter reads all-zero on **2,212 slots (33.3%)** whose full field is non-zero, so the Dye editor stays disabled.
+
+*Save body*: no drift. The two 2.03-written saves load through the editor's own `NativeSaveLoader` (HMAC ok, format v2 / `0x0080`, every field decoded, 0 undecoded bytes — slot107 1,091 blocks / 3,289 fields, slot102 1,168 / 3,464) and re-save to a decode-identical body.
+
+*Text*: an English copy pass retitled six curated main-quest missions, two arcs and one side-quest mission (upstream's curated tables follow; no key moved) and **changed `MissionKey 1000157` back to "Unfamiliar Lands"** after two patches as "Unfamiliar Land" — the one C# pin that moved besides the paver pins.
+
+`CompatibleMinors` = `{3}`; unlike 2.01 and 2.02 this is a **genuine** incompatibility, since 2.02 iteminfo really does mis-decode against the 10-slot parser. On the editor side the alignment cost the manual `VerMinor` 2 → 3 lock-step bump (`VerPatch` stays 1), the paver pin refresh, the mission-title pin, and doc refreshes; the untouched suite failed exactly those five of 401 tests.

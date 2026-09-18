@@ -7,71 +7,273 @@ namespace CrimsonAtomtic.Tests;
 
 /// <summary>
 /// End-to-end smoke tests for <see cref="NativeSaveLoader"/>. Drives the
-/// real crimson-rs C ABI against a live save under
-/// <c>%LOCALAPPDATA%\Pearl Abyss\CD\save\…\slot0\save.save</c>. Tests
-/// skip cleanly when no save is present so CI / fresh machines don't
-/// fail — matching the Rust side's <c>test_save_*</c> tests.
+/// real crimson-rs C ABI against the <b>most recently written</b> live save
+/// (<see cref="LiveSaves"/>) — the format the installed game writes today —
+/// and <see cref="Load_EveryLiveSave_ReturnsConsistentSummary"/> against
+/// every save on the machine. Tests skip cleanly when no save is present so
+/// CI / fresh machines don't fail — matching the Rust side's
+/// <c>test_save_*</c> tests.
 /// </summary>
 public sealed class NativeSaveLoaderTests
 {
-    private static string? FindLiveSave()
+    private static string? FindLiveSave() => LiveSaves.Newest();
+
+    /// <summary>
+    /// Block 0 field 0 is the u32 <c>_characterKey</c> the scalar-mutation
+    /// tests write through. Check it before mutating, so a schema drift
+    /// surfaces here rather than as silently corrupted bytes. The kind label
+    /// is not pinned: the decoder says fixed_prefix for a scalar it read in
+    /// order and fixed_suffix for one it placed from the block's end, which
+    /// only its fallback walk does.
+    /// </summary>
+    private static void AssertCharacterKeyU32(DecodedFieldRow field)
     {
-        var local = Environment.GetEnvironmentVariable("LOCALAPPDATA");
-        if (string.IsNullOrEmpty(local))
-        {
-            return null;
-        }
-        var root = Path.Combine(local, "Pearl Abyss", "CD", "save");
-        if (!Directory.Exists(root))
-        {
-            return null;
-        }
-        foreach (var user in Directory.EnumerateDirectories(root))
-        {
-            foreach (var slot in new[] { "slot0", "slot1", "slot2" })
-            {
-                var p = Path.Combine(user, slot, "save.save");
-                if (File.Exists(p))
-                {
-                    return p;
-                }
-            }
-        }
-        return null;
+        Assert.Equal("_characterKey", field.Name);
+        Assert.True(field.Kind is "fixed_prefix" or "fixed_suffix", $"unexpected kind {field.Kind}");
+        Assert.Equal(4, field.End - field.Start);
     }
 
+    /// <summary>
+    /// Every live save loads with a consistent header and every present
+    /// field decoded — the newest one because that is the format the
+    /// installed game writes, the older ones because the editor promises to
+    /// re-save any patch's save in its own format. Problems are collected
+    /// across all saves before failing, so a failure says whether it is
+    /// only the newest saves (a new patch drifted) or all of them (the
+    /// loader regressed).
+    /// </summary>
     [Fact]
-    public void Load_LiveSave_ReturnsConsistentSummary()
+    public void Load_EveryLiveSave_ReturnsConsistentSummary()
     {
-        var path = FindLiveSave();
+        var saves = LiveSaves.All();
+        if (saves.Count == 0)
+        {
+            return;
+        }
+        // One loader per save and they share no native state, so load a few
+        // at a time: a dozen late-game saves take ~10 s one after another.
+        var perSave = new List<string>[saves.Count];
+        Parallel.For(0, saves.Count, new ParallelOptions { MaxDegreeOfParallelism = 4 },
+            i => perSave[i] = SummaryProblems(saves[i]));
+        var problems = perSave.SelectMany(p => p).ToList();
+        Assert.True(problems.Count == 0,
+            $"{problems.Count} problem(s) across {saves.Count} live save(s):\n"
+            + string.Join("\n", problems));
+    }
+
+    private static List<string> SummaryProblems(string path)
+    {
+        var name = LiveSaves.Describe(path);
+        SaveSummary summary;
+        try
+        {
+            using var loader = new NativeSaveLoader();
+            summary = loader.Load(path);
+        }
+        catch (CrimsonSaveException ex)
+        {
+            return [$"{name}: load failed: {ex.Message}"];
+        }
+        var problems = new List<string>();
+
+        // Header invariants — same checks the Rust test_save_parse runs.
+        if (summary.Version != 2)
+        {
+            problems.Add($"{name}: version {summary.Version}, expected 2");
+        }
+        if (!summary.HmacOk)
+        {
+            problems.Add($"{name}: HMAC does not verify");
+        }
+        if (summary.UncompressedSize <= 0 || summary.PayloadSize <= 0)
+        {
+            problems.Add($"{name}: empty body ({summary.PayloadSize} B payload, "
+                + $"{summary.UncompressedSize} B uncompressed)");
+        }
+
+        // Body invariants.
+        if (summary.SchemaTypeCount <= 0 || summary.TocEntryCount <= 0
+            || summary.TocEntryCount != summary.Blocks.Count)
+        {
+            problems.Add($"{name}: {summary.SchemaTypeCount} schema types, "
+                + $"{summary.TocEntryCount} TOC entries, {summary.Blocks.Count} blocks");
+        }
+
+        // Per-block: class names non-empty; every present field decoded.
+        var unnamed = summary.Blocks.Count(b => string.IsNullOrEmpty(b.ClassName));
+        if (unnamed > 0)
+        {
+            problems.Add($"{name}: {unnamed} block(s) without a class name");
+        }
+        var partial = summary.Blocks.Where(b => b.FieldsDecoded != b.FieldsPresent).ToList();
+        if (partial.Count > 0)
+        {
+            var first = partial[0];
+            problems.Add($"{name}: {partial.Count} block(s) with undecoded fields, first "
+                + $"#{first.Index} {first.ClassName} ({first.FieldsDecoded}/{first.FieldsPresent})");
+        }
+
+        // Slot name from path parent.
+        if (string.IsNullOrEmpty(summary.SlotName))
+        {
+            problems.Add($"{name}: no slot name");
+        }
+        return problems;
+    }
+
+    /// <summary>
+    /// The newest save must decode down to the last byte and survive an
+    /// unmodified write → reload with an identical decode. This is the
+    /// C#-side alarm for a save-body drift in a new patch: it runs on a save
+    /// the installed game wrote, where <see cref="Load_EveryLiveSave_ReturnsConsistentSummary"/>
+    /// only checks the per-block field counts. Those count a top-level
+    /// block's own fields and nothing nested, while a decode failure deeper
+    /// down — in a list element or a locator child — leaves its residue in
+    /// that object's <see cref="BlockDetails.UndecodedRanges"/> without
+    /// moving any count. A re-encode that loses such bytes is how 1.10 saves
+    /// were silently corrupted before the leading-pad fix. <c>PayloadSize</c>
+    /// is not compared: the rewrite re-compresses, and the game's LZ4
+    /// compressor is not the one crimson-rs uses.
+    /// </summary>
+    [Fact]
+    public void NewestSave_DecodesCompletelyAndRewritesIdentically()
+    {
+        var path = LiveSaves.Newest();
         if (path is null)
         {
             return;
         }
-        var loader = new NativeSaveLoader();
-
+        var name = LiveSaves.Describe(path);
+        using var loader = new NativeSaveLoader();
         var summary = loader.Load(path);
+        Assert.True(summary.HmacOk, $"{name}: HMAC does not verify");
 
-        // Header invariants — same checks the Rust test_save_parse runs.
-        Assert.Equal(2, summary.Version);
-        Assert.True(summary.HmacOk);
-        Assert.True(summary.UncompressedSize > 0);
-        Assert.True(summary.PayloadSize > 0);
-
-        // Body invariants.
-        Assert.True(summary.SchemaTypeCount > 0);
-        Assert.True(summary.TocEntryCount > 0);
-        Assert.Equal(summary.TocEntryCount, summary.Blocks.Count);
-
-        // Per-block: class names non-empty; every present field decoded.
-        Assert.All(summary.Blocks, b =>
+        var tempPath = Path.Combine(Path.GetTempPath(),
+            $"crimsonatomtic_rewrite_{Guid.NewGuid():N}.save");
+        try
         {
-            Assert.False(string.IsNullOrEmpty(b.ClassName));
-            Assert.Equal(b.FieldsPresent, b.FieldsDecoded);
-        });
+            loader.WriteToFile(tempPath);
+            using var reloaded = new NativeSaveLoader();
+            var again = reloaded.Load(tempPath);
+            Assert.True(again.HmacOk, $"{name}: the rewritten save does not verify HMAC");
+            Assert.Equal(summary.Version, again.Version);
+            Assert.Equal(summary.Flags, again.Flags);
+            Assert.Equal(summary.UncompressedSize, again.UncompressedSize);
+            Assert.Equal(summary.Blocks.Count, again.Blocks.Count);
 
-        // Slot name from path parent.
-        Assert.False(string.IsNullOrEmpty(summary.SlotName));
+            // One decode pass over a late-game save is ~9 s, mostly
+            // QuestSaveData and FieldSaveData; the two handles are
+            // independent, so walk them side by side.
+            BlockDetails[] before = [];
+            BlockDetails[] after = [];
+            Parallel.Invoke(
+                () => before = DecodeAll(loader, path, summary.Blocks.Count),
+                () => after = DecodeAll(reloaded, tempPath, again.Blocks.Count));
+
+            var undecoded = before.Sum(UndecodedBytes);
+            Assert.True(undecoded == 0, $"{name}: {undecoded:N0} undecoded byte(s)");
+            string? firstDifference = null;
+            for (var i = 0; i < before.Length && firstDifference is null; i++)
+            {
+                firstDifference = FirstDifference(before[i], after[i], $"block {i}");
+            }
+            Assert.True(firstDifference is null,
+                $"{name}: an unmodified rewrite changed the decode at {firstDifference}");
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+        }
+    }
+
+    private static BlockDetails[] DecodeAll(NativeSaveLoader loader, string path, int count) =>
+        Enumerable.Range(0, count).Select(i => loader.LoadBlockDetails(path, i)).ToArray();
+
+    /// <summary>Total length of every undecoded range in
+    /// <paramref name="block"/> and everything nested under it. Ranges are
+    /// half-open <c>[start, end)</c>.</summary>
+    private static long UndecodedBytes(BlockDetails block)
+    {
+        var total = block.UndecodedRanges.Sum(r => r[1] - r[0]);
+        foreach (var field in block.Fields)
+        {
+            if (field.Child is { } child)
+            {
+                total += UndecodedBytes(child);
+            }
+            if (field.Elements is { } elements)
+            {
+                total += elements.Sum(UndecodedBytes);
+            }
+        }
+        return total;
+    }
+
+    /// <summary>
+    /// Where two decodes of the same block first disagree, or <c>null</c>
+    /// when they are identical all the way down — class, span, presence
+    /// mask, trailing pad, undecoded ranges, and every field's metadata,
+    /// value and byte range, recursing into locator children and list
+    /// elements.
+    /// </summary>
+    private static string? FirstDifference(BlockDetails a, BlockDetails b, string at)
+    {
+        if (a.ClassIndex != b.ClassIndex || a.ClassName != b.ClassName
+            || a.DataOffset != b.DataOffset || a.DataSize != b.DataSize)
+        {
+            return $"{at}: {a.ClassName} @{a.DataOffset}+{a.DataSize} "
+                + $"vs {b.ClassName} @{b.DataOffset}+{b.DataSize}";
+        }
+        if (a.MaskBytesHex != b.MaskBytesHex || a.TrailingPadHex != b.TrailingPadHex)
+        {
+            return $"{at} ({a.ClassName}): mask/pad {a.MaskBytesHex}/{a.TrailingPadHex} "
+                + $"vs {b.MaskBytesHex}/{b.TrailingPadHex}";
+        }
+        if (a.UndecodedRanges.Count != b.UndecodedRanges.Count
+            || a.UndecodedRanges.Zip(b.UndecodedRanges).Any(p => !p.First.SequenceEqual(p.Second)))
+        {
+            return $"{at} ({a.ClassName}): undecoded ranges differ";
+        }
+        if (a.Fields.Count != b.Fields.Count)
+        {
+            return $"{at} ({a.ClassName}): {a.Fields.Count} vs {b.Fields.Count} fields";
+        }
+        for (var i = 0; i < a.Fields.Count; i++)
+        {
+            var fa = a.Fields[i];
+            var fb = b.Fields[i];
+            var here = $"{at}.{fa.Name}";
+            // Record equality over everything but the nested data, which
+            // is compared structurally below.
+            if (fa with { Child = null, Elements = null } != fb with { Child = null, Elements = null })
+            {
+                return $"{here}: '{fa.Value}' [{fa.Start}..{fa.End}) "
+                    + $"vs '{fb.Value}' [{fb.Start}..{fb.End})";
+            }
+            if ((fa.Child is null) != (fb.Child is null)
+                || (fa.Elements?.Count ?? -1) != (fb.Elements?.Count ?? -1))
+            {
+                return $"{here}: nested shape differs";
+            }
+            if (fa.Child is { } childA && FirstDifference(childA, fb.Child!, here) is { } inChild)
+            {
+                return inChild;
+            }
+            if (fa.Elements is { } elementsA)
+            {
+                for (var j = 0; j < elementsA.Count; j++)
+                {
+                    if (FirstDifference(elementsA[j], fb.Elements![j], $"{here}[{j}]") is { } inElement)
+                    {
+                        return inElement;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     [Fact]
@@ -266,7 +468,7 @@ public sealed class NativeSaveLoaderTests
         loader.Load(path);
 
         var before = loader.LoadBlockDetails(path, 0);
-        Assert.Equal("fixed_suffix", before.Fields[0].Kind);
+        AssertCharacterKeyU32(before.Fields[0]);
 
         ReadOnlySpan<byte> sentinel = [0xAB, 0xCD, 0xEF, 0x01];
         loader.SetScalarField(0, 0, sentinel);
@@ -349,12 +551,8 @@ public sealed class NativeSaveLoaderTests
         using var loader = new NativeSaveLoader();
         loader.Load(path);
 
-        // Block 0 field 0 is _characterKey (fixed_suffix u32). Sanity-
-        // check the layout before mutating, so a schema drift surfaces
-        // here rather than silently corrupting bytes.
         var before = loader.LoadBlockDetails(path, 0);
-        Assert.Equal("fixed_suffix", before.Fields[0].Kind);
-        Assert.Equal(4, before.Fields[0].End - before.Fields[0].Start);
+        AssertCharacterKeyU32(before.Fields[0]);
 
         // 0x01EFCDAB = 32_492_971; distinct from any plausible original.
         ReadOnlySpan<byte> sentinel = [0xAB, 0xCD, 0xEF, 0x01];
@@ -521,7 +719,7 @@ public sealed class NativeSaveLoaderTests
         using var loader = new NativeSaveLoader();
         loader.Load(path);
 
-        // Block 0 field 0 is the fixed_suffix u32 _characterKey — a scalar,
+        // Block 0 field 0 is the u32 scalar _characterKey — a scalar,
         // not navigable. Targeting it as a mid-path step must surface as
         // NOT_NAVIGABLE (-15), distinct from NOT_SCALAR which fires only
         // on the leaf.
@@ -552,7 +750,7 @@ public sealed class NativeSaveLoaderTests
 
         // Op 1: top-level — block 0 field 0 _characterKey (u32).
         var before0 = loader.LoadBlockDetails(path, 0);
-        Assert.Equal("fixed_suffix", before0.Fields[0].Kind);
+        AssertCharacterKeyU32(before0.Fields[0]);
         const uint topSentinel = 32_492_971u; // 0x01EFCDAB
         var topBytes = new byte[4];
         System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(topBytes, topSentinel);
@@ -632,7 +830,7 @@ public sealed class NativeSaveLoaderTests
         // it's unchanged after the failed batch.
         var before = loader.LoadBlockDetails(path, 0);
         var originalValue = before.Fields[0].Value;
-        Assert.Equal("fixed_suffix", before.Fields[0].Kind);
+        AssertCharacterKeyU32(before.Fields[0]);
 
         // Op 0 is valid (a u32 sentinel into block 0 field 0).
         // Op 1 targets the same field but with bytes_len = 3 — a
@@ -1144,7 +1342,11 @@ public sealed class NativeSaveLoaderTests
         using var loader = new NativeSaveLoader();
         var target = FindObjectListTarget(loader, path);
         Assert.NotNull(target);
-        var (_, _, _, elementClassIdx) = target!.Value;
+        var (blockIdx, fieldIdx, _, elementClassIdx) = target!.Value;
+        // Absent fields cost nothing, except that the game still writes a
+        // one-byte 0x01 marker for an absent dynamic array / object list.
+        var markers = loader.LoadBlockDetails(path, blockIdx).Fields[fieldIdx].Elements![0]
+            .Fields.Count(f => f.MetaKind is 3 or 6 or 7);
 
         var bytes = loader.MakeEmptyElementBytes(elementClassIdx);
         Assert.True(bytes.Length >= 26, $"empty element should be at least mbc(1)+25 = 26 bytes, got {bytes.Length}");
@@ -1152,7 +1354,7 @@ public sealed class NativeSaveLoaderTests
         // First u16 is the mask byte count, which must be in 1..=16.
         var mbc = (int)BitConverter.ToUInt16(bytes, 0);
         Assert.InRange(mbc, 1, 16);
-        Assert.Equal(mbc + 25, bytes.Length);
+        Assert.Equal(mbc + 25 + markers, bytes.Length);
 
         // All mbc mask bytes must be zero (all fields absent).
         for (var i = 0; i < mbc; i++)
@@ -1164,9 +1366,11 @@ public sealed class NativeSaveLoaderTests
         var typeIdx = (int)BitConverter.ToUInt16(bytes, 2 + mbc);
         Assert.Equal(elementClassIdx, typeIdx);
 
-        // Trailing u32 (last 4 bytes) is trailing_size = 4 (empty payload).
+        // The payload is the reserved u32, then the markers, then the u32
+        // footer (last 4 bytes) holding trailing_size = 4 + markers.
+        Assert.All(bytes[^(4 + markers)..^4], b => Assert.Equal(0x01, b));
         var trailing = BitConverter.ToUInt32(bytes, bytes.Length - 4);
-        Assert.Equal(4u, trailing);
+        Assert.Equal((uint)(4 + markers), trailing);
     }
 
     [Fact]

@@ -35,8 +35,10 @@ namespace CrimsonAtomtic.RustInterop;
 /// chapters ("In Ashes", "Reclamation", "The Counterattack"), and for
 /// those <see cref="ChapterForMission"/> + <see cref="ArcForMission"/>
 /// can only return the first match by table order. The titles were
-/// reconciled against the live 2.02 English PALOC upstream; the few
-/// wiki-only titles with no live counterpart stay
+/// reconciled against the live 2.02 English PALOC upstream and follow the
+/// live strings since — 2.03 retitled six missions and two arcs without
+/// moving a single key, which is the case the key lookups exist for. The
+/// few wiki-only titles with no live counterpart stay
 /// <see cref="QuestRollupKeyKind.Unresolved"/> — the title lookups still
 /// answer for them, the key lookups cannot.
 /// </para>

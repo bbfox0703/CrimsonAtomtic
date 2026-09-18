@@ -1237,6 +1237,95 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         return buf;
     }
 
+    public byte[] ExportElementTemplate(
+        int blockIndex,
+        ReadOnlySpan<PathStep> path,
+        int fieldIndex,
+        int elementIndex)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(elementIndex);
+
+        var cached = RequireLoaded(nameof(ExportElementTemplate));
+        nuint required = 0;
+        unsafe
+        {
+            fixed (PathStep* pPath = path)
+            {
+                var sizeRc = NativeMethods.ExportElementTemplate(
+                    cached, (uint)blockIndex, pPath, (nuint)path.Length,
+                    (uint)fieldIndex, (uint)elementIndex, null, 0, out required);
+                if (sizeRc != NativeMethods.BUFFER_TOO_SMALL && sizeRc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(sizeRc,
+                        $"crimson_save_export_element_template(block={blockIndex}, path_len={path.Length}, " +
+                        $"field={fieldIndex}, element={elementIndex}) size query failed: {ErrorName(sizeRc)}");
+                }
+            }
+        }
+
+        var buf = new byte[(int)required];
+        unsafe
+        {
+            fixed (PathStep* pPath = path)
+            fixed (byte* p = buf)
+            {
+                var rc = NativeMethods.ExportElementTemplate(
+                    cached, (uint)blockIndex, pPath, (nuint)path.Length,
+                    (uint)fieldIndex, (uint)elementIndex, p, (nuint)buf.Length, out _);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_save_export_element_template(block={blockIndex}, path_len={path.Length}, " +
+                        $"field={fieldIndex}, element={elementIndex}) fill failed: {ErrorName(rc)}");
+                }
+            }
+        }
+        return buf;
+    }
+
+    public int ListInsertElementTemplate(
+        int blockIndex,
+        ReadOnlySpan<PathStep> path,
+        int fieldIndex,
+        int insertAt,
+        ReadOnlySpan<byte> templateBytes)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(blockIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(fieldIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(insertAt);
+
+        var cached = RequireLoaded(nameof(ListInsertElementTemplate));
+        uint dropped;
+        unsafe
+        {
+            fixed (PathStep* pPath = path)
+            fixed (byte* pTemplate = templateBytes)
+            {
+                var rc = NativeMethods.ListInsertElementTemplate(
+                    cached,
+                    (uint)blockIndex,
+                    pPath,
+                    (nuint)path.Length,
+                    (uint)fieldIndex,
+                    (uint)insertAt,
+                    pTemplate,
+                    (nuint)templateBytes.Length,
+                    out dropped);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_save_list_insert_element_template(block={blockIndex}, path_len={path.Length}, " +
+                        $"field={fieldIndex}, insert_at={insertAt}, template={templateBytes.Length}) failed: " +
+                        $"{ErrorName(rc)}");
+                }
+            }
+        }
+        MarkStructuralEdit();
+        return (int)dropped;
+    }
+
     public void ListInsertElement(
         int blockIndex,
         ReadOnlySpan<PathStep> path,
@@ -1557,6 +1646,11 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         NativeMethods.NOT_SCALAR_FIELD_KIND => "NOT_SCALAR_FIELD_KIND",
         NativeMethods.MUTATION_INVALID      => "MUTATION_INVALID",
         NativeMethods.NOT_INLINE_BYTES      => "NOT_INLINE_BYTES",
+        NativeMethods.BATCH_IN_PROGRESS     => "BATCH_IN_PROGRESS",
+        NativeMethods.BATCH_NOT_OPEN        => "BATCH_NOT_OPEN",
+        NativeMethods.NOT_OBJECT_LIST       => "NOT_OBJECT_LIST",
+        NativeMethods.TRANSPLANT_TYPE_MISSING => "TRANSPLANT_TYPE_MISSING",
+        NativeMethods.TEMPLATE_MISMATCH     => "TEMPLATE_MISMATCH",
         NativeMethods.PANIC                 => "PANIC",
         _                                   => $"UNKNOWN({code})",
     };
@@ -1659,6 +1753,11 @@ internal static partial class NativeMethods
     // Object-list presence-toggle error (per
     // vendor/crimson-rs/docs/dye-editor-scope.md §v2).
     public const int NOT_OBJECT_LIST          = -23;
+    // Cross-save element errors: a class the element names is missing
+    // from the target schema, and (element templates only) a field whose
+    // kind or size no longer matches the target's same-named field.
+    public const int TRANSPLANT_TYPE_MISSING  = -24;
+    public const int TEMPLATE_MISMATCH        = -25;
     public const int PANIC                 = -99;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -1875,6 +1974,30 @@ internal static partial class NativeMethods
         nuint sourcePathLen,
         uint sourceFieldIdx,
         uint sourceElementIdx);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_export_element_template")]
+    public static unsafe partial int ExportElementTemplate(
+        CrimsonSaveHandle handle,
+        uint blockIdx,
+        PathStep* path,
+        nuint pathLen,
+        uint fieldIdx,
+        uint elementIdx,
+        byte* buf,
+        nuint bufLen,
+        out nuint required);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_list_insert_element_template")]
+    public static unsafe partial int ListInsertElementTemplate(
+        CrimsonSaveHandle handle,
+        uint blockIdx,
+        PathStep* path,
+        nuint pathLen,
+        uint fieldIdx,
+        uint insertAt,
+        byte* templateBytes,
+        nuint templateLen,
+        out uint droppedFields);
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_save_set_scalar_field_present")]
     public static unsafe partial int SetScalarFieldPresent(

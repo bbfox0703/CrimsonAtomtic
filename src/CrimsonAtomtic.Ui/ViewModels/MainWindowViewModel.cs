@@ -1106,11 +1106,12 @@ public sealed partial class MainWindowViewModel(
     /// not a prefix or any contiguous window of the new twelve. The twelve
     /// read as four groups of three, and which group a given slot uses is
     /// not yet reverse-engineered. Measured through the release dll over
-    /// all 1,626 prefabs / 6,585 slots on live 2.01, the legacy 3-byte
-    /// getter the editor calls reads all-zero on 2,196 slots (33.3%) whose
+    /// all 1,645 prefabs / 6,634 slots on live 2.03, the legacy 3-byte
+    /// getter the editor calls reads all-zero on 2,212 slots (33.3%) whose
     /// full field is non-zero — i.e. a third of the dye UI would render
-    /// blank, and edits made on that reading would be wrong. 2.02 ships
-    /// the table byte-identical (body and header), so the figure stands.
+    /// blank, and edits made on that reading would be wrong. (2.01 and
+    /// 2.02: 2,196 of 6,585 slots over 1,626 prefabs — 2.03 added rows,
+    /// not a new mask shape.)
     /// </para>
     ///
     /// <para>
@@ -4086,13 +4087,10 @@ public sealed partial class MainWindowViewModel(
     }
 
     /// <summary>
-    /// Unlock the dragon: transplant its real <c>_mercenaryDataList</c>
-    /// element from the embedded donor save (a charKey swap on a generic
-    /// clone CTDs — the element content must match the charKey), then inject
-    /// its identity / summon knowledge. The donor is extracted to a temp file
-    /// because the save loader is file-path only. Post-transplant the element
-    /// is re-numbered (fresh <c>_mercenaryNo</c>) and de-flagged as main so it
-    /// doesn't displace the player's active mount.
+    /// Unlock the dragon: insert its real <c>_mercenaryDataList</c> element
+    /// (a charKey swap on a generic clone CTDs — the element content must
+    /// match the charKey), then inject its identity / summon knowledge and
+    /// fill its HP. See <see cref="InsertDragonElementAsync"/>.
     /// </summary>
     private async Task<(bool Ok, string Message)> UnlockDragonAsync(MountEntry entry)
     {
@@ -4167,8 +4165,8 @@ public sealed partial class MainWindowViewModel(
             }
         }
 
-        // Fill the grafted/existing dragon's HP to full (the donor was
-        // captured mid-fight at 1038/2500). Runs on both the fresh and the
+        // Fill the inserted/existing dragon's HP to full (the element was
+        // captured mid-fight at 1032/2500). Runs on both the fresh and the
         // already-present paths so a half-done earlier run gets healed too.
         var (hpChanged, hpNote) = await FillDragonHpAsync();
 
@@ -4204,13 +4202,11 @@ public sealed partial class MainWindowViewModel(
 
     /// <summary>
     /// Fill the (already-present) dragon's <c>_currentHp</c> to
-    /// <see cref="MountCatalog.DragonFullHp"/>. The field is a packed TStat —
-    /// <c>[01 00 01 01 01][u16 current][00]</c> for the donor's dragon — so we
-    /// overwrite only the inner current-HP u16 and leave the rest of the 8
-    /// bytes untouched, and ONLY when the bytes match that exact known shape
-    /// (so an unexpected layout is never corrupted). Returns
-    /// <c>(changed, note)</c>: <c>changed</c> is true only when HP was actually
-    /// raised; <c>note</c> is a short status fragment for the result message.
+    /// <see cref="MountCatalog.DragonFullHp"/>. The field is a plain u64; it
+    /// is only written when it is present, 8 bytes wide and below full, so
+    /// an unexpected layout is never touched. Returns <c>(changed, note)</c>:
+    /// <c>changed</c> is true only when HP was actually raised; <c>note</c>
+    /// is a short status fragment for the result message.
     /// </summary>
     private async Task<(bool Changed, string Note)> FillDragonHpAsync()
     {
@@ -4224,66 +4220,34 @@ public sealed partial class MainWindowViewModel(
             return (false, string.Empty);
         }
 
-        // Find the dragon element + its _currentHp field index + raw value.
+        // Find the dragon element + its _currentHp field.
         var dragonIdx = -1;
-        var hpFieldIdx = -1;
-        ulong hpRaw = 0;
+        DecodedFieldRow? hpField = null;
         for (var i = 0; i < merc.Value.Elements.Count && dragonIdx < 0; i++)
         {
             var el = merc.Value.Elements[i];
-            var isDragon = false;
-            var fi = -1;
-            ulong raw = 0;
-            foreach (var f in el.Fields)
-            {
-                if (string.Equals(f.Name, "_characterKey", StringComparison.Ordinal)
-                    && TryParseScalarUInt(f.Value, out var ck)
-                    && ck == MountCatalog.DragonCharacterKey)
-                {
-                    isDragon = true;
-                }
-                else if (string.Equals(f.Name, "_currentHp", StringComparison.Ordinal))
-                {
-                    fi = f.FieldIndex;
-                    if (TryParseScalarUInt(f.Value, out var parsedHp))
-                    {
-                        raw = parsedHp;
-                    }
-                }
-            }
-            if (isDragon)
+            if (FindFieldByName(el, "_characterKey") is { } ckField
+                && TryParseScalarUInt(ckField.Value, out var ck)
+                && ck == MountCatalog.DragonCharacterKey)
             {
                 dragonIdx = i;
-                hpFieldIdx = fi;
-                hpRaw = raw;
+                hpField = FindFieldByName(el, "_currentHp");
             }
         }
-        if (dragonIdx < 0 || hpFieldIdx < 0)
+        if (hpField is not { Present: true, MetaSize: 8 }
+            || !TryParseScalarUInt(hpField.Value, out var current))
         {
             return (false, string.Empty);
         }
-
-        var hp = BitConverter.GetBytes(hpRaw); // 8 LE bytes
-        // Guard: only the known donor-dragon TStat shape. byte[5..7] = the
-        // current-HP u16; bytes 0..5 are the marker and byte 7 is 0.
-        if (hp.Length != 8 || hp[0] != 0x01 || hp[1] != 0x00 || hp[2] != 0x01
-            || hp[3] != 0x01 || hp[4] != 0x01 || hp[7] != 0x00)
-        {
-            return (false, string.Empty);
-        }
-        var current = (ushort)(hp[5] | (hp[6] << 8));
         if (current >= MountCatalog.DragonFullHp)
         {
             return (false, " " + UiText.Get("DragonHpAlreadyFull", "HP already full."));
         }
 
-        var full = BitConverter.GetBytes(MountCatalog.DragonFullHp);
-        hp[5] = full[0];
-        hp[6] = full[1];
-
         var path = new[] { new PathStep((uint)merc.Value.ListFieldIndex, (uint)dragonIdx) };
         var blockIdx = merc.Value.BlockIndex;
-        var bytes = hp;
+        var hpFieldIdx = hpField.FieldIndex;
+        var bytes = BitConverter.GetBytes(MountCatalog.DragonFullHp);
         CrimsonSaveException? error = null;
         await Task.Run(() =>
         {
@@ -4296,70 +4260,22 @@ public sealed partial class MainWindowViewModel(
     }
 
     /// <summary>
-    /// Insert the dragon's real <c>_mercenaryDataList</c> element (captured as
-    /// <see cref="MountCatalog.DragonElementHex"/>) into the loaded save (a
-    /// charKey swap on a generic clone CTDs — the element content must match
-    /// the charKey). The captured bytes carry the source save's schema
-    /// type-indices, so we remap them to THIS save's indices by class name
-    /// (read from the save's own merc elements) — the same remap
-    /// <c>crimson_save_transplant_list_element</c> does, but for a byte blob,
-    /// so no whole-save donor embed is needed. The inserted element is
-    /// re-numbered (fresh u64 <c>_mercenaryNo</c>) and de-flagged as main so
-    /// it doesn't displace the player's active mount. Returns <c>null</c> on
-    /// success, else an error message.
+    /// Insert the dragon's real <c>_mercenaryDataList</c> element into the
+    /// loaded save (a charKey swap on a generic clone CTDs — the element
+    /// content must match the charKey). crimson-rs rebuilds
+    /// <see cref="MountCatalog.DragonElementTemplateHex"/> under THIS save's
+    /// schema by field name, so the element fits whichever patch wrote the
+    /// save. The inserted element is re-numbered (fresh u64
+    /// <c>_mercenaryNo</c>) and de-flagged as main so it doesn't displace the
+    /// player's active mount. Returns <c>null</c> on success, else an error
+    /// message.
     /// </summary>
     private async Task<string?> InsertDragonElementAsync(
         (int BlockIndex, int ListFieldIndex, IReadOnlyList<BlockDetails> Elements) tgt)
     {
-        if (tgt.Elements.Count == 0)
+        if (_loadedPath is not { } savePath)
         {
-            return "No existing mercenary to read this save's schema type-indices from.";
-        }
-
-        // Collect this save's type-index for each class the dragon element
-        // nests, plus the _mercenaryNo / _isMainMercenary field indices —
-        // both by walking the save's own merc elements (same schema).
-        var classIndices = new Dictionary<string, int>(StringComparer.Ordinal);
-        var mercNoFieldIdx = -1;
-        var isMainFieldIdx = -1;
-        foreach (var el in tgt.Elements)
-        {
-            CollectClassIndices(el, classIndices);
-            foreach (var f in el.Fields)
-            {
-                if (mercNoFieldIdx < 0
-                    && string.Equals(f.Name, "_mercenaryNo", StringComparison.Ordinal))
-                {
-                    mercNoFieldIdx = f.FieldIndex;
-                }
-                else if (isMainFieldIdx < 0
-                    && string.Equals(f.Name, "_isMainMercenary", StringComparison.Ordinal))
-                {
-                    isMainFieldIdx = f.FieldIndex;
-                }
-            }
-            if (mercNoFieldIdx >= 0 && isMainFieldIdx >= 0
-                && Array.TrueForAll(MountCatalog.DragonElementTypeIndexFixups,
-                    fx => classIndices.ContainsKey(fx.ClassName)))
-            {
-                break;
-            }
-        }
-
-        // Remap the captured element's type-indices to this save.
-        var bytes = Convert.FromHexString(MountCatalog.DragonElementHex);
-        foreach (var (offset, className) in MountCatalog.DragonElementTypeIndexFixups)
-        {
-            if (!classIndices.TryGetValue(className, out var targetIdx))
-            {
-                return $"This save has no '{className}' type to remap the dragon element onto.";
-            }
-            if (targetIdx > ushort.MaxValue || offset + 2 > bytes.Length)
-            {
-                return "Dragon element remap offset out of range (schema drift?).";
-            }
-            bytes[offset] = (byte)(targetIdx & 0xFF);
-            bytes[offset + 1] = (byte)((targetIdx >> 8) & 0xFF);
+            return "No save loaded.";
         }
 
         // Append at the tail; pick a collision-free _mercenaryNo (u64).
@@ -4378,6 +4294,7 @@ public sealed partial class MainWindowViewModel(
         }
         var newMercNo = maxMercNo + 1;
 
+        var template = Convert.FromHexString(MountCatalog.DragonElementTemplateHex);
         var blockIdx = tgt.BlockIndex;
         var listFieldIdx = tgt.ListFieldIndex;
         CrimsonSaveException? error = null;
@@ -4385,22 +4302,26 @@ public sealed partial class MainWindowViewModel(
         {
             try
             {
-                loader.ListInsertElement(
-                    blockIdx, ReadOnlySpan<PathStep>.Empty, listFieldIdx, insertAt, bytes);
+                loader.ListInsertElementTemplate(
+                    blockIdx, ReadOnlySpan<PathStep>.Empty, listFieldIdx, insertAt, template);
+                // Field indices come from the element just built, i.e. from
+                // this save's schema — they move between patches.
+                var list = FindFieldByName(loader.LoadBlockDetails(savePath, blockIdx), "_mercenaryDataList");
+                var dragon = list?.Elements is { } els && insertAt < els.Count ? els[insertAt] : null;
                 var dragonPath = new[] { new PathStep((uint)listFieldIdx, (uint)insertAt) };
                 // Fresh u64 _mercenaryNo so it can't collide with an existing
                 // merc/mount; the captured element's number would.
-                if (mercNoFieldIdx >= 0)
+                if (dragon is not null && FindFieldByName(dragon, "_mercenaryNo") is { Present: true } mercNo)
                 {
                     loader.SetScalarField(
-                        blockIdx, dragonPath, mercNoFieldIdx, BitConverter.GetBytes(newMercNo));
+                        blockIdx, dragonPath, mercNo.FieldIndex, BitConverter.GetBytes(newMercNo));
                 }
                 // Clear _isMainMercenary so the dragon doesn't displace the
                 // player's current active mount on load.
-                if (isMainFieldIdx >= 0)
+                if (dragon is not null && FindFieldByName(dragon, "_isMainMercenary") is { Present: true } isMain)
                 {
                     loader.SetScalarField(
-                        blockIdx, dragonPath, isMainFieldIdx, new byte[] { 0 });
+                        blockIdx, dragonPath, isMain.FieldIndex, new byte[] { 0 });
                 }
             }
             catch (CrimsonSaveException ex)
@@ -4415,35 +4336,10 @@ public sealed partial class MainWindowViewModel(
     }
 
     /// <summary>
-    /// Recursively collect <c>class name → schema type-index</c> from a
-    /// decoded object tree (first occurrence wins). Used to learn THIS save's
-    /// type-indices for the classes the dragon element nests, so the captured
-    /// bytes can be remapped onto it.
-    /// </summary>
-    private static void CollectClassIndices(BlockDetails obj, Dictionary<string, int> into)
-    {
-        into.TryAdd(obj.ClassName, obj.ClassIndex);
-        foreach (var f in obj.Fields)
-        {
-            if (f.Child is { } child)
-            {
-                CollectClassIndices(child, into);
-            }
-            if (f.Elements is { } elements)
-            {
-                foreach (var e in elements)
-                {
-                    CollectClassIndices(e, into);
-                }
-            }
-        }
-    }
-
-    /// <summary>
     /// Locate <c>MercenaryClanSaveData._mercenaryDataList</c> on a loader and
     /// return its block index, list field index, and current elements. Used
-    /// by the dragon transplant for both the target (this save) and source
-    /// (donor) loaders. Returns <c>null</c> when the block / field is absent.
+    /// by the dragon unlock. Returns <c>null</c> when the block / field is
+    /// absent.
     /// </summary>
     private static (int BlockIndex, int ListFieldIndex, IReadOnlyList<BlockDetails> Elements)? LoadMercList(
         ISaveLoader ld, string savePath, IReadOnlyList<BlockSummary> blocks)

@@ -63,52 +63,63 @@ public static class MountCatalog
     public const uint DragonCharacterKey = 1000799;
 
     /// <summary>
-    /// The dragon's base max HP. The donor element is captured mid-fight
-    /// (1038/2500), so after grafting we fill <c>_currentHp</c> to this. The
-    /// value is cross-confirmed: the reference editor's full-HP
-    /// <c>DRAGON_HEX</c> carries 2500 (0x09C4) at the same <c>_currentHp</c>
-    /// slot. The field is a packed TStat (<c>01 00 01 01 01 [u16 current] 00</c>);
-    /// we set only the inner current-HP u16, leaving the rest untouched.
+    /// The dragon's base max HP. The captured element is mid-fight
+    /// (<c>_currentHp</c> 1032; the game showed 1038/2500), so the unlock
+    /// fills <c>_currentHp</c> to this. Cross-confirmed by the reference
+    /// editor's full-HP <c>DRAGON_HEX</c>, which carries 2500 (0x09C4) in
+    /// the same field. <c>_currentHp</c> is a plain u64: it only looked like
+    /// a packed TStat (<c>01 00 01 01 01 [u16] 00</c>) while the decoder
+    /// misread the one-byte markers of the absent lists in front of it.
     /// </summary>
-    public const ushort DragonFullHp = 2500;
+    public const ulong DragonFullHp = 2500;
 
     /// <summary>
-    /// The dragon's real <c>_mercenaryDataList</c> element, captured once from
-    /// a save that owns it (212 bytes, hex). Inserted via
-    /// <c>ISaveLoader.ListInsertElement</c> after remapping its embedded
-    /// schema type-indices to the target save (see
-    /// <see cref="DragonElementTypeIndexFixups"/>) — this replaces the old
-    /// 1.47 MB whole-save donor embed. A charKey swap on a generic clone
-    /// CTDs, so the real element content is required.
+    /// The dragon's real <c>_mercenaryDataList</c> element as a crimson-rs
+    /// element template ("CRET" v1, hex), inserted with
+    /// <c>ISaveLoader.ListInsertElementTemplate</c>. A charKey swap on a
+    /// generic clone CTDs, so the real element content is required.
+    ///
+    /// <para>The template records the element by field NAME, so it is
+    /// rebuilt under whichever schema the target save carries. Raw element
+    /// bytes only fit the schema that wrote them, and <c>MercenarySaveData</c>
+    /// keeps changing: 2.00 removed <c>_occupationState</c> (the builder
+    /// drops it), 2.01 appended <c>_shipStationSaveList</c> (left absent),
+    /// and <c>ExperienceLevelSaveData</c> gained
+    /// <c>_shareKnowledgeRewardDailyCountData</c> (created empty).</para>
+    ///
+    /// <para>Exported from the 212-byte element first captured from a save
+    /// that owns the dragon, decoded under that save's schema:
+    /// <c>_characterKey</c> 1000799, <c>_mercenaryNo</c> 640,
+    /// <c>_ownedCharacterKey</c> 1, <c>_levelData</c> (three empty
+    /// <c>FriendlyDailyCountSaveData</c>), <c>_lastPaidTime</c> /
+    /// <c>_lastBreedingTime</c> 3420870048, <c>_lastSummoned</c>, spawn
+    /// position / yaw / field key 1, <c>_isMainMercenary</c>,
+    /// <c>_isInitialize</c>, <c>_occupationState</c> 0, <c>_currentHp</c>
+    /// 1032, <c>_currentMp</c> 0. The unlock then renumbers
+    /// <c>_mercenaryNo</c>, clears <c>_isMainMercenary</c> and fills HP.</para>
     /// </summary>
-    public const string DragonElementHex =
-        "06000d19003f0806370000ffffffffffffffff96ae1200000000005f450f00" +
-        "80020000000000000100000001001c390000ffffffffffffffffbcae120000" +
-        "0000000100002d0000ffffffffffffffffd2ae12000000000004000000" +
-        "0100002d0000ffffffffffffffffecae12000000000004000000" +
-        "0100002d0000ffffffffffffffff06af1200000000000400000052000000" +
-        "a055e6cb00000000a055e6cb00000000012c0c22c6fb671a44821d79c5" +
-        "b46d83be01000000010101010001010108040000000000000000000000" +
-        "000000b9000000";
-
-    /// <summary>
-    /// Where the type-indices live inside <see cref="DragonElementHex"/> and
-    /// the class each one names. At unlock time we read the target save's
-    /// type-index for each class (from one of its own merc elements) and
-    /// overwrite the u16 at each offset — the same class-name → type-index
-    /// remap <c>crimson_save_transplant_list_element</c> does internally, but
-    /// for a byte blob. Offsets are byte positions from the element start;
-    /// values are little-endian u16. Source indices in the captured bytes are
-    /// Mercenary=55, ExperienceLevel=57, FriendlyDailyCount=45.
-    /// </summary>
-    public static readonly (int Offset, string ClassName)[] DragonElementTypeIndexFixups =
-    [
-        (8,   "MercenarySaveData"),
-        (46,  "ExperienceLevelSaveData"),
-        (68,  "FriendlyDailyCountSaveData"),
-        (94,  "FriendlyDailyCountSaveData"),
-        (120, "FriendlyDailyCountSaveData"),
-    ];
+    public const string DragonElementTemplateHex =
+        "435245540111004d657263656e61727953617665446174610000000000ffffff" +
+        "ffffffffff0f000d005f6368617261637465724b65790004005f450f000c005f" +
+        "6d657263656e6172794e6f000800800200000000000012005f6f776e65644368" +
+        "617261637465724b6579000400010000000a005f6c6576656c44617461030400" +
+        "1700457870657269656e63654c6576656c53617665446174610000000000ffff" +
+        "ffffffffffff03001b005f67696d6d69636b4576656e744461696c79436f756e" +
+        "74446174610304001a00467269656e646c794461696c79436f756e7453617665" +
+        "446174610000000000ffffffffffffffff00001f005f616374696f6e4672616d" +
+        "654576656e744461696c79436f756e74446174610304001a00467269656e646c" +
+        "794461696c79436f756e7453617665446174610000000000ffffffffffffffff" +
+        "000018005f74616c6b4576656e744461696c79436f756e74446174610304001a" +
+        "00467269656e646c794461696c79436f756e7453617665446174610000000000" +
+        "ffffffffffffffff00000d005f6c6173745061696454696d65000800a055e6cb" +
+        "0000000011005f6c6173744272656564696e6754696d65000800a055e6cb0000" +
+        "00000d005f6c61737453756d6d6f6e6564000100010e005f737061776e506f73" +
+        "6974696f6e000c002c0c22c6fb671a44821d79c509005f737061776e59617700" +
+        "0400b46d83be12005f737061776e4669656c64496e666f4b6579000400010000" +
+        "0010005f69734d61696e4d657263656e617279000100010d005f6973496e6974" +
+        "69616c697a650001000110005f6f636375706174696f6e537461746500010000" +
+        "0a005f63757272656e74487000080008040000000000000a005f63757272656e" +
+        "744d700008000000000000000000";
 
     /// <summary>
     /// The 187-key dragon ("Blackstar") knowledge set — the
