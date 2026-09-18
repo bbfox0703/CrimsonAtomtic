@@ -28,7 +28,8 @@ namespace CrimsonAtomtic.RustInterop;
 /// take the key a save stores and keep answering when a patch retitles
 /// the row. The titles were reconciled against the live 2.02 English
 /// PALOC upstream, which also settled the old "Encirlement on the Cliff"
-/// transcription typo as "Encirclement". User-curated list —
+/// transcription typo as "Encirclement", and follow the live strings
+/// since (2.03 retitled one mission; its key did not move). User-curated list —
 /// completeness vs. shipped game content not guaranteed; quests outside
 /// the MD return <c>null</c>.
 /// </para>

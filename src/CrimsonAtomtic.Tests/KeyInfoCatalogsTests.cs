@@ -76,10 +76,11 @@ public sealed class KeyInfoCatalogsTests
                      paloc.Display(part => cat.LookupDisplayName(1000083, part)));
 
         // Also verify the very first prologue tutorial — second ground-truth
-        // row. 2.01 reworded it "Unfamiliar Lands" -> "Unfamiliar Land"; a
-        // game-side text edit, not a parse drift (the 25-character title
-        // above resolves through the identical path and is unchanged).
-        Assert.Equal("Unfamiliar Land", paloc.Display(part => cat.LookupDisplayName(1000157, part)));
+        // row. 2.01 reworded it "Unfamiliar Lands" -> "Unfamiliar Land" and
+        // 2.03 changed it back; game-side text edits, not parse drift (the
+        // 25-character title above resolves through the identical path and
+        // is unchanged).
+        Assert.Equal("Unfamiliar Lands", paloc.Display(part => cat.LookupDisplayName(1000157, part)));
 
         // NOT_FOUND on an obviously invalid key.
         Assert.Null(cat.LookupStringKey(uint.MaxValue));

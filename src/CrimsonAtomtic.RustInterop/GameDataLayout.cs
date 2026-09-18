@@ -125,8 +125,16 @@ public sealed class GameDataLayout
     ///
     /// <para>
     /// The namespace is already encoded in every entry's key, and the
-    /// container is a flat entry list — so the split is presentational and
-    /// the per-file catalogs can simply be queried in turn.
+    /// entry list is flat — so the split is presentational and the
+    /// per-file catalogs can simply be queried in turn.
+    /// </para>
+    ///
+    /// <para>
+    /// 2.03 then wrapped every file in an LZ4 container (a 0x200-byte
+    /// <c>"paloc"</c> header plus one LZ4 block around the unchanged entry
+    /// list). Both crimson-rs PALOC loaders unwrap it, so the files named
+    /// here are handed to <see cref="NativePalocCatalog"/> exactly as
+    /// extracted, on either side of the change.
     /// </para>
     /// </summary>
     /// <returns>

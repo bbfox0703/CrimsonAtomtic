@@ -1106,11 +1106,12 @@ public sealed partial class MainWindowViewModel(
     /// not a prefix or any contiguous window of the new twelve. The twelve
     /// read as four groups of three, and which group a given slot uses is
     /// not yet reverse-engineered. Measured through the release dll over
-    /// all 1,626 prefabs / 6,585 slots on live 2.01, the legacy 3-byte
-    /// getter the editor calls reads all-zero on 2,196 slots (33.3%) whose
+    /// all 1,645 prefabs / 6,634 slots on live 2.03, the legacy 3-byte
+    /// getter the editor calls reads all-zero on 2,212 slots (33.3%) whose
     /// full field is non-zero — i.e. a third of the dye UI would render
-    /// blank, and edits made on that reading would be wrong. 2.02 ships
-    /// the table byte-identical (body and header), so the figure stands.
+    /// blank, and edits made on that reading would be wrong. (2.01 and
+    /// 2.02: 2,196 of 6,585 slots over 1,626 prefabs — 2.03 added rows,
+    /// not a new mask shape.)
     /// </para>
     ///
     /// <para>
