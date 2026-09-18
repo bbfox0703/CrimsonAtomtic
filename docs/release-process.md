@@ -168,8 +168,21 @@ published").
 
 ## Undoing a tag
 
+**If the release was published — or the user may have touched the draft —
+save its live body first and reuse it for the new cut.** The user edits the
+notes on GitHub when publishing; GitHub keeps no copy of a deleted release,
+and the tag message holds only the pre-edit notes. Re-cutting v2.03.01 from
+the local notes file wiped those edits once.
+
+```sh
+gh release view v1.10.01-fix --json body --jq .body > release-notes-live.md   # BEFORE deleting
+```
+
 ```sh
 git push origin :refs/tags/v1.10.01-fix   # delete the remote tag
 git tag -d v1.10.01-fix                    # delete the local tag
 gh release delete v1.10.01-fix            # delete the DRAFT release CI created (or in the web UI)
 ```
+
+Then re-tag with `-F release-notes-live.md` and, in step 4, replace the new
+draft's body with the same file.
