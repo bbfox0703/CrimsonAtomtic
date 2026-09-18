@@ -13,8 +13,10 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 /// <list type="bullet">
 ///   <item>Sigil mounts → grant the Sigil of Solidarity item into Quest
 ///     Artifacts; the player uses it in-game to finish the unlock.</item>
-///   <item>Dragon → transplant its real merc element from the embedded donor
-///     + inject its identity/summon knowledge.</item>
+///   <item>Dragon → insert its real merc element, rebuilt under the loaded
+///     save's schema from <see cref="MountCatalog.DragonElementTemplateHex"/>
+///     (fresh <c>_mercenaryNo</c>, <c>_isMainMercenary</c> cleared), inject
+///     its 187-key summon/riding knowledge and fill its HP.</item>
 /// </list>
 /// The host (<see cref="MainWindowViewModel"/>) already flips its own dirty
 /// flag + window title inside <c>UnlockMountAsync</c>, so this dialog is a

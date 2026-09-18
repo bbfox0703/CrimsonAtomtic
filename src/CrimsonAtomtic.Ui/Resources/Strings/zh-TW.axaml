@@ -194,7 +194,7 @@
 
   <!-- 解鎖坐騎對話框 -->
   <sys:String x:Key="MountUnlockWindowTitle">解鎖坐騎</sys:String>
-  <sys:String x:Key="MountUnlockHeader">符咒坐騎 (白熊、純白鹿、羱羊、紅野豬、銀色獠牙、鳳凰) 會以「團結符咒」形式發放到任務道具 (Quest Artifacts)——請進入遊戲並「使用」該符咒以完成解鎖 (引擎隨後會召喚並授予騎乘能力)。龍 (深暗之星 Blackstar) 則直接解鎖：從內建的來源存檔移植其真實坐騎元素，並注入召喚知識。下次「檔案 → 儲存」時寫入檔案。</sys:String>
+  <sys:String x:Key="MountUnlockHeader">符咒坐騎 (白熊、純白鹿、羱羊、紅野豬、銀色獠牙、鳳凰) 會以「團結符咒」形式發放到任務道具 (Quest Artifacts)——請進入遊戲並「使用」該符咒以完成解鎖 (引擎隨後會召喚並授予騎乘能力)。龍 (深暗之星 Blackstar) 則直接解鎖：將其真實坐騎資料加入存檔 (配合此存檔的遊戲版本產生)，並注入召喚知識。下次「檔案 → 儲存」時寫入檔案。</sys:String>
   <sys:String x:Key="MountUnlockColMount">坐騎</sys:String>
   <sys:String x:Key="MountUnlockColType">類型</sys:String>
   <sys:String x:Key="MountUnlockColMethod">方式</sys:String>
