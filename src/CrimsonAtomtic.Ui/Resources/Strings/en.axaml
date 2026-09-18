@@ -187,7 +187,7 @@
 
   <!-- Mount Unlock dialog -->
   <sys:String x:Key="MountUnlockWindowTitle">Unlock Mounts</sys:String>
-  <sys:String x:Key="MountUnlockHeader">Sigil mounts (bears, deer, ibex, warthog, Silver Fang, Phoenix) are granted as a Sigil of Solidarity into Quest Artifacts — load the game and USE the sigil to finish the unlock (the engine then summons + grants riding). The Dragon (Blackstar) is unlocked directly: its real mount element is transplanted from a bundled donor save + its summon knowledge injected. Saves to the file on next File → Save.</sys:String>
+  <sys:String x:Key="MountUnlockHeader">Sigil mounts (bears, deer, ibex, warthog, Silver Fang, Phoenix) are granted as a Sigil of Solidarity into Quest Artifacts — load the game and USE the sigil to finish the unlock (the engine then summons + grants riding). The Dragon (Blackstar) is unlocked directly: its real mount data is added to the save (built to match your save's game version) and its summon knowledge is injected. Saves to the file on next File → Save.</sys:String>
   <sys:String x:Key="MountUnlockColMount">Mount</sys:String>
   <sys:String x:Key="MountUnlockColType">Type</sys:String>
   <sys:String x:Key="MountUnlockColMethod">Method</sys:String>

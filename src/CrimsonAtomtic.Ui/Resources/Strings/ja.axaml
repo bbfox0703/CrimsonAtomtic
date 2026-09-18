@@ -194,7 +194,7 @@
 
   <!-- 騎乗アンロックダイアログ -->
   <sys:String x:Key="MountUnlockWindowTitle">騎乗をアンロック</sys:String>
-  <sys:String x:Key="MountUnlockHeader">シジル騎乗 (クマ、シカ、アイベックス、イボイノシシ、シルバーファング、フェニックス) は「結束のシジル」としてクエストアーティファクトに付与されます。ゲームを起動してシジルを「使用」するとアンロックが完了します (エンジンが召喚と騎乗能力を付与)。ドラゴン (ブラックスター) は直接アンロックされます: 同梱のドナーセーブから実際の騎乗要素を移植し、召喚ナレッジを注入します。次回の「ファイル → 保存」でファイルに書き込まれます。</sys:String>
+  <sys:String x:Key="MountUnlockHeader">シジル騎乗 (クマ、シカ、アイベックス、イボイノシシ、シルバーファング、フェニックス) は「結束のシジル」としてクエストアーティファクトに付与されます。ゲームを起動してシジルを「使用」するとアンロックが完了します (エンジンが召喚と騎乗能力を付与)。ドラゴン (ブラックスター) は直接アンロックされます: 実際の騎乗データをセーブに追加し (このセーブのゲームバージョンに合わせて生成)、召喚ナレッジを注入します。次回の「ファイル → 保存」でファイルに書き込まれます。</sys:String>
   <sys:String x:Key="MountUnlockColMount">騎乗</sys:String>
   <sys:String x:Key="MountUnlockColType">種類</sys:String>
   <sys:String x:Key="MountUnlockColMethod">方法</sys:String>
