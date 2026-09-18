@@ -8,10 +8,10 @@
 > the deep history behind a decision.
 >
 > Last updated: **2026-09-18** — the editor is aligned to game **2.03**
-> **committed on `dev`, not yet pushed, tagged or released** (v2.02.01 is still
-> the published Latest). 2.03 (paver `2/3/0/0x03045138`) makes two format
-> changes, both absorbed inside the vendored crimson-rs (`main` `234b289`;
-> the 2.03 work is PR #97): iteminfo's `inventory_info_list` widened
+> and the Mount-Unlock dragon works again; both are **on `main`, not yet
+> tagged or released** (v2.02.01 is still the published Latest). 2.03
+> (paver `2/3/0/0x03045138`) makes two format changes, both absorbed inside
+> crimson-rs (the 2.03 work is PR #97): iteminfo's `inventory_info_list` widened
 > `[u16; 9]` → `[u16; 10]` (every item +2 B), and every `.paloc` file is
 > now wrapped in a 0x200-byte header + one LZ4 block. Neither reached the
 > C ABI surface — both PALOC loaders unwrap internally, and
@@ -26,9 +26,9 @@
 > install. The SDK did not move (10.0.401 / runtime 10.0.12), so the
 > ILCompiler pin stays at 10.0.12.
 >
-> **Next task: ship it** — push `dev`, PR to `main`, then the
-> 「啟動 release CI」 runbook for `v2.03.01`. crimson-rs `main` already
-> carries 2.03, so CI's fresh clone ships the right parser.
+> **Next task: ship `v2.03.01`** — the 「啟動 release CI」 runbook. It was
+> held for the dragon fix, which is now in. crimson-rs `main` (`b1b687b`)
+> carries both 2.03 and the fix, so CI's fresh clone ships the right parser.
 >
 > **A vendor refresh is not a build — it bit again, in a new shape.**
 > `vendor/crimson-rs` had been refreshed to `234b289` (13:29 today), but its
@@ -55,12 +55,20 @@
 > **402 tests green, 0 skipped**, about +6 s on a ~180 s suite (A/B on the
 > same machine).
 >
-> **Doing that exposed a real bug: Mount-Unlock's dragon fails on every
-> save written since game 2.00.** Its test had been pinned to slot105, a
-> June save, and on any newer save the insert returns `MUTATION_INVALID`,
-> because the embedded 1.09-era element no longer matches
-> `MercenarySaveData`'s field order. Not fixed here — see the 🔴 backlog
-> item. The test stays on slot105, with a comment saying why.
+> **Doing that exposed a real bug: Mount-Unlock's dragon failed on every
+> save written since game 2.00**, because the embedded 1.09-era element no
+> longer matched `MercenarySaveData`'s field order. **Fixed, and confirmed
+> in-game on 2.03**: the dragon summons and can be ridden. Chasing it turned
+> up a decoder bug under every save: the engine writes one `0x01` byte for
+> each absent dynamic array / object list, and the old walk read those
+> bytes as part of the next field — the dragon's "packed TStat"
+> `_currentHp` was one of them; it is a plain u64 (1032). crimson-rs PR #99
+> (merge `b1b687b`) decodes by that rule (0 fallback and 0 `trailing_pad`
+> on all 17 saves measured) and adds name-keyed element templates, which
+> rebuild the dragon under whichever schema the target save carries.
+> `MountUnlockMechanicsTests` runs the unlock on each schema among the live
+> saves. Vendored at `b1b687b` and rebuilt (`build_rust.ps1` +
+> `setup_python_env.ps1`).
 >
 > **Below this line is the 2.02 history, kept for context.**
 >
@@ -360,15 +368,16 @@
   install **substantive** (2.02 iteminfo really does mis-decode), like
   1.18 → 2.00 and unlike the target-only convention 2.01 and 2.02 got. Full
   per-version breakdown in [game-versions.md](game-versions.md).
-- **crimson-rs 2.03 is on `main`, and vendored.** The 2.03 support is PR #97
+- **crimson-rs 2.03 and the absence-marker fix are on `main`, and vendored.** The 2.03 support is PR #97
   (merge `332c47b`: `e932797` — `PARSER_TARGET_GAMEDATA_MINOR` 2 → 3, the
   10-slot `inventory_info_list`, `binary::paloc::unwrap_container` in every
   PALOC reader, and the curated quest tables' 2.03 retitles), and `main` has
-  since moved to `234b289` (PR #98, fork-guard scripts only). The vendor copy
-  sits at `234b289`; `build_rust.ps1` rebuilt the c_abi dll + staticlib from
-  it and `setup_python_env.ps1` the Python module. CI clones `main` fresh at
-  tag time, so a `v2.03.01` tag ships the 2.03 parser as things stand. (The
-  2.02 support was PR #95, merge `3296b5c`.)
+  since moved to `234b289` (PR #98, fork-guard scripts only) and `b1b687b`
+  (PR #99, absence markers + element templates — the dragon fix). The vendor
+  copy sits at `b1b687b`; `build_rust.ps1` rebuilt the c_abi dll + staticlib
+  from it and `setup_python_env.ps1` the Python module. CI clones `main`
+  fresh at tag time, so a `v2.03.01` tag ships both. (The 2.02 support was
+  PR #95, merge `3296b5c`.)
   **Still no version tags**, now for 1.18 through 2.03 (re-checked
   2026-09-18: `git ls-remote --tags origin` returns 0 refs): the `v1.0.10.x`–
   `v1.0.17.x` tags exist **only in the local clone** at
@@ -378,8 +387,9 @@
   keep them local, or stop cutting them.
 - **Health:** full suite green this session (**402** C# tests, 0 skipped, 0
   failures — 401 for the 2.03 alignment, plus the newest-save rewrite test)
-  against the live 2.03 install, with the native lib rebuilt from
-  the vendored 2.03 crimson-rs so the ABI reports target major 2 / minor 3.
+  against the live 2.03 install, with the native lib rebuilt from the
+  vendored crimson-rs `b1b687b`. The count stayed 402 through the dragon fix
+  (tests renamed and re-pinned, none added).
   The untouched suite (401) failed exactly five: the four
   `NativePaverReaderTests` pins and the `MissionKey 1000157` title. At 2.02
   the untouched suite (396) failed exactly the four paver pins; the five
@@ -476,28 +486,6 @@ are in [status-archive.md](status-archive.md).
   missing one is `ara` in group 0033: 39 files, and all of them parse through
   the same loader on 2.03. Adding it is feature work (a right-to-left script
   in the grids, plus a language-menu entry), not an alignment fix.
-- **🔴 Mount-Unlock's dragon fails on every save written since game 2.00.**
-  `MountCatalog.DragonElementHex` is a 1.09-era capture (2026-05-31) of the
-  dragon's `_mercenaryDataList` element, and inserting it assumes the target
-  save's `MercenarySaveData` has the field order it was captured from. It no
-  longer does: `_occupationState` (field 35) left that class's schema
-  somewhere between 1.12 and 2.00, 2.01 appended `_shipStationSaveList`, and
-  `ExperienceLevelSaveData` gained `_shareKnowledgeRewardDailyCountData`. The
-  element's presence mask still marks field 35 present as a 1-byte enum,
-  which on a 2.00+ save is `_customizationSaveData` (an 8-byte object
-  pointer), so the re-parse after the insert fails and `ListInsertElement`
-  returns `MUTATION_INVALID` (−19) and rolls back. Measured over all 12
-  local saves: the four written in June (up to 1.12) take the insert; all
-  eight written 2026-08-27 or later (2.00–2.03) fail. The app fails safe —
-  the loaded save is left untouched and the unlock reports the error — but
-  the dragon cannot be unlocked on any current save. The type-index remap
-  fixes class numbers, not field order. **Fix direction:** build the element
-  for the target save's schema — map the captured fields by name onto the
-  target's field list (drop fields it no longer has, leave new ones absent,
-  rebuild the mask) — rather than re-capturing from a current save, which
-  would break again at the next schema change. `MountUnlockMechanicsTests`
-  stays pinned to slot105 (a June save that still matches), with a comment
-  saying why; move it to `LiveSaves` together with the fix.
 
 ## Gotchas — don't relearn these
 
@@ -618,11 +606,24 @@ window-restore quirks, etc.) is in
   into another is pinned to the schema they came from. `MercenarySaveData`
   lost `_occupationState` between 1.12 and 2.00 and gained
   `_shipStationSaveList` in 2.01 while every alignment reported "no
-  save-body drift", and `MountCatalog.DragonElementHex` broke without a
+  save-body drift", and the dragon's captured element broke without a
   sound because its only test ran on a June save. Remapping type indices by
-  class name is not enough; fields have to be mapped by name too. And a
-  live-save test pinned to a slot tests that slot's patch, not the game —
-  use `LiveSaves` (newest first).
+  class name is not enough; fields have to be mapped by name too — which is
+  what crimson-rs element templates do
+  (`crimson_save_export_element_template`). And a live-save test pinned to
+  a slot tests that slot's patch, not the game — use `LiveSaves` (newest
+  first).
+- **An absent dynamic array / object list is one `0x01` byte.** Every other
+  absent field is zero bytes, and a present array / list opens with `00` +
+  a u32 count. Until 2026-09-18 the decoder skipped absent fields without
+  consuming that byte, so values behind an absent list were misread, and
+  older notes in [status-archive.md](status-archive.md) quote some of
+  them: the dragon's "packed TStat" `_currentHp`
+  (`01 00 01 01 01 [u16] 00`) and Silver Fang's `_currentHp=494784544309249`
+  (same shape) are markers + `_occupationState` + the real value's low
+  bytes. `_currentHp` is a plain u64. Anything that builds element bytes
+  has to write the markers; crimson-rs does in
+  `make_empty_element_bytes`, templates and list make-absent.
 - **Scalar-only mutation + length-changing ops.** The C ABI mutates
   fixed-size scalars in place; list clone/insert/remove and inline-bytes
   resize are supported via the dedicated ops (incl. the `marker_run_plus_zeros`
@@ -767,6 +768,30 @@ Each step should be green. If anything fails, fix it before touching new code
 ## Session changelog (newest first)
 
 One line per milestone; full detail in [status-archive.md](status-archive.md).
+
+- **2026-09-18 — dragon unlock rebuilt by field name; save decoder follows the engine's absence markers (confirmed in-game)**:
+  crimson-rs PR #99 (merge `b1b687b`) walks every object by the
+  engine's rule — one `0x01` byte per absent dynamic array / object list —
+  and keeps the heuristic walk only as a fallback no save needs (17 saves:
+  12 live from 1.10 to 2.03 + 5 fixtures; 118k–135k objects and 170k–181k
+  markers each; 0 `trailing_pad`; identical re-encode). New C ABI
+  `crimson_save_export_element_template` /
+  `crimson_save_list_insert_element_template` ("CRET" v1, name-keyed:
+  removed fields dropped, new ones absent, empty child for new inline
+  objects, `TEMPLATE_MISMATCH` −25 on a kind or size change). Editor:
+  `MountCatalog.DragonElementTemplateHex` replaces the 212-byte raw element
+  + fixups; `InsertDragonElementAsync` inserts it and sets `_mercenaryNo` /
+  `_isMainMercenary` by name; `FillDragonHpAsync` writes a plain u64 2500
+  (the "packed TStat" guard is gone, it guarded a misread). Tests:
+  `MountUnlockMechanicsTests` runs once per schema of the template's
+  classes (3 of the 12 saves here: crimson-rs runs save calls one at a time
+  behind a global lock, so all 12 took 66 s against 24 s); the four block-0
+  `_characterKey` pins accept `fixed_prefix` (the marker walk reads scalars
+  in order); the empty-element size test counts markers. With the new
+  native lib the untouched suite failed exactly those four pins. **402 tests
+  green, 0 skipped**, about 200 s (from ~186 s).
+  In-game check on 2.03: slot103 (slot102 plus the unlock, made by the real
+  `UnlockMountAsync` run headless) — the dragon summons and can be ridden.
 
 - **2026-09-18 — live-save tests follow the newest save; the dragon unlock is broken on 2.00+ saves (found, not fixed)**:
   a new `LiveSaves` test helper (newest-first by last-write time) replaces

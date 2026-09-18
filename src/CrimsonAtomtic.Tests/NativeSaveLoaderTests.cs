@@ -19,6 +19,21 @@ public sealed class NativeSaveLoaderTests
     private static string? FindLiveSave() => LiveSaves.Newest();
 
     /// <summary>
+    /// Block 0 field 0 is the u32 <c>_characterKey</c> the scalar-mutation
+    /// tests write through. Check it before mutating, so a schema drift
+    /// surfaces here rather than as silently corrupted bytes. The kind label
+    /// is not pinned: the decoder says fixed_prefix for a scalar it read in
+    /// order and fixed_suffix for one it placed from the block's end, which
+    /// only its fallback walk does.
+    /// </summary>
+    private static void AssertCharacterKeyU32(DecodedFieldRow field)
+    {
+        Assert.Equal("_characterKey", field.Name);
+        Assert.True(field.Kind is "fixed_prefix" or "fixed_suffix", $"unexpected kind {field.Kind}");
+        Assert.Equal(4, field.End - field.Start);
+    }
+
+    /// <summary>
     /// Every live save loads with a consistent header and every present
     /// field decoded — the newest one because that is the format the
     /// installed game writes, the older ones because the editor promises to
@@ -453,7 +468,7 @@ public sealed class NativeSaveLoaderTests
         loader.Load(path);
 
         var before = loader.LoadBlockDetails(path, 0);
-        Assert.Equal("fixed_suffix", before.Fields[0].Kind);
+        AssertCharacterKeyU32(before.Fields[0]);
 
         ReadOnlySpan<byte> sentinel = [0xAB, 0xCD, 0xEF, 0x01];
         loader.SetScalarField(0, 0, sentinel);
@@ -536,12 +551,8 @@ public sealed class NativeSaveLoaderTests
         using var loader = new NativeSaveLoader();
         loader.Load(path);
 
-        // Block 0 field 0 is _characterKey (fixed_suffix u32). Sanity-
-        // check the layout before mutating, so a schema drift surfaces
-        // here rather than silently corrupting bytes.
         var before = loader.LoadBlockDetails(path, 0);
-        Assert.Equal("fixed_suffix", before.Fields[0].Kind);
-        Assert.Equal(4, before.Fields[0].End - before.Fields[0].Start);
+        AssertCharacterKeyU32(before.Fields[0]);
 
         // 0x01EFCDAB = 32_492_971; distinct from any plausible original.
         ReadOnlySpan<byte> sentinel = [0xAB, 0xCD, 0xEF, 0x01];
@@ -708,7 +719,7 @@ public sealed class NativeSaveLoaderTests
         using var loader = new NativeSaveLoader();
         loader.Load(path);
 
-        // Block 0 field 0 is the fixed_suffix u32 _characterKey — a scalar,
+        // Block 0 field 0 is the u32 scalar _characterKey — a scalar,
         // not navigable. Targeting it as a mid-path step must surface as
         // NOT_NAVIGABLE (-15), distinct from NOT_SCALAR which fires only
         // on the leaf.
@@ -739,7 +750,7 @@ public sealed class NativeSaveLoaderTests
 
         // Op 1: top-level — block 0 field 0 _characterKey (u32).
         var before0 = loader.LoadBlockDetails(path, 0);
-        Assert.Equal("fixed_suffix", before0.Fields[0].Kind);
+        AssertCharacterKeyU32(before0.Fields[0]);
         const uint topSentinel = 32_492_971u; // 0x01EFCDAB
         var topBytes = new byte[4];
         System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(topBytes, topSentinel);
@@ -819,7 +830,7 @@ public sealed class NativeSaveLoaderTests
         // it's unchanged after the failed batch.
         var before = loader.LoadBlockDetails(path, 0);
         var originalValue = before.Fields[0].Value;
-        Assert.Equal("fixed_suffix", before.Fields[0].Kind);
+        AssertCharacterKeyU32(before.Fields[0]);
 
         // Op 0 is valid (a u32 sentinel into block 0 field 0).
         // Op 1 targets the same field but with bytes_len = 3 — a
@@ -1331,7 +1342,11 @@ public sealed class NativeSaveLoaderTests
         using var loader = new NativeSaveLoader();
         var target = FindObjectListTarget(loader, path);
         Assert.NotNull(target);
-        var (_, _, _, elementClassIdx) = target!.Value;
+        var (blockIdx, fieldIdx, _, elementClassIdx) = target!.Value;
+        // Absent fields cost nothing, except that the game still writes a
+        // one-byte 0x01 marker for an absent dynamic array / object list.
+        var markers = loader.LoadBlockDetails(path, blockIdx).Fields[fieldIdx].Elements![0]
+            .Fields.Count(f => f.MetaKind is 3 or 6 or 7);
 
         var bytes = loader.MakeEmptyElementBytes(elementClassIdx);
         Assert.True(bytes.Length >= 26, $"empty element should be at least mbc(1)+25 = 26 bytes, got {bytes.Length}");
@@ -1339,7 +1354,7 @@ public sealed class NativeSaveLoaderTests
         // First u16 is the mask byte count, which must be in 1..=16.
         var mbc = (int)BitConverter.ToUInt16(bytes, 0);
         Assert.InRange(mbc, 1, 16);
-        Assert.Equal(mbc + 25, bytes.Length);
+        Assert.Equal(mbc + 25 + markers, bytes.Length);
 
         // All mbc mask bytes must be zero (all fields absent).
         for (var i = 0; i < mbc; i++)
@@ -1351,9 +1366,11 @@ public sealed class NativeSaveLoaderTests
         var typeIdx = (int)BitConverter.ToUInt16(bytes, 2 + mbc);
         Assert.Equal(elementClassIdx, typeIdx);
 
-        // Trailing u32 (last 4 bytes) is trailing_size = 4 (empty payload).
+        // The payload is the reserved u32, then the markers, then the u32
+        // footer (last 4 bytes) holding trailing_size = 4 + markers.
+        Assert.All(bytes[^(4 + markers)..^4], b => Assert.Equal(0x01, b));
         var trailing = BitConverter.ToUInt32(bytes, bytes.Length - 4);
-        Assert.Equal(4u, trailing);
+        Assert.Equal((uint)(4 + markers), trailing);
     }
 
     [Fact]

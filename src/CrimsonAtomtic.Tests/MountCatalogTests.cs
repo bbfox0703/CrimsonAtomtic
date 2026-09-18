@@ -74,26 +74,27 @@ public sealed class MountCatalogTests
     }
 
     [Fact]
-    public void DragonElement_HexAndFixups_AreConsistent()
+    public void DragonElementTemplate_IsAMercenaryTemplateForTheDragon()
     {
-        // The captured dragon element is 212 bytes (replaces the 1.47 MB
-        // whole-save donor embed).
-        var bytes = Convert.FromHexString(MountCatalog.DragonElementHex);
-        Assert.Equal(212, bytes.Length);
+        // A crimson-rs element template (CRET v1) exported from the captured
+        // element: magic + version, then the MercenarySaveData object.
+        // MountUnlockMechanicsTests builds it into real saves.
+        var bytes = Convert.FromHexString(MountCatalog.DragonElementTemplateHex);
+        Assert.Equal(654, bytes.Length);
+        Assert.Equal("CRET"u8.ToArray(), bytes[..4]);
+        Assert.Equal(1, bytes[4]);
+        var className = "MercenarySaveData"u8.ToArray();
+        Assert.Equal(className.Length, BitConverter.ToUInt16(bytes, 5));
+        Assert.Equal(className, bytes[7..(7 + className.Length)]);
 
-        // Every type-index fixup offset is in range with room for a u16, and
-        // names only the classes the element actually nests.
-        var allowed = new[]
-        {
-            "MercenarySaveData", "ExperienceLevelSaveData", "FriendlyDailyCountSaveData",
-        };
-        Assert.NotEmpty(MountCatalog.DragonElementTypeIndexFixups);
-        foreach (var (offset, className) in MountCatalog.DragonElementTypeIndexFixups)
-        {
-            Assert.InRange(offset, 0, bytes.Length - 2);
-            Assert.Contains(className, allowed);
-        }
-        // The main element type-index sits at offset 8 (mbc=6 → 2+6).
-        Assert.Contains((8, "MercenarySaveData"), MountCatalog.DragonElementTypeIndexFixups);
+        // Its _characterKey is recorded as a 4-byte scalar (kind 0) holding
+        // the dragon's charKey — the element content must match the charKey.
+        byte[] characterKey =
+        [
+            .. BitConverter.GetBytes((ushort)"_characterKey".Length), .. "_characterKey"u8,
+            0, .. BitConverter.GetBytes((ushort)4), .. BitConverter.GetBytes(MountCatalog.DragonCharacterKey),
+        ];
+        Assert.True(bytes.AsSpan().IndexOf(characterKey) >= 0,
+            "template has no _characterKey = DragonCharacterKey record");
     }
 }

@@ -13,6 +13,11 @@
 > `ObjectBlock.trailing_pad`. The crimson-rs decode test asserts both
 > "zero undecoded" and "zero Unknown fields" as hard invariants, so a
 > future game patch that drifts the format will fail loudly.
+>
+> **2026-09-18:** those figures predate the [absence-marker
+> rule](#absence-markers). The decoder now follows it, and `trailing_pad`
+> is empty on every save measured (12 live saves from 1.10 to 2.03 plus the
+> 1.09 / 1.10 fixtures).
 
 The decompressed save body has three sequential sections:
 
@@ -68,10 +73,29 @@ u16 mask_byte_count       1..16
 u8  mask_bytes[mask_byte_count]   one presence bit per schema field
 u32 reserved_u32
 
-...field payloads encoded per the schema, walked head-to-tail with a
-   reverse pass for trailing fixed-size fields and a forward pass for
-   the rest...
+...field payloads in schema order: a present field's payload per its
+   meta_kind, an absent dynamic array / object list as one 0x01 byte,
+   any other absent field as nothing (see Absence markers)...
 ```
+
+## Absence markers
+
+The engine writes one `0x01` byte for every **absent** dynamic array
+(`meta_kind` 3) and object list (6 / 7), and nothing for any other absent
+field. A present array or list opens with a `0x00` tag and a u32 count (a
+list then has 13 more header bytes before its elements). crimson-rs walks
+every object this way first (`walk_fields_with_markers`); the older
+heuristic walk is only a fallback, and no measured save needs it.
+
+The older walk skipped absent fields without consuming anything, so each
+marker was read as part of the next field. A mercenary's `_currentHp`
+behind five absent lists read as 1,134,700,311,674,881
+(`01 00 01 01 01 08 04 00`: markers, a misread `_occupationState` and the
+low bytes of the real value), where the true value is 1,032. Leftover
+markers ended up in the leading-`01` header variants below and in
+`trailing_pad`, and byte-exact round-trips hid all of it. Anything that
+builds bytes (`crimson_save_make_empty_element_bytes`, element templates,
+make-absent on a list) writes the markers.
 
 ## Field decoder dispatch (meta_kind)
 
@@ -104,6 +128,12 @@ u32 reserved_u32
 
 The decoder tries body offsets `{cursor, cursor+1, cursor+2, cursor+3}` and picks whichever produces the deepest decode. Matches the Python parser's heuristic.
 
+Under the [absence-marker rule](#absence-markers), the leading `01` bytes
+of `marker_prefix`, `marker_run_plus_zeros` and `ones_then_count` (and the
+`01×5` trailer) are the markers of neighbouring absent fields, not part of
+this field. The marker walk accepts only the `00`-tagged shapes; the
+variant tables describe the fallback walk.
+
 ## Type-name → scalar dispatch
 
 | `type_name` (lowercased) condition | `meta_size` | Decoded as       |
@@ -121,6 +151,11 @@ The decoder tries body offsets `{cursor, cursor+1, cursor+2, cursor+3}` and pick
 - [`tools/inspect/inspect_save_section.py`](../tools/inspect/inspect_save_section.py) — run the full decoder; filter by `--class` or `--toc-index`; pretty-print or dump JSON.
 
 ## Engine trailer (`ObjectBlock.trailing_pad`)
+
+> **Legacy.** This is what the fallback walk made of
+> [absence markers](#absence-markers): the `MercenaryClanSaveData` pad
+> `01 01 01` is three of them. Under the marker walk, `trailing_pad` is
+> empty on every save measured.
 
 234 blocks have a small region between the end of the forward walk
 and the start of the reverse-peeled tail (or, when no reverse pass
