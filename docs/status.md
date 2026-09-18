@@ -8,8 +8,8 @@
 > the deep history behind a decision.
 >
 > Last updated: **2026-09-18** — the editor is aligned to game **2.03**
-> and the Mount-Unlock dragon works again; both are **on `main`, not yet
-> tagged or released** (v2.02.01 is still the published Latest). 2.03
+> and the Mount-Unlock dragon works again; both shipped in **v2.03.01**,
+> tagged, built and **PUBLISHED** (2026-09-18T10:03:22Z, marked Latest). 2.03
 > (paver `2/3/0/0x03045138`) makes two format changes, both absorbed inside
 > crimson-rs (the 2.03 work is PR #97): iteminfo's `inventory_info_list` widened
 > `[u16; 9]` → `[u16; 10]` (every item +2 B), and every `.paloc` file is
@@ -26,9 +26,23 @@
 > install. The SDK did not move (10.0.401 / runtime 10.0.12), so the
 > ILCompiler pin stays at 10.0.12.
 >
-> **Next task: ship `v2.03.01`** — the 「啟動 release CI」 runbook. It was
-> held for the dragon fix, which is now in. crimson-rs `main` (`b1b687b`)
-> carries both 2.03 and the fix, so CI's fresh clone ships the right parser.
+> **v2.03.01 was cut twice.** The first cut (PR #40, merge `ec69029`; CI
+> run `35327302283`) was published at 09:12:19Z. The Unlock Mounts dialog
+> and README text fixes then landed (PR #41, merge `7150190`, build number
+> 27 → 28), so that release and its tag were deleted (0 downloads) and
+> v2.03.01 was re-tagged at `7150190`: CI run `35332014534`, exe
+> `2.3.1.28`, zip 20,662,273 B, sha256 `06975c46…1384` (equal to the
+> asset's GitHub digest), crimson-rs `b1b687b`. **The re-cut cost the user
+> their notes edits**: they had edited the notes on GitHub when publishing,
+> the replacement body was rebuilt from the local notes file, and they had
+> to edit it again. Save the live body before undoing a published release
+> (now in [release-process.md](release-process.md), "Undoing a tag"). The
+> published notes also park the Dye editor: **no plan to fix it for now**.
+> Not run before publishing: the binary checks on the release zip itself
+> (download, FileVersion, launch) — the local AOT publish of `ec69029` was
+> clean (4 files, no warnings).
+>
+> **Next task: none queued** — pick from the backlog below.
 >
 > **A vendor refresh is not a build — it bit again, in a new shape.**
 > `vendor/crimson-rs` had been refreshed to `234b289` (13:29 today), but its
@@ -421,7 +435,9 @@ are in [status-archive.md](status-archive.md).
 
 ## Open work / backlog
 
-- **🔴 Dye editor is disabled since 2.01 — needs the mask-group RE.** (Still
+- **⏸️ Dye editor is disabled since 2.01 — parked, no plan to fix it for
+  now** (the user's call, stated in the v2.03.01 release notes,
+  2026-09-18); it needs the mask-group RE. (Still
   true on 2.03, which added 19 prefabs but kept the 12-byte mask shape.
   Re-measured on 2.03 through the rebuilt dll: 1,645 prefabs / 6,634 slots,
   exactly one group non-zero on 4,304, two on 1,272, three on 73, none on
@@ -768,6 +784,15 @@ Each step should be green. If anything fails, fix it before touching new code
 ## Session changelog (newest first)
 
 One line per milestone; full detail in [status-archive.md](status-archive.md).
+
+- **2026-09-18 — v2.03.01 released (2.03 + the dragon fix)**:
+  PR #40 (2.03 alignment, newest-save tests, dragon fix; merge `ec69029`)
+  and PR #41 (Unlock Mounts dialog + README text; merge `7150190`). First
+  cut at `ec69029` published 09:12:19Z, deleted with 0 downloads, re-cut
+  at `7150190` (CI run `35332014534`, exe `2.3.1.28`) and published
+  10:03:22Z, marked Latest. The re-cut wiped the user's GitHub edits to
+  the notes (they redid them); `release-process.md` now says to save the
+  live body first. The notes park the Dye editor with no plan to fix it.
 
 - **2026-09-18 — dragon unlock rebuilt by field name; save decoder follows the engine's absence markers (confirmed in-game)**:
   crimson-rs PR #99 (merge `b1b687b`) walks every object by the
