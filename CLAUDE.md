@@ -56,9 +56,8 @@ auto-detection. Cross-platform goal: Windows (must), Linux, macOS.
 
 - **Build verification**: after code changes, fully rebuild and inspect the actual build output before claiming success.
 - **Refactoring**: when asked to refactor/rename, change the code (move files, update imports, rename classes) — not just docs.
-- **Debugging**: verify fixes against actual memory layout / data structure; if the first attempt fails, re-examine fundamental assumptions before iterating.
+- **Debugging**: verify a fix against the actual bytes / data structure it touches, not the expected shape.
 - **PRs**: before `gh pr create`, run `git status` and `git log --oneline -5`; resolve any divergence.
-- **Cheat Engine Lua**: verify each API exists in the CE Lua reference before using it; do not invent calls.
 
 ## Pointers
 
@@ -71,4 +70,4 @@ auto-detection. Cross-platform goal: Windows (must), Linux, macOS.
 - CrimsonForge coverage gaps (the canonical RE-reference repo for CD formats): [docs/crimsonforge-coverage-gaps.md](docs/crimsonforge-coverage-gaps.md)
 - **「啟動 release CI」** = run the runbook in [docs/release-process.md](docs/release-process.md) end to end (pre-flight → player-facing bilingual notes → annotated tag → CI draft → replace notes → verify; publishing stays the user's call)
 - Python toolchain conventions: [tools/CLAUDE.md](tools/CLAUDE.md)
-- Rust core (our fork): [vendor/crimson-rs/README.md](vendor/crimson-rs/README.md) (after first vendor refresh)
+- Rust core (our fork): [vendor/crimson-rs/README.md](vendor/crimson-rs/README.md)
