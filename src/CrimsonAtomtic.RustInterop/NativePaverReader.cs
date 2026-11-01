@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace CrimsonAtomtic.RustInterop;
 
 /// <summary>
-/// Parsed contents of <c>meta/0.paver</c> — the 10-byte version stamp
+/// Parsed contents of <c>meta/0.paver</c> — the version stamp (10 bytes through 2.03, longer once an install ships DLC)
 /// every Crimson Desert install carries. Mirrors the
 /// <c>Paver</c> struct in <c>vendor/crimson-rs/src/binary/paver.rs</c>;
 /// see <see cref="NativePaverReader.TryReadFromInstall"/> for the

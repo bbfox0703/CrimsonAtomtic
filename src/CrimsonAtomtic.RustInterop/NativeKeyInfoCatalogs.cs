@@ -325,6 +325,38 @@ public sealed class NativeQuestInfoCatalog : IDisposable
         }
     }
 
+    /// <summary>
+    /// Load through the table's index, the game's own row list. Unlike the
+    /// headerless scan of <see cref="LoadFromBytes(ReadOnlySpan{byte})"/> it
+    /// keeps rows whose name fails the scan's validation.
+    /// </summary>
+    public static NativeQuestInfoCatalog LoadFromBytes(ReadOnlySpan<byte> pabgb, ReadOnlySpan<byte> pabgh)
+    {
+        unsafe
+        {
+            fixed (byte* b = pabgb)
+            fixed (byte* h = pabgh)
+            {
+                var rc = NativeMethods.QuestInfoLoadFromBytesWithPabgh(
+                    b, (nuint)pabgb.Length, h, (nuint)pabgh.Length, out var raw);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_questinfo_load_from_bytes_with_pabgh(len={pabgb.Length}) failed: {NameBuffer.ErrorName(rc)}");
+                }
+                var handle = CrimsonQuestInfoHandle.FromOwnedPointer(raw);
+                var rcCount = NativeMethods.QuestInfoEntryCount(handle, out var count);
+                if (rcCount != NativeMethods.OK)
+                {
+                    handle.Dispose();
+                    throw new CrimsonSaveException(rcCount,
+                        $"crimson_questinfo_entry_count failed: {NameBuffer.ErrorName(rcCount)}");
+                }
+                return new NativeQuestInfoCatalog(handle, (int)count);
+            }
+        }
+    }
+
     public string? LookupStringKey(uint questKey)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -417,6 +449,38 @@ public sealed class NativeStageInfoCatalog : IDisposable
                 {
                     throw new CrimsonSaveException(rc,
                         $"crimson_stageinfo_load_from_bytes(len={bytes.Length}) failed: {NameBuffer.ErrorName(rc)}");
+                }
+                var handle = CrimsonStageInfoHandle.FromOwnedPointer(raw);
+                var rcCount = NativeMethods.StageInfoEntryCount(handle, out var count);
+                if (rcCount != NativeMethods.OK)
+                {
+                    handle.Dispose();
+                    throw new CrimsonSaveException(rcCount,
+                        $"crimson_stageinfo_entry_count failed: {NameBuffer.ErrorName(rcCount)}");
+                }
+                return new NativeStageInfoCatalog(handle, (int)count);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Load through the table's index, the game's own row list. The
+    /// headerless scan of <see cref="LoadFromBytes(ReadOnlySpan{byte})"/>
+    /// misses thousands of rows on 2.04.
+    /// </summary>
+    public static NativeStageInfoCatalog LoadFromBytes(ReadOnlySpan<byte> pabgb, ReadOnlySpan<byte> pabgh)
+    {
+        unsafe
+        {
+            fixed (byte* b = pabgb)
+            fixed (byte* h = pabgh)
+            {
+                var rc = NativeMethods.StageInfoLoadFromBytesWithPabgh(
+                    b, (nuint)pabgb.Length, h, (nuint)pabgh.Length, out var raw);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_stageinfo_load_from_bytes_with_pabgh(len={pabgb.Length}) failed: {NameBuffer.ErrorName(rc)}");
                 }
                 var handle = CrimsonStageInfoHandle.FromOwnedPointer(raw);
                 var rcCount = NativeMethods.StageInfoEntryCount(handle, out var count);

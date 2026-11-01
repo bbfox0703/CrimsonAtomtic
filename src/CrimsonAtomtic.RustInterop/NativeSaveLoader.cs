@@ -2580,6 +2580,10 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "crimson_questinfo_load_from_bytes")]
     public static unsafe partial int QuestInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
 
+    [LibraryImport(LibraryName, EntryPoint = "crimson_questinfo_load_from_bytes_with_pabgh")]
+    public static unsafe partial int QuestInfoLoadFromBytesWithPabgh(
+        byte* pabgb, nuint pabgbLen, byte* pabgh, nuint pabghLen, out IntPtr handle);
+
     [LibraryImport(LibraryName, EntryPoint = "crimson_questinfo_free")]
     public static partial void QuestInfoFree(IntPtr handle);
 
@@ -2611,6 +2615,10 @@ internal static partial class NativeMethods
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_stageinfo_load_from_bytes")]
     public static unsafe partial int StageInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_stageinfo_load_from_bytes_with_pabgh")]
+    public static unsafe partial int StageInfoLoadFromBytesWithPabgh(
+        byte* pabgb, nuint pabgbLen, byte* pabgh, nuint pabghLen, out IntPtr handle);
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_stageinfo_free")]
     public static partial void StageInfoFree(IntPtr handle);

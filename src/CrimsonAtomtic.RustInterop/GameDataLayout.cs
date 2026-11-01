@@ -40,6 +40,13 @@ public sealed class GameDataLayout
     /// </summary>
     public const string PalocRoot = "gamedata/stringtable/binary__";
 
+    /// <summary>
+    /// Install subdirectory holding one second install root per DLC. 2.04
+    /// added it: <c>dlc/dlc_01/0008/0.pamt</c> and so on, same group numbers,
+    /// directories and row layouts as the base install.
+    /// </summary>
+    public const string DlcDirectory = "dlc";
+
     private readonly string _bodyExtension;
     private readonly string _headerExtension;
 
@@ -79,6 +86,33 @@ public sealed class GameDataLayout
     /// <c>skill.staticinfoheader</c>.
     /// </summary>
     public string Header(string tableStem) => $"{tableStem}.{_headerExtension}";
+
+    /// <summary>
+    /// A table's stem inside a DLC root: <c>("iteminfo", "dlc_01")</c> →
+    /// <c>iteminfo.dlc_01</c>, for <see cref="Body"/> / <see cref="Header"/>.
+    /// </summary>
+    public static string DlcTableStem(string tableStem, string dlcName) =>
+        $"{tableStem}.{dlcName}";
+
+    /// <summary>
+    /// Names of the DLCs an install ships, sorted so load order is stable:
+    /// each directory under <see cref="DlcDirectory"/> that holds a
+    /// <see cref="GameDataGroup"/> manifest. Empty before 2.04.
+    /// </summary>
+    public static IReadOnlyList<string> DlcNames(string gameRoot)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(gameRoot);
+        var root = Path.Combine(gameRoot, DlcDirectory);
+        if (!Directory.Exists(root))
+        {
+            return [];
+        }
+        return Directory.GetDirectories(root)
+            .Where(d => File.Exists(Path.Combine(d, GameDataGroup, "0.pamt")))
+            .Select(d => Path.GetFileName(d))
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToArray();
+    }
 
     /// <summary>
     /// Resolve which layout an install ships by probing its
