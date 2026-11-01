@@ -123,11 +123,12 @@ public sealed class LocalizationProvider : IDisposable
 
     private readonly IPazExtractor _paz;
 
-    /// <summary>For each discovered language code, the group plus the
+    /// <summary>For each discovered language code, the manifest plus the
     /// archive directory and filename(s) holding it. One file through 2.00;
     /// 2.01 split each language into one file per namespace inside a
-    /// per-language directory. Populated by Bootstrap.</summary>
-    private readonly Dictionary<string, (string Group, string Directory, IReadOnlyList<string> Files)> _languageSources =
+    /// per-language directory. The base install comes first, then one source
+    /// per DLC that ships the language (2.04). Populated by Bootstrap.</summary>
+    private readonly Dictionary<string, List<(string Pamt, string Directory, IReadOnlyList<string> Files)>> _languageSources =
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Loaded catalogs, keyed by language code. Owns them.</summary>
@@ -328,6 +329,24 @@ public sealed class LocalizationProvider : IDisposable
 
     private NativeItemInfoCatalog? _itemInfo;
     private NativeStringInfoCatalog? _stringInfo;
+
+    /// <summary>
+    /// Each DLC's own iteminfo / stringinfo (2.04). Lookups fall back to them
+    /// so items a save already holds resolve; enumeration stays on the base
+    /// tables, so the pickers never offer an item the player may not own.
+    /// </summary>
+    private readonly List<NativeItemInfoCatalog> _dlcItemInfo = [];
+    private readonly List<NativeStringInfoCatalog> _dlcStringInfo = [];
+
+    /// <summary>Owns each DLC's key-table bridges.</summary>
+    private readonly List<IDisposable> _dlcBridges = [];
+
+    /// <summary>
+    /// By field TypeName, one resolver per DLC table: <c>(key, PALOC parts of
+    /// the asked language) → name</c>. Asked after the base bridge misses.
+    /// </summary>
+    private readonly Dictionary<string, List<Func<uint, NativePalocCatalog[]?, string?>>> _dlcKeyResolvers =
+        new(StringComparer.Ordinal);
     private NativeMissionInfoCatalog? _missionInfo;
     private NativeQuestInfoCatalog? _questInfo;
     private NativeStageInfoCatalog? _stageInfo;
@@ -547,6 +566,10 @@ public sealed class LocalizationProvider : IDisposable
         // working (the existing IconProvider cache path is unaffected).
         TryBootstrapStringInfo(gameRoot);
 
+        // ── DLC iteminfo / stringinfo (2.04+), the fallback behind both
+        // bridges above. Each DLC degrades on its own.
+        TryBootstrapDlcItemTables(gameRoot);
+
         // ── Key-resolver bridges (Mission/Quest/Stage/Knowledge live
         // alongside iteminfo in group 0008's
         // gamedata/binary__/client/bin/). Each is independent — failure
@@ -556,9 +579,10 @@ public sealed class LocalizationProvider : IDisposable
         // LookupDisplayName only needs the paloc handle at call time.
         TryBootstrapKeyInfoCatalog(gameRoot, MissionInfoTable,
             NativeMissionInfoCatalog.LoadFromBytes, ref _missionInfo);
-        TryBootstrapKeyInfoCatalog(gameRoot, QuestInfoTable,
+        var gameDataPamt = Path.Combine(gameRoot, GameDataLayout.GameDataGroup, "0.pamt");
+        TryLoadNicheBridge(gameDataPamt, QuestInfoTable,
             NativeQuestInfoCatalog.LoadFromBytes, ref _questInfo);
-        TryBootstrapKeyInfoCatalog(gameRoot, StageInfoTable,
+        TryLoadNicheBridge(gameDataPamt, StageInfoTable,
             NativeStageInfoCatalog.LoadFromBytes, ref _stageInfo);
         TryBootstrapKeyInfoCatalog(gameRoot, KnowledgeInfoTable,
             NativeKnowledgeInfoCatalog.LoadFromBytes, ref _knowledgeInfo);
@@ -574,6 +598,7 @@ public sealed class LocalizationProvider : IDisposable
         TryBootstrapDyeGamedata(gameRoot);
         TryBootstrapStoreInfo(gameRoot);
         TryBootstrapNicheBridges(gameRoot);
+        TryBootstrapDlcKeyTables(gameRoot);
 
         // ── Discover available PALOC languages by probing the well-known
         // group range. PAMT parses are fast (a few ms each); the probe
@@ -632,6 +657,162 @@ public sealed class LocalizationProvider : IDisposable
         catch (IOException)
         {
         }
+    }
+
+    private void TryBootstrapDlcItemTables(string gameRoot)
+    {
+        _dlcItemInfo.ForEach(c => c.Dispose());
+        _dlcItemInfo.Clear();
+        _dlcStringInfo.ForEach(c => c.Dispose());
+        _dlcStringInfo.Clear();
+        foreach (var dlc in GameDataLayout.DlcNames(gameRoot))
+        {
+            var pamt = Path.Combine(
+                gameRoot, GameDataLayout.DlcDirectory, dlc, GameDataLayout.GameDataGroup, "0.pamt");
+            try
+            {
+                var bytes = _paz.ExtractFile(pamt, _layout.BinDirectory,
+                    _layout.Body(GameDataLayout.DlcTableStem(ItemInfoTable, dlc)));
+                _dlcItemInfo.Add(NativeItemInfoCatalog.LoadFromBytes(bytes));
+            }
+            catch (CrimsonSaveException) { }
+            catch (IOException) { }
+            try
+            {
+                var bytes = _paz.ExtractFile(pamt, _layout.BinDirectory,
+                    _layout.Body(GameDataLayout.DlcTableStem(StringInfoTable, dlc)));
+                _dlcStringInfo.Add(NativeStringInfoCatalog.LoadFromBytes(bytes));
+            }
+            catch (CrimsonSaveException) { }
+            catch (IOException) { }
+        }
+    }
+
+    /// <summary>
+    /// Load each DLC's copy of the key tables. A DLC table holds only that
+    /// DLC's rows, so <see cref="ResolveKeyTableOne"/> asks it after the base
+    /// bridge misses. Each table degrades on its own, and a table a DLC ships
+    /// no body for simply registers nothing.
+    /// </summary>
+    private void TryBootstrapDlcKeyTables(string gameRoot)
+    {
+        _dlcBridges.ForEach(b => b.Dispose());
+        _dlcBridges.Clear();
+        _dlcKeyResolvers.Clear();
+        foreach (var dlc in GameDataLayout.DlcNames(gameRoot))
+        {
+            var pamt = Path.Combine(
+                gameRoot, GameDataLayout.DlcDirectory, dlc, GameDataLayout.GameDataGroup, "0.pamt");
+            RegisterDlcKeyTable(pamt, dlc, MissionInfoTable, (b, _) => NativeMissionInfoCatalog.LoadFromBytes(b),
+                (t, k, p) => t.LookupDisplayName(k, p), (t, k) => t.LookupStringKey(k), "MissionKey");
+            RegisterDlcKeyTable(pamt, dlc, QuestInfoTable, (b, h) => NativeQuestInfoCatalog.LoadFromBytes(b, h),
+                (t, k, p) => t.LookupDisplayName(k, p), (t, k) => t.LookupStringKey(k), "QuestKey");
+            RegisterDlcKeyTable(pamt, dlc, StageInfoTable, (b, h) => NativeStageInfoCatalog.LoadFromBytes(b, h),
+                (t, k, p) => t.LookupDisplayName(k, p), (t, k) => t.LookupStringKey(k), "StageKey");
+            RegisterDlcKeyTable(pamt, dlc, KnowledgeInfoTable, (b, _) => NativeKnowledgeInfoCatalog.LoadFromBytes(b),
+                (t, k, p) => t.LookupDisplayName(k, p), (t, k) => t.LookupStringKey(k), "KnowledgeKey");
+            RegisterDlcKeyTable(pamt, dlc, GimmickInfoTable, (b, _) => NativeGimmickInfoCatalog.LoadFromBytes(b),
+                (t, k, p) => t.LookupDisplayName(k, p), (t, k) => t.LookupStringKey(k),
+                "GimmickInfoKey", "LevelGimmickSceneObjectInfoKey");
+            RegisterDlcKeyTable(pamt, dlc, CharacterInfoTable, (b, _) => NativeCharacterInfoCatalog.LoadFromBytes(b),
+                (t, k, p) => t.LookupDisplayName(k, p), (t, k) => t.LookupStringKey(k), "CharacterKey");
+            RegisterDlcKeyTable(pamt, dlc, QuestGaugeInfoTable, (b, _) => NativeQuestGaugeInfoCatalog.LoadFromBytes(b),
+                null, (t, k) => t.LookupStringKey(k), "QuestGaugeKey");
+            RegisterDlcKeyTable(pamt, dlc, SkillTable, (b, h) => NativeSkillInfoCatalog.LoadFromBytes(h, b),
+                null, (t, k) => t.LookupStringKey(k), "SkillKey");
+            RegisterDlcKeyTable(pamt, dlc, StoreInfoTable, (b, h) => NativeStoreInfoCatalog.LoadFromBytes(b, h),
+                null, (t, k) => t.LookupStringKey(k), "StoreKey");
+            RegisterDlcKeyTable(pamt, dlc, FactionNodeTable, (b, h) => NativeFactionNodeInfoCatalog.LoadFromBytes(b, h),
+                null, (t, k) => t.LookupStringKey(k), "FactionNodeKey");
+            RegisterDlcKeyTable(pamt, dlc, HouseInfoTable, (b, h) => NativeHouseInfoCatalog.LoadFromBytes(b, h),
+                null, (t, k) => t.LookupStringKey(k), "HouseKey");
+            RegisterDlcKeyTable(pamt, dlc, GamePlayVariableInfoTable, (b, h) => NativeGamePlayVariableInfoCatalog.LoadFromBytes(b, h),
+                null, (t, k) => t.LookupStringKey(k), "GamePlayVariableKey");
+            RegisterDlcKeyTable(pamt, dlc, GlobalGameEventTable, (b, h) => NativeGlobalGameEventInfoCatalog.LoadFromBytes(b, h),
+                null, (t, k) => t.LookupStringKey(k), "GlobalGameEventInfoKey");
+            RegisterDlcKeyTable(pamt, dlc, GlobalGameEventGroupTable, (b, h) => NativeGlobalGameEventGroupInfoCatalog.LoadFromBytes(b, h),
+                null, (t, k) => t.LookupStringKey(k), "GlobalGameEventGroupKey");
+            RegisterDlcKeyTable(pamt, dlc, GameAdviceInfoTable, (b, h) => NativeGameAdviceInfoCatalog.LoadFromBytes(b, h),
+                null, (t, k) => t.LookupStringKey(k), "GameAdviceInfoKey");
+            RegisterDlcKeyTable(pamt, dlc, GameAdviceGroupInfoTable, (b, h) => NativeGameAdviceGroupInfoCatalog.LoadFromBytes(b, h),
+                null, (t, k) => t.LookupStringKey(k), "GameAdviceGroupKey");
+            RegisterDlcKeyTable(pamt, dlc, RegionInfoTable, (b, h) => NativeRegionInfoCatalog.LoadFromBytes(b, h),
+                null, (t, k) => t.LookupStringKey(k), "RegionKey");
+            RegisterDlcKeyTable(pamt, dlc, ItemGroupInfoTable, (b, h) => NativeItemGroupInfoCatalog.LoadFromBytes(b, h),
+                null, (t, k) => t.LookupStringKey(k), "ItemGroupKey");
+        }
+    }
+
+    private void RegisterDlcKeyTable<T>(
+        string pamt,
+        string dlc,
+        string tableStem,
+        Func<byte[], byte[], T> load,
+        Func<T, uint, NativePalocCatalog, string?>? displayLookup,
+        Func<T, uint, string?> internalLookup,
+        params string[] typeNames)
+        where T : class, IDisposable
+    {
+        try
+        {
+            var stem = GameDataLayout.DlcTableStem(tableStem, dlc);
+            var bridge = load(
+                _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(stem)),
+                _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Header(stem)));
+            _dlcBridges.Add(bridge);
+            foreach (var typeName in typeNames)
+            {
+                if (!_dlcKeyResolvers.TryGetValue(typeName, out var resolvers))
+                {
+                    _dlcKeyResolvers[typeName] = resolvers = [];
+                }
+                resolvers.Add((key, paloc) => displayLookup is null
+                    ? internalLookup(bridge, key)
+                    : DisplayOrFallback(bridge, paloc,
+                        (b, part) => displayLookup(b, key, part),
+                        b => internalLookup(b, key)));
+            }
+        }
+        catch (CrimsonSaveException) { }
+        catch (IOException) { }
+    }
+
+    /// <summary>
+    /// The iteminfo table holding <paramref name="itemKey"/>: the base table
+    /// when it has the row (242 DLC rows repeat a base key), else the first
+    /// DLC that does. Falls back to the base table so a miss reads as one.
+    /// </summary>
+    private NativeItemInfoCatalog? ItemInfoFor(uint itemKey)
+    {
+        if (_dlcItemInfo.Count == 0 || _itemInfo?.LookupMaxStackCount(itemKey) is not null)
+        {
+            return _itemInfo;
+        }
+        foreach (var dlc in _dlcItemInfo)
+        {
+            if (dlc.LookupMaxStackCount(itemKey) is not null)
+            {
+                return dlc;
+            }
+        }
+        return _itemInfo;
+    }
+
+    /// <summary>Resolve a StringInfoKey hash, base table first.</summary>
+    private string? LookupStringInfo(uint hash)
+    {
+        if (_stringInfo?.LookupByHash(hash) is { } value)
+        {
+            return value;
+        }
+        foreach (var dlc in _dlcStringInfo)
+        {
+            if (dlc.LookupByHash(hash) is { } dlcValue)
+            {
+                return dlcValue;
+            }
+        }
+        return null;
     }
 
     /// <summary>
@@ -865,17 +1046,39 @@ public sealed class LocalizationProvider : IDisposable
     private void DiscoverLanguages(string gameRoot)
     {
         _languageSources.Clear();
+        foreach (var (code, source) in ProbeLanguages(gameRoot))
+        {
+            _languageSources[code] = [source];
+        }
+        // A DLC only extends a language the base install ships.
+        foreach (var dlc in GameDataLayout.DlcNames(gameRoot))
+        {
+            var dlcRoot = Path.Combine(gameRoot, GameDataLayout.DlcDirectory, dlc);
+            foreach (var (code, source) in ProbeLanguages(dlcRoot))
+            {
+                if (_languageSources.TryGetValue(code, out var sources))
+                {
+                    sources.Add(source);
+                }
+            }
+        }
+    }
+
+    private Dictionary<string, (string Pamt, string Directory, IReadOnlyList<string> Files)>
+        ProbeLanguages(string root)
+    {
+        var found = new Dictionary<string, (string, string, IReadOnlyList<string>)>(
+            StringComparer.OrdinalIgnoreCase);
         for (var n = PalocGroupRange.Lo; n <= PalocGroupRange.Hi; n++)
         {
-            var group = $"{n:D4}";
-            var pamt = Path.Combine(gameRoot, group, "0.pamt");
+            var pamt = Path.Combine(root, $"{n:D4}", "0.pamt");
             if (!File.Exists(pamt))
             {
                 continue;
             }
             foreach (var code in KnownLanguageCodes)
             {
-                if (_languageSources.ContainsKey(code))
+                if (found.ContainsKey(code))
                 {
                     continue; // first hit wins
                 }
@@ -886,12 +1089,13 @@ public sealed class LocalizationProvider : IDisposable
                 // We deliberately do NOT read the bytes here — caching all
                 // 14 language catalogs eagerly would consume ~350 MB; they
                 // are extracted lazily on first request in TryLoadCatalog.
-                if (GameDataLayout.ResolvePalocFiles(_paz, pamt, code) is { } found)
+                if (GameDataLayout.ResolvePalocFiles(_paz, pamt, code) is { } files)
                 {
-                    _languageSources[code] = (group, found.Directory, found.Files);
+                    found[code] = (pamt, files.Directory, files.Files);
                 }
             }
         }
+        return found;
     }
 
     private bool TryLoadCatalog(string langCode)
@@ -900,21 +1104,22 @@ public sealed class LocalizationProvider : IDisposable
         {
             return true;
         }
-        if (_gameRoot is null || !_languageSources.TryGetValue(langCode, out var src))
+        if (_gameRoot is null || !_languageSources.TryGetValue(langCode, out var sources))
         {
             return false;
         }
         try
         {
-            var pamt = Path.Combine(_gameRoot, src.Group, "0.pamt");
-            var parts = new NativePalocCatalog[src.Files.Count];
-            var built = 0;
+            var loaded = new List<NativePalocCatalog>();
             try
             {
-                for (; built < parts.Length; built++)
+                foreach (var src in sources)
                 {
-                    var bytes = _paz.ExtractFile(pamt, src.Directory, src.Files[built]);
-                    parts[built] = NativePalocCatalog.LoadFromBytes(bytes);
+                    foreach (var file in src.Files)
+                    {
+                        var bytes = _paz.ExtractFile(src.Pamt, src.Directory, file);
+                        loaded.Add(NativePalocCatalog.LoadFromBytes(bytes));
+                    }
                 }
             }
             catch
@@ -922,12 +1127,10 @@ public sealed class LocalizationProvider : IDisposable
                 // Partial load: nothing is registered yet, so the handles
                 // opened so far would leak. Close them before rethrowing
                 // into the per-language degrade-gracefully catches below.
-                for (var i = 0; i < built; i++)
-                {
-                    parts[i].Dispose();
-                }
+                loaded.ForEach(p => p.Dispose());
                 throw;
             }
+            var parts = loaded.ToArray();
             // A single-file language is its own catalog; a split one is
             // queried part by part. Either way _catalogs owns the result.
             IPalocCatalog cat = parts.Length == 1 ? parts[0] : new MultiPalocCatalog(parts);
@@ -1050,7 +1253,7 @@ public sealed class LocalizationProvider : IDisposable
     /// <c>"Pyeonjeon_Arrow"</c>). Useful as a fallback display when
     /// no PALOC entry exists.
     /// </summary>
-    public string? ItemInfoStringKey(uint itemId) => _itemInfo?.LookupStringKey(itemId);
+    public string? ItemInfoStringKey(uint itemId) => ItemInfoFor(itemId)?.LookupStringKey(itemId);
 
     /// <summary>
     /// Enumerate one entry of the loaded iteminfo bridge by index.
@@ -1441,7 +1644,7 @@ public sealed class LocalizationProvider : IDisposable
     /// Drives the "Set to max stack" UX in the edit panel.
     /// </summary>
     public ulong? GetItemMaxStackCount(uint itemKey) =>
-        _itemInfo?.LookupMaxStackCount(itemKey);
+        ItemInfoFor(itemKey)?.LookupMaxStackCount(itemKey);
 
     /// <summary>
     /// One-shot static-metadata snapshot for <paramref name="itemKey"/>.
@@ -1451,7 +1654,7 @@ public sealed class LocalizationProvider : IDisposable
     /// stack / icon / socket helpers to render a complete item card.
     /// </summary>
     public ItemInfoSummary? LookupItemInfoSummary(uint itemKey) =>
-        _itemInfo?.LookupSummary(itemKey);
+        ItemInfoFor(itemKey)?.LookupSummary(itemKey);
 
     /// <summary>
     /// <c>StringInfoKey</c> (u32 hash) of an item's primary icon —
@@ -1461,7 +1664,7 @@ public sealed class LocalizationProvider : IDisposable
     /// iteminfo bridge isn't loaded or the item has no icon.
     /// </summary>
     public uint? GetItemIconPathHash(uint itemKey) =>
-        _itemInfo?.LookupIconPathHash(itemKey);
+        ItemInfoFor(itemKey)?.LookupIconPathHash(itemKey);
 
     /// <summary>
     /// Catalog <c>MissionKey</c> (u32) the iteminfo entry's
@@ -1477,7 +1680,7 @@ public sealed class LocalizationProvider : IDisposable
     /// in the player's inventory.
     /// </remarks>
     public uint? GetItemLookDetailMissionInfo(uint itemKey) =>
-        _itemInfo?.LookupLookDetailMissionInfo(itemKey);
+        ItemInfoFor(itemKey)?.LookupLookDetailMissionInfo(itemKey);
 
     /// <summary>
     /// True when the stringinfo bridge is loaded. Lets the icon-extraction
@@ -1496,7 +1699,7 @@ public sealed class LocalizationProvider : IDisposable
     /// <c>stringinfo.pabgb</c>.
     /// </summary>
     public string? ResolveStringInfoHash(uint hash) =>
-        _stringInfo?.LookupByHash(hash);
+        LookupStringInfo(hash);
 
     /// <summary>
     /// Internal ASCII identifier for <paramref name="missionKey"/>
@@ -1751,6 +1954,23 @@ public sealed class LocalizationProvider : IDisposable
     private string? ResolveKeyTableOne(string typeName, uint key, string langCode)
     {
         _palocParts.TryGetValue(langCode, out var paloc);
+        var name = ResolveBaseKeyTable(typeName, key, paloc);
+        if (!string.IsNullOrEmpty(name) || !_dlcKeyResolvers.TryGetValue(typeName, out var resolvers))
+        {
+            return name;
+        }
+        foreach (var resolve in resolvers)
+        {
+            if (resolve(key, paloc) is { Length: > 0 } dlcName)
+            {
+                return dlcName;
+            }
+        }
+        return name;
+    }
+
+    private string? ResolveBaseKeyTable(string typeName, uint key, NativePalocCatalog[]? paloc)
+    {
         return typeName switch
         {
             "MissionKey"    => DisplayOrFallback(_missionInfo, paloc,
@@ -1801,7 +2021,7 @@ public sealed class LocalizationProvider : IDisposable
             // StringInfoKey scalar: u32 Jenkins hash → reversed via the
             // already-loaded stringinfo bridge. Internal name only —
             // stringinfo doesn't ship localized titles.
-            "StringInfoKey" => _stringInfo?.LookupByHash(key),
+            "StringInfoKey" => LookupStringInfo(key),
             // 13 niche bridges — internal name only (no PALOC chain).
             // Same convention as Store / QuestGauge / Skill: secondary
             // language intentionally echoes the English column.
@@ -1919,6 +2139,13 @@ public sealed class LocalizationProvider : IDisposable
         _itemInfo = null;
         _stringInfo?.Dispose();
         _stringInfo = null;
+        _dlcItemInfo.ForEach(c => c.Dispose());
+        _dlcItemInfo.Clear();
+        _dlcStringInfo.ForEach(c => c.Dispose());
+        _dlcStringInfo.Clear();
+        _dlcBridges.ForEach(b => b.Dispose());
+        _dlcBridges.Clear();
+        _dlcKeyResolvers.Clear();
         _missionInfo?.Dispose();
         _missionInfo = null;
         _questInfo?.Dispose();

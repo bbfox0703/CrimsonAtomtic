@@ -194,7 +194,9 @@ public readonly struct ItemInfoSummary
     /// <summary>Tier / rarity step (engine-defined gradient).</summary>
     public readonly byte ItemTier;
 
-    /// <summary>Quick-slot index when the item is pinned to the action bar.</summary>
+    /// <summary>Quick-slot index when the item is pinned to the action bar.
+    /// iteminfo dropped the field in 2.04, so this always reads 0 now; it
+    /// stays because the struct mirrors the C ABI layout.</summary>
     public readonly byte QuickSlotIndex;
 
     /// <summary>Charge-type for chargeable consumables.</summary>

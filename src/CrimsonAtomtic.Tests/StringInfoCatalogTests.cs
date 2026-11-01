@@ -6,7 +6,8 @@ namespace CrimsonAtomtic.Tests;
 /// <summary>
 /// Tests for the C# binding over <c>crimson_string_info_*</c>. Synthetic
 /// stringinfo blobs are trivial to build (the format is
-/// <c>[u32 hash][u32 zero][u8 flag][u32 slen][N utf-8]</c>) so the
+/// <c>[u32 zero][u32 hash][u8 flag][u32 slen][N utf-8]</c>, the 2.04 row
+/// order — the zero is the row's empty name, now ahead of its key) so the
 /// error paths get their own deterministic coverage. The happy path
 /// also runs against the live game install when present and skips
 /// cleanly otherwise.
@@ -38,7 +39,7 @@ public sealed class StringInfoCatalogTests
     /// <summary>
     /// Build a minimal valid stringinfo.pabgb buffer with the supplied
     /// entries. Each entry is laid out as:
-    ///   [u32 hash][u32 zero][u8 flag][u32 slen][N bytes utf-8]
+    ///   [u32 zero][u32 hash][u8 flag][u32 slen][N bytes utf-8]
     /// </summary>
     private static byte[] BuildSyntheticBlob(params (uint Hash, string Value)[] entries)
     {
@@ -47,8 +48,8 @@ public sealed class StringInfoCatalogTests
         foreach (var (hash, value) in entries)
         {
             var utf8 = System.Text.Encoding.UTF8.GetBytes(value);
-            bw.Write(hash);
             bw.Write(0u);             // reserved_zero
+            bw.Write(hash);
             bw.Write((byte)0);        // reserved_flag
             bw.Write((uint)utf8.Length);
             bw.Write(utf8);

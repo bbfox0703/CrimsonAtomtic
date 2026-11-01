@@ -2,7 +2,7 @@
 
 ## Current install
 
-`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 2.03**
+`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 2.04**
 
 Top-level layout:
 
@@ -10,6 +10,7 @@ Top-level layout:
 Crimson Desert/
 ├── 0000/ ... 0035/      # 36 asset pack groups, each contains *.paz + 0.pamt
 ├── bin64/               # CrimsonDesert.exe, DX12, DLSS/FSR/XeSS, Steam, Sentry
+├── dlc/dlc_01/          # 2.04: a second install root, same group numbers and layouts
 ├── CDMods/              # cdumm.db (SQLite mod registry) + vanilla/ unpack cache
 ├── gamedata/            # <lang>/*.paloc (2.01; one blob per language before)
 ├── meta/                # 0.papgt (master pack tree), 0.pathc, 0.paver (version stamp)
@@ -19,18 +20,22 @@ Crimson Desert/
 
 - **Engine**: proprietary Pearl Abyss engine, DirectX 12.
 - **Total size on disk**: ~126 GB.
-- **Version stamp**: `meta/0.paver` is 10 bytes, binary-encoded. Layout
-  is fully decoded (see `crimson-rs` `src/binary/paver.rs`, exposed via
+- **Version stamp**: `meta/0.paver` is binary-encoded, 10 bytes through 2.03.
+  Layout is fully decoded (see `crimson-rs` `src/binary/paver.rs`, exposed via
   `crimson_paver_read_from_*`): three little-endian u16s `(major, minor,
-  patch)` followed by a little-endian u32 `build`. The schema-compatibility
+  patch)` followed by a little-endian u32 `build`; 2.04 inserts a DLC list
+  (`u32` count, then `u32` length + name + `u32` revision per DLC) ahead of
+  `build`. The schema-compatibility
   key is the **`(major, minor)` pair** — it used to be described as "the
   minor", which was true only while the major sat at 1 for every shipped
   patch. **Game 2.00 is the first major bump, and it RESETS the minor**
   (1.18 → 2.00 is `18` → `0`), so a bare minor no longer identifies a schema:
   minor `0` means 2.00 today and would have meant a hypothetical 1.00
-  yesterday. Live 2.03.00 install:
-  `02 00 03 00 00 00 38 51 04 03` → major 2, minor 3, patch 0,
-  build `0x03045138`. (2.02.00 was `02 00 02 00 00 00 58 5c 92 c8`,
+  yesterday. Live 2.04.03 install:
+  `02 00 04 00 03 00 01 00 00 00 06 00 00 00 "dlc_01" 02 00 00 00 e2 7e be 3e`
+  → major 2, minor 4, patch 3, DLC `dlc_01` revision 2, build `0x3ebe7ee2`.
+  (2.03.00 was `02 00 03 00 00 00 38 51 04 03`,
+  build `0x03045138`; 2.02.00 was `02 00 02 00 00 00 58 5c 92 c8`,
   build `0xc8925c58`; 2.01.00 was `02 00 01 00 00 00 cb 5f 1e a3`,
   build `0xa31e5fcb`; 2.00.00 was `02 00 00 00 00 00 14 d2 41 b2`,
   build `0xb241d214`; 1.18.00 was `01 00 12 00 00 00 0f 7c 57 28`,
@@ -48,7 +53,7 @@ Crimson Desert/
   install's `(major, minor)` isn't one the parser can load —
   `GameDataVersion.IsCompatibleWithParser` now gates on
   `Major == ParserTargetMajor` **and** `Minor ∈ CompatibleMinors`
-  (currently `2` and `{3}`). The major half was added at the 2.00 alignment
+  (currently `2` and `{4}`). The major half was added at the 2.00 alignment
   and is not cosmetic: with the minor reset to `0`, the old minor-only test
   would have reported a hypothetical `1.00.xx` install as compatible with the
   2.00 parser. **2.00 carries two iteminfo layout drifts** (crimson-rs commit
@@ -219,3 +224,17 @@ On the editor side the alignment cost the manual `VerMinor` 0→1 lock-step bump
 *Text*: an English copy pass retitled six curated main-quest missions, two arcs and one side-quest mission (upstream's curated tables follow; no key moved) and **changed `MissionKey 1000157` back to "Unfamiliar Lands"** after two patches as "Unfamiliar Land" — the one C# pin that moved besides the paver pins.
 
 `CompatibleMinors` = `{3}`; unlike 2.01 and 2.02 this is a **genuine** incompatibility, since 2.02 iteminfo really does mis-decode against the 10-slot parser. On the editor side the alignment cost the manual `VerMinor` 2 → 3 lock-step bump (`VerPatch` stays 1), the paver pin refresh, the mission-title pin, and doc refreshes; the untouched suite failed exactly those five of 401 tests.
+
+**2.03 → 2.04 rewrites the row layout and the archive index, and adds the first DLC.** Vendored from `crimson-rs` `main` at `8e84704` (PR #101: commit `1f32ec2`), validated against the live 2.04 install (paver `2/4/3/0x3ebe7ee2`, Steam build 26345091, 2026-11-01). The full record is the 2.04 row of the "Validated patches" table in `vendor/crimson-rs/scripts/CLAUDE.md` and the "ItemInfo (2.04)" header in `src/item_info/item.rs`.
+
+*Absorbed in Rust.* Every named table row now opens `[len][name][key]`; iteminfo (7,064 items) and skill (2,159) were reordered; PAMT tries use relative parents with a closing extension table; PAPGT lost its checksum for a 64-byte trailer that looks like a signature. The C ABI did not move in shape, with two changes in meaning: `CrimsonItemInfoSummary.quick_slot_index` always reads 0 because iteminfo dropped the field (nothing in the editor shows it), and `IS_IMPORTANT_ITEM` now derives from the three-valued `item_importance_kind`. `CompatibleMinors` = `{4}`, a genuine incompatibility.
+
+*The DLC is what needed editor work.* `dlc/dlc_01/` is a second install root with the same groups, directories and layouts; its files are named `<table>.dlc_01.staticinfobody` and `<namespace>.dlc_01.paloc`, and each table holds only DLC rows (iteminfo: 1,310 new keys, 242 repeating a base key with the same `string_key`). A 2.04-written save references those rows, and **the suite stayed green while the editor showed them blank**: slot102, slot2 and slot107 each hold eight `Diving_PlateArmor_*` items only the DLC table defines. `LocalizationProvider` now reads every `dlc/*` root (`GameDataLayout.DlcNames`): each language's PALOC parts include the DLC's, and iteminfo, stringinfo and 18 key tables fall back to the DLC copy after a base miss. **Enumeration stays base-only on purpose**, so `GetItem` / `ItemCount` and the pickers never offer an item the player may not own; which row wins with the DLC loaded is unknown, so the base row does.
+
+*Index-driven loads.* Stage and quest moved to `crimson_{stage,quest}info_load_from_bytes_with_pabgh`: the headerless scan misses 3,165 stage rows on 2.04 (1,974 on 2.03). Measured over slot102 after both changes, unresolved distinct keys went StageKey 3,133 → 0, QuestKey 31 → 0, FactionNodeKey 140 → 0, QuestGaugeKey 7 → 0, StoreKey 24 → 0, ItemKey 8 → 0, MissionKey 1,702 → 1,420.
+
+*Still blank, and not from this patch.* Of the 1,420 MissionKey and 106 CharacterKey values, 1,415 and 106 were already in the 2.03 key snapshots, so they predate 2.04. Icon extraction (`IconExtractionService`) walks base items and group 0012 only, so a DLC item has a name but no icon.
+
+*Save body*: format unchanged (v2 / `0x0080`); slot102 decodes 1,166 blocks with 0 undecoded bytes. Upstream records one content change worth knowing: re-saving on 2.04 strips `_equipItemList` from most hired mercenaries (slot0 → slot102: 252 → 57 items). That is the game, not the decoder.
+
+*Other editor costs.* The manual `VerMinor` 3 → 4 bump (`VerPatch` stays 1), paver and synthetic-stringinfo pins (the hash and the zero swapped places), and an SDK-driven ILCompiler pin 10.0.12 → 10.0.14 (SDK 10.0.403). The untouched suite failed exactly five of 402 tests: four paver pins and that synthetic blob.
