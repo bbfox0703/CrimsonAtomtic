@@ -7,7 +7,25 @@
 > **[status-archive.md](status-archive.md)** — look there only when you need
 > the deep history behind a decision.
 >
-> Last updated: **2026-09-18** — the editor is aligned to game **2.03**
+> Last updated: **2026-11-01** — the editor is aligned to game **2.04**
+> (paver `2/4/3/0x3ebe7ee2`) and merged to `main`, **not tagged or released**.
+> The user confirmed in-game that the test save loads: slot103 holds slot102
+> plus the dragon unlock and a Silver Fang sigil, built through the real view
+> model (the previous slot103 is in
+> `data/_saves/slot103-before-2.04-test-20261101/`). That report covered the
+> load; summoning the dragon and using the sigil were not reported. Rust absorbed the new row
+> layout and archive index; the editor's real work was the first DLC. A
+> 2.04-written save references rows only `dlc/dlc_01/` defines, and the suite
+> stayed green while they showed blank, so `LocalizationProvider` now falls
+> back to each DLC's PALOC, iteminfo, stringinfo and key tables. Pickers stay
+> base-only on purpose. **405 C# tests green, 0 skipped**; AOT publish has zero
+> IL/trim warnings and the exe launches as `CrimsonAtomtic v2.04.01.29`. Details
+> in [game-versions.md](game-versions.md). **Next task: the release runbook
+> when the user asks for it**, otherwise the backlog below.
+>
+> **Below this line is the 2.03 history, kept for context.**
+>
+> As of **2026-09-18** the editor is aligned to game **2.03**
 > and the Mount-Unlock dragon works again; both shipped in **v2.03.01**,
 > tagged, built and **PUBLISHED** (2026-09-18T10:03:22Z, marked Latest). 2.03
 > (paver `2/3/0/0x03045138`) makes two format changes, both absorbed inside
@@ -42,7 +60,6 @@
 > (download, FileVersion, launch) — the local AOT publish of `ec69029` was
 > clean (4 files, no warnings).
 >
-> **Next task: none queued** — pick from the backlog below.
 >
 > **A vendor refresh is not a build — it bit again, in a new shape.**
 > `vendor/crimson-rs` had been refreshed to `234b289` (13:29 today), but its
@@ -435,6 +452,15 @@ are in [status-archive.md](status-archive.md).
 
 ## Open work / backlog
 
+- **DLC items have no icon.** `IconExtractionService` walks base items and
+  group 0012 only, so a DLC item resolves its name and texture name but gets
+  no `.webp`. Needs a walk over DLC keys against `dlc/<name>/0012/0.pamt`.
+- **Whether the pickers should offer DLC items.** They are base-only so nobody
+  grants an item they may not own. Offering them needs an answer to what the
+  game does with one on an install without the entitlement.
+- **Mission keys the bridge cannot name.** 1,420 distinct `MissionKey` values
+  in slot102 stay blank, 1,415 of them already in the 2.03 snapshot. Mission
+  has no `_with_pabgh` loader in crimson-rs; stage and quest do.
 - **⏸️ Dye editor is disabled since 2.01 — parked, no plan to fix it for
   now** (the user's call, stated in the v2.03.01 release notes,
   2026-09-18); it needs the mask-group RE. (Still
@@ -510,6 +536,12 @@ name-resolution coverage, nested-edit path mechanics, fill-stack regimes,
 window-restore quirks, etc.) is in
 [status-archive.md → "Important context / gotchas"](status-archive.md).
 
+- **A green suite says nothing about keys it never asks for.** On 2.04 the
+  untouched suite failed only five pins, while every 2.04-written save held
+  rows the editor could not name, because no test walked a save's keys through
+  the resolver. On a new patch, count unresolved distinct keys per TypeName
+  over the newest save, and attribute each group to a base table, a DLC table
+  or the previous snapshot before calling it content.
 - **Foundation-first.** When parsing produces wrong data, fix the parser or
   schema — never add a workaround in a consumer. (CLAUDE.md rule 12.)
 - **ABSENT is a value. `_validSocketCount` proves it.** The save's presence
