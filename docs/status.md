@@ -8,20 +8,26 @@
 > the deep history behind a decision.
 >
 > Last updated: **2026-11-01** — the editor is aligned to game **2.04**
-> (paver `2/4/3/0x3ebe7ee2`) and merged to `main`, **not tagged or released**.
-> The user confirmed in-game that the test save loads: slot103 holds slot102
+> (paver `2/4/3/0x3ebe7ee2`), and **v2.04.01 is tagged, built and PUBLISHED**
+> (2026-11-01T05:25:13Z, marked Latest): tag → `f0207a1` (PR #44 merge), CI run
+> `41275985676`, crimson-rs `8e84704`, exe `2.4.1.29`, zip 20,690,606 B, sha256
+> `c9b7f79f…1af6` (equal to the asset's GitHub digest). Not run before
+> publishing: the binary checks on the release zip itself (download,
+> FileVersion, launch); the local AOT publish of the same source launched
+> clean. The user confirmed in-game
+> that the test save loads and the dragon can be summoned: slot103 holds slot102
 > plus the dragon unlock and a Silver Fang sigil, built through the real view
 > model (the previous slot103 is in
-> `data/_saves/slot103-before-2.04-test-20261101/`). That report covered the
-> load; summoning the dragon and using the sigil were not reported. Rust absorbed the new row
+> `data/_saves/slot103-before-2.04-test-20261101/`). The sigil was not used
+> in-game. Rust absorbed the new row
 > layout and archive index; the editor's real work was the first DLC. A
 > 2.04-written save references rows only `dlc/dlc_01/` defines, and the suite
 > stayed green while they showed blank, so `LocalizationProvider` now falls
 > back to each DLC's PALOC, iteminfo, stringinfo and key tables. Pickers stay
 > base-only on purpose. **405 C# tests green, 0 skipped**; AOT publish has zero
 > IL/trim warnings and the exe launches as `CrimsonAtomtic v2.04.01.29`. Details
-> in [game-versions.md](game-versions.md). **Next task: the release runbook
-> when the user asks for it**, otherwise the backlog below.
+> in [game-versions.md](game-versions.md). **Next task: none queued** — pick
+> from the backlog below.
 >
 > **Below this line is the 2.03 history, kept for context.**
 >
