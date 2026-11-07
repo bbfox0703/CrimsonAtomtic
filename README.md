@@ -18,13 +18,13 @@ Abyss). Two things move independently here:
   back, and it stays a 1.05 save (the version stamp is preserved; the round-trip
   is byte-perfect). You never need to downgrade your install to open an older
   save.
-- **Item names / icons resolve against the installed game (currently 2.04).**
+- **Item names / icons resolve against the installed game (currently 2.04.08).**
   Name and icon lookup reads the live install's game-data, *not* the schema
   embedded in the save. So structural editing of an old save always works, but
   if an item's key changed between that save's patch and 2.04 it may show as a
   bare key instead of a name. This is also why the editor warns **once at
   startup** if your *installed game* isn't a version it can resolve names for
-  (right now: anything other than 2.04) — that warning is about your install,
+  (right now: anything other than 2.04.08 or a later 2.04 patch) — that warning is about your install,
   not about which save you open.
 
 Cross-platform goal: Windows (primary), Linux, macOS.

@@ -7,7 +7,45 @@
 > **[status-archive.md](status-archive.md)** — look there only when you need
 > the deep history behind a decision.
 >
-> Last updated: **2026-11-01** — the editor is aligned to game **2.04**
+> Last updated: **2026-11-07** — the editor is aligned to game **2.04.08**
+> (paver `2/4/8/0xe4d53a97`, `dlc_01` revision 7), **uncommitted on `dev`**.
+> 2.04.08 added two strings to every iteminfo row without moving the minor,
+> so every name went blank on v2.04.01; crimson-rs PR #102 (merge `08dbc2d`)
+> parses it and adds `crimson_parser_min_gamedata_patch()` = 8, which
+> `GameDataVersion.IsCompatibleWithParser` now applies on the target minor
+> (a 2.04.03 install reads incompatible). `VerPatch` 1 → 2, so the next
+> release is v2.04.02. Also on this cut: **the item pickers offer DLC items**
+> (8,379 = 7,069 base + 1,310 DLC-only; a "DLC" column names the source;
+> the gem picker gains 19), DLC icons come from the DLC's 0012 group with a
+> fall-back to the base one, and a missing or broken DLC no longer blocks a
+> language (tested with junction-built installs). Re-verified on crimson-rs
+> `54fc208` (PR #103: a DLC-less 2.04 stamp reads its `build`, pinned by
+> `TryReadFromBytes_DlcLessStamp_ReadsBuildAndIsCompatible`): **408 C# tests
+> green**, plus the opt-in icon extraction test; AOT publish has zero IL/trim
+> warnings and launches as `v2.04.02.31`. The Browse Items window was checked
+> in the app: 8,379 items, "Diving" finds 28 with `dlc_01` and Chinese names.
+> Their icon cells stay blank until Tools → extract icons is re-run, because
+> the existing cache predates DLC support. Not checked in-game.
+>
+> **Fixed upstream: the skill parser could try a ~15.7 GB allocation.** The
+> first full-suite run on `54fc208` aborted with `memory allocation of
+> 15770583040 bytes failed`. The skill reader's tail probe reads list counts
+> at misaligned offsets, and `buff_data.rs` (`cnt96`, `cnt112`) and
+> `post_buff.rs` (`read_list_u32`) passed them straight to
+> `Vec::with_capacity`; 15,770,583,040 = 4 × `0xEB000000`. Whether it fired
+> depended on `TailSizeCache` hash order and free memory — the
+> "`--test-threads=4`" artifact crimson-rs documented — and the app, which
+> loads skill at startup, was exposed too. crimson-rs PR #104 (merge
+> `7d02f8c`) rejects a count that cannot fit in the remaining bytes. Vendored
+> and rebuilt: **408 C# tests green on three consecutive default-parallel
+> runs** (162–171 s), live skill round-trips byte-identical through Python
+> (2,159 entries), and AOT publish has zero IL/trim warnings and launches as
+> `v2.04.02.32`. crimson-rs's own notes still recommend `--test-threads=4`;
+> that advice is now stale.
+>
+> **Below this line is the 2.04.03 history.**
+>
+> On **2026-11-01** the editor was aligned to game **2.04**
 > (paver `2/4/3/0x3ebe7ee2`), and **v2.04.01 is tagged, built and PUBLISHED**
 > (2026-11-01T05:25:13Z, marked Latest): tag → `f0207a1` (PR #44 merge), CI run
 > `41275985676`, crimson-rs `8e84704`, exe `2.4.1.29`, zip 20,690,606 B, sha256
@@ -23,11 +61,10 @@
 > layout and archive index; the editor's real work was the first DLC. A
 > 2.04-written save references rows only `dlc/dlc_01/` defines, and the suite
 > stayed green while they showed blank, so `LocalizationProvider` now falls
-> back to each DLC's PALOC, iteminfo, stringinfo and key tables. Pickers stay
-> base-only on purpose. **405 C# tests green, 0 skipped**; AOT publish has zero
-> IL/trim warnings and the exe launches as `CrimsonAtomtic v2.04.01.29`. Details
-> in [game-versions.md](game-versions.md). **Next task: none queued** — pick
-> from the backlog below.
+> back to each DLC's PALOC, iteminfo, stringinfo and key tables. Pickers stayed
+> base-only in that release. **405 C# tests green, 0 skipped**; AOT publish had zero
+> IL/trim warnings and the exe launched as `CrimsonAtomtic v2.04.01.29`. Details
+> in [game-versions.md](game-versions.md).
 >
 > **Below this line is the 2.03 history, kept for context.**
 >
@@ -458,12 +495,9 @@ are in [status-archive.md](status-archive.md).
 
 ## Open work / backlog
 
-- **DLC items have no icon.** `IconExtractionService` walks base items and
-  group 0012 only, so a DLC item resolves its name and texture name but gets
-  no `.webp`. Needs a walk over DLC keys against `dlc/<name>/0012/0.pamt`.
-- **Whether the pickers should offer DLC items.** They are base-only so nobody
-  grants an item they may not own. Offering them needs an answer to what the
-  game does with one on an install without the entitlement.
+- **A DLC item added to a save whose owner lacks the DLC is untested
+  in-game.** The pickers offer DLC items and label them in a "DLC" column
+  rather than hiding them (the user's call, 2026-11-07).
 - **Mission keys the bridge cannot name.** 1,420 distinct `MissionKey` values
   in slot102 stay blank, 1,415 of them already in the 2.03 snapshot. Mission
   has no `_with_pabgh` loader in crimson-rs; stage and quest do.
