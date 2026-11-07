@@ -107,6 +107,16 @@ public sealed class IconExtractionServiceTests
             Assert.True(new FileInfo(arrowWebp).Length > 100,
                 "extracted webp should be more than 100 bytes");
 
+            // 2.04 DLC items: the diving helm's texture lives in the DLC's
+            // own icon group, the sawmill notice's in the base one.
+            if (localization.ItemDlcName(1005282) is not null)
+            {
+                Assert.True(File.Exists(Path.Combine(cacheDir, "1005282.webp")),
+                    "DLC item icon from the DLC archive was not written");
+                Assert.True(File.Exists(Path.Combine(cacheDir, "1006663.webp")),
+                    "DLC item icon from the base archive was not written");
+            }
+
             // Progress was reported at least a handful of times for a
             // run that big.
             Assert.True(progressUpdates.Count > 10,

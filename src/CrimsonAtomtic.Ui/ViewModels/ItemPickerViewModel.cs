@@ -76,7 +76,8 @@ public sealed partial class ItemPickerViewModel : ObservableObject
                 e.ItemKey.ToString(CultureInfo.InvariantCulture),
                 e.StringKey,
                 nameEn,
-                nameSecondary));
+                nameSecondary,
+                localization.ItemDlcName(e.ItemKey)));
         }
         // Sort once by ItemKey ascending so the unfiltered view has
         // predictable ordering (lowest keys first — Camp Funds, Pearl,
@@ -338,7 +339,9 @@ public sealed partial class ItemPickerViewModel : ObservableObject
                 || row.StringKey.Contains(needle!, StringComparison.OrdinalIgnoreCase)
                 || row.NameEnglish.Contains(needle!, StringComparison.OrdinalIgnoreCase)
                 || (row.NameSecondary is not null
-                    && row.NameSecondary.Contains(needle!, StringComparison.OrdinalIgnoreCase)))
+                    && row.NameSecondary.Contains(needle!, StringComparison.OrdinalIgnoreCase))
+                || (row.DlcName is not null
+                    && row.DlcName.Contains(needle!, StringComparison.OrdinalIgnoreCase)))
             {
                 Results.Add(row);
                 if (Results.Count >= MaxResults)
@@ -357,14 +360,18 @@ public sealed partial class ItemPickerViewModel : ObservableObject
 /// <see cref="StringKey"/> is iteminfo's internal identifier (e.g.
 /// <c>"Item_Currency_Gold"</c>); <see cref="NameEnglish"/> falls back
 /// to <see cref="StringKey"/> when no PALOC entry exists, so the
-/// English column always has *something* showing.
+/// English column always has *something* showing. <see cref="DlcName"/>
+/// names the DLC that defines the item (e.g. <c>dlc_01</c>), <c>null</c>
+/// for a base-game item: the game may not accept a DLC item on an install
+/// whose owner lacks the DLC.
 /// </summary>
 public sealed record ItemPickerRow(
     uint ItemKey,
     string ItemKeyText,
     string StringKey,
     string NameEnglish,
-    string? NameSecondary)
+    string? NameSecondary,
+    string? DlcName = null)
 {
     /// <summary>
     /// Combined human label for the top action bar:

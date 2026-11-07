@@ -22,11 +22,24 @@ namespace CrimsonAtomtic.Tests;
 /// </summary>
 public sealed class NativePaverReaderTests
 {
-    /// <summary>Bit-for-bit copy of the live 2.04.03 install's paver. 2.04
+    /// <summary>Bit-for-bit copy of the live 2.04.08 install's paver. 2.04
     /// inserted a DLC list ahead of <c>build</c>: <c>u32</c> count, then
     /// <c>u32</c> length + name + <c>u32</c> revision per DLC, so <c>build</c>
-    /// (0x3EBE7EE2 LE) moved to the end of the file.</summary>
-    private static readonly byte[] Paver_2_04_Live =
+    /// (0xE4D53A97 LE) moved to the end of the file.</summary>
+    private static readonly byte[] Paver_2_04_08_Live =
+    [
+        0x02, 0x00, 0x04, 0x00, 0x08, 0x00,
+        0x01, 0x00, 0x00, 0x00,
+        0x06, 0x00, 0x00, 0x00, (byte)'d', (byte)'l', (byte)'c', (byte)'_', (byte)'0', (byte)'1',
+        0x07, 0x00, 0x00, 0x00,
+        0x97, 0x3a, 0xd5, 0xe4,
+    ];
+
+    /// <summary>The 2.04.03 paver: same minor as the target, older patch.
+    /// 2.04.08 added two strings to every iteminfo row without moving the
+    /// minor, so this must read INCOMPATIBLE — the first case the patch half
+    /// of the gate decides.</summary>
+    private static readonly byte[] Paver_2_04_03_SameMinorOlderPatch =
     [
         0x02, 0x00, 0x04, 0x00, 0x03, 0x00,
         0x01, 0x00, 0x00, 0x00,
@@ -53,22 +66,63 @@ public sealed class NativePaverReaderTests
         [0x01, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
 
     [Fact]
-    public void TryReadFromBytes_HappyPath_Returns_2_04_Live()
+    public void TryReadFromBytes_HappyPath_Returns_2_04_08_Live()
     {
         if (!File.Exists("crimson_rs.dll"))
         {
             return;
         }
-        var v = NativePaverReader.TryReadFromBytes(Paver_2_04_Live);
+        var v = NativePaverReader.TryReadFromBytes(Paver_2_04_08_Live);
         Assert.NotNull(v);
         Assert.Equal(2, v!.Value.Major);
         Assert.Equal(4, v.Value.Minor);
-        Assert.Equal(3, v.Value.Patch);
-        Assert.Equal(0x3ebe7ee2u, v.Value.Build);
+        Assert.Equal(8, v.Value.Patch);
+        Assert.Equal(0xe4d53a97u, v.Value.Build);
         Assert.True(v.Value.IsCompatibleWithParser,
-            "2.04.03 should be compatible with the current parser target 2.4");
-        Assert.Equal("2.04.03", v.Value.ShortVersionString);
-        Assert.Equal("2.04.03 build 0x3ebe7ee2", v.Value.DisplayString);
+            "2.04.08 should be compatible with the current parser target 2.4.08");
+        Assert.Equal("2.04.08", v.Value.ShortVersionString);
+        Assert.Equal("2.04.08 build 0xe4d53a97", v.Value.DisplayString);
+    }
+
+    /// <summary>
+    /// A 2.04 stamp on an install without DLC: the list is present with a
+    /// count of 0. crimson-rs read <c>build</c> as 0 here until PR #103;
+    /// the version gate never depended on it, so this pins both.
+    /// </summary>
+    [Fact]
+    public void TryReadFromBytes_DlcLessStamp_ReadsBuildAndIsCompatible()
+    {
+        if (!File.Exists("crimson_rs.dll"))
+        {
+            return;
+        }
+        var v = NativePaverReader.TryReadFromBytes(
+        [
+            0x02, 0x00, 0x04, 0x00, 0x08, 0x00,
+            0x00, 0x00, 0x00, 0x00,
+            0x97, 0x3a, 0xd5, 0xe4,
+        ]);
+        Assert.NotNull(v);
+        Assert.Equal("2.04.08 build 0xe4d53a97", v!.Value.DisplayString);
+        Assert.True(v.Value.IsCompatibleWithParser);
+    }
+
+    [Fact]
+    public void TryReadFromBytes_SameMinorOlderPatch_FlagsIncompatible()
+    {
+        if (!File.Exists("crimson_rs.dll"))
+        {
+            return;
+        }
+        var v = NativePaverReader.TryReadFromBytes(Paver_2_04_03_SameMinorOlderPatch);
+        Assert.NotNull(v);
+        // Premise: same major and minor as the target, so only the patch
+        // half can reject it.
+        Assert.Equal(GameDataVersion.ParserTargetMajor, v!.Value.Major);
+        Assert.Equal(GameDataVersion.ParserTargetMinor, v.Value.Minor);
+        Assert.True(v.Value.Patch < GameDataVersion.ParserMinPatch);
+        Assert.False(v.Value.IsCompatibleWithParser,
+            "2.04.03 must NOT be compatible — its iteminfo lacks the 2.04.08 strings");
     }
 
     [Fact]
@@ -88,6 +142,7 @@ public sealed class NativePaverReaderTests
         Assert.Equal(4, GameDataVersion.ParserTargetMinor);
         Assert.Contains<ushort>(4, GameDataVersion.CompatibleMinors);
         Assert.DoesNotContain<ushort>(3, GameDataVersion.CompatibleMinors);
+        Assert.Equal(8, GameDataVersion.ParserMinPatch);
     }
 
     [Fact]

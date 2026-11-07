@@ -303,6 +303,7 @@
   <sys:String x:Key="ItemPickerColIcon">圖示</sys:String>
   <sys:String x:Key="ItemPickerColKey">ItemKey</sys:String>
   <sys:String x:Key="ItemPickerColStringKey">String ID</sys:String>
+  <sys:String x:Key="ItemPickerColDlc">DLC</sys:String>
   <sys:String x:Key="ItemPickerColNameEnglish">名稱 (eng)</sys:String>
   <sys:String x:Key="ItemPickerColCopy">複製</sys:String>
   <sys:String x:Key="ItemPickerCopyKeyTip">將數值 ItemKey 複製到剪貼簿</sys:String>

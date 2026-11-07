@@ -73,7 +73,7 @@ public sealed class LocalizationProviderTests
     /// every other test here while the editor showed those rows blank.
     /// </summary>
     [Fact]
-    public void Bootstrap_LiveInstall_ResolvesDlcRows_ButOffersOnlyBaseItems()
+    public void Bootstrap_LiveInstall_ResolvesAndOffersDlcRows()
     {
         if (!File.Exists("crimson_rs.dll"))
         {
@@ -107,9 +107,105 @@ public sealed class LocalizationProviderTests
         // A key table with rows only its DLC copy holds.
         Assert.False(string.IsNullOrEmpty(loc.ResolveByFieldTypeName("FactionNodeKey", 1000417)));
 
-        // The pickers walk this enumeration, and the DLC item stays out of it.
-        var offered = Enumerable.Range(0, loc.ItemCount).Select(i => loc.GetItem(i)!.Value.ItemKey);
-        Assert.DoesNotContain(DlcItem, offered);
+        // The pickers walk this enumeration: the DLC item is in it, tagged
+        // with its DLC, and the DLC rows that repeat a base key are not
+        // listed a second time.
+        var offered = Enumerable.Range(0, loc.ItemCount).Select(i => loc.GetItem(i)!.Value.ItemKey).ToList();
+        Assert.Contains(DlcItem, offered);
+        Assert.Equal(offered.Count, offered.Distinct().Count());
+        Assert.Equal("dlc_01", loc.ItemDlcName(DlcItem));
+        Assert.Null(loc.ItemDlcName(2200)); // Pyeonjeon_Arrow, a base item
+    }
+
+    /// <summary>
+    /// An install without DLC, and one whose DLC files are broken, must
+    /// bootstrap exactly as the base game. Built from directory junctions to
+    /// the live install's base groups (no admin rights needed), plus a
+    /// <c>dlc/dlc_99</c> whose manifests are garbage.
+    /// </summary>
+    [Fact]
+    public void Bootstrap_WithoutOrWithBrokenDlc_LoadsTheBaseGame()
+    {
+        if (!File.Exists("crimson_rs.dll") || !OperatingSystem.IsWindows())
+        {
+            return;
+        }
+        var pamt = LiveInstall.FindGroupPamt(GameDataLayout.GameDataGroup);
+        if (pamt is null)
+        {
+            return;
+        }
+        var liveRoot = Path.GetDirectoryName(Path.GetDirectoryName(pamt))!;
+        // Junctions must sit on a local volume; next to the test binaries is.
+        var root = Path.Combine(AppContext.BaseDirectory, $"nodlc_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        try
+        {
+            foreach (var group in Directory.GetDirectories(liveRoot)
+                         .Where(d => Path.GetFileName(d) is { Length: 4 } n && n.All(char.IsAsciiDigit)
+                                     || Path.GetFileName(d) == "meta"))
+            {
+                CreateJunction(Path.Combine(root, Path.GetFileName(group)), group);
+            }
+            int baseItems;
+            using (var loc = new LocalizationProvider(new NativePazExtractor()))
+            {
+                Assert.Empty(GameDataLayout.DlcNames(root));
+                Assert.True(loc.TryBootstrapFromGameRoot(root));
+                Assert.Null(loc.ItemInfoStringKey(1005282));
+                Assert.Null(loc.ItemDlcName(1005282));
+                baseItems = loc.ItemCount;
+                Assert.True(baseItems > 5_000);
+            }
+
+            foreach (var group in new[] { GameDataLayout.GameDataGroup, "0020" })
+            {
+                var dir = Path.Combine(root, GameDataLayout.DlcDirectory, "dlc_99", group);
+                Directory.CreateDirectory(dir);
+                File.WriteAllBytes(Path.Combine(dir, "0.pamt"), [0xde, 0xad, 0xbe, 0xef]);
+            }
+            using (var loc = new LocalizationProvider(new NativePazExtractor()))
+            {
+                Assert.Equal(["dlc_99"], GameDataLayout.DlcNames(root));
+                Assert.True(loc.TryBootstrapFromGameRoot(root));
+                Assert.Equal(baseItems, loc.ItemCount);
+                Assert.False(string.IsNullOrEmpty(
+                    loc.LookupItemName(2200, LocalizationProvider.DefaultLanguage)));
+            }
+        }
+        finally
+        {
+            // Never a recursive delete over the junctions: each is removed
+            // as a link (rmdir without /s), then only the fake dlc tree,
+            // which holds real files, is deleted recursively.
+            foreach (var link in Directory.GetDirectories(root)
+                         .Where(d => new DirectoryInfo(d).LinkTarget is not null))
+            {
+                RunCmd("rmdir", link);
+            }
+            var dlcDir = Path.Combine(root, GameDataLayout.DlcDirectory);
+            if (Directory.Exists(dlcDir))
+            {
+                Directory.Delete(dlcDir, recursive: true);
+            }
+            Directory.Delete(root);
+        }
+    }
+
+    private static void CreateJunction(string link, string target) =>
+        RunCmd("mklink", "/J", link, target);
+
+    private static void RunCmd(params string[] args)
+    {
+        using var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+            "cmd.exe", ["/c", .. args])
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        })!;
+        p.WaitForExit();
+        Assert.True(p.ExitCode == 0, $"{string.Join(' ', args)} failed: {p.StandardError.ReadToEnd()}");
     }
 
     /// <summary>

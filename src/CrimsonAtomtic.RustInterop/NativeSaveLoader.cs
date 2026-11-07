@@ -2083,6 +2083,11 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "crimson_parser_target_gamedata_major")]
     public static partial ushort ParserTargetGamedataMajor();
 
+    // 2.04.08 changed iteminfo without moving the minor, so the target minor
+    // also needs a lowest patch. 0 means any patch.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_parser_min_gamedata_patch")]
+    public static partial ushort ParserMinGamedataPatch();
+
     [LibraryImport(LibraryName, EntryPoint = "crimson_parser_target_gamedata_minor")]
     public static partial ushort ParserTargetGamedataMinor();
 

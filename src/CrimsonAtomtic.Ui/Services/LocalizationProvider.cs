@@ -332,11 +332,21 @@ public sealed class LocalizationProvider : IDisposable
 
     /// <summary>
     /// Each DLC's own iteminfo / stringinfo (2.04). Lookups fall back to them
-    /// so items a save already holds resolve; enumeration stays on the base
-    /// tables, so the pickers never offer an item the player may not own.
+    /// after a base miss. An install without DLC leaves both empty.
     /// </summary>
     private readonly List<NativeItemInfoCatalog> _dlcItemInfo = [];
     private readonly List<NativeStringInfoCatalog> _dlcStringInfo = [];
+
+    /// <summary>
+    /// Items only a DLC defines, in load order, enumerated after the base
+    /// table. 242 DLC rows repeat a base key and stay out, so no item is
+    /// listed twice.
+    /// </summary>
+    private readonly List<(uint ItemKey, string StringKey)> _dlcOnlyItems = [];
+
+    /// <summary>The DLC (e.g. <c>dlc_01</c>) defining each item in
+    /// <see cref="_dlcOnlyItems"/>.</summary>
+    private readonly Dictionary<uint, string> _dlcOnlyItemSource = [];
 
     /// <summary>Owns each DLC's key-table bridges.</summary>
     private readonly List<IDisposable> _dlcBridges = [];
@@ -485,7 +495,13 @@ public sealed class LocalizationProvider : IDisposable
         _catalogs.TryGetValue(DefaultLanguage, out var cat) ? cat.EntryCount : 0;
 
     /// <summary>Number of items in the iteminfo bridge, or 0 when not loaded.</summary>
-    public int ItemCount => _itemInfo?.EntryCount ?? 0;
+    public int ItemCount => (_itemInfo?.EntryCount ?? 0) + _dlcOnlyItems.Count;
+
+    /// <summary>
+    /// The DLC that defines <paramref name="itemKey"/> (e.g. <c>dlc_01</c>),
+    /// or <c>null</c> for a base item or an unknown key.
+    /// </summary>
+    public string? ItemDlcName(uint itemKey) => _dlcOnlyItemSource.GetValueOrDefault(itemKey);
 
     /// <summary>
     /// Language codes discovered in the game install (e.g. <c>"eng"</c>,
@@ -665,6 +681,8 @@ public sealed class LocalizationProvider : IDisposable
         _dlcItemInfo.Clear();
         _dlcStringInfo.ForEach(c => c.Dispose());
         _dlcStringInfo.Clear();
+        _dlcOnlyItems.Clear();
+        _dlcOnlyItemSource.Clear();
         foreach (var dlc in GameDataLayout.DlcNames(gameRoot))
         {
             var pamt = Path.Combine(
@@ -673,7 +691,17 @@ public sealed class LocalizationProvider : IDisposable
             {
                 var bytes = _paz.ExtractFile(pamt, _layout.BinDirectory,
                     _layout.Body(GameDataLayout.DlcTableStem(ItemInfoTable, dlc)));
-                _dlcItemInfo.Add(NativeItemInfoCatalog.LoadFromBytes(bytes));
+                var catalog = NativeItemInfoCatalog.LoadFromBytes(bytes);
+                _dlcItemInfo.Add(catalog);
+                for (var i = 0; i < catalog.EntryCount; i++)
+                {
+                    if (catalog.GetEntry(i) is { } e
+                        && _itemInfo?.LookupMaxStackCount(e.ItemKey) is null
+                        && _dlcOnlyItemSource.TryAdd(e.ItemKey, dlc))
+                    {
+                        _dlcOnlyItems.Add(e);
+                    }
+                }
             }
             catch (CrimsonSaveException) { }
             catch (IOException) { }
@@ -1113,12 +1141,24 @@ public sealed class LocalizationProvider : IDisposable
             var loaded = new List<NativePalocCatalog>();
             try
             {
-                foreach (var src in sources)
+                for (var s = 0; s < sources.Count; s++)
                 {
-                    foreach (var file in src.Files)
+                    var src = sources[s];
+                    var before = loaded.Count;
+                    try
                     {
-                        var bytes = _paz.ExtractFile(src.Pamt, src.Directory, file);
-                        loaded.Add(NativePalocCatalog.LoadFromBytes(bytes));
+                        foreach (var file in src.Files)
+                        {
+                            var bytes = _paz.ExtractFile(src.Pamt, src.Directory, file);
+                            loaded.Add(NativePalocCatalog.LoadFromBytes(bytes));
+                        }
+                    }
+                    catch (Exception ex) when (s > 0 && ex is CrimsonSaveException or IOException)
+                    {
+                        // A DLC source (index > 0) that fails to load is
+                        // dropped on its own; the base language still loads.
+                        loaded.Skip(before).ToList().ForEach(p => p.Dispose());
+                        loaded.RemoveRange(before, loaded.Count - before);
                     }
                 }
             }
@@ -1256,13 +1296,22 @@ public sealed class LocalizationProvider : IDisposable
     public string? ItemInfoStringKey(uint itemId) => ItemInfoFor(itemId)?.LookupStringKey(itemId);
 
     /// <summary>
-    /// Enumerate one entry of the loaded iteminfo bridge by index.
-    /// Returns <c>null</c> when the bridge isn't loaded or the index
-    /// is out of range. Used by the Item Picker dialog to walk every
-    /// known item without re-extracting iteminfo.pabgb.
+    /// Enumerate one known item by index: the base iteminfo rows first,
+    /// then the items only a DLC defines (see <see cref="ItemDlcName"/>).
+    /// Returns <c>null</c> when the index is out of range. Used by the
+    /// Item Picker dialog to walk every known item without re-extracting
+    /// iteminfo.
     /// </summary>
-    public (uint ItemKey, string StringKey)? GetItem(int index) =>
-        _itemInfo?.GetEntry(index);
+    public (uint ItemKey, string StringKey)? GetItem(int index)
+    {
+        var baseCount = _itemInfo?.EntryCount ?? 0;
+        if (index < baseCount)
+        {
+            return _itemInfo?.GetEntry(index);
+        }
+        index -= baseCount;
+        return index >= 0 && index < _dlcOnlyItems.Count ? _dlcOnlyItems[index] : null;
+    }
 
     /// <summary>
     /// Number of entries in the loaded <c>characterinfo.pabgb</c>.
@@ -1775,15 +1824,10 @@ public sealed class LocalizationProvider : IDisposable
     {
         ArgumentException.ThrowIfNullOrEmpty(prefix);
         var list = new List<(uint, string)>();
-        var info = _itemInfo;
-        if (info is null)
-        {
-            return list;
-        }
-        var count = info.EntryCount;
+        var count = ItemCount;
         for (var i = 0; i < count; i++)
         {
-            var entry = info.GetEntry(i);
+            var entry = GetItem(i);
             if (entry is { } e
                 && e.StringKey is { Length: > 0 } sk
                 && sk.StartsWith(prefix, StringComparison.Ordinal))
@@ -2143,6 +2187,8 @@ public sealed class LocalizationProvider : IDisposable
         _dlcItemInfo.Clear();
         _dlcStringInfo.ForEach(c => c.Dispose());
         _dlcStringInfo.Clear();
+        _dlcOnlyItems.Clear();
+        _dlcOnlyItemSource.Clear();
         _dlcBridges.ForEach(b => b.Dispose());
         _dlcBridges.Clear();
         _dlcKeyResolvers.Clear();

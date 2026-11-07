@@ -31,6 +31,10 @@ namespace CrimsonAtomtic.Ui.Services;
 public static class IconExtractionService
 {
     private const string IconDirectoryInPaz = "ui/texture/icon";
+
+    /// <summary>PAZ group holding the icon textures, in the base install and
+    /// in each DLC root.</summary>
+    private const string IconGroup = "0012";
     private const int IconTargetSize = 64;
     private const int WebpQuality = 80;
     private const int MaxFailureSamples = 10;
@@ -91,7 +95,7 @@ public static class IconExtractionService
                 "Stringinfo bridge not loaded; cannot resolve icon paths.");
         }
 
-        var pamtPath = Path.Combine(gameRoot, "0012", "0.pamt");
+        var pamtPath = Path.Combine(gameRoot, IconGroup, "0.pamt");
         if (!File.Exists(pamtPath))
         {
             throw new FileNotFoundException(
@@ -108,7 +112,7 @@ public static class IconExtractionService
         {
             cancellationToken.ThrowIfCancellationRequested();
             await ProcessOneAsync(
-                i, localization, paz, pamtPath, cacheDirectory,
+                i, localization, paz, gameRoot, pamtPath, cacheDirectory,
                 overwriteExisting, stats, failureSamples, cancellationToken).ConfigureAwait(false);
 
             if ((i + 1) % ProgressEveryN == 0 || i + 1 == total)
@@ -136,6 +140,7 @@ public static class IconExtractionService
         int index,
         LocalizationProvider localization,
         IPazExtractor paz,
+        string gameRoot,
         string pamtPath,
         string cacheDirectory,
         bool overwriteExisting,
@@ -178,7 +183,7 @@ public static class IconExtractionService
         byte[] ddsBytes;
         try
         {
-            ddsBytes = paz.ExtractFile(pamtPath, IconDirectoryInPaz, ddsName);
+            ddsBytes = ExtractIcon(paz, gameRoot, pamtPath, localization.ItemDlcName(itemKey), ddsName);
         }
         catch (CrimsonSaveException ex) when (ex.ErrorCode == NotFoundErrorCode)
         {
@@ -234,6 +239,33 @@ public static class IconExtractionService
             RecordFailure(stats, failureSamples,
                 $"itemKey={itemKey} ({prefabName}): write failed — {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// A DLC item's texture sits in its DLC's icon group or, for some, in the
+    /// base one (2.04: the dlc_01 diving armour in the DLC, its notice papers
+    /// in the base), so a DLC item tries its own archive first. A missing DLC
+    /// archive falls through to the base one.
+    /// </summary>
+    private static byte[] ExtractIcon(
+        IPazExtractor paz, string gameRoot, string basePamt, string? dlcName, string ddsName)
+    {
+        if (dlcName is not null)
+        {
+            var dlcPamt = Path.Combine(
+                gameRoot, GameDataLayout.DlcDirectory, dlcName, IconGroup, "0.pamt");
+            if (File.Exists(dlcPamt))
+            {
+                try
+                {
+                    return paz.ExtractFile(dlcPamt, IconDirectoryInPaz, ddsName);
+                }
+                catch (CrimsonSaveException ex) when (ex.ErrorCode == NotFoundErrorCode)
+                {
+                }
+            }
+        }
+        return paz.ExtractFile(basePamt, IconDirectoryInPaz, ddsName);
     }
 
     // Mirror of NativeMethods.NOT_FOUND; kept local so the service

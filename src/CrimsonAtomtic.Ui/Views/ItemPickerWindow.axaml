@@ -96,6 +96,12 @@
         <DataGridTextColumn Header="{DynamicResource ItemPickerColStringKey}"
                             Binding="{Binding StringKey}"
                             Width="280" />
+        <!-- DLC column: the DLC that defines the item, blank for base-game
+             items. Adding a DLC item to a save whose owner lacks the DLC
+             is untested in-game, so it is labelled rather than hidden. -->
+        <DataGridTextColumn Header="{DynamicResource ItemPickerColDlc}"
+                            Binding="{Binding DlcName}"
+                            Width="70" />
         <DataGridTextColumn Header="{DynamicResource ItemPickerColNameEnglish}"
                             Binding="{Binding NameEnglish}"
                             Width="*" />

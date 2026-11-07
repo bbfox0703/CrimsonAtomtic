@@ -57,10 +57,11 @@ public sealed partial class GameVersionMismatchDialog : Window
         // Both halves are ABI-sourced. The major used to be a hard-coded
         // literal "1." here — correct for every patch through 1.18, and
         // flat-out wrong from 2.00 on, where it would have rendered the
-        // target as "1.00.xx".
+        // target as "1.00.xx". A lowest patch (2.04.08 on) reads "2.04.08+".
         dlg.TargetVersionText.Text =
             $"{GameDataVersion.ParserTargetMajor}." +
-            $"{GameDataVersion.ParserTargetMinor:D2}.xx";
+            $"{GameDataVersion.ParserTargetMinor:D2}." +
+            (GameDataVersion.ParserMinPatch > 0 ? $"{GameDataVersion.ParserMinPatch:D2}+" : "xx");
         var result = await dlg.ShowDialog<bool?>(owner);
         // OS-chrome close (X / Alt-F4) returns null — treat as Quit
         // so we don't silently swallow consent the user didn't give.
