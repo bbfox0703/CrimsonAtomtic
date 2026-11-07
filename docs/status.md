@@ -8,7 +8,16 @@
 > the deep history behind a decision.
 >
 > Last updated: **2026-11-07** — the editor is aligned to game **2.04.08**
-> (paver `2/4/8/0xe4d53a97`, `dlc_01` revision 7), **uncommitted on `dev`**.
+> (paver `2/4/8/0xe4d53a97`, `dlc_01` revision 7), and **v2.04.02 is tagged,
+> built and PUBLISHED** (2026-11-07T09:12:24Z, marked Latest): tag →
+> `3659591` (PR #46 merge), CI run `42358078301`, crimson-rs `7d02f8c`, exe
+> `2.4.2.32`, zip 20,695,563 B, sha256 `30dbc0f1…dc3cca` (equal to the
+> asset's GitHub digest). Not run before publishing: the binary checks on the
+> release zip itself (download, FileVersion, launch); the local AOT publish of
+> the same source launched clean. **Next task: none queued** — pick from the
+> backlog below.
+>
+> What v2.04.02 carries:
 > 2.04.08 added two strings to every iteminfo row without moving the minor,
 > so every name went blank on v2.04.01; crimson-rs PR #102 (merge `08dbc2d`)
 > parses it and adds `crimson_parser_min_gamedata_patch()` = 8, which
