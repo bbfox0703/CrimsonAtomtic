@@ -296,6 +296,7 @@
   <sys:String x:Key="ItemPickerColIcon">Icon</sys:String>
   <sys:String x:Key="ItemPickerColKey">ItemKey</sys:String>
   <sys:String x:Key="ItemPickerColStringKey">String ID</sys:String>
+  <sys:String x:Key="ItemPickerColDlc">DLC</sys:String>
   <sys:String x:Key="ItemPickerColNameEnglish">Name (eng)</sys:String>
   <sys:String x:Key="ItemPickerColCopy">Copy</sys:String>
   <sys:String x:Key="ItemPickerCopyKeyTip">Copy the numeric ItemKey to the clipboard</sys:String>

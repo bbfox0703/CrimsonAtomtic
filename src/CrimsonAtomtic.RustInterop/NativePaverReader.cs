@@ -130,6 +130,15 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     /// </summary>
     public static ushort[] CompatibleMinors => ParserTargetInfo.Value.Compatible;
 
+    /// <summary>
+    /// The lowest <see cref="Patch"/> of the target minor this build parses
+    /// (<c>0</c> = any). Game 2.04.08 was the first patch to change a layout
+    /// without moving the minor: two strings joined every iteminfo row, so a
+    /// 2.04.03 install shares minor 4 and still no longer parses. Read from
+    /// <c>crimson_parser_min_gamedata_patch</c>.
+    /// </summary>
+    public static ushort ParserMinPatch => ParserTargetInfo.Value.MinPatch;
+
     // Read once per process from the native lib and cached. Rust exposes the
     // target major / target minor / compatible set as compile-time constants,
     // so a single read is authoritative. Guarded so the startup version-check
@@ -140,33 +149,33 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     // state is deliberately fail-CLOSED — Compatible is empty, so
     // IsCompatibleWithParser is false for every install and the user gets the
     // mismatch warning instead of a silent mis-decode.
-    private static readonly Lazy<(ushort Major, ushort Target, ushort[] Compatible)> ParserTargetInfo =
+    private static readonly Lazy<(ushort Major, ushort Target, ushort[] Compatible, ushort MinPatch)> ParserTargetInfo =
         new(LoadParserTargetInfo);
 
-    private static (ushort Major, ushort Target, ushort[] Compatible) LoadParserTargetInfo()
+    private static (ushort Major, ushort Target, ushort[] Compatible, ushort MinPatch) LoadParserTargetInfo()
     {
         try
         {
-            // crimson_parser_target_gamedata_major is the newest of the three
-            // (added at the 2.00 alignment), so a stale vendored DLL throws
+            // crimson_parser_min_gamedata_patch is the newest export (added at
+            // the 2.04.08 alignment), so a stale vendored DLL throws
             // EntryPointNotFound here and takes the whole tuple down with it.
-            // That is intended: a lib old enough to lack this export also
-            // predates the 2.00 parser, so its minor is not one we should be
-            // reporting as compatible either.
+            // That is intended: a lib old enough to lack it cannot parse
+            // 2.04.08 iteminfo, so nothing it reports should read as compatible.
+            ushort minPatch = NativeMethods.ParserMinGamedataPatch();
             ushort major = NativeMethods.ParserTargetGamedataMajor();
             ushort target = NativeMethods.ParserTargetGamedataMinor();
             ushort[] compatible = ReadCompatibleMinors();
             // The target is always a member of the compatible set; fall back
             // to a singleton if the set query came back empty for any reason.
-            return (major, target, compatible.Length > 0 ? compatible : [target]);
+            return (major, target, compatible.Length > 0 ? compatible : [target], minPatch);
         }
         catch (DllNotFoundException)
         {
-            return (0, 0, []);
+            return (0, 0, [], 0);
         }
         catch (EntryPointNotFoundException)
         {
-            return (0, 0, []);
+            return (0, 0, [], 0);
         }
     }
 
@@ -192,8 +201,10 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
 
     /// <summary>
     /// True when this install's schema is one this parser build can load —
-    /// i.e. <see cref="Major"/> equals <see cref="ParserTargetMajor"/>
-    /// <b>and</b> <see cref="Minor"/> is in <see cref="CompatibleMinors"/>.
+    /// i.e. <see cref="Major"/> equals <see cref="ParserTargetMajor"/>,
+    /// <see cref="Minor"/> is in <see cref="CompatibleMinors"/>, <b>and</b>,
+    /// on the target minor, <see cref="Patch"/> is at least
+    /// <see cref="ParserMinPatch"/>.
     /// False values should surface a UI warning before iteminfo /
     /// save-body loading; the user can still opt to continue but the
     /// load may crash or mis-decode.
@@ -202,11 +213,14 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     /// The major half of the check was added at the 2.00 alignment and is not
     /// cosmetic: 2.00 reset the minor to <c>0</c>, so the previous minor-only
     /// test would have reported a hypothetical <c>1.00.xx</c> install as
-    /// compatible with the 2.00 parser. Both halves are ABI-sourced, so a
-    /// future major bump needs no edit here.
+    /// compatible with the 2.00 parser. The patch half came with 2.04.08, the
+    /// first layout change inside a minor. All three are ABI-sourced, so a
+    /// future bump needs no edit here.
     /// </remarks>
     public bool IsCompatibleWithParser =>
-        Major == ParserTargetMajor && Array.IndexOf(CompatibleMinors, Minor) >= 0;
+        Major == ParserTargetMajor
+        && Array.IndexOf(CompatibleMinors, Minor) >= 0
+        && (Minor != ParserTargetMinor || Patch >= ParserMinPatch);
 
     /// <summary>
     /// Human-readable version (e.g. <c>"2.00.00 build 0xb241d214"</c>).

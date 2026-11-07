@@ -2,7 +2,7 @@
 
 ## Current install
 
-`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 2.04**
+`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 2.04.08**
 
 Top-level layout:
 
@@ -53,7 +53,8 @@ Crimson Desert/
   install's `(major, minor)` isn't one the parser can load —
   `GameDataVersion.IsCompatibleWithParser` now gates on
   `Major == ParserTargetMajor` **and** `Minor ∈ CompatibleMinors`
-  (currently `2` and `{4}`). The major half was added at the 2.00 alignment
+  (currently `2` and `{4}`), and, on the target minor, `Patch >=
+  ParserMinPatch` (currently `8`; see 2.04.08 below). The major half was added at the 2.00 alignment
   and is not cosmetic: with the minor reset to `0`, the old minor-only test
   would have reported a hypothetical `1.00.xx` install as compatible with the
   2.00 parser. **2.00 carries two iteminfo layout drifts** (crimson-rs commit
@@ -238,3 +239,9 @@ On the editor side the alignment cost the manual `VerMinor` 0→1 lock-step bump
 *Save body*: format unchanged (v2 / `0x0080`); slot102 decodes 1,166 blocks with 0 undecoded bytes. Upstream records one content change worth knowing: re-saving on 2.04 strips `_equipItemList` from most hired mercenaries (slot0 → slot102: 252 → 57 items). That is the game, not the decoder.
 
 *Other editor costs.* The manual `VerMinor` 3 → 4 bump (`VerPatch` stays 1), paver and synthetic-stringinfo pins (the hash and the zero swapped places), and an SDK-driven ILCompiler pin 10.0.12 → 10.0.14 (SDK 10.0.403). The untouched suite failed exactly five of 402 tests: four paver pins and that synthetic blob.
+
+**2.04.03 → 2.04.08 is the first layout change inside a minor.** Vendored from `crimson-rs` `main` at `08dbc2d` (PR #102), validated against the live install (paver `2/4/8/0xe4d53a97`, `dlc_01` revision 7, 2026-11-07). Two strings (`charged_sound_name`, `charged_sound_param`) now sit between `filter_type` and `unk_texture_path` in every iteminfo row, so every base row grew 8 B (both empty) and v2.04.01 resolved no names at all; seven DLC ship cannons fill them. Iteminfo has 7,069 base rows (+5) and 1,552 DLC rows. Skill is byte-identical; everything else is content.
+
+The minor is still 4, so a `(major, minor)` gate would have passed a 2.04.03 install that no longer parses. crimson-rs added `PARSER_MIN_GAMEDATA_PATCH = 8` behind `crimson_parser_min_gamedata_patch()`, and `GameDataVersion.IsCompatibleWithParser` now also requires `Patch >= ParserMinPatch` when the install's minor is the target minor; the mismatch dialog reads `2.04.08+`. The new export is read first, so a vendored lib older than it fails closed. `VerPatch` 1 → 2: the next release is v2.04.02.
+
+Same cut, editor side: the item pickers now list the 1,310 DLC-only items after the base ones (8,379 in all; the 242 DLC rows repeating a base key stay out) with a "DLC" column naming the source, and the gem picker gains 19 DLC gems. Whether the game accepts a DLC item on an install without the entitlement is untested. Icon extraction tries `dlc/<name>/0012` before the base `0012`, because the textures are split between them (the diving armour in the DLC group, the sawmill notice in the base one). A DLC root whose files are missing or corrupt no longer takes a whole language down; `Bootstrap_WithoutOrWithBrokenDlc_LoadsTheBaseGame` builds both installs from directory junctions to the live groups and checks the base game loads unchanged.
