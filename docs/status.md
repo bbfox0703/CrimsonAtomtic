@@ -8,7 +8,21 @@
 > the deep history behind a decision.
 >
 > Last updated: **2026-11-13** — the editor is aligned to game **2.05**
-> (paver `2/5/0/0x6b551ea7`, `dlc_01` revision 8), **uncommitted on `dev`**.
+> (paver `2/5/0/0x6b551ea7`, `dlc_01` revision 8), and **v2.05.01 is tagged,
+> built and PUBLISHED** (2026-11-13T12:57:17Z, marked Latest): tag →
+> `7373f9b` (PR #49 merge), CI run `43428676035` on Rust 1.100.0, crimson-rs
+> `983dcc5` (docs-only past the tested `d4036b0`), exe `2.5.1.35`, zip
+> 20,704,174 B, sha256 `30a5d567…fc1bb3b` (equal to the asset's GitHub
+> digest). **It was cut twice.** The first tag (on PR #48's merge `48dad90`)
+> failed in CI before any release existed: Rust 1.100, out on 2026-11-09 and
+> picked up by the runner's `stable`, parks threads with `WaitOnAddress` /
+> `WakeByAddress*`, so the AOT link needed `Synchronization.lib` (LNK2019);
+> the local 1.99 never did. PR #49 links it next to `Userenv.lib`, the tag was
+> deleted and re-cut. Not run before publishing: the binary checks on the
+> release zip itself; the local AOT publish of the same source launched clean.
+> **Next task: none queued** — pick from the backlog below.
+>
+> The 2.05 alignment itself:
 > crimson-rs `d4036b0` (PR #105) absorbs 2.05's one format change — both dye
 > tables named their rows again, and had read 0 rows on 2.04/2.04.08 — and
 > moves the gate to minor 5 with the patch floor reset to 0, so the C# side
@@ -791,6 +805,13 @@ window-restore quirks, etc.) is in
   vanished entirely (only 11.0.100 was left), so `global.json` matched nothing
   and every `dotnet` command failed; reinstalling the .NET 10 SDK, not
   retargeting, is the fix, because CI builds with `10.0.x`.
+- **CI's Rust is newer than yours the day a stable lands.** The release
+  workflow takes `dtolnay/rust-toolchain@stable`, so a new Rust reaches the
+  release build before it reaches this machine. Rust 1.100's std needed
+  `Synchronization.lib` in the AOT link and broke the first v2.05.01 cut
+  while every local build passed. When a link fails only in CI, compare the
+  `rustc` line in the run log with `rustc --version` here first, and get the
+  staticlib's needs from rustc's `print native-static-libs` option.
 - **A vendor refresh does NOT rebuild the Python `crimson_rs` module.**
   `maturin develop` installs *editable* (a `.pth` pointing at
   `vendor/crimson-rs/python`), so after `update_vendors.ps1` the in-tree source
