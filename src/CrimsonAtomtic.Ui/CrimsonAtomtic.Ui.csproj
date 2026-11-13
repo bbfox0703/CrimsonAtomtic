@@ -138,11 +138,21 @@
        Userenv.lib: the Rust std pulls GetUserProfileDirectoryW (in
        userenv.dll) transitively for env::home_dir. NativeAOT's default
        linker input list doesn't include userenv.lib, so the staticlib
-       fails to resolve __imp_GetUserProfileDirectoryW without this. -->
+       fails to resolve __imp_GetUserProfileDirectoryW without this.
+
+       Synchronization.lib: Rust 1.100's std parks threads with
+       WaitOnAddress / WakeByAddressSingle / WakeByAddressAll (in
+       api-ms-win-core-synch-l1-2-0), which NativeAOT's default inputs
+       don't cover either. Without it the v2.05.01 CI build, the first on
+       Rust 1.100, failed with LNK2019 on __imp_WaitOnAddress; the local
+       1.99 toolchain did not need it. When a new Rust release breaks the
+       link, rustc's "print native-static-libs" option lists what the
+       staticlib wants. -->
   <ItemGroup>
     <DirectPInvoke Include="crimson_rs" />
     <NativeLibrary Include="..\..\vendor\crimson-rs\target\release\crimson_rs.lib" Condition="Exists('..\..\vendor\crimson-rs\target\release\crimson_rs.lib')" />
     <NativeLibrary Include="Userenv.lib" />
+    <NativeLibrary Include="Synchronization.lib" />
   </ItemGroup>
 
   <!-- Strip .pdb files from the publish bundle. We still produce PDBs in
