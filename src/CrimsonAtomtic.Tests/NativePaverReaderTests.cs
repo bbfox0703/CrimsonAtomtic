@@ -15,18 +15,31 @@ namespace CrimsonAtomtic.Tests;
 /// <see cref="GameDataVersion.CompatibleMinors"/> are all read from the
 /// crimson-rs C ABI (Rust is the single source of truth), so the
 /// compatibility assertions below transitively verify the wiring: the
-/// live target (2.04) is compatible, the previous patch (2.03) is not,
+/// live target (2.05) is compatible, the previous patch (2.04.08) is not,
 /// and — the case game 2.00 newly opened up — neither is a version that
 /// happens to share the target's <i>minor</i> under a different major.
 /// </para>
 /// </summary>
 public sealed class NativePaverReaderTests
 {
-    /// <summary>Bit-for-bit copy of the live 2.04.08 install's paver. 2.04
-    /// inserted a DLC list ahead of <c>build</c>: <c>u32</c> count, then
+    /// <summary>Bit-for-bit copy of the live 2.05.00 install's paver. Since
+    /// 2.04 a DLC list sits ahead of <c>build</c>: <c>u32</c> count, then
     /// <c>u32</c> length + name + <c>u32</c> revision per DLC, so <c>build</c>
-    /// (0xE4D53A97 LE) moved to the end of the file.</summary>
-    private static readonly byte[] Paver_2_04_08_Live =
+    /// (0x6B551EA7 LE) is at the end of the file.</summary>
+    private static readonly byte[] Paver_2_05_Live =
+    [
+        0x02, 0x00, 0x05, 0x00, 0x00, 0x00,
+        0x01, 0x00, 0x00, 0x00,
+        0x06, 0x00, 0x00, 0x00, (byte)'d', (byte)'l', (byte)'c', (byte)'_', (byte)'0', (byte)'1',
+        0x08, 0x00, 0x00, 0x00,
+        0xa7, 0x1e, 0x55, 0x6b,
+    ];
+
+    /// <summary>The previous patch's paver (2.04.08) — kept to pin that it
+    /// is flagged INCOMPATIBLE. 2.05 named the rows of both dye tables,
+    /// nameless since 2.04, so 2.04 data no longer reads against this
+    /// parser.</summary>
+    private static readonly byte[] Paver_2_04_08_Prev =
     [
         0x02, 0x00, 0x04, 0x00, 0x08, 0x00,
         0x01, 0x00, 0x00, 0x00,
@@ -35,57 +48,36 @@ public sealed class NativePaverReaderTests
         0x97, 0x3a, 0xd5, 0xe4,
     ];
 
-    /// <summary>The 2.04.03 paver: same minor as the target, older patch.
-    /// 2.04.08 added two strings to every iteminfo row without moving the
-    /// minor, so this must read INCOMPATIBLE — the first case the patch half
-    /// of the gate decides.</summary>
-    private static readonly byte[] Paver_2_04_03_SameMinorOlderPatch =
-    [
-        0x02, 0x00, 0x04, 0x00, 0x03, 0x00,
-        0x01, 0x00, 0x00, 0x00,
-        0x06, 0x00, 0x00, 0x00, (byte)'d', (byte)'l', (byte)'c', (byte)'_', (byte)'0', (byte)'1',
-        0x02, 0x00, 0x00, 0x00,
-        0xe2, 0x7e, 0xbe, 0x3e,
-    ];
-
-    /// <summary>The previous patch's paver (2.03.00) — kept to pin that
-    /// it is flagged INCOMPATIBLE. A <b>substantive</b> incompatibility:
-    /// 2.04 moved every table row's name ahead of its key and reordered
-    /// iteminfo and skill, so 2.03 data really does mis-decode against this
-    /// parser.</summary>
-    private static readonly byte[] Paver_2_03_Prev =
-        [0x02, 0x00, 0x03, 0x00, 0x00, 0x00, 0x38, 0x51, 0x04, 0x03];
-
-    /// <summary>Synthetic <c>1.04.xx</c> — constructed so its <b>minor
-    /// matches the 2.04 target's minor (4)</b> while its major does not.
+    /// <summary>Synthetic <c>1.05.xx</c> — constructed so its <b>minor
+    /// matches the 2.05 target's minor (5)</b> while its major does not.
     /// This is the exact hole the 2.00 major bump opened: before
     /// <see cref="GameDataVersion.IsCompatibleWithParser"/> gated on the
     /// major, these bytes would have been reported as compatible. It
     /// tracks the target minor, so it moves with every bump.</summary>
-    private static readonly byte[] Paver_1_04_SameMinorOtherMajor =
-        [0x01, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+    private static readonly byte[] Paver_1_05_SameMinorOtherMajor =
+        [0x01, 0x00, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
 
     [Fact]
-    public void TryReadFromBytes_HappyPath_Returns_2_04_08_Live()
+    public void TryReadFromBytes_HappyPath_Returns_2_05_Live()
     {
         if (!File.Exists("crimson_rs.dll"))
         {
             return;
         }
-        var v = NativePaverReader.TryReadFromBytes(Paver_2_04_08_Live);
+        var v = NativePaverReader.TryReadFromBytes(Paver_2_05_Live);
         Assert.NotNull(v);
         Assert.Equal(2, v!.Value.Major);
-        Assert.Equal(4, v.Value.Minor);
-        Assert.Equal(8, v.Value.Patch);
-        Assert.Equal(0xe4d53a97u, v.Value.Build);
+        Assert.Equal(5, v.Value.Minor);
+        Assert.Equal(0, v.Value.Patch);
+        Assert.Equal(0x6b551ea7u, v.Value.Build);
         Assert.True(v.Value.IsCompatibleWithParser,
-            "2.04.08 should be compatible with the current parser target 2.4.08");
-        Assert.Equal("2.04.08", v.Value.ShortVersionString);
-        Assert.Equal("2.04.08 build 0xe4d53a97", v.Value.DisplayString);
+            "2.05.00 should be compatible with the current parser target 2.5");
+        Assert.Equal("2.05.00", v.Value.ShortVersionString);
+        Assert.Equal("2.05.00 build 0x6b551ea7", v.Value.DisplayString);
     }
 
     /// <summary>
-    /// A 2.04 stamp on an install without DLC: the list is present with a
+    /// A 2.04+ stamp on an install without DLC: the list is present with a
     /// count of 0. crimson-rs read <c>build</c> as 0 here until PR #103;
     /// the version gate never depended on it, so this pins both.
     /// </summary>
@@ -98,31 +90,43 @@ public sealed class NativePaverReaderTests
         }
         var v = NativePaverReader.TryReadFromBytes(
         [
-            0x02, 0x00, 0x04, 0x00, 0x08, 0x00,
+            0x02, 0x00, 0x05, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00,
-            0x97, 0x3a, 0xd5, 0xe4,
+            0xa7, 0x1e, 0x55, 0x6b,
         ]);
         Assert.NotNull(v);
-        Assert.Equal("2.04.08 build 0xe4d53a97", v!.Value.DisplayString);
+        Assert.Equal("2.05.00 build 0x6b551ea7", v!.Value.DisplayString);
         Assert.True(v.Value.IsCompatibleWithParser);
     }
 
+    /// <summary>
+    /// The patch half of the gate, against whatever floor the vendored
+    /// crimson-rs reports: on the target minor, the floor itself passes and
+    /// one patch below it fails. The floor came in at 2.04.08 (8, so
+    /// 2.04.03 failed) and resets to 0 when the minor moves (2.05).
+    /// </summary>
     [Fact]
-    public void TryReadFromBytes_SameMinorOlderPatch_FlagsIncompatible()
+    public void TryReadFromBytes_PatchFloor_GatesTheTargetMinor()
     {
         if (!File.Exists("crimson_rs.dll"))
         {
             return;
         }
-        var v = NativePaverReader.TryReadFromBytes(Paver_2_04_03_SameMinorOlderPatch);
-        Assert.NotNull(v);
-        // Premise: same major and minor as the target, so only the patch
-        // half can reject it.
-        Assert.Equal(GameDataVersion.ParserTargetMajor, v!.Value.Major);
-        Assert.Equal(GameDataVersion.ParserTargetMinor, v.Value.Minor);
-        Assert.True(v.Value.Patch < GameDataVersion.ParserMinPatch);
-        Assert.False(v.Value.IsCompatibleWithParser,
-            "2.04.03 must NOT be compatible — its iteminfo lacks the 2.04.08 strings");
+        static GameDataVersion? Read(ushort patch) => NativePaverReader.TryReadFromBytes(
+        [
+            (byte)GameDataVersion.ParserTargetMajor, 0x00,
+            (byte)GameDataVersion.ParserTargetMinor, 0x00,
+            (byte)patch, (byte)(patch >> 8),
+            0x00, 0x00, 0x00, 0x00,
+        ]);
+        var floor = GameDataVersion.ParserMinPatch;
+        Assert.True(Read(floor)!.Value.IsCompatibleWithParser,
+            $"patch {floor} is the floor and must be compatible");
+        if (floor > 0)
+        {
+            Assert.False(Read((ushort)(floor - 1))!.Value.IsCompatibleWithParser,
+                $"patch {floor - 1} is below the floor and must NOT be compatible");
+        }
     }
 
     [Fact]
@@ -134,15 +138,16 @@ public sealed class NativePaverReaderTests
         }
         // These values are sourced from the crimson-rs C ABI
         // (crimson_parser_target_gamedata_major / _minor /
-        // crimson_parser_compatible_gamedata_minors), NOT hand-coded C#
-        // constants. Pin the currently-vendored target (2.04 → major 2,
-        // minor 4) and that the target minor is always a member of the
+        // crimson_parser_compatible_gamedata_minors /
+        // crimson_parser_min_gamedata_patch), NOT hand-coded C# constants.
+        // Pin the currently-vendored target (2.05 → major 2, minor 5, any
+        // patch) and that the target minor is always a member of the
         // compatible set.
         Assert.Equal(2, GameDataVersion.ParserTargetMajor);
-        Assert.Equal(4, GameDataVersion.ParserTargetMinor);
-        Assert.Contains<ushort>(4, GameDataVersion.CompatibleMinors);
-        Assert.DoesNotContain<ushort>(3, GameDataVersion.CompatibleMinors);
-        Assert.Equal(8, GameDataVersion.ParserMinPatch);
+        Assert.Equal(5, GameDataVersion.ParserTargetMinor);
+        Assert.Contains<ushort>(5, GameDataVersion.CompatibleMinors);
+        Assert.DoesNotContain<ushort>(4, GameDataVersion.CompatibleMinors);
+        Assert.Equal(0, GameDataVersion.ParserMinPatch);
     }
 
     [Fact]
@@ -152,16 +157,16 @@ public sealed class NativePaverReaderTests
         {
             return;
         }
-        // 2.04 moved every table row's name ahead of its key and reordered
-        // iteminfo and skill, so 2.03 data really does mis-decode against this
-        // parser — a substantive incompatibility (as with 1.16, 1.18, 2.00 and
-        // 2.03), not the target-only convention 2.01 and 2.02 were.
-        var v = NativePaverReader.TryReadFromBytes(Paver_2_03_Prev);
+        // 2.05 named the rows of both dye tables, so 2.04.08 data no longer
+        // reads against this parser — a substantive incompatibility (as with
+        // 1.16, 1.18, 2.00, 2.03 and 2.04), not the target-only convention
+        // 2.01 and 2.02 were.
+        var v = NativePaverReader.TryReadFromBytes(Paver_2_04_08_Prev);
         Assert.NotNull(v);
         Assert.Equal(2, v!.Value.Major);
-        Assert.Equal(3, v.Value.Minor);
+        Assert.Equal(4, v.Value.Minor);
         Assert.False(v.Value.IsCompatibleWithParser,
-            "2.03.00 must NOT be compatible — the parser targets 2.4");
+            "2.04.08 must NOT be compatible — the parser targets 2.5");
     }
 
     [Fact]
@@ -178,14 +183,14 @@ public sealed class NativePaverReaderTests
         // (Array.IndexOf(CompatibleMinors, Minor) >= 0) would have waved it
         // straight through into a mis-decode. Assert the premise explicitly
         // so this test still means something if CompatibleMinors changes.
-        var v = NativePaverReader.TryReadFromBytes(Paver_1_04_SameMinorOtherMajor);
+        var v = NativePaverReader.TryReadFromBytes(Paver_1_05_SameMinorOtherMajor);
         Assert.NotNull(v);
         Assert.Equal(1, v!.Value.Major);
         Assert.Equal(GameDataVersion.ParserTargetMinor, v.Value.Minor);
         Assert.Contains(v.Value.Minor, GameDataVersion.CompatibleMinors);
         Assert.NotEqual(GameDataVersion.ParserTargetMajor, v.Value.Major);
         Assert.False(v.Value.IsCompatibleWithParser,
-            "1.04.xx must NOT be compatible — matching minor under a "
+            "1.05.xx must NOT be compatible — matching minor under a "
             + "different major says nothing about schema compatibility");
     }
 
@@ -211,7 +216,7 @@ public sealed class NativePaverReaderTests
             return;
         }
         // Synthetic 1.07.xx layout: major 1 is not the target major, and
-        // minor 7 is not in CompatibleMinors {4} either — 1.07 used a
+        // minor 7 is not in CompatibleMinors {5} either — 1.07 used a
         // different iteminfo layout. Fails both halves of the gate.
         ReadOnlySpan<byte> bytes =
             [0x01, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
@@ -230,18 +235,18 @@ public sealed class NativePaverReaderTests
         {
             return;
         }
-        // Synthetic 2.05.xx layout: the right major, but a minor past the
+        // Synthetic 2.06.xx layout: the right major, but a minor past the
         // validated set. The gate is an explicit allow-list, not "≥ target",
         // so the next patch inside this major is still flagged until
         // CompatibleMinors is extended (Rust-side, via the vendored parser).
         ReadOnlySpan<byte> bytes =
-            [0x02, 0x00, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+            [0x02, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
         var v = NativePaverReader.TryReadFromBytes(bytes);
         Assert.NotNull(v);
         Assert.Equal(2, v!.Value.Major);
-        Assert.Equal(5, v.Value.Minor);
+        Assert.Equal(6, v.Value.Minor);
         Assert.False(v.Value.IsCompatibleWithParser,
-            "2.05.xx must NOT be compatible — not yet in CompatibleMinors {4}");
+            "2.06.xx must NOT be compatible — not yet in CompatibleMinors {5}");
     }
 
     [Fact]
