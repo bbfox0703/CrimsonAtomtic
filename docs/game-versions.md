@@ -2,7 +2,7 @@
 
 ## Current install
 
-`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 2.04.08**
+`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 2.05**
 
 Top-level layout:
 
@@ -31,10 +31,13 @@ Crimson Desert/
   patch. **Game 2.00 is the first major bump, and it RESETS the minor**
   (1.18 → 2.00 is `18` → `0`), so a bare minor no longer identifies a schema:
   minor `0` means 2.00 today and would have meant a hypothetical 1.00
-  yesterday. Live 2.04.03 install:
-  `02 00 04 00 03 00 01 00 00 00 06 00 00 00 "dlc_01" 02 00 00 00 e2 7e be 3e`
-  → major 2, minor 4, patch 3, DLC `dlc_01` revision 2, build `0x3ebe7ee2`.
-  (2.03.00 was `02 00 03 00 00 00 38 51 04 03`,
+  yesterday. Live 2.05.00 install:
+  `02 00 05 00 00 00 01 00 00 00 06 00 00 00 "dlc_01" 08 00 00 00 a7 1e 55 6b`
+  → major 2, minor 5, patch 0, DLC `dlc_01` revision 8, build `0x6b551ea7`.
+  (2.04.08 was `02 00 04 00 08 00 …` with `dlc_01` revision 7, build
+  `0xe4d53a97`; 2.04.03 was
+  `02 00 04 00 03 00 01 00 00 00 06 00 00 00 "dlc_01" 02 00 00 00 e2 7e be 3e`,
+  build `0x3ebe7ee2`; 2.03.00 was `02 00 03 00 00 00 38 51 04 03`,
   build `0x03045138`; 2.02.00 was `02 00 02 00 00 00 58 5c 92 c8`,
   build `0xc8925c58`; 2.01.00 was `02 00 01 00 00 00 cb 5f 1e a3`,
   build `0xa31e5fcb`; 2.00.00 was `02 00 00 00 00 00 14 d2 41 b2`,
@@ -53,8 +56,8 @@ Crimson Desert/
   install's `(major, minor)` isn't one the parser can load —
   `GameDataVersion.IsCompatibleWithParser` now gates on
   `Major == ParserTargetMajor` **and** `Minor ∈ CompatibleMinors`
-  (currently `2` and `{4}`), and, on the target minor, `Patch >=
-  ParserMinPatch` (currently `8`; see 2.04.08 below). The major half was added at the 2.00 alignment
+  (currently `2` and `{5}`), and, on the target minor, `Patch >=
+  ParserMinPatch` (currently `0`, any patch; it was `8` for 2.04, see 2.04.08 below). The major half was added at the 2.00 alignment
   and is not cosmetic: with the minor reset to `0`, the old minor-only test
   would have reported a hypothetical `1.00.xx` install as compatible with the
   2.00 parser. **2.00 carries two iteminfo layout drifts** (crimson-rs commit
@@ -245,3 +248,9 @@ On the editor side the alignment cost the manual `VerMinor` 0→1 lock-step bump
 The minor is still 4, so a `(major, minor)` gate would have passed a 2.04.03 install that no longer parses. crimson-rs added `PARSER_MIN_GAMEDATA_PATCH = 8` behind `crimson_parser_min_gamedata_patch()`, and `GameDataVersion.IsCompatibleWithParser` now also requires `Patch >= ParserMinPatch` when the install's minor is the target minor; the mismatch dialog reads `2.04.08+`. The new export is read first, so a vendored lib older than it fails closed. `VerPatch` 1 → 2: the next release is v2.04.02.
 
 Same cut, editor side: the item pickers now list the 1,310 DLC-only items after the base ones (8,379 in all; the 242 DLC rows repeating a base key stay out) with a "DLC" column naming the source, and the gem picker gains 19 DLC gems. Whether the game accepts a DLC item on an install without the entitlement is untested. Icon extraction tries `dlc/<name>/0012` before the base `0012`, because the textures are split between them (the diving armour in the DLC group, the sawmill notice in the base one). A DLC root whose files are missing or corrupt no longer takes a whole language down; `Bootstrap_WithoutOrWithBrokenDlc_LoadsTheBaseGame` builds both installs from directory junctions to the live groups and checks the base game loads unchanged.
+
+**2.04.08 → 2.05 named the rows of both dye tables; everything else is content.** Vendored from `crimson-rs` `main` at `d4036b0` (the 2.05 work is PR #105, merge `3425e06`; PR #106 is docs), validated against the live install (paver `2/5/0/0x6b551ea7`, `dlc_01` revision 8, Steam build 26636972, 2026-11-13). `partprefabdyeslotinfo` and `partprefabdyetexturepalleteinfo` rows, nameless since 2.04, carry a name again; both crimson-rs parsers required the empty name, so they had read **0 rows on 2.04 and 2.04.08** without failing loudly (the Dye editor was already off, so nothing visible broke). They accept either now, and `item_part_prefab` recovered with them. Iteminfo is 7,068 base and 1,555 `dlc_01` rows (1,311 DLC-only); skill is 2,160 entries.
+
+The version gate moved entirely inside crimson-rs: target minor 5, `CompatibleMinors` `{5}`, and `ParserMinPatch` reset to `0` (listing minor 4 as compatible would have let 2.04.03 past the old patch floor). The C# gate needed no change. Upstream also read the running game's item key array (now 24-byte elements) and found the base header's rows first, then the DLC-only rows in `iteminfo.dlc_01` order, with overridden keys keeping their base slot: the same order `LocalizationProvider.GetItem` enumerates.
+
+Editor side: the manual `VerMinor` 4 → 5 bump (`VerPatch` back to 1) and the paver pins; the patch-floor test now follows whatever floor the ABI reports instead of naming 2.04.03. The untouched suite failed exactly six paver pins of 408. Separately, the machine's .NET SDK had been swapped for 11.0.100 (the .NET 10 SDK was gone, so nothing built); after reinstalling SDK 10.0.404 (runtime 10.0.15) the ILCompiler pin went 10.0.14 → 10.0.15. On slot2/slot1/slot0 (all 2.05-written) every block decodes with 0 undecoded bytes, and the unresolved keys per type are identical to 2.04.08's.
