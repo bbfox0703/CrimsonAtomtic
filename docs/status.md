@@ -7,15 +7,29 @@
 > **[status-archive.md](status-archive.md)** — look there only when you need
 > the deep history behind a decision.
 >
-> Last updated: **2026-11-07** — the editor is aligned to game **2.04.08**
+> Last updated: **2026-11-13** — the editor is aligned to game **2.05**
+> (paver `2/5/0/0x6b551ea7`, `dlc_01` revision 8), **uncommitted on `dev`**.
+> crimson-rs `d4036b0` (PR #105) absorbs 2.05's one format change — both dye
+> tables named their rows again, and had read 0 rows on 2.04/2.04.08 — and
+> moves the gate to minor 5 with the patch floor reset to 0, so the C# side
+> needed only `VerMinor` 4 → 5 (`VerPatch` 1) and the paver pins. The .NET
+> SDK on this machine had been swapped for 11.0.100; after the user
+> reinstalled SDK 10.0.404 the ILCompiler pin went 10.0.14 → 10.0.15.
+> **408 C# tests green**; three 2.05-written saves decode with 0 undecoded
+> bytes; the pickers list 8,379 items (7,068 base + 1,311 DLC-only); AOT
+> publish has zero IL/trim warnings and launches as `v2.05.01.33`. Not
+> checked: anything in-game. Details in [game-versions.md](game-versions.md).
+>
+> **Below this line is the 2.04.08 history.**
+>
+> On **2026-11-07** the editor was aligned to game **2.04.08**
 > (paver `2/4/8/0xe4d53a97`, `dlc_01` revision 7), and **v2.04.02 is tagged,
 > built and PUBLISHED** (2026-11-07T09:12:24Z, marked Latest): tag →
 > `3659591` (PR #46 merge), CI run `42358078301`, crimson-rs `7d02f8c`, exe
 > `2.4.2.32`, zip 20,695,563 B, sha256 `30dbc0f1…dc3cca` (equal to the
 > asset's GitHub digest). Not run before publishing: the binary checks on the
 > release zip itself (download, FileVersion, launch); the local AOT publish of
-> the same source launched clean. **Next task: none queued** — pick from the
-> backlog below.
+> the same source launched clean.
 >
 > What v2.04.02 carries:
 > 2.04.08 added two strings to every iteminfo row without moving the minor,
@@ -770,9 +784,13 @@ window-restore quirks, etc.) is in
   SDK auto-injects a newer `Microsoft.DotNet.ILCompiler`, which then demands
   `runtime.win-x64.Microsoft.DotNet.ILCompiler >=` that version → **NU1109 at
   restore**, blocking every build. Bumped 10.0.8 → 10.0.9 (1.11) → 10.0.10
-  (1.14) → 10.0.11 (1.18, SDK 10.0.400) → **10.0.12** (2.02, SDK 10.0.401 —
-  it failed even the untouched pre-edit baseline test run). Expect this every
-  time the SDK moves; it is not related to the game patch.
+  (1.14) → 10.0.11 (1.18, SDK 10.0.400) → 10.0.12 (2.02, SDK 10.0.401 —
+  it failed even the untouched pre-edit baseline test run) → 10.0.14 (2.04,
+  SDK 10.0.403) → **10.0.15** (2.05, SDK 10.0.404). Expect this every time the
+  SDK moves; it is not related to the game patch. At 2.05 the .NET 10 SDK had
+  vanished entirely (only 11.0.100 was left), so `global.json` matched nothing
+  and every `dotnet` command failed; reinstalling the .NET 10 SDK, not
+  retargeting, is the fix, because CI builds with `10.0.x`.
 - **A vendor refresh does NOT rebuild the Python `crimson_rs` module.**
   `maturin develop` installs *editable* (a `.pth` pointing at
   `vendor/crimson-rs/python`), so after `update_vendors.ps1` the in-tree source
