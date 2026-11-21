@@ -9,7 +9,17 @@
 >
 > Last updated: **2026-11-21** — the editor is aligned to game **2.05.01**
 > (paver `2/5/1/0x4ef4be86`, `dlc_01` revision 9, Steam build 26776744,
-> live since 2026-11-19), **on `dev`, not committed or released**. Like
+> live since 2026-11-19), and **v2.05.02 is tagged, built and PUBLISHED**
+> (2026-11-21T03:19:28Z, marked Latest): tag → `7adecad` (PR #53 merge), CI
+> run `44859982100` on Rust 1.100.0, crimson-rs `9f4a2ba`, exe `2.5.2.36`,
+> zip 20,703,991 B, sha256 `f2f5d879…efeb0a8b` (equal to the asset's GitHub
+> digest and the run log). The downloaded zip was checked before
+> publishing: its `.sha256` matches, it holds the four expected files with
+> no `crimson_rs.dll`, the exe's ProductVersion ends in `7adecad`, and it
+> launches as `CrimsonAtomtic v2.05.02.36`. **Next task: none queued** —
+> pick from the backlog below.
+>
+> The 2.05.01 alignment itself: like
 > 2.04.08, 2.05.01 changed the iteminfo layout without moving the minor (a
 > `u8` on every row, a trailing `u8` on every notice-paper page), so
 > **v2.05.01 resolves no item names on a 2.05.01 install**. crimson-rs PR #113
@@ -19,9 +29,8 @@
 > untouched suite failed exactly three of 408). **408 C# tests green**;
 > unresolved distinct keys per TypeName on slot102 (2.05.01) equal slot1's
 > (2.05.00), ItemKey 753/753 resolved; AOT publish has zero IL/trim warnings
-> and launches as `v2.05.02.36`. Not checked: anything in-game; the release
-> itself. **Next task: commit, then 「啟動 release CI」 for v2.05.02.**
-> Details in [game-versions.md](game-versions.md).
+> and launches as `v2.05.02.36`. Not checked: anything in-game. Details in
+> [game-versions.md](game-versions.md).
 >
 > **Below this line is the 2.05 history.**
 >
