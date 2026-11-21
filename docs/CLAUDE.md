@@ -16,6 +16,7 @@
 - **paz-containers.md** — asset archives: `.paz`, `.pamt`, `.papgt`, `.paloc`, trie buffers
 - **ui-design.md** — UI/UX principles for the editor, with the design constraints they derive from
 - **crimsonforge-coverage-gaps.md** — what NattKh's CrimsonForge modding tool can decode that we can't (yet); the canonical "look here when you don't know how to parse format X" pointer
+- **dev-workflow.md** — branch/merge flow, switching machines, running single tests, preparing in-game test saves (slot102 → slot103), driving the app UI; shared across machines in place of agent memory
 - **release-process.md** — the 「啟動 release CI」 runbook (pre-flight → player-facing bilingual notes → annotated tag → CI draft → replace notes → verify → stop at the draft), plus background: annotated `v*` tags, what the CI workflow does, the crimson-rs-from-`main` gotcha
 
 ## How to extend

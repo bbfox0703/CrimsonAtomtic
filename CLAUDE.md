@@ -69,5 +69,6 @@ auto-detection. Cross-platform goal: Windows (must), Linux, macOS.
 - Asset containers (PAZ, PAMT, PAPGT, PALOC): [docs/paz-containers.md](docs/paz-containers.md)
 - CrimsonForge coverage gaps (the canonical RE-reference repo for CD formats): [docs/crimsonforge-coverage-gaps.md](docs/crimsonforge-coverage-gaps.md)
 - **「啟動 release CI」** = run the runbook in [docs/release-process.md](docs/release-process.md) end to end (pre-flight → player-facing bilingual notes → annotated tag → CI draft → replace notes → verify; publishing stays the user's call)
+- Dev workflow (branch/merge flow, switching machines, running tests, in-game test saves, driving the UI): [docs/dev-workflow.md](docs/dev-workflow.md). Workflow facts go there, not in machine-local agent memory.
 - Python toolchain conventions: [tools/CLAUDE.md](tools/CLAUDE.md)
 - Rust core (our fork): [vendor/crimson-rs/README.md](vendor/crimson-rs/README.md)
