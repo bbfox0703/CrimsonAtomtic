@@ -7,7 +7,25 @@
 > **[status-archive.md](status-archive.md)** — look there only when you need
 > the deep history behind a decision.
 >
-> Last updated: **2026-11-13** — the editor is aligned to game **2.05**
+> Last updated: **2026-11-21** — the editor is aligned to game **2.05.01**
+> (paver `2/5/1/0x4ef4be86`, `dlc_01` revision 9, Steam build 26776744,
+> live since 2026-11-19), **on `dev`, not committed or released**. Like
+> 2.04.08, 2.05.01 changed the iteminfo layout without moving the minor (a
+> `u8` on every row, a trailing `u8` on every notice-paper page), so
+> **v2.05.01 resolves no item names on a 2.05.01 install**. crimson-rs PR #113
+> (vendored at `9f4a2ba`) parses it and raises the patch floor 0 → 1, so a
+> 2.05.00 install now reads incompatible. C ABI unchanged; the C# side is
+> `VerPatch` 1 → 2 (next release **v2.05.02**) and the paver pins (the
+> untouched suite failed exactly three of 408). **408 C# tests green**;
+> unresolved distinct keys per TypeName on slot102 (2.05.01) equal slot1's
+> (2.05.00), ItemKey 753/753 resolved; AOT publish has zero IL/trim warnings
+> and launches as `v2.05.02.36`. Not checked: anything in-game; the release
+> itself. **Next task: commit, then 「啟動 release CI」 for v2.05.02.**
+> Details in [game-versions.md](game-versions.md).
+>
+> **Below this line is the 2.05 history.**
+>
+> On **2026-11-13** the editor was aligned to game **2.05**
 > (paver `2/5/0/0x6b551ea7`, `dlc_01` revision 8), and **v2.05.01 is tagged,
 > built and PUBLISHED** (2026-11-13T12:57:17Z, marked Latest): tag →
 > `7373f9b` (PR #49 merge), CI run `43428676035` on Rust 1.100.0, crimson-rs
@@ -20,7 +38,7 @@
 > the local 1.99 never did. PR #49 links it next to `Userenv.lib`, the tag was
 > deleted and re-cut. Not run before publishing: the binary checks on the
 > release zip itself; the local AOT publish of the same source launched clean.
-> **Next task: none queued** — pick from the backlog below.
+> (Next task at the time: none queued.)
 >
 > The 2.05 alignment itself:
 > crimson-rs `d4036b0` (PR #105) absorbs 2.05's one format change — both dye
@@ -737,7 +755,18 @@ window-restore quirks, etc.) is in
   what crimson-rs element templates do
   (`crimson_save_export_element_template`). And a live-save test pinned to
   a slot tests that slot's patch, not the game — use `LiveSaves` (newest
-  first).
+  first). Before reading a field-level diff between two saves, compare their
+  schema signature (`type_count`, `schema_end`, the class's field count):
+  if it differs, the same field index names different fields. File mtime
+  proves nothing, because the editor preserves it.
+- **Sealed Abyss challenges: write the pre-claim shape, not the post-claim
+  one.** Pattern B v1 flips only the FAR tracker (negative key = adjacent
+  twin's key − 1) and appends the `X_2` follow-up sub-mission; the artifact
+  item, the catalog row and the negative-key visibility twin stay untouched,
+  and the engine fills them in when the player claims. Pattern A (writing the
+  catalog's `_state=5` / tags directly) corrupted visible cards — don't retry
+  it. Multi-objective shapes (Living_* / Cooking) are out of scope. History:
+  status-archive.md, 2026-05-15..17.
 - **An absent dynamic array / object list is one `0x01` byte.** Every other
   absent field is zero bytes, and a present array / list opens with `00` +
   a u32 count. Until 2026-09-18 the decoder skipped absent fields without

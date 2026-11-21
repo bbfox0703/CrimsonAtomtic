@@ -2,7 +2,7 @@
 
 ## Current install
 
-`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 2.05**
+`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 2.05.01**
 
 Top-level layout:
 
@@ -31,10 +31,11 @@ Crimson Desert/
   patch. **Game 2.00 is the first major bump, and it RESETS the minor**
   (1.18 → 2.00 is `18` → `0`), so a bare minor no longer identifies a schema:
   minor `0` means 2.00 today and would have meant a hypothetical 1.00
-  yesterday. Live 2.05.00 install:
-  `02 00 05 00 00 00 01 00 00 00 06 00 00 00 "dlc_01" 08 00 00 00 a7 1e 55 6b`
-  → major 2, minor 5, patch 0, DLC `dlc_01` revision 8, build `0x6b551ea7`.
-  (2.04.08 was `02 00 04 00 08 00 …` with `dlc_01` revision 7, build
+  yesterday. Live 2.05.01 install:
+  `02 00 05 00 01 00 01 00 00 00 06 00 00 00 "dlc_01" 09 00 00 00 86 be f4 4e`
+  → major 2, minor 5, patch 1, DLC `dlc_01` revision 9, build `0x4ef4be86`.
+  (2.05.00 was `02 00 05 00 00 00 …` with `dlc_01` revision 8, build
+  `0x6b551ea7`; 2.04.08 was `02 00 04 00 08 00 …` with `dlc_01` revision 7, build
   `0xe4d53a97`; 2.04.03 was
   `02 00 04 00 03 00 01 00 00 00 06 00 00 00 "dlc_01" 02 00 00 00 e2 7e be 3e`,
   build `0x3ebe7ee2`; 2.03.00 was `02 00 03 00 00 00 38 51 04 03`,
@@ -57,7 +58,7 @@ Crimson Desert/
   `GameDataVersion.IsCompatibleWithParser` now gates on
   `Major == ParserTargetMajor` **and** `Minor ∈ CompatibleMinors`
   (currently `2` and `{5}`), and, on the target minor, `Patch >=
-  ParserMinPatch` (currently `0`, any patch; it was `8` for 2.04, see 2.04.08 below). The major half was added at the 2.00 alignment
+  ParserMinPatch` (currently `1`, set at 2.05.01; it was `8` for 2.04, see 2.04.08 below, and `0` for 2.05.00). The major half was added at the 2.00 alignment
   and is not cosmetic: with the minor reset to `0`, the old minor-only test
   would have reported a hypothetical `1.00.xx` install as compatible with the
   2.00 parser. **2.00 carries two iteminfo layout drifts** (crimson-rs commit
@@ -254,3 +255,9 @@ Same cut, editor side: the item pickers now list the 1,310 DLC-only items after 
 The version gate moved entirely inside crimson-rs: target minor 5, `CompatibleMinors` `{5}`, and `ParserMinPatch` reset to `0` (listing minor 4 as compatible would have let 2.04.03 past the old patch floor). The C# gate needed no change. Upstream also read the running game's item key array (now 24-byte elements) and found the base header's rows first, then the DLC-only rows in `iteminfo.dlc_01` order, with overridden keys keeping their base slot: the same order `LocalizationProvider.GetItem` enumerates.
 
 Editor side: the manual `VerMinor` 4 → 5 bump (`VerPatch` back to 1) and the paver pins; the patch-floor test now follows whatever floor the ABI reports instead of naming 2.04.03. The untouched suite failed exactly six paver pins of 408. Separately, the machine's .NET SDK had been swapped for 11.0.100 (the .NET 10 SDK was gone, so nothing built); after reinstalling SDK 10.0.404 (runtime 10.0.15) the ILCompiler pin went 10.0.14 → 10.0.15. On slot2/slot1/slot0 (all 2.05-written) every block decodes with 0 undecoded bytes, and the unresolved keys per type are identical to 2.04.08's.
+
+**2.05 → 2.05.01 is the second layout change inside a minor.** Vendored from `crimson-rs` `main` at `9f4a2ba` (PR #113; the work is `86e1b30`), validated against the live install (paver `2/5/1/0x4ef4be86`, `dlc_01` revision 9, Steam build 26776744, 2026-11-19). Every iteminfo row gained a `u8` (`unk_post_discardable`, between `discardable` and `is_packed_in_vehicle`; 1 on the 133 items with `item_type` 102/103, else 0), and every notice-paper page element gained a trailing `u8` (2 on the DLC's 40 treasure-map pages, else 0). Without it no row parsed, so v2.05.01 resolves no item names on a 2.05.01 install. The rest is content: 804 base and 273 DLC notice papers gained a page. Row counts, order and every other value are unchanged; the 2.05.01 key snapshots equal 2.05's.
+
+The minor is still 5, so crimson-rs raised `PARSER_MIN_GAMEDATA_PATCH` 0 → 1 and a 2.05.00 install now reads incompatible (`2.05.01+` in the dialog). The C ABI surface is unchanged and the C# gate needed nothing.
+
+Editor side: `VerPatch` 1 → 2, so the next release is v2.05.02, and the paver pins (live → 2.05.01, previous → 2.05.00, which the patch floor now rejects; floor pin 0 → 1). The untouched suite failed exactly three paver pins of 408. Unresolved distinct keys per TypeName on slot102 (2.05.01-written) are identical to slot1 (2.05.00-written), both read against the 2.05.01 install: ItemKey 753 of 753 resolve; the only blanks are the known MissionKey 1,420, CharacterKey 106, FactionKey 60, InventoryKey 8 and StringInfoKey 1. Upstream checked the save body: slot102 and slot107 decode (v2 / `0x0080`, HMAC ok), with 0 trailing-pad bytes and idempotent round-trips.
