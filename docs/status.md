@@ -16,8 +16,111 @@
 > digest and the run log). The downloaded zip was checked before
 > publishing: its `.sha256` matches, it holds the four expected files with
 > no `crimson_rs.dll`, the exe's ProductVersion ends in `01c1f00`, and it
-> launches as `CrimsonAtomtic v2.06.01.36`. **Next task: none queued** —
-> pick from the backlog below.
+> launches as `CrimsonAtomtic v2.06.01.36`. **Next task: the in-game
+> results of the slot103 test below**, then pick from the backlog.
+>
+> **Tools → Edit Contributions (new, 2026-11-27, on `dev`).** The faction
+> contribution currencies (`Contribution_Hernandian` 1001754, `_Graymane`,
+> `_Demenissian`, `_Pailunese`, `_Delesyian`, `_Tashkalpan` on 2.06) are
+> plain `ItemSaveData` stacks in `_inventorylist` container 1 ("Camp &
+> Contributions"). iteminfo gives them no tag, but they and nothing else
+> carry `category_info` **60001** (`item_type` 32 is shared with copper and
+> camp resources), so `ContributionService` reads the catalog from iteminfo.
+> The dialog sets stacks the save holds and adds absent ones by cloning an
+> existing contribution stack (same mask profile) with a fresh `_slotNo`,
+> an `_itemNo` unique across the whole inventory block, and the engine's
+> `_transferredItemKey`. 0 on an existing stack is refused (whether the game
+> accepts a 0-count currency row is unknown). `ContributionServiceTests`
+> adds the absent Hernandian stack to a copy of the newest save and reads
+> it back. **413 C# tests green**; AOT publish has zero IL/trim warnings.
+> Not checked in-game yet (slot103 below carries 10,000 Hernandian).
+>
+> **Tools → Edit Faction Relations (new, 2026-11-27, on `dev`).**
+> `FactionRelationService` lists every faction with its relation to the
+> player's (the element led by `CharacterKey 1`) and writes changes both
+> ways: retype a row, Neutral = a row with `_relationTypeRaw` absent (the
+> game's shape), add rows to a faction with none (`SetObjectListPresent`
+> or a clone, `_dueDate` `0xFFFFFFFF`), and Group default = remove the rows
+> (a faction's last row makes the list absent again). Relation-group names
+> now resolve (`FactionRelationGroupKey`, new C# bridge over the existing
+> `crimson_factionrelationgroup_*`). `FactionRelationServiceTests` runs all
+> four shapes on a copy of the newest save. The dialog also shows each
+> faction's **member count** (characterinfo's faction field, via crimson-rs
+> PR #117 `crimson_characterinfo_faction_member_count`, vendored at
+> `9827361`) and sorts by it, plus the localized faction-group name
+> (`crimson_faction_info_lookup_display_name`: Celeste_Hernand → "Hernand",
+> Graymane → "Greymanes"); pinned by `MemberCountsAndGroupNames_Live`
+> (66 / 172 / 2 / 0). With #117 characterinfo reads its rows from the 2.06
+> header, so `entry_count` is 7,315 (359 hashed-key rows); the suite stayed
+> green. **416 C# tests green**; AOT zero warnings. **In-game, 2026-11-27:**
+> rows **added** to a faction that had none work and override the relation
+> group — player ⇄ Faction_Bandit (no rows, Monster_Common) set to
+> BloodAlly through `FactionRelationService`, and bandits no longer attack.
+> The user opened the dialog: its "Name" column is the factiongroup, i.e. a
+> region ("Hernand" for Faction_Bandit too), which does not identify a
+> faction. Fixed: factions ship no name, but their members do, so
+> `LocalizationProvider.FactionMemberNames` (via
+> `crimson_characterinfo_lookup_faction_key`) gives the most common member
+> names — Faction_Bandit "Bandit / 盜賊 ×164", Celeste_Hernand "Hernandian
+> Guard / 埃爾南德警衛隊 ×49" — shown first as "Typical members"; the
+> factiongroup column is now "Region". `ResolveFactionLabel` reuses it.
+>
+> **Edit Faction Nodes — readable.** The user found the 1,262 `Node_Her_*`
+> internal names unreadable. Now: a Place column (crimson-rs PR #118,
+> vendored at `ec7cd83`: each node names a knowledge row whose title is
+> the place — `crimson_factionnode_lookup_display_name`, 1,120 of 1,262
+> nodes named, e.g. Node_Her_GlenbrightFarm → "Glenbright Farm / …"),
+> State / Region / Conqueror filter combos, conquerors by member name.
+> crimson-rs found **no** owning-faction or region field, so Region is a
+> guess from the internal-name prefix (Her → Hernand, Dem, Del, Crim, Kwe,
+> …) and the column says so.
+>
+> **DLC rows merged (2026-11-27).** crimson-rs PR #119 (vendored at
+> `7c72e20`) lets the factionnode / knowledgeinfo / faction / characterinfo
+> handles merge a DLC copy (`*_merge_dlc_from_bytes`, appended, base rows
+> win on shared keys). `LocalizationProvider.TryMergeDlcTables` merges every
+> installed DLC at bootstrap, so the 142 dlc_01 nodes get place names
+> (Node_Ocean_IliyaIsland → "Iliya Island"), DLC factions resolve
+> (1000099 Faction_Satyros, 9 members) and member counts include DLC
+> characters (Greymanes 172 → 187). Side effect: Browse Characters and the
+> knowledge list now also list DLC rows on a DLC install. Contribution
+> currencies are confirmed complete at 6 (dlc_01 adds none). **423 C# tests
+> green**; AOT zero warnings; dialogs not opened by hand after these
+> changes. Dye-mask RE: queued as its own crimson-rs session (the user
+> starts it); it reports straight back here.
+>
+> **Faction relations — `1` = War confirmed in-game (2026-11-27).**
+> `FactionSaveData._factionElementSaveDataList[i]._factionRelationDataList[j]`
+> = `{_targetFactionKey, _relationTypeRaw u8, _dueDate u32}`. The exe's
+> name table right after the "FactionRelationGroupInfo … must be the same
+> Relation" check reads **0 Neutral, 1 War, 2 Agreement, 3 BloodAlly,
+> 4 ByGroup**; the save fits it (every pair is symmetric; `_dueDate` is
+> always `0xFFFFFFFF`; the only `1` is the Sandfang ⇄ Savage Fangs bandit
+> pair; the player is `3` with Faction_Roberts / Serkis / GoldleafGuildhouse
+> and others, `2` with Faction_Alfonso, absent with Marchell / Elimoor /
+> Byron / SilvermoonTroll). Hostility toward most enemies comes from the
+> faction's relation group, not from these rows. The save holds no 0–100
+> faction "reputation" value. **In-game tests:** (1) player ⇄
+> Faction_Roberts (1000001) `3` → `1`: no reaction at their stronghold —
+> but only **2** characterinfo rows belong to that faction, so it proved
+> nothing. The 10,000 Hernandian contribution added by Edit Contributions
+> **showed in-game** (2026-11-27). (2) Now in slot103: slot102 with player
+> ⇄ **Faction_Celeste_Hernand (1000131)** `3` → `1` both ways, plus the
+> 10,000 Hernandian; all 47 Hernand soldier rows (the in-game "Hernandian
+> Guard") belong to it — **the guards attacked on entering Hernand: `1` is
+> War.** The other values rest on the exe table plus the save's pattern,
+> not yet on an in-game test. Practical upshot: what decides whether a
+> place turns hostile is the faction its rank-and-file NPCs belong to (66
+> characters for Celeste_Hernand), not the named family faction (2 for
+> Roberts) — so a relation editor must show each faction's member count.
+> A character's faction lives only in characterinfo (the save records
+> it for the player alone): a u32 at 2.06 body-row offset 159, always a
+> faction key or 0 — found by a scratch scan; asked crimson-rs to parse and
+> expose it (plus faction group keys and their PALOC display names).
+> The previous slot103 is in
+> `data/_saves/slot103-before-faction-test-20261127/`. NPC friendliness
+> (`FriendlySaveData._friendlyDataList[i]._levelData`) is `_exp` 0–100;
+> `_level` is 0 on all 67 NPCs, including the 19 at 100.
 >
 > **FactionKey names were wrong (fixed 2026-11-27).**
 > `FactionKey` resolved through PALOC type byte `0x30`, which is
@@ -613,7 +716,14 @@ are in [status-archive.md](status-archive.md).
   has no `_with_pabgh` loader in crimson-rs; stage and quest do.
 - **⏸️ Dye editor is disabled since 2.01 — parked, no plan to fix it for
   now** (the user's call, stated in the v2.03.01 release notes,
-  2026-09-18); it needs the mask-group RE. (Still
+  2026-09-18); it needs the mask-group RE. **Re-checked 2026-11-27 on 2.06
+  (the user thought upstream had fixed it): it has not.** No crimson-rs
+  branch touches the mask after 2.05's named-row fix (that one restored
+  0-row reads on 2.04, not the group selection). Measured on 2.06 through
+  `_lookup_slot_mask_full`: 1,703 prefabs / 6,955 slots, 12-byte mask,
+  non-zero groups per slot 0×1,023 / 1×4,519 / 2×1,332 / 3×81 / 4×0, and the
+  legacy 3-byte getter reads blank on **2,304 (33.1%)** slots whose full
+  mask is set. (Still
   true on 2.03, which added 19 prefabs but kept the 12-byte mask shape.
   Re-measured on 2.03 through the rebuilt dll: 1,645 prefabs / 6,634 slots,
   exactly one group non-zero on 4,304, two on 1,272, three on 73, none on

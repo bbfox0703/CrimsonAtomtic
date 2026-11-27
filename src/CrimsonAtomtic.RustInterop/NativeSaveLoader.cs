@@ -2667,6 +2667,12 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "crimson_knowledgeinfo_entry_count")]
     public static partial int KnowledgeInfoEntryCount(CrimsonKnowledgeInfoHandle handle, out uint count);
 
+    // Append the rows of a DLC copy of the table whose keys the handle lacks
+    // (indices of existing rows don't move; shared keys keep the base row).
+    [LibraryImport(LibraryName, EntryPoint = "crimson_knowledgeinfo_merge_dlc_from_bytes")]
+    public static unsafe partial int KnowledgeInfoMergeDlcFromBytes(
+        CrimsonKnowledgeInfoHandle handle, byte* body, nuint bodyLen, byte* header, nuint headerLen, out uint added);
+
     [LibraryImport(LibraryName, EntryPoint = "crimson_knowledgeinfo_lookup_string_key")]
     public static unsafe partial int KnowledgeInfoLookupStringKey(
         CrimsonKnowledgeInfoHandle handle, uint knowledgeKey,
@@ -2831,9 +2837,23 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "crimson_factionnode_entry_count")]
     public static partial int FactionNodeInfoEntryCount(CrimsonFactionNodeInfoHandle handle, out uint count);
 
+    // Append the rows of a DLC copy of the table whose keys the handle lacks
+    // (indices of existing rows don't move; shared keys keep the base row).
+    [LibraryImport(LibraryName, EntryPoint = "crimson_factionnode_merge_dlc_from_bytes")]
+    public static unsafe partial int FactionNodeInfoMergeDlcFromBytes(
+        CrimsonFactionNodeInfoHandle handle, byte* body, nuint bodyLen, byte* header, nuint headerLen, out uint added);
+
     [LibraryImport(LibraryName, EntryPoint = "crimson_factionnode_lookup_string_key")]
     public static unsafe partial int FactionNodeInfoLookupStringKey(
         CrimsonFactionNodeInfoHandle handle, uint factionNodeKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    // The node's place name: the title of the knowledge row it names
+    // (PALOC (hashlittle2(name) << 32) | 0x490), in the language of palocHandle.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_factionnode_lookup_display_name")]
+    public static unsafe partial int FactionNodeInfoLookupDisplayName(
+        CrimsonFactionNodeInfoHandle handle, CrimsonKnowledgeInfoHandle knowledgeHandle,
+        CrimsonPalocHandle palocHandle, uint factionNodeKey,
         byte* buf, nuint bufLen, out nuint required);
 
     // ── RoyalSupplyInfo bridge (royalsupply.pabgb + royalsupply.pabgh) ──────
@@ -3124,9 +3144,50 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "crimson_faction_info_entry_count")]
     public static partial int FactionInfoEntryCount(CrimsonFactionInfoHandle handle, out uint count);
 
+    // Append the rows of a DLC copy of the table whose keys the handle lacks
+    // (indices of existing rows don't move; shared keys keep the base row).
+    [LibraryImport(LibraryName, EntryPoint = "crimson_faction_info_merge_dlc_from_bytes")]
+    public static unsafe partial int FactionInfoMergeDlcFromBytes(
+        CrimsonFactionInfoHandle handle, byte* body, nuint bodyLen, byte* header, nuint headerLen, out uint added);
+
     [LibraryImport(LibraryName, EntryPoint = "crimson_faction_info_lookup_string_key")]
     public static unsafe partial int FactionInfoLookupStringKey(
         CrimsonFactionInfoHandle handle, uint factionKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    // Localized name of the faction's factiongroup (PALOC (group << 32) | 0x214).
+    [LibraryImport(LibraryName, EntryPoint = "crimson_faction_info_lookup_display_name")]
+    public static unsafe partial int FactionInfoLookupDisplayName(
+        CrimsonFactionInfoHandle handle, CrimsonPalocHandle palocHandle, uint factionKey,
+        byte* buf, nuint bufLen, out nuint required);
+
+    // FactionKey of a character (0 = none); NOT_FOUND when the character is unknown.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_characterinfo_lookup_faction_key")]
+    public static partial int CharacterInfoLookupFactionKey(
+        CrimsonCharacterInfoHandle handle, uint characterKey, out uint factionKey);
+
+    // Number of characterinfo rows whose FactionKey equals factionKey (always OK).
+    [LibraryImport(LibraryName, EntryPoint = "crimson_characterinfo_faction_member_count")]
+    public static partial int CharacterInfoFactionMemberCount(
+        CrimsonCharacterInfoHandle handle, uint factionKey, out uint count);
+
+    // ── FactionRelationGroupInfo bridge (factionrelationgroup.pabgb + .pabgh) ─
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_factionrelationgroup_load_from_bytes")]
+    public static unsafe partial int FactionRelationGroupLoadFromBytes(
+        byte* pabgbData, nuint pabgbLen,
+        byte* pabghData, nuint pabghLen,
+        out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_factionrelationgroup_free")]
+    public static partial void FactionRelationGroupFree(IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_factionrelationgroup_entry_count")]
+    public static partial int FactionRelationGroupEntryCount(CrimsonFactionRelationGroupHandle handle, out uint count);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_factionrelationgroup_lookup_string_key")]
+    public static unsafe partial int FactionRelationGroupLookupStringKey(
+        CrimsonFactionRelationGroupHandle handle, uint relationGroupKey,
         byte* buf, nuint bufLen, out nuint required);
 
     // ── ItemGroupInfo bridge (itemgroupinfo.pabgb + itemgroupinfo.pabgh) ────
@@ -3233,6 +3294,12 @@ internal static partial class NativeMethods
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_characterinfo_entry_count")]
     public static partial int CharacterInfoEntryCount(CrimsonCharacterInfoHandle handle, out uint count);
+
+    // Append the rows of a DLC copy of the table whose keys the handle lacks
+    // (indices of existing rows don't move; shared keys keep the base row).
+    [LibraryImport(LibraryName, EntryPoint = "crimson_characterinfo_merge_dlc_from_bytes")]
+    public static unsafe partial int CharacterInfoMergeDlcFromBytes(
+        CrimsonCharacterInfoHandle handle, byte* body, nuint bodyLen, byte* header, nuint headerLen, out uint added);
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_characterinfo_lookup_string_key")]
     public static unsafe partial int CharacterInfoLookupStringKey(

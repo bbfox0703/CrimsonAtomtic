@@ -519,8 +519,11 @@ public sealed class NativeKnowledgeInfoCatalog : IDisposable
     public const uint DescriptionLo32 = 0x491;
 
     private readonly CrimsonKnowledgeInfoHandle _handle;
-    private readonly int _entryCount;
+    private int _entryCount;
     private bool _disposed;
+
+    /// <summary>For bridges that resolve through a knowledge row (faction-node place names).</summary>
+    internal CrimsonKnowledgeInfoHandle NativeHandle => _handle;
 
     private NativeKnowledgeInfoCatalog(CrimsonKnowledgeInfoHandle handle, int entryCount)
     {
@@ -639,6 +642,36 @@ public sealed class NativeKnowledgeInfoCatalog : IDisposable
             finally
             {
                 ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Merge a DLC copy of this table (e.g. <c>knowledgeinfo.dlc_01</c>):
+    /// rows whose key this table lacks are appended, so existing indices
+    /// keep their place and a key in both keeps the base row. Returns the
+    /// number of rows added (0 when merged twice).
+    /// </summary>
+    public int MergeDlcFromBytes(ReadOnlySpan<byte> body, ReadOnlySpan<byte> header)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        unsafe
+        {
+            fixed (byte* b = body)
+            fixed (byte* h = header)
+            {
+                var rc = NativeMethods.KnowledgeInfoMergeDlcFromBytes(
+                    _handle, b, (nuint)body.Length, h, (nuint)header.Length, out var added);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_knowledgeinfo_merge_dlc_from_bytes(len={body.Length}, header={header.Length}) failed: {NameBuffer.ErrorName(rc)}");
+                }
+                if (NativeMethods.KnowledgeInfoEntryCount(_handle, out var count) == NativeMethods.OK)
+                {
+                    _entryCount = (int)count;
+                }
+                return (int)added;
             }
         }
     }
@@ -1201,13 +1234,35 @@ public sealed class NativeCharacterInfoCatalog : IDisposable
     public const uint DisplayNameLo32 = 0x30;
 
     private readonly CrimsonCharacterInfoHandle _handle;
-    private readonly int _entryCount;
+    private int _entryCount;
     private bool _disposed;
 
     private NativeCharacterInfoCatalog(CrimsonCharacterInfoHandle handle, int entryCount)
     {
         _handle = handle;
         _entryCount = entryCount;
+    }
+
+    /// <summary>
+    /// The faction <paramref name="characterKey"/> belongs to (characterinfo's
+    /// faction field), 0 for none, null for an unknown character.
+    /// </summary>
+    public uint? LookupFactionKey(uint characterKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var rc = NativeMethods.CharacterInfoLookupFactionKey(_handle, characterKey, out var faction);
+        return rc == NativeMethods.OK ? faction : null;
+    }
+
+    /// <summary>
+    /// How many characters belong to <paramref name="factionKey"/>
+    /// (characterinfo's faction field). 0 for an unknown faction.
+    /// </summary>
+    public int FactionMemberCount(uint factionKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var rc = NativeMethods.CharacterInfoFactionMemberCount(_handle, factionKey, out var count);
+        return rc == NativeMethods.OK ? (int)count : 0;
     }
 
     public int EntryCount
@@ -1419,6 +1474,36 @@ public sealed class NativeCharacterInfoCatalog : IDisposable
         }
     }
 
+    /// <summary>
+    /// Merge a DLC copy of this table (e.g. <c>characterinfo.dlc_01</c>):
+    /// rows whose key this table lacks are appended, so existing indices
+    /// keep their place and a key in both keeps the base row. Returns the
+    /// number of rows added (0 when merged twice).
+    /// </summary>
+    public int MergeDlcFromBytes(ReadOnlySpan<byte> body, ReadOnlySpan<byte> header)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        unsafe
+        {
+            fixed (byte* b = body)
+            fixed (byte* h = header)
+            {
+                var rc = NativeMethods.CharacterInfoMergeDlcFromBytes(
+                    _handle, b, (nuint)body.Length, h, (nuint)header.Length, out var added);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_characterinfo_merge_dlc_from_bytes(len={body.Length}, header={header.Length}) failed: {NameBuffer.ErrorName(rc)}");
+                }
+                if (NativeMethods.CharacterInfoEntryCount(_handle, out var count) == NativeMethods.OK)
+                {
+                    _entryCount = (int)count;
+                }
+                return (int)added;
+            }
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -1562,7 +1647,7 @@ internal sealed class CrimsonSubLevelInfoHandle : SafeHandle
 public sealed class NativeFactionNodeInfoCatalog : IDisposable
 {
     private readonly CrimsonFactionNodeInfoHandle _handle;
-    private readonly int _entryCount;
+    private int _entryCount;
     private bool _disposed;
 
     private NativeFactionNodeInfoCatalog(CrimsonFactionNodeInfoHandle handle, int entryCount)
@@ -1614,6 +1699,57 @@ public sealed class NativeFactionNodeInfoCatalog : IDisposable
                 (byte* buf, nuint bufLen, out nuint required) =>
                     NativeMethods.FactionNodeInfoLookupStringKey(_handle, factionNodeKey, buf, bufLen, out required),
                 $"crimson_factionnode_lookup_string_key({factionNodeKey})");
+        }
+    }
+
+    /// <summary>
+    /// The node's place name as the game shows it ("Hernand Castle",
+    /// "Glenbright Farm"): the title of the knowledge row the node names, in
+    /// <paramref name="paloc"/>'s language. Null when the node, its knowledge
+    /// row or the PALOC entry is missing.
+    /// </summary>
+    public string? LookupDisplayName(uint factionNodeKey, NativeKnowledgeInfoCatalog knowledge, NativePalocCatalog paloc)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(knowledge);
+        ArgumentNullException.ThrowIfNull(paloc);
+        unsafe
+        {
+            return NameBuffer.ReadString(
+                (byte* buf, nuint bufLen, out nuint required) =>
+                    NativeMethods.FactionNodeInfoLookupDisplayName(
+                        _handle, knowledge.NativeHandle, paloc.NativeHandle, factionNodeKey, buf, bufLen, out required),
+                $"crimson_factionnode_lookup_display_name({factionNodeKey})");
+        }
+    }
+
+    /// <summary>
+    /// Merge a DLC copy of this table (e.g. <c>factionnode.dlc_01</c>):
+    /// rows whose key this table lacks are appended, so existing indices
+    /// keep their place and a key in both keeps the base row. Returns the
+    /// number of rows added (0 when merged twice).
+    /// </summary>
+    public int MergeDlcFromBytes(ReadOnlySpan<byte> body, ReadOnlySpan<byte> header)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        unsafe
+        {
+            fixed (byte* b = body)
+            fixed (byte* h = header)
+            {
+                var rc = NativeMethods.FactionNodeInfoMergeDlcFromBytes(
+                    _handle, b, (nuint)body.Length, h, (nuint)header.Length, out var added);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_factionnode_merge_dlc_from_bytes(len={body.Length}, header={header.Length}) failed: {NameBuffer.ErrorName(rc)}");
+                }
+                if (NativeMethods.FactionNodeInfoEntryCount(_handle, out var count) == NativeMethods.OK)
+                {
+                    _entryCount = (int)count;
+                }
+                return (int)added;
+            }
         }
     }
 
@@ -2773,7 +2909,7 @@ internal sealed class CrimsonRegionInfoHandle : SafeHandle
 public sealed class NativeFactionInfoCatalog : IDisposable
 {
     private readonly CrimsonFactionInfoHandle _handle;
-    private readonly int _entryCount;
+    private int _entryCount;
     private bool _disposed;
 
     private NativeFactionInfoCatalog(CrimsonFactionInfoHandle handle, int entryCount)
@@ -2828,6 +2964,56 @@ public sealed class NativeFactionInfoCatalog : IDisposable
         }
     }
 
+    /// <summary>
+    /// The localized name of the faction's group in <paramref name="paloc"/>
+    /// (e.g. "Hernand" for Faction_Celeste_Hernand, "Greymanes" for
+    /// Faction_Graymane), or null. Several factions share a group, so the
+    /// name does not identify a faction on its own.
+    /// </summary>
+    public string? LookupDisplayName(uint factionKey, NativePalocCatalog paloc)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(paloc);
+        unsafe
+        {
+            return NameBuffer.ReadString(
+                (byte* buf, nuint bufLen, out nuint required) =>
+                    NativeMethods.FactionInfoLookupDisplayName(
+                        _handle, paloc.NativeHandle, factionKey, buf, bufLen, out required),
+                $"crimson_faction_info_lookup_display_name({factionKey})");
+        }
+    }
+
+    /// <summary>
+    /// Merge a DLC copy of this table (e.g. <c>faction.dlc_01</c>):
+    /// rows whose key this table lacks are appended, so existing indices
+    /// keep their place and a key in both keeps the base row. Returns the
+    /// number of rows added (0 when merged twice).
+    /// </summary>
+    public int MergeDlcFromBytes(ReadOnlySpan<byte> body, ReadOnlySpan<byte> header)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        unsafe
+        {
+            fixed (byte* b = body)
+            fixed (byte* h = header)
+            {
+                var rc = NativeMethods.FactionInfoMergeDlcFromBytes(
+                    _handle, b, (nuint)body.Length, h, (nuint)header.Length, out var added);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_faction_info_merge_dlc_from_bytes(len={body.Length}, header={header.Length}) failed: {NameBuffer.ErrorName(rc)}");
+                }
+                if (NativeMethods.FactionInfoEntryCount(_handle, out var count) == NativeMethods.OK)
+                {
+                    _entryCount = (int)count;
+                }
+                return (int)added;
+            }
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -2849,6 +3035,97 @@ internal sealed class CrimsonFactionInfoHandle : SafeHandle
     protected override bool ReleaseHandle()
     {
         NativeMethods.FactionInfoFree(handle);
+        return true;
+    }
+}
+
+// ── FactionRelationGroupInfo ────────────────────────────────────────────────
+
+/// <summary>
+/// <c>FactionRelationGroupKey (u16-widened-u32)</c> → row internal name. Five
+/// rows: <c>Graymane</c>, <c>FriendlyCombat</c>, <c>HostileCombat</c>,
+/// <c>NPC_Common</c>, <c>Monster_Common</c>. A faction's group decides how it
+/// treats another when the save holds no relation row between them.
+/// </summary>
+public sealed class NativeFactionRelationGroupCatalog : IDisposable
+{
+    private readonly CrimsonFactionRelationGroupHandle _handle;
+    private readonly int _entryCount;
+    private bool _disposed;
+
+    private NativeFactionRelationGroupCatalog(CrimsonFactionRelationGroupHandle handle, int entryCount)
+    {
+        _handle = handle;
+        _entryCount = entryCount;
+    }
+
+    public int EntryCount
+    {
+        get { ObjectDisposedException.ThrowIf(_disposed, this); return _entryCount; }
+    }
+
+    public static NativeFactionRelationGroupCatalog LoadFromBytes(
+        ReadOnlySpan<byte> pabgb, ReadOnlySpan<byte> pabgh)
+    {
+        unsafe
+        {
+            fixed (byte* pb = pabgb)
+            fixed (byte* ph = pabgh)
+            {
+                var rc = NativeMethods.FactionRelationGroupLoadFromBytes(
+                    pb, (nuint)pabgb.Length, ph, (nuint)pabgh.Length, out var raw);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_factionrelationgroup_load_from_bytes(pabgb={pabgb.Length},pabgh={pabgh.Length}) " +
+                        $"failed: {NameBuffer.ErrorName(rc)}");
+                }
+                var handle = CrimsonFactionRelationGroupHandle.FromOwnedPointer(raw);
+                var rcCount = NativeMethods.FactionRelationGroupEntryCount(handle, out var count);
+                if (rcCount != NativeMethods.OK)
+                {
+                    handle.Dispose();
+                    throw new CrimsonSaveException(rcCount,
+                        $"crimson_factionrelationgroup_entry_count failed: {NameBuffer.ErrorName(rcCount)}");
+                }
+                return new NativeFactionRelationGroupCatalog(handle, (int)count);
+            }
+        }
+    }
+
+    public string? LookupStringKey(uint relationGroupKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        unsafe
+        {
+            return NameBuffer.ReadString(
+                (byte* buf, nuint bufLen, out nuint required) =>
+                    NativeMethods.FactionRelationGroupLookupStringKey(_handle, relationGroupKey, buf, bufLen, out required),
+                $"crimson_factionrelationgroup_lookup_string_key({relationGroupKey})");
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _handle.Dispose();
+    }
+}
+
+internal sealed class CrimsonFactionRelationGroupHandle : SafeHandle
+{
+    public CrimsonFactionRelationGroupHandle() : base(IntPtr.Zero, ownsHandle: true) { }
+    public static CrimsonFactionRelationGroupHandle FromOwnedPointer(IntPtr ptr)
+    {
+        var h = new CrimsonFactionRelationGroupHandle();
+        h.SetHandle(ptr);
+        return h;
+    }
+    public override bool IsInvalid => handle == IntPtr.Zero;
+    protected override bool ReleaseHandle()
+    {
+        NativeMethods.FactionRelationGroupFree(handle);
         return true;
     }
 }

@@ -125,6 +125,12 @@
         <MenuItem Header="{DynamicResource MenuEditFactionNodes}"
                   Click="OnEditFactionNodesClick"
                   IsEnabled="{Binding HasSave}" />
+        <MenuItem Header="{DynamicResource MenuEditFactionRelations}"
+                  Click="OnEditFactionRelationsClick"
+                  IsEnabled="{Binding HasSave}" />
+        <MenuItem Header="{DynamicResource MenuEditContributions}"
+                  Click="OnEditContributionsClick"
+                  IsEnabled="{Binding HasSave}" />
         <MenuItem Header="{DynamicResource MenuRenameMercenary}"
                   Click="OnRenameMercenaryClick"
                   IsEnabled="{Binding HasSave}" />

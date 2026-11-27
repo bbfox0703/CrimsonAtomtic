@@ -47,7 +47,7 @@ public sealed class FactionNodeRowTests
     [Fact]
     public void OwnerName_FallsBackToKey_WhenResolvedNameEmpty()
     {
-        var row = new FactionNodeRow(Target(owner: 1000044), ownerName: null, conquerorName: null);
+        var row = new FactionNodeRow(Target(owner: 1000044), ownerName: null, placeName: string.Empty, conquerorName: null);
         Assert.Equal("1000044", row.OwnerName);
         Assert.Equal("1000044", row.OwnerKeyText);
     }
@@ -55,14 +55,30 @@ public sealed class FactionNodeRowTests
     [Fact]
     public void OwnerName_UsesResolvedName_WhenPresent()
     {
-        var row = new FactionNodeRow(Target(), "Node_Her_HernandCastle", null);
+        var row = new FactionNodeRow(Target(), "Node_Her_HernandCastle", "Hernand Castle", null);
         Assert.Equal("Node_Her_HernandCastle", row.OwnerName);
+        Assert.Equal("Hernand Castle", row.PlaceName);
+    }
+
+    /// <summary>
+    /// The region comes from the internal name's prefix — a naming habit, not
+    /// game data (crimson-rs found no region field), so it is labelled a guess.
+    /// </summary>
+    [Theory]
+    [InlineData("Node_Her_HernandCastle / Node_Her_HernandCastle", "Hernand")]
+    [InlineData("Node_Dem_SungroveManor_Marcella", "Demeniss")]
+    [InlineData("Node_Crim_RockVillage", "Crimson Desert")]
+    [InlineData("Node_Kwe_SpireOfRingingTruth", "Kweiden")]
+    [InlineData("Node_Odeck_Something", "Other")]
+    public void Region_IsGuessedFromThePrefix(string internalName, string region)
+    {
+        Assert.Equal(region, new FactionNodeRow(Target(), internalName, string.Empty, null).Region);
     }
 
     [Fact]
     public void StateLabel_Conqueror_AndCapital_Reflect()
     {
-        var row = new FactionNodeRow(Target(state: 3, capital: true), "X", "Graymane");
+        var row = new FactionNodeRow(Target(state: 3, capital: true), "X", string.Empty, "Graymane");
         Assert.Equal("Conquered", row.StateLabel);
         Assert.Equal("Graymane", row.ConquerorName);
         Assert.Equal("★", row.CapitalText);
@@ -71,7 +87,7 @@ public sealed class FactionNodeRowTests
     [Fact]
     public void Capital_Empty_WhenNotCapital()
     {
-        var row = new FactionNodeRow(Target(capital: false), "X", null);
+        var row = new FactionNodeRow(Target(capital: false), "X", string.Empty, null);
         Assert.Equal(string.Empty, row.CapitalText);
         Assert.Null(row.ConquerorName);
     }
