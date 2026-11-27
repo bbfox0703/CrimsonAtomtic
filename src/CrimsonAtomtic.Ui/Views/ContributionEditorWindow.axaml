@@ -1,0 +1,95 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        mc:Ignorable="d"
+        d:DesignWidth="900"
+        d:DesignHeight="480"
+        x:Class="CrimsonAtomtic.Ui.Views.ContributionEditorWindow"
+        x:DataType="vm:ContributionEditorViewModel"
+        Title="{DynamicResource ContribWindowTitle}"
+        Icon="/Assets/MainIcon.ico"
+        Width="900" Height="480"
+        MinWidth="640" MinHeight="320"
+        FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
+
+  <DockPanel LastChildFill="True" Margin="12">
+    <TextBlock DockPanel.Dock="Top"
+               Text="{DynamicResource ContribHeader}"
+               TextWrapping="Wrap"
+               Opacity="0.7"
+               Margin="0,0,0,8" />
+
+    <!-- Status footer + actions -->
+    <Grid DockPanel.Dock="Bottom"
+          ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto"
+          ColumnSpacing="8"
+          Margin="0,8,0,0">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding StatusMessage}"
+                 Opacity="0.75"
+                 VerticalAlignment="Center"
+                 TextWrapping="Wrap" />
+      <TextBlock Grid.Column="1"
+                 Text="{DynamicResource ContribSetAllLabel}"
+                 VerticalAlignment="Center" />
+      <TextBox Grid.Column="2"
+               Text="{Binding SetAllText}"
+               MinWidth="110"
+               HorizontalContentAlignment="Right" />
+      <Button Grid.Column="3"
+              Content="{DynamicResource ContribSetAll}"
+              Command="{Binding SetAllCommand}"
+              MinWidth="80" />
+      <Button Grid.Column="4"
+              Content="{DynamicResource ContribApply}"
+              Command="{Binding ApplyCommand}"
+              MinWidth="90" />
+      <Button Grid.Column="5"
+              Content="{DynamicResource ContribClose}"
+              Click="OnCloseClick"
+              MinWidth="80" />
+    </Grid>
+
+    <DataGrid ItemsSource="{Binding Rows}"
+              CanUserResizeColumns="True"
+              CanUserSortColumns="True"
+              GridLinesVisibility="Horizontal"
+              HeadersVisibility="Column"
+              AutoGenerateColumns="False">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="{DynamicResource ContribColName}"
+                            Binding="{Binding Name}"
+                            IsReadOnly="True"
+                            Width="*" />
+        <DataGridTextColumn Header="{DynamicResource ContribColSecondary}"
+                            Binding="{Binding SecondaryName}"
+                            IsReadOnly="True"
+                            Width="*" />
+        <DataGridTextColumn Header="{DynamicResource ContribColKey}"
+                            Binding="{Binding ItemKey}"
+                            IsReadOnly="True"
+                            Width="90"
+                            FontFamily="Consolas, Menlo, monospace" />
+        <DataGridTextColumn Header="{DynamicResource ContribColLocation}"
+                            Binding="{Binding Location}"
+                            IsReadOnly="True"
+                            Width="190" />
+        <DataGridTextColumn Header="{DynamicResource ContribColCurrent}"
+                            Binding="{Binding CurrentText}"
+                            IsReadOnly="True"
+                            Width="110" />
+        <DataGridTemplateColumn Header="{DynamicResource ContribColNew}" Width="140" CanUserSort="False">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate DataType="vm:ContributionRow">
+              <TextBox Text="{Binding NewAmountText, Mode=TwoWay}"
+                       HorizontalContentAlignment="Right"
+                       VerticalAlignment="Center" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+      </DataGrid.Columns>
+    </DataGrid>
+  </DockPanel>
+</Window>

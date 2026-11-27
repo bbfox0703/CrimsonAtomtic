@@ -35,6 +35,24 @@ public sealed partial class FactionNodeEditorViewModel : ObservableObject
     [ObservableProperty]
     private string? _searchText;
 
+    /// <summary>"All states" plus one entry per <c>_factionState</c> value.</summary>
+    public ObservableCollection<NodeFilterOption> StateFilters { get; } = [];
+
+    [ObservableProperty]
+    private NodeFilterOption? _selectedStateFilter;
+
+    /// <summary>"All regions" plus every region guessed from the nodes' internal names, with counts.</summary>
+    public ObservableCollection<NodeFilterOption> RegionFilters { get; } = [];
+
+    [ObservableProperty]
+    private NodeFilterOption? _selectedRegionFilter;
+
+    /// <summary>"All" plus every conqueror faction present, by member name, with node counts.</summary>
+    public ObservableCollection<NodeFilterOption> ConquerorFilters { get; } = [];
+
+    [ObservableProperty]
+    private NodeFilterOption? _selectedConquerorFilter;
+
     [ObservableProperty]
     private string? _statusMessage;
 
@@ -67,6 +85,12 @@ public sealed partial class FactionNodeEditorViewModel : ObservableObject
         }
         // Default target = Active (the "discovered" state).
         _selectedTargetState = TargetStates.FirstOrDefault(o => o.Value == 2) ?? TargetStates.FirstOrDefault();
+        StateFilters.Add(new NodeFilterOption(UiText.Get("FactionNodeFilterAllStates", "All states"), null));
+        foreach (var (value, label) in MainWindowViewModel.FactionNodeStates.All)
+        {
+            StateFilters.Add(new NodeFilterOption(label, value));
+        }
+        _selectedStateFilter = StateFilters[0];
     }
 
     /// <summary>
@@ -79,19 +103,8 @@ public sealed partial class FactionNodeEditorViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(main);
 
         var vm = new FactionNodeEditorViewModel(main);
-        var loc = main.Localization;
-        var targets = await Task.Run(main.ScanFactionNodes).ConfigureAwait(true);
-
-        var rows = new List<FactionNodeRow>(targets.Count);
-        foreach (var t in targets)
-        {
-            var owner = loc.ResolveByFieldTypeName("FactionNodeKey", t.OwnerKey);
-            var conq = t.ConquerorKey == 0 ? null : loc.ResolveByFieldTypeName("FactionKey", t.ConquerorKey);
-            rows.Add(new FactionNodeRow(t, owner, conq));
-        }
-        rows.Sort((a, b) => string.CompareOrdinal(a.OwnerName, b.OwnerName));
-        vm._allRows = rows;
-        vm.ApplyFilter();
+        await vm.RescanAsync().ConfigureAwait(true);
+        var rows = vm._allRows;
         vm.StatusMessage = rows.Count == 0
             ? NoNodesSummary
             : UiText.Format("FactionNodeHeaderStatus",
@@ -103,6 +116,12 @@ public sealed partial class FactionNodeEditorViewModel : ObservableObject
 
     partial void OnSearchTextChanged(string? value) => ApplyFilter();
 
+    partial void OnSelectedStateFilterChanged(NodeFilterOption? value) => ApplyFilter();
+
+    partial void OnSelectedConquerorFilterChanged(NodeFilterOption? value) => ApplyFilter();
+
+    partial void OnSelectedRegionFilterChanged(NodeFilterOption? value) => ApplyFilter();
+
     private void ApplyFilter()
     {
         var search = SearchText?.Trim();
@@ -111,8 +130,21 @@ public sealed partial class FactionNodeEditorViewModel : ObservableObject
         Rows.Clear();
         foreach (var r in _allRows)
         {
+            if (SelectedStateFilter?.Value is { } state && r.Target.CurrentState != state)
+            {
+                continue;
+            }
+            if (SelectedConquerorFilter?.Value is { } conqueror && r.Target.ConquerorKey != conqueror)
+            {
+                continue;
+            }
+            if (SelectedRegionFilter?.Text is { } region && r.Region != region)
+            {
+                continue;
+            }
             if (hasSearch
                 && !r.OwnerName.Contains(search!, StringComparison.OrdinalIgnoreCase)
+                && !r.PlaceName.Contains(search!, StringComparison.OrdinalIgnoreCase)
                 && !r.OwnerKeyText.Contains(search!, StringComparison.OrdinalIgnoreCase)
                 && !r.StateLabel.Contains(search!, StringComparison.OrdinalIgnoreCase)
                 && (r.ConquerorName is null || !r.ConquerorName.Contains(search!, StringComparison.OrdinalIgnoreCase)))
@@ -235,17 +267,59 @@ public sealed partial class FactionNodeEditorViewModel : ObservableObject
     {
         var loc = _main.Localization;
         var targets = await Task.Run(_main.ScanFactionNodes).ConfigureAwait(true);
+        var labels = new Dictionary<uint, string>();
+        string Label(uint faction) => labels.TryGetValue(faction, out var l) ? l : labels[faction] = loc.ResolveFactionLabel(faction);
         var rows = new List<FactionNodeRow>(targets.Count);
         foreach (var t in targets)
         {
             var owner = loc.ResolveByFieldTypeName("FactionNodeKey", t.OwnerKey);
-            var conq = t.ConquerorKey == 0 ? null : loc.ResolveByFieldTypeName("FactionKey", t.ConquerorKey);
-            rows.Add(new FactionNodeRow(t, owner, conq));
+            var (english, secondary) = loc.ResolveFactionNodeName(t.OwnerKey);
+            var place = english is null ? string.Empty
+                : secondary is null || secondary == english ? english
+                : $"{english} / {secondary}";
+            rows.Add(new FactionNodeRow(t, owner, place, t.ConquerorKey == 0 ? null : Label(t.ConquerorKey)));
         }
-        rows.Sort((a, b) => string.CompareOrdinal(a.OwnerName, b.OwnerName));
+        // Region, then named places first, then by place name.
+        rows.Sort((a, b) =>
+        {
+            var c = string.CompareOrdinal(a.Region, b.Region);
+            if (c != 0) return c;
+            c = string.IsNullOrEmpty(a.PlaceName).CompareTo(string.IsNullOrEmpty(b.PlaceName));
+            return c != 0 ? c : string.CompareOrdinal(a.PlaceName + a.OwnerName, b.PlaceName + b.OwnerName);
+        });
         _allRows = rows;
+
+        var keepRegion = SelectedRegionFilter?.Text;
+        RegionFilters.Clear();
+        RegionFilters.Add(new NodeFilterOption(UiText.Get("FactionNodeFilterAllRegions", "All regions"), null));
+        foreach (var g in rows.GroupBy(r => r.Region).OrderByDescending(g => g.Count()))
+        {
+            RegionFilters.Add(new NodeFilterOption($"{g.Key} ({g.Count():N0})", null, g.Key));
+        }
+        SelectedRegionFilter = RegionFilters.FirstOrDefault(o => o.Text == keepRegion) ?? RegionFilters[0];
+
+        // Conqueror choices: every faction that holds a node, most nodes first.
+        var keep = SelectedConquerorFilter?.Value;
+        ConquerorFilters.Clear();
+        ConquerorFilters.Add(new NodeFilterOption(UiText.Get("FactionNodeFilterAllConquerors", "All conquerors"), null));
+        foreach (var g in rows.Where(r => r.Target.ConquerorKey != 0)
+                     .GroupBy(r => r.Target.ConquerorKey)
+                     .OrderByDescending(g => g.Count()))
+        {
+            ConquerorFilters.Add(new NodeFilterOption($"{Label(g.Key)} ({g.Count():N0})", g.Key));
+        }
+        SelectedConquerorFilter = ConquerorFilters.FirstOrDefault(o => o.Value == keep) ?? ConquerorFilters[0];
         ApplyFilter();
     }
+}
+
+/// <summary>
+/// One choice in a filter combo: a state value or a FactionKey in
+/// <see cref="Value"/>, a region in <see cref="Text"/>, or neither for "all".
+/// </summary>
+public sealed record NodeFilterOption(string Label, uint? Value, string? Text = null)
+{
+    public override string ToString() => Label;
 }
 
 /// <summary>One target-state choice for the "set selected to…" combo.</summary>
@@ -258,14 +332,47 @@ public sealed record FactionNodeStateOption(byte Value, string Label)
 public sealed partial class FactionNodeRow : ObservableObject
 {
     internal FactionNodeRow(
-        MainWindowViewModel.FactionNodeTarget target, string? ownerName, string? conquerorName)
+        MainWindowViewModel.FactionNodeTarget target, string? ownerName, string placeName, string? conquerorName)
     {
         Target = target;
         OwnerName = string.IsNullOrEmpty(ownerName)
             ? target.OwnerKey.ToString(System.Globalization.CultureInfo.InvariantCulture)
             : ownerName;
+        PlaceName = placeName;
+        Region = RegionOf(OwnerName);
         ConquerorName = conquerorName;
     }
+
+    /// <summary>
+    /// Region guessed from the internal name's prefix (<c>Node_Her_…</c> →
+    /// Hernand). The game data holds no region for a node — crimson-rs found
+    /// none — so this is a naming habit, labelled as a guess in the UI.
+    /// </summary>
+    private static string RegionOf(string internalName)
+    {
+        var parts = internalName.Split(" / ")[0].Split('_');
+        var code = parts.Length > 2 && parts[0] == "Node" ? parts[1] : string.Empty;
+        return code switch
+        {
+            "Her" or "Hernand" => "Hernand",
+            "Dem" => "Demeniss",
+            "Del" => "Delesyia",
+            "Crim" or "Crimson" => "Crimson Desert",
+            "Kwe" => "Kweiden",
+            "Cal" => "Calphade",
+            "Pailune" => "Pailune",
+            "Island" => "Islands",
+            "Ocean" or "Pywel" => "Ocean",
+            "Abyss" or "Abyssone" => "Abyss",
+            _ => UiText.Get("FactionNodeRegionOther", "Other"),
+        };
+    }
+
+    /// <summary>The place name the game shows ("Hernand Castle / 埃爾南德城"); empty for unnamed nodes.</summary>
+    public string PlaceName { get; }
+
+    /// <summary>See <see cref="RegionOf"/> — a guess.</summary>
+    public string Region { get; }
 
     internal MainWindowViewModel.FactionNodeTarget Target { get; }
 

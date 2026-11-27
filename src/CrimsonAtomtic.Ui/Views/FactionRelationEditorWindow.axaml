@@ -1,0 +1,115 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        mc:Ignorable="d"
+        d:DesignWidth="1000"
+        d:DesignHeight="640"
+        x:Class="CrimsonAtomtic.Ui.Views.FactionRelationEditorWindow"
+        x:DataType="vm:FactionRelationEditorViewModel"
+        Title="{DynamicResource RelWindowTitle}"
+        Icon="/Assets/MainIcon.ico"
+        Width="1000" Height="640"
+        MinWidth="720" MinHeight="400"
+        FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
+
+  <DockPanel LastChildFill="True" Margin="12">
+    <TextBlock DockPanel.Dock="Top"
+               Text="{DynamicResource RelHeader}"
+               TextWrapping="Wrap"
+               Opacity="0.7"
+               Margin="0,0,0,8" />
+
+    <!-- Filter toolbar -->
+    <Grid DockPanel.Dock="Top"
+          ColumnDefinitions="*,Auto,Auto"
+          ColumnSpacing="12"
+          Margin="0,0,0,8">
+      <TextBox Grid.Column="0"
+               Text="{Binding SearchText}"
+               PlaceholderText="{DynamicResource RelSearchHint}" />
+      <CheckBox Grid.Column="1"
+                IsChecked="{Binding OnlyWithRows}"
+                Content="{DynamicResource RelOnlyWithRows}"
+                VerticalAlignment="Center" />
+      <TextBlock Grid.Column="2"
+                 Text="{Binding FilterSummary}"
+                 Opacity="0.55"
+                 VerticalAlignment="Center" />
+    </Grid>
+
+    <!-- Status footer + actions -->
+    <Grid DockPanel.Dock="Bottom"
+          ColumnDefinitions="*,Auto,Auto"
+          ColumnSpacing="8"
+          Margin="0,8,0,0">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding StatusMessage}"
+                 Opacity="0.75"
+                 VerticalAlignment="Center"
+                 TextWrapping="Wrap" />
+      <Button Grid.Column="1"
+              Content="{DynamicResource RelApply}"
+              Command="{Binding ApplyCommand}"
+              MinWidth="90" />
+      <Button Grid.Column="2"
+              Content="{DynamicResource RelClose}"
+              Click="OnCloseClick"
+              MinWidth="80" />
+    </Grid>
+
+    <DataGrid ItemsSource="{Binding Rows}"
+              CanUserResizeColumns="True"
+              CanUserSortColumns="True"
+              GridLinesVisibility="Horizontal"
+              HeadersVisibility="Column"
+              AutoGenerateColumns="False">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="{DynamicResource RelColTypical}"
+                            Binding="{Binding TypicalMembers}"
+                            IsReadOnly="True"
+                            Width="2*" />
+        <DataGridTextColumn Header="{DynamicResource RelColMembers}"
+                            Binding="{Binding MemberCount}"
+                            IsReadOnly="True"
+                            Width="80" />
+        <DataGridTextColumn Header="{DynamicResource RelColDisplayName}"
+                            Binding="{Binding DisplayName}"
+                            IsReadOnly="True"
+                            Width="150" />
+        <DataGridTextColumn Header="{DynamicResource RelColFaction}"
+                            Binding="{Binding FactionName}"
+                            IsReadOnly="True"
+                            Width="*" />
+        <DataGridTextColumn Header="{DynamicResource RelColKey}"
+                            Binding="{Binding KeyText}"
+                            IsReadOnly="True"
+                            Width="90"
+                            FontFamily="Consolas, Menlo, monospace" />
+        <DataGridTextColumn Header="{DynamicResource RelColLeader}"
+                            Binding="{Binding LeaderName}"
+                            IsReadOnly="True"
+                            Width="180" />
+        <DataGridTextColumn Header="{DynamicResource RelColGroup}"
+                            Binding="{Binding GroupName}"
+                            IsReadOnly="True"
+                            Width="140" />
+        <DataGridTextColumn Header="{DynamicResource RelColCurrent}"
+                            Binding="{Binding CurrentText}"
+                            IsReadOnly="True"
+                            Width="150" />
+        <DataGridTemplateColumn Header="{DynamicResource RelColNew}" Width="190" CanUserSort="False">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate DataType="vm:FactionRelationRow">
+              <ComboBox ItemsSource="{Binding Options}"
+                        SelectedItem="{Binding NewRelation, Mode=TwoWay}"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Center" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+      </DataGrid.Columns>
+    </DataGrid>
+  </DockPanel>
+</Window>

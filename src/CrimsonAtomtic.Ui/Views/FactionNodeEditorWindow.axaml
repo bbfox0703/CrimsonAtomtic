@@ -23,12 +23,35 @@
 
     <!-- Filter toolbar -->
     <Grid DockPanel.Dock="Top"
-          ColumnDefinitions="*"
+          ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto,Auto"
+          ColumnSpacing="8"
           Margin="0,0,0,8"
           VerticalAlignment="Center">
       <TextBox Grid.Column="0"
                Text="{Binding SearchText}"
                PlaceholderText="{DynamicResource FactionNodeSearchHint}" />
+      <TextBlock Grid.Column="1"
+                 Text="{DynamicResource FactionNodeFilterState}"
+                 VerticalAlignment="Center" />
+      <ComboBox Grid.Column="2"
+                MinWidth="140"
+                ItemsSource="{Binding StateFilters}"
+                SelectedItem="{Binding SelectedStateFilter}" />
+      <TextBlock Grid.Column="3"
+                 Text="{DynamicResource FactionNodeFilterRegion}"
+                 VerticalAlignment="Center" />
+      <ComboBox Grid.Column="4"
+                MinWidth="170"
+                ItemsSource="{Binding RegionFilters}"
+                SelectedItem="{Binding SelectedRegionFilter}" />
+      <TextBlock Grid.Column="5"
+                 Text="{DynamicResource FactionNodeFilterConqueror}"
+                 VerticalAlignment="Center" />
+      <ComboBox Grid.Column="6"
+                MinWidth="260"
+                MaxWidth="420"
+                ItemsSource="{Binding ConquerorFilters}"
+                SelectedItem="{Binding SelectedConquerorFilter}" />
     </Grid>
 
     <!-- Selection toolbar (acts on the current filtered view) -->
@@ -102,6 +125,14 @@
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
+        <DataGridTextColumn Header="{DynamicResource FactionNodeColPlace}"
+                            Binding="{Binding PlaceName}"
+                            IsReadOnly="True"
+                            Width="*" />
+        <DataGridTextColumn Header="{DynamicResource FactionNodeColRegion}"
+                            Binding="{Binding Region}"
+                            IsReadOnly="True"
+                            Width="150" />
         <DataGridTextColumn Header="{DynamicResource FactionNodeColOwner}"
                             Binding="{Binding OwnerName}"
                             IsReadOnly="True"

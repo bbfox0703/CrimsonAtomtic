@@ -64,6 +64,7 @@ public sealed class LocalizationProvider : IDisposable
     // reserveslot) - copy literally.
     private const string FactionNodeTable            = "factionnode";
     private const string FactionInfoTable            = "faction";
+    private const string FactionRelationGroupTable   = "factionrelationgroup";
     private const string HouseInfoTable              = "houseinfo";
     private const string RoyalSupplyTable            = "royalsupply";
     private const string CraftToolInfoTable          = "crafttoolinfo";
@@ -288,6 +289,7 @@ public sealed class LocalizationProvider : IDisposable
         "ItemGroupKey",              // 1,500 rows
         "FactionNodeKey",            // 1,158 rows — faction-stronghold node names
         "FactionKey",                // 135 rows (2.06) — "Faction_Graymane", …; no PALOC chain
+        "FactionRelationGroupKey",   // 5 rows — Graymane / FriendlyCombat / HostileCombat / NPC_Common / Monster_Common
     };
 
     /// <summary>
@@ -370,6 +372,7 @@ public sealed class LocalizationProvider : IDisposable
     // 13 niche name-only bridges, group 0008 (impl_name_only_bridge!).
     private NativeFactionNodeInfoCatalog? _factionNodeInfo;
     private NativeFactionInfoCatalog? _factionInfo;
+    private NativeFactionRelationGroupCatalog? _factionRelationGroupInfo;
     private NativeHouseInfoCatalog? _houseInfo;
     private NativeRoyalSupplyInfoCatalog? _royalSupplyInfo;
     private NativeCraftToolInfoCatalog? _craftToolInfo;
@@ -550,6 +553,7 @@ public sealed class LocalizationProvider : IDisposable
             return false;
         }
         _gameRoot = gameRoot;
+        _factionMembers = null; // rebuilt from the characterinfo loaded below
 
         // ── Read meta/0.paver FIRST so the caller (App startup) can
         // surface a warning dialog if the install's game-data version
@@ -614,6 +618,7 @@ public sealed class LocalizationProvider : IDisposable
         TryBootstrapStoreInfo(gameRoot);
         TryBootstrapNicheBridges(gameRoot);
         TryBootstrapDlcKeyTables(gameRoot);
+        TryMergeDlcTables(gameRoot);
 
         // ── Discover available PALOC languages by probing the well-known
         // group range. PAMT parses are fast (a few ms each); the probe
@@ -723,6 +728,44 @@ public sealed class LocalizationProvider : IDisposable
     /// bridge misses. Each table degrades on its own, and a table a DLC ships
     /// no body for simply registers nothing.
     /// </summary>
+    /// <summary>
+    /// Merge each DLC's copy of the faction-node, knowledge, faction and
+    /// character tables into the base handles, so DLC rows resolve like base
+    /// ones: place names of DLC nodes (most name a DLC knowledge row), DLC
+    /// factions, and DLC characters in the faction member counts. Merged rows
+    /// are appended, so base indices don't move. Without a DLC folder nothing
+    /// changes; a missing or broken DLC table is skipped on its own.
+    /// </summary>
+    private void TryMergeDlcTables(string gameRoot)
+    {
+        foreach (var dlc in GameDataLayout.DlcNames(gameRoot))
+        {
+            var pamt = Path.Combine(
+                gameRoot, GameDataLayout.DlcDirectory, dlc, GameDataLayout.GameDataGroup, "0.pamt");
+            if (!File.Exists(pamt))
+            {
+                continue;
+            }
+            Merge(KnowledgeInfoTable, (b, h) => _knowledgeInfo?.MergeDlcFromBytes(b, h));
+            Merge(FactionNodeTable, (b, h) => _factionNodeInfo?.MergeDlcFromBytes(b, h));
+            Merge(FactionInfoTable, (b, h) => _factionInfo?.MergeDlcFromBytes(b, h));
+            Merge(CharacterInfoTable, (b, h) => _characterInfo?.MergeDlcFromBytes(b, h));
+
+            void Merge(string table, Func<byte[], byte[], int?> merge)
+            {
+                try
+                {
+                    var stem = GameDataLayout.DlcTableStem(table, dlc);
+                    merge(_paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(stem)),
+                          _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Header(stem)));
+                }
+                catch (CrimsonSaveException) { }
+                catch (IOException) { }
+            }
+        }
+        _factionMembers = null; // member lists now include DLC characters
+    }
+
     private void TryBootstrapDlcKeyTables(string gameRoot)
     {
         _dlcBridges.ForEach(b => b.Dispose());
@@ -990,6 +1033,8 @@ public sealed class LocalizationProvider : IDisposable
             NativeFactionNodeInfoCatalog.LoadFromBytes, ref _factionNodeInfo);
         TryLoadNicheBridge(pamt, FactionInfoTable,
             NativeFactionInfoCatalog.LoadFromBytes, ref _factionInfo);
+        TryLoadNicheBridge(pamt, FactionRelationGroupTable,
+            NativeFactionRelationGroupCatalog.LoadFromBytes, ref _factionRelationGroupInfo);
         TryLoadNicheBridge(pamt, HouseInfoTable,
             NativeHouseInfoCatalog.LoadFromBytes, ref _houseInfo);
         TryLoadNicheBridge(pamt, RoyalSupplyTable,
@@ -1810,6 +1855,162 @@ public sealed class LocalizationProvider : IDisposable
     }
 
     /// <summary>
+    /// Every item (base, then DLC-only) whose iteminfo
+    /// <c>category_info</c> equals <paramref name="category"/>, in
+    /// enumeration order. Empty when iteminfo isn't loaded.
+    /// </summary>
+    public IReadOnlyList<uint> EnumerateItemsByCategory(ushort category)
+    {
+        var list = new List<uint>();
+        var count = ItemCount;
+        for (var i = 0; i < count; i++)
+        {
+            if (GetItem(i) is { } e
+                && LookupItemInfoSummary(e.ItemKey) is { } s
+                && s.CategoryInfo == category)
+            {
+                list.Add(e.ItemKey);
+            }
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// The localized name of <paramref name="factionKey"/>'s faction group
+    /// ("Hernand", "Greymanes"), primary and secondary language. Null where
+    /// the game has none — faction rows themselves carry no localized name.
+    /// </summary>
+    public (string? English, string? Secondary) ResolveFactionDisplayName(uint factionKey)
+    {
+        string? One(string lang)
+        {
+            _palocParts.TryGetValue(lang, out var parts);
+            return DisplayOrFallback(_factionInfo, parts,
+                (bridge, part) => bridge.LookupDisplayName(factionKey, part), _ => null);
+        }
+        var english = One(DefaultLanguage);
+        var secondary = _secondaryLanguage is { } lang && lang != DefaultLanguage ? One(lang) : null;
+        return (english, secondary);
+    }
+
+    /// <summary>
+    /// The most common localized names among <paramref name="factionKey"/>'s
+    /// members, most frequent first: the primary-language name, the
+    /// secondary-language name of the same characters (null without a
+    /// secondary language), and how many members carry it. Factions carry no
+    /// name of their own; their members' names ("Hernandian Guard",
+    /// "Bandit") are what a player recognises. Members without a
+    /// primary-language name are skipped.
+    /// </summary>
+    public IReadOnlyList<(string Name, string? Secondary, int Count)> FactionMemberNames(uint factionKey, int top = 3)
+    {
+        if (_characterInfo is not { } info || !FactionMembers().TryGetValue(factionKey, out var members))
+        {
+            return [];
+        }
+        _palocParts.TryGetValue(DefaultLanguage, out var primary);
+        NativePalocCatalog[]? secondary = null;
+        if (_secondaryLanguage is { } lang && lang != DefaultLanguage)
+        {
+            _palocParts.TryGetValue(lang, out secondary);
+        }
+        var groups = new Dictionary<string, (string? Secondary, int Count)>(StringComparer.Ordinal);
+        foreach (var key in members)
+        {
+            var name = DisplayOrFallback(info, primary, (b, part) => b.LookupDisplayName(key, part), _ => null);
+            if (string.IsNullOrEmpty(name))
+            {
+                continue;
+            }
+            var g = groups.GetValueOrDefault(name);
+            g.Secondary ??= secondary is null
+                ? null
+                : DisplayOrFallback(info, secondary, (b, part) => b.LookupDisplayName(key, part), _ => null);
+            g.Count++;
+            groups[name] = g;
+        }
+        return groups
+            .OrderByDescending(kv => kv.Value.Count)
+            .ThenBy(kv => kv.Key, StringComparer.Ordinal)
+            .Take(top)
+            .Select(kv => (kv.Key, kv.Value.Secondary, kv.Value.Count))
+            .ToList();
+    }
+
+    /// <summary>
+    /// The place name of a faction node as the game shows it ("Hernand
+    /// Castle" / "埃爾南德城"), primary and secondary language. A node has no
+    /// name of its own; it names a knowledge row whose title is the place.
+    /// </summary>
+    public (string? English, string? Secondary) ResolveFactionNodeName(uint nodeKey)
+    {
+        if (_factionNodeInfo is not { } nodes || _knowledgeInfo is not { } knowledge)
+        {
+            return (null, null);
+        }
+        string? One(string lang)
+        {
+            _palocParts.TryGetValue(lang, out var parts);
+            return DisplayOrFallback(nodes, parts, (b, part) => b.LookupDisplayName(nodeKey, knowledge, part), _ => null);
+        }
+        var english = One(DefaultLanguage);
+        var secondary = _secondaryLanguage is { } lang && lang != DefaultLanguage ? One(lang) : null;
+        return (english, secondary);
+    }
+
+    /// <summary>
+    /// A label a player recognises for <paramref name="factionKey"/>: its most
+    /// common member name ("Hernandian Guard / 埃爾南德警衛隊"), else its
+    /// internal row name, else the key.
+    /// </summary>
+    public string ResolveFactionLabel(uint factionKey)
+    {
+        if (FactionMemberNames(factionKey, 1) is [var top])
+        {
+            return top.Secondary is null || top.Secondary == top.Name ? top.Name : $"{top.Name} / {top.Secondary}";
+        }
+        var internalName = _factionInfo?.LookupStringKey(factionKey);
+        return string.IsNullOrEmpty(internalName)
+            ? factionKey.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : internalName;
+    }
+
+    private Dictionary<uint, List<uint>>? _factionMembers;
+
+    /// <summary>FactionKey → member CharacterKeys, built once from characterinfo (DLC rows merged in).</summary>
+    private Dictionary<uint, List<uint>> FactionMembers()
+    {
+        if (_factionMembers is { } cached)
+        {
+            return cached;
+        }
+        var map = new Dictionary<uint, List<uint>>();
+        if (_characterInfo is { } info)
+        {
+            for (var i = 0; i < info.EntryCount; i++)
+            {
+                if (info.GetEntry(i) is { } e && info.LookupFactionKey(e.Key) is { } f and not 0)
+                {
+                    if (!map.TryGetValue(f, out var list))
+                    {
+                        map[f] = list = [];
+                    }
+                    list.Add(e.Key);
+                }
+            }
+        }
+        return _factionMembers = map;
+    }
+
+    /// <summary>
+    /// Characters (base, plus each installed DLC's) that belong to <paramref name="factionKey"/>.
+    /// This, not the faction's name, tells which faction a place's NPCs
+    /// follow (Hernand's guards: Faction_Celeste_Hernand, 66). 0 without
+    /// characterinfo.
+    /// </summary>
+    public int FactionMemberCount(uint factionKey) => _characterInfo?.FactionMemberCount(factionKey) ?? 0;
+
+    /// <summary>
     /// True when the given save-schema field <c>TypeName</c> has a
     /// name-resolution path — PALOC-backed (item / gimmick),
     /// table-driven (mission / quest / stage / knowledge / character / faction /
@@ -2042,6 +2243,7 @@ public sealed class LocalizationProvider : IDisposable
             // language intentionally echoes the English column.
             "FactionNodeKey"          => _factionNodeInfo?.LookupStringKey(key),
             "FactionKey"              => _factionInfo?.LookupStringKey(key),
+            "FactionRelationGroupKey" => _factionRelationGroupInfo?.LookupStringKey(key),
             "HouseKey"                => _houseInfo?.LookupStringKey(key),
             "RoyalSupplyKey"          => _royalSupplyInfo?.LookupStringKey(key),
             "CraftToolKey"            => _craftToolInfo?.LookupStringKey(key),
@@ -2195,6 +2397,8 @@ public sealed class LocalizationProvider : IDisposable
         // 13 niche bridges.
         _factionNodeInfo?.Dispose(); _factionNodeInfo = null;
         _factionInfo?.Dispose(); _factionInfo = null;
+        _factionMembers = null;
+        _factionRelationGroupInfo?.Dispose(); _factionRelationGroupInfo = null;
         _houseInfo?.Dispose(); _houseInfo = null;
         _royalSupplyInfo?.Dispose(); _royalSupplyInfo = null;
         _craftToolInfo?.Dispose(); _craftToolInfo = null;

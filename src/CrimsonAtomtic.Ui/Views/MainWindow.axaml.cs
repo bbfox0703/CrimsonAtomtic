@@ -1445,6 +1445,55 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Tools → Edit Faction Relations. Lists every faction with its relation
+    /// to the player's faction and writes picked changes both ways. Without a
+    /// faction list the status footer says so instead.
+    /// </summary>
+    private async void OnEditFactionRelationsClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm
+            || vm.LoadedPath is null
+            || vm.Summary is not { Blocks: not null })
+        {
+            return;
+        }
+        var dialogVm = await FactionRelationEditorViewModel.CreateAsync(vm);
+        if (!dialogVm.HasFactions)
+        {
+            vm.BulkOpStatus = FactionRelationEditorViewModel.NoFactionsSummary;
+            return;
+        }
+        dialogVm.ConfirmRequested = (title, msg) => ConfirmDialog.ShowAsync(this, title, msg);
+        var child = new FactionRelationEditorWindow { DataContext = dialogVm };
+        child.Show(this);
+    }
+
+    /// <summary>
+    /// Tools → Edit Contributions. Lists every faction contribution currency
+    /// (iteminfo category 60001) with its amount in the save — or "not in
+    /// save" — and lets the user set or add them. Without iteminfo there is
+    /// no catalog, which is surfaced in the status footer instead.
+    /// </summary>
+    private async void OnEditContributionsClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm
+            || vm.LoadedPath is null
+            || vm.Summary is not { Blocks: not null })
+        {
+            return;
+        }
+        var dialogVm = await ContributionEditorViewModel.CreateAsync(vm);
+        if (!dialogVm.HasCatalog)
+        {
+            vm.BulkOpStatus = ContributionEditorViewModel.NoCatalogSummary;
+            return;
+        }
+        dialogVm.ConfirmRequested = (title, msg) => ConfirmDialog.ShowAsync(this, title, msg);
+        var child = new ContributionEditorWindow { DataContext = dialogVm };
+        child.Show(this);
+    }
+
+    /// <summary>
     /// Tools → Find Items… handler. Opens the cross-bag item-search
     /// dialog powered by <see cref="ISaveLoader.ListInventoryItems"/>.
     /// Read-only; the menu item is gated on <c>HasSave</c> so this
