@@ -9,15 +9,22 @@
 >
 > Last updated: **2026-11-27** — the editor is aligned to game **2.06**
 > (paver `2/6/0/0xe1bd9840`, `dlc_01` revision 11, Steam build 26949954,
-> live since 2026-11-27), and **v2.06.01 is tagged, built and PUBLISHED**
-> (2026-11-27T03:55:25Z, marked Latest): tag → `01c1f00` (PR #55 merge), CI
-> run `45936467259` on Rust 1.100.0, crimson-rs `2983e1e`, exe `2.6.1.36`,
-> zip 20,709,824 B, sha256 `4e426b1f…4caf58` (equal to the asset's GitHub
-> digest and the run log). The downloaded zip was checked before
-> publishing: its `.sha256` matches, it holds the four expected files with
-> no `crimson_rs.dll`, the exe's ProductVersion ends in `01c1f00`, and it
-> launches as `CrimsonAtomtic v2.06.01.36`. **Next task: the in-game
-> results of the slot103 test below**, then pick from the backlog.
+> live since 2026-11-27), and **v2.06.02 is tagged, built and PUBLISHED**
+> (2026-11-27T13:22:50Z, marked Latest): version bumped 2.6.1 → 2.6.2 in
+> PR #61, tag → `b9034bb` (PR #61 merge), CI run `46005852913` (3 m 44 s),
+> crimson-rs `0a551a6`, exe `2.6.2.36`, zip 22,155,661 B, sha256
+> `f850854b…08ffd` (equal to the asset's GitHub digest and the run log).
+> The downloaded zip was checked before publishing: its `.sha256` matches,
+> it holds the four expected files with no `crimson_rs.dll`, the exe's
+> ProductVersion ends in `b9034bb`, and it launches as
+> `CrimsonAtomtic v2.06.02.36`. It ships the dye editor (re-enabled, slot
+> add/remove, free colour), Known Dye Colours, the faction relation /
+> contribution / node editors, the Abyss gate location columns and Add Item
+> learning item knowledge (PRs #57–#60). v2.06.01 (2026-11-27T03:55:25Z) was
+> the plain 2.06 alignment. slot103 is restored to its 2026-11-15 original
+> and the test backups are deleted. **Next task: pick from the backlog**
+> (not yet checked in-game: dye slot add/remove, Add Item knowledge, the
+> Abyss gate columns, relation-group edits).
 >
 > **Tools → Edit Contributions (new, 2026-11-27, on `dev`).** The faction
 > contribution currencies (`Contribution_Hernandian` 1001754, `_Graymane`,
