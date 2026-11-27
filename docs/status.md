@@ -9,7 +9,17 @@
 >
 > Last updated: **2026-11-27** — the editor is aligned to game **2.06**
 > (paver `2/6/0/0xe1bd9840`, `dlc_01` revision 11, Steam build 26949954,
-> live since 2026-11-27), **on `dev`, not committed or released**. 2.06
+> live since 2026-11-27), and **v2.06.01 is tagged, built and PUBLISHED**
+> (2026-11-27T03:55:25Z, marked Latest): tag → `01c1f00` (PR #55 merge), CI
+> run `45936467259` on Rust 1.100.0, crimson-rs `2983e1e`, exe `2.6.1.36`,
+> zip 20,709,824 B, sha256 `4e426b1f…4caf58` (equal to the asset's GitHub
+> digest and the run log). The downloaded zip was checked before
+> publishing: its `.sha256` matches, it holds the four expected files with
+> no `crimson_rs.dll`, the exe's ProductVersion ends in `01c1f00`, and it
+> launches as `CrimsonAtomtic v2.06.01.36`. **Next task: none queued** —
+> pick from the backlog below.
+>
+> The 2.06 alignment itself: 2.06
 > moved every static-info row's name from the table body into its header, so
 > **v2.05.02 shows item, mission, character, knowledge and gimmick names
 > blank on 2.06**. crimson-rs PR #115 (vendored at `2983e1e`) reads the new
@@ -23,8 +33,7 @@
 > per TypeName on slot0 / slot102 (2.06-written) equal 2.05.01's, ItemKey
 > 752/752 resolved; AOT publish has zero IL/trim warnings and launches as
 > `v2.06.01.36`. Not checked: anything in-game. Details in
-> [game-versions.md](game-versions.md). **Next task: commit, then
-> 「啟動 release CI」 for v2.06.01.**
+> [game-versions.md](game-versions.md).
 >
 > **Below this line is the 2.05.01 history.**
 >
