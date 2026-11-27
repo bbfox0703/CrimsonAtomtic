@@ -134,12 +134,11 @@
         <MenuItem Header="{DynamicResource MenuRenameMercenary}"
                   Click="OnRenameMercenaryClick"
                   IsEnabled="{Binding HasSave}" />
-        <!-- Greyed out since game 2.01 re-encoded the dye slot mask; see
-             MainWindowViewModel.IsDyeEditorAvailable for the measurement. -->
+        <!-- Gated by MainWindowViewModel.IsDyeEditorAvailable (off 2.01 → 2026-11-27,
+             until the 12-byte dye mask was decoded). -->
         <MenuItem Header="{DynamicResource MenuEditItemDyes}"
                   Click="OnEditItemDyesClick"
-                  IsEnabled="{Binding IsDyeEditorAvailable}"
-                  ToolTip.Tip="{DynamicResource MenuEditItemDyesUnavailableTip}" />
+                  IsEnabled="{Binding IsDyeEditorAvailable}" />
         <MenuItem Header="{DynamicResource MenuVendorBuyback}"
                   Click="OnVendorBuybackClick"
                   IsEnabled="{Binding HasSave}" />

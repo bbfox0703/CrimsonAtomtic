@@ -508,6 +508,60 @@ public sealed class NativePartPrefabDyeSlotInfoCatalog : IDisposable
         }
     }
 
+    /// <summary>
+    /// The dye slot numbers the prefab offers — the <c>_dyeSlotNo</c> values
+    /// a save's dye elements use — ascending. Each slot's three material
+    /// channels carry a dye slot number in <c>mat_indices</c>, and the
+    /// 12-byte mask flags which numbers are dyeable (crimson-rs PR #122);
+    /// this is the union over the prefab's slots and extra layers. The
+    /// numbers are sparse (e.g. 0, 1, 2, 4, 5, 6). Null when the prefab
+    /// isn't in the table.
+    /// </summary>
+    public IReadOnlyList<int>? LookupDyeSlotNumbers(uint prefabKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var rc = NativeMethods.PartPrefabDyeSlotInfoLookupDyeSlotBits(_handle, prefabKey, out var bits);
+        if (rc == NativeMethods.NOT_FOUND) return null;
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_part_prefab_dye_slot_info_lookup_dye_slot_bits({prefabKey}) failed: "
+                + NameBuffer.ErrorName(rc));
+        }
+        var numbers = new List<int>();
+        for (var n = 0; n < 32; n++)
+        {
+            if ((bits & (1u << n)) != 0) numbers.Add(n);
+        }
+        return numbers;
+    }
+
+    /// <summary>
+    /// Default material name of dye slot <paramref name="dyeSlotNo"/> in the
+    /// prefab ("cloth", "leather", "metal"); empty when unnamed, null when
+    /// no channel of the prefab uses that number.
+    /// </summary>
+    public string? LookupDyeSlotMaterial(uint prefabKey, int dyeSlotNo)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentOutOfRangeException.ThrowIfNegative(dyeSlotNo);
+        try
+        {
+            unsafe
+            {
+                return NameBuffer.ReadString(
+                    (byte* buf, nuint bufLen, out nuint required) =>
+                        NativeMethods.PartPrefabDyeSlotInfoLookupDyeSlotMaterial(
+                            _handle, prefabKey, (uint)dyeSlotNo, buf, bufLen, out required),
+                    $"crimson_part_prefab_dye_slot_info_lookup_dye_slot_material({prefabKey},{dyeSlotNo})");
+            }
+        }
+        catch (CrimsonSaveException ex) when (ex.ErrorCode == NativeMethods.OUT_OF_RANGE)
+        {
+            return null;
+        }
+    }
+
     public string? LookupSlotDefaultMaterial(uint prefabKey, int slotIndex, int matIndex)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -823,6 +877,129 @@ public sealed class NativeItemPartPrefabCatalog : IDisposable
     /// Useful for diagnostics — divide by iteminfo's total item count
     /// to get a coverage estimate.
     /// </summary>
+    /// <summary>
+    /// Build the join through each item's <c>.prefab</c> files in
+    /// <paramref name="prefabPamtPath"/> (<c>&lt;game&gt;/0009/0.pamt</c>): a
+    /// prefab lists every mesh of the outfit, so body-type armour resolves
+    /// (909 of 917 dyeable items on 2.06, against 70 by name). About 2 s.
+    /// </summary>
+    public static NativeItemPartPrefabCatalog LoadFromBytes(
+        ReadOnlySpan<byte> iteminfoPabgb,
+        ReadOnlySpan<byte> stringinfoPabgb,
+        ReadOnlySpan<byte> partprefabPabgb,
+        ReadOnlySpan<byte> partprefabPabgh,
+        string prefabPamtPath)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(prefabPamtPath);
+        unsafe
+        {
+            fixed (byte* pi = iteminfoPabgb)
+            fixed (byte* ps = stringinfoPabgb)
+            fixed (byte* pb = partprefabPabgb)
+            fixed (byte* ph = partprefabPabgh)
+            {
+                var rc = NativeMethods.ItemPartPrefabLoadFromBytesWithPrefabPamt(
+                    pi, (nuint)iteminfoPabgb.Length,
+                    ps, (nuint)stringinfoPabgb.Length,
+                    pb, (nuint)partprefabPabgb.Length,
+                    ph, (nuint)partprefabPabgh.Length,
+                    prefabPamtPath,
+                    out var raw);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        "crimson_item_part_prefab_load_from_bytes_with_prefab_pamt failed: "
+                        + NameBuffer.ErrorName(rc));
+                }
+                return new NativeItemPartPrefabCatalog(
+                    CrimsonItemPartPrefabHandle.FromOwnedPointer(raw));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Merge a DLC's items (its <c>iteminfo</c> / <c>stringinfo</c> copies and
+    /// <c>&lt;game&gt;/dlc/&lt;name&gt;/0009/0.pamt</c> prefabs) into a join
+    /// built with <see cref="LoadFromBytes(ReadOnlySpan{byte}, ReadOnlySpan{byte}, ReadOnlySpan{byte}, ReadOnlySpan{byte}, string)"/>.
+    /// Items both tables carry keep their base join. Atomic: a failure throws
+    /// and leaves the join unchanged. Returns the number of items added.
+    /// </summary>
+    public int MergeDlcFromBytes(ReadOnlySpan<byte> iteminfoPabgb, ReadOnlySpan<byte> stringinfoPabgb, string dlcPrefabPamtPath)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrEmpty(dlcPrefabPamtPath);
+        unsafe
+        {
+            fixed (byte* pi = iteminfoPabgb)
+            fixed (byte* ps = stringinfoPabgb)
+            {
+                var rc = NativeMethods.ItemPartPrefabMergeDlcFromBytes(
+                    _handle, pi, (nuint)iteminfoPabgb.Length, ps, (nuint)stringinfoPabgb.Length,
+                    dlcPrefabPamtPath, out var added);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        "crimson_item_part_prefab_merge_dlc_from_bytes failed: " + NameBuffer.ErrorName(rc));
+                }
+                return (int)added;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The dye slot numbers an item offers — its save dye elements'
+    /// <c>_dyeSlotNo</c> values — ascending: the union over the meshes of
+    /// the item's prefabs, for every body type (<paramref name="tribeGender"/>
+    /// null) or one (<c>"player_1"</c>, <c>"human_female"</c>, …). Null when
+    /// the item has no dye rows.
+    /// </summary>
+    public IReadOnlyList<int>? LookupDyeSlotNumbers(uint itemKey, string? tribeGender = null)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var rc = NativeMethods.ItemPartPrefabLookupDyeSlotBits(_handle, itemKey, tribeGender, out var bits);
+        if (rc == NativeMethods.NOT_FOUND) return null;
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_item_part_prefab_lookup_dye_slot_bits({itemKey}) failed: {NameBuffer.ErrorName(rc)}");
+        }
+        var numbers = new List<int>();
+        for (var n = 0; n < 32; n++)
+        {
+            if ((bits & (1u << n)) != 0) numbers.Add(n);
+        }
+        return numbers;
+    }
+
+    /// <summary>
+    /// Default material of an item's dye slot <paramref name="dyeSlotNo"/>
+    /// ("cloth", "leather", "metal"); empty when unnamed, null when no mesh
+    /// of the item uses that number. A number can name different materials
+    /// on different body types; with <paramref name="tribeGender"/> null the
+    /// first match answers.
+    /// </summary>
+    public string? LookupDyeSlotMaterial(uint itemKey, int dyeSlotNo, string? tribeGender = null)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentOutOfRangeException.ThrowIfNegative(dyeSlotNo);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(dyeSlotNo, 255);
+        try
+        {
+            unsafe
+            {
+                return NameBuffer.ReadString(
+                    (byte* buf, nuint bufLen, out nuint required) =>
+                        NativeMethods.ItemPartPrefabLookupDyeSlotMaterial(
+                            _handle, itemKey, tribeGender, (byte)dyeSlotNo, buf, bufLen, out required),
+                    $"crimson_item_part_prefab_lookup_dye_slot_material({itemKey},{dyeSlotNo})");
+            }
+        }
+        catch (CrimsonSaveException ex) when (ex.ErrorCode == NativeMethods.OUT_OF_RANGE)
+        {
+            return null;
+        }
+    }
+
     public int ResolvedItemCount
     {
         get

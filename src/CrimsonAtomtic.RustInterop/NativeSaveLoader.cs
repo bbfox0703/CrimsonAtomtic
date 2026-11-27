@@ -3155,6 +3155,11 @@ internal static partial class NativeMethods
         CrimsonFactionInfoHandle handle, uint factionKey,
         byte* buf, nuint bufLen, out nuint required);
 
+    [LibraryImport(LibraryName, EntryPoint = "crimson_faction_info_get_entry")]
+    public static unsafe partial int FactionInfoGetEntry(
+        CrimsonFactionInfoHandle handle, uint idx, out uint outKey,
+        byte* buf, nuint bufLen, out nuint required);
+
     // Localized name of the faction's factiongroup (PALOC (group << 32) | 0x214).
     [LibraryImport(LibraryName, EntryPoint = "crimson_faction_info_lookup_display_name")]
     public static unsafe partial int FactionInfoLookupDisplayName(
@@ -3184,6 +3189,12 @@ internal static partial class NativeMethods
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_factionrelationgroup_entry_count")]
     public static partial int FactionRelationGroupEntryCount(CrimsonFactionRelationGroupHandle handle, out uint count);
+
+    // FactionRelationType between two distinct relation groups (1 War / 3 BloodAlly);
+    // NOT_FOUND for an unknown group or a group with itself.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_factionrelationgroup_lookup_relation")]
+    public static partial int FactionRelationGroupLookupRelation(
+        CrimsonFactionRelationGroupHandle handle, uint groupA, uint groupB, out uint relationType);
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_factionrelationgroup_lookup_string_key")]
     public static unsafe partial int FactionRelationGroupLookupStringKey(
@@ -3496,6 +3507,21 @@ internal static partial class NativeMethods
     public static partial int PartPrefabDyeSlotInfoEntryCount(
         CrimsonPartPrefabDyeSlotInfoHandle handle, out uint count);
 
+    // Union of the prefab's slot (and extra-layer) masks as a bitset: bit n
+    // = dye slot n, i.e. the _dyeSlotNo values the item offers (2.01+ rule).
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_slot_info_lookup_dye_slot_bits")]
+    public static partial int PartPrefabDyeSlotInfoLookupDyeSlotBits(
+        CrimsonPartPrefabDyeSlotInfoHandle handle, uint prefabKey, out uint bits);
+
+    // Default material name of a dye slot number ("cloth"/"leather"/"metal";
+    // "" if unnamed; OUT_OF_RANGE when no channel uses that number).
+    [LibraryImport(LibraryName,
+        EntryPoint = "crimson_part_prefab_dye_slot_info_lookup_dye_slot_material")]
+    public static unsafe partial int PartPrefabDyeSlotInfoLookupDyeSlotMaterial(
+        CrimsonPartPrefabDyeSlotInfoHandle handle, uint prefabKey, uint dyeSlotNo,
+        byte* buf, nuint bufLen, out nuint required);
+
     [LibraryImport(LibraryName,
         EntryPoint = "crimson_part_prefab_dye_slot_info_lookup_slot_count")]
     public static partial int PartPrefabDyeSlotInfoLookupSlotCount(
@@ -3579,6 +3605,43 @@ internal static partial class NativeMethods
         byte* partprefabPabgb, nuint partprefabPabgbLen,
         byte* partprefabPabgh, nuint partprefabPabghLen,
         out IntPtr handle);
+
+    // The join through each item's .prefab files (group 0009): every mesh the
+    // outfit lists, so body-type armour resolves too (crimson-rs PR #123).
+    [LibraryImport(LibraryName, EntryPoint = "crimson_item_part_prefab_load_from_bytes_with_prefab_pamt",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static unsafe partial int ItemPartPrefabLoadFromBytesWithPrefabPamt(
+        byte* iteminfoPabgb, nuint iteminfoLen,
+        byte* stringinfoPabgb, nuint stringinfoLen,
+        byte* partprefabPabgb, nuint partprefabPabgbLen,
+        byte* partprefabPabgh, nuint partprefabPabghLen,
+        string prefabPamtPath,
+        out IntPtr handle);
+
+    // Merge a DLC's items into the prefab-mesh join (atomic: a failure leaves
+    // the handle unchanged). dlcPrefabPamtPath = <game>/dlc/<name>/0009/0.pamt.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_item_part_prefab_merge_dlc_from_bytes",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static unsafe partial int ItemPartPrefabMergeDlcFromBytes(
+        CrimsonItemPartPrefabHandle handle,
+        byte* iteminfoPabgb, nuint iteminfoLen,
+        byte* stringinfoPabgb, nuint stringinfoLen,
+        string? dlcPrefabPamtPath,
+        out uint added);
+
+    // Union of an item's dye slot numbers over its meshes (tribeGender null =
+    // every body type). NOT_FOUND when the item has no dye rows.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_item_part_prefab_lookup_dye_slot_bits",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int ItemPartPrefabLookupDyeSlotBits(
+        CrimsonItemPartPrefabHandle handle, uint itemKey, string? tribeGender, out uint bits);
+
+    // Default material of an item's dye slot ("" unnamed; OUT_OF_RANGE unused).
+    [LibraryImport(LibraryName, EntryPoint = "crimson_item_part_prefab_lookup_dye_slot_material",
+                   StringMarshalling = StringMarshalling.Utf8)]
+    public static unsafe partial int ItemPartPrefabLookupDyeSlotMaterial(
+        CrimsonItemPartPrefabHandle handle, uint itemKey, string? tribeGender, byte dyeSlotNo,
+        byte* buf, nuint bufLen, out nuint required);
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_item_part_prefab_free")]
     public static partial void ItemPartPrefabFree(IntPtr handle);

@@ -108,6 +108,67 @@ public sealed class FactionRelationServiceTests(ITestOutputHelper output)
         Assert.Equal("Graymane", loc.ResolveByFieldTypeName("FactionRelationGroupKey", 16963));
         Assert.Equal("HostileCombat", loc.ResolveByFieldTypeName("FactionRelationGroupKey", 16965));
         Assert.Equal("Monster_Common", loc.ResolveByFieldTypeName("FactionRelationGroupKey", 16967));
+
+        // The group matrix (crimson-rs #121), checked against the game:
+        // bandits (Monster_Common) attack the player's Graymane, NPCs don't.
+        Assert.Equal(FactionRelation.War, loc.GroupRelation(16963, 16967));
+        Assert.Equal(FactionRelation.War, loc.GroupRelation(16967, 16963));
+        Assert.Equal(FactionRelation.War, loc.GroupRelation(16963, 16965));
+        Assert.Equal(FactionRelation.BloodAlly, loc.GroupRelation(16963, 16966));
+        Assert.Equal(FactionRelation.BloodAlly, loc.GroupRelation(16963, 16964));
+        Assert.Null(loc.GroupRelation(16963, 16963));
+
+        // Faction-group (region) names localize the node editor's regions.
+        loc.SecondaryLanguage = "zho-tw";
+        var groups = loc.FactionGroupNames();
+        Assert.Equal("埃爾南德", groups["Hernand"]);
+        Assert.Equal("赤血沙漠", groups["Crimson Desert"]);
+        Assert.Equal("大洋", groups["Great Ocean"]);
+    }
+
+    /// <summary>
+    /// A faction's relation group (<c>_relationGroupKey</c>, u16) is in the
+    /// save and can be changed; everything else stays as it was.
+    /// </summary>
+    [Fact]
+    public void Apply_ChangesARelationGroup_AndReadsBack()
+    {
+        if (!File.Exists("crimson_rs.dll") || LiveSaves.Newest() is not { } save)
+        {
+            return;
+        }
+        var dir = Directory.CreateTempSubdirectory("crimson-relgroup-");
+        try
+        {
+            using var loader = new NativeSaveLoader();
+            var blocks = loader.Load(save).Blocks;
+            var service = new FactionRelationService(loader);
+            var before = service.Scan(save, blocks);
+            // Faction_Bandit (Monster_Common on every save seen) → FriendlyCombat.
+            var bandit = before.SingleOrDefault(e => e.FactionKey == 1000128);
+            if (bandit is null || bandit.RelationGroupKey == 16964)
+            {
+                return;
+            }
+            var result = service.Apply(save, blocks, [], [new FactionGroupChange(1000128, 16964)]);
+            Assert.Null(result.Error);
+            Assert.Equal(1, result.GroupsApplied);
+
+            var outPath = Path.Combine(dir.FullName, "save.save");
+            loader.WriteToFile(outPath);
+            using var reread = new NativeSaveLoader();
+            var after = new FactionRelationService(reread).Scan(outPath, reread.Load(outPath).Blocks)
+                .ToDictionary(e => e.FactionKey);
+            Assert.Equal(16964u, after[1000128].RelationGroupKey);
+            foreach (var b in before.Where(b => b.FactionKey != 1000128))
+            {
+                Assert.Equal(b, after[b.FactionKey]);
+            }
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
     }
 
     /// <summary>

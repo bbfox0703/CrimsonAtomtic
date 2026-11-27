@@ -28,6 +28,12 @@ public sealed partial class FactionRelationEditorViewModel : ObservableObject
     [ObservableProperty]
     private bool _onlyWithRows;
 
+    /// <summary>"All relations" plus each relation present, with counts.</summary>
+    public ObservableCollection<FactionRelationFilter> RelationFilters { get; } = [];
+
+    [ObservableProperty]
+    private FactionRelationFilter? _selectedRelationFilter;
+
     [ObservableProperty]
     private string? _statusMessage;
 
@@ -62,7 +68,15 @@ public sealed partial class FactionRelationEditorViewModel : ObservableObject
     private async Task RescanAsync()
     {
         var entries = await Task.Run(_main.ScanFactionRelations).ConfigureAwait(true);
+        var playerGroup = await Task.Run(_main.PlayerRelationGroup).ConfigureAwait(true);
         var loc = _main.Localization;
+        // What a faction in a given group is to the player when no row says
+        // otherwise (game data: War or BloodAlly).
+        FactionRelation? GroupEffect(uint group) => playerGroup is { } pg ? loc.GroupRelation(pg, group) : null;
+        // The relation groups, as the save's factions use them.
+        var groups = entries.Select(e => e.RelationGroupKey).Distinct().Order()
+            .Select(k => new FactionGroupOption(k, Name(loc, "FactionRelationGroupKey", k)))
+            .ToList();
         // Most members first: the faction a place's rank-and-file NPCs
         // follow is what turns it hostile, not the named family faction.
         _allRows = entries
@@ -83,11 +97,24 @@ public sealed partial class FactionRelationEditorViewModel : ObservableObject
                     display,
                     loc.FactionMemberCount(e.FactionKey),
                     e.LeaderCharacterKey == 0 ? string.Empty : Name(loc, "CharacterKey", e.LeaderCharacterKey),
-                    Name(loc, "FactionRelationGroupKey", e.RelationGroupKey));
+                    groups,
+                    GroupEffect);
             })
             .OrderByDescending(r => r.MemberCount)
             .ThenBy(r => r.FactionName, StringComparer.Ordinal)
             .ToList();
+
+        // One choice per current relation as displayed, so "Group default →
+        // War" and "Group default → Blood ally" are separate.
+        var keep = SelectedRelationFilter?.Key;
+        RelationFilters.Clear();
+        RelationFilters.Add(new FactionRelationFilter(UiText.Get("RelFilterAllRelations", "All relations"), null));
+        foreach (var g in _allRows.GroupBy(r => r.CurrentText)
+                     .OrderBy(g => (int)g.First().Entry.PlayerToFaction).ThenBy(g => g.Key, StringComparer.Ordinal))
+        {
+            RelationFilters.Add(new FactionRelationFilter($"{g.Key} ({g.Count():N0})", g.Key));
+        }
+        SelectedRelationFilter = RelationFilters.FirstOrDefault(f => f.Key == keep) ?? RelationFilters[0];
         ApplyFilter();
     }
 
@@ -101,6 +128,8 @@ public sealed partial class FactionRelationEditorViewModel : ObservableObject
 
     partial void OnOnlyWithRowsChanged(bool value) => ApplyFilter();
 
+    partial void OnSelectedRelationFilterChanged(FactionRelationFilter? value) => ApplyFilter();
+
     private void ApplyFilter()
     {
         var search = SearchText?.Trim();
@@ -112,13 +141,18 @@ public sealed partial class FactionRelationEditorViewModel : ObservableObject
             {
                 continue;
             }
+            if (SelectedRelationFilter?.Key is { } relation && r.CurrentText != relation)
+            {
+                continue;
+            }
             if (!string.IsNullOrEmpty(search)
                 && !r.FactionName.Contains(search, StringComparison.OrdinalIgnoreCase)
                 && !r.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase)
                 && !r.TypicalMembers.Contains(search, StringComparison.OrdinalIgnoreCase)
                 && !r.KeyText.Contains(search, StringComparison.OrdinalIgnoreCase)
                 && !r.LeaderName.Contains(search, StringComparison.OrdinalIgnoreCase)
-                && !r.GroupName.Contains(search, StringComparison.OrdinalIgnoreCase))
+                && !r.GroupName.Contains(search, StringComparison.OrdinalIgnoreCase)
+                && !r.CurrentText.Contains(search, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
@@ -135,7 +169,10 @@ public sealed partial class FactionRelationEditorViewModel : ObservableObject
         var changed = _allRows
             .Where(r => r.NewRelation is { } n && (n.Value != r.Entry.PlayerToFaction || r.Entry.IsMismatched))
             .ToList();
-        if (changed.Count == 0)
+        var regrouped = _allRows
+            .Where(r => r.NewGroup is { } g && g.Key != r.Entry.RelationGroupKey)
+            .ToList();
+        if (changed.Count + regrouped.Count == 0)
         {
             StatusMessage = UiText.Get("RelNoChanges", "Nothing changed.");
             return;
@@ -143,8 +180,8 @@ public sealed partial class FactionRelationEditorViewModel : ObservableObject
         if (ConfirmRequested is { } ask
             && !await ask(UiText.Get("RelConfirmTitle", "Apply faction relations?"),
                 UiText.Format("RelConfirmBody",
-                    "Set the relation with {0} faction(s), both directions?\n\nReversible by reloading the save without writing.",
-                    changed.Count)).ConfigureAwait(true))
+                    "Set the relation with {0} faction(s), both directions, and the relation group of {1}?\n\nReversible by reloading the save without writing.",
+                    changed.Count, regrouped.Count)).ConfigureAwait(true))
         {
             StatusMessage = UiText.Get("DialogCancelled", "Cancelled.");
             return;
@@ -155,11 +192,13 @@ public sealed partial class FactionRelationEditorViewModel : ObservableObject
         try
         {
             var changes = changed.Select(r => new FactionRelationChange(r.Entry.FactionKey, r.NewRelation!.Value)).ToList();
-            var result = await _main.ApplyFactionRelationsAsync(changes).ConfigureAwait(true);
+            var groupChanges = regrouped.Select(r => new FactionGroupChange(r.Entry.FactionKey, r.NewGroup!.Key)).ToList();
+            var result = await _main.ApplyFactionRelationsAsync(changes, groupChanges).ConfigureAwait(true);
             StatusMessage = result.Error is null
-                ? UiText.Format("RelDone", "Done: set {0} faction(s). Saved to the file on File → Save.", result.Applied)
-                : UiText.Format("RelFailed", "Stopped after {0} faction(s): {1}. Reload without writing to revert.",
-                    result.Applied, result.Error);
+                ? UiText.Format("RelDone", "Done: set {0} relation(s) and {1} relation group(s). Saved to the file on File → Save.",
+                    result.Applied, result.GroupsApplied)
+                : UiText.Format("RelFailed", "Stopped after {0} relation(s) and {1} group(s): {2}. Reload without writing to revert.",
+                    result.Applied, result.GroupsApplied, result.Error);
             await RescanAsync().ConfigureAwait(true);
         }
         finally
@@ -167,6 +206,18 @@ public sealed partial class FactionRelationEditorViewModel : ObservableObject
             IsBusy = false;
         }
     }
+}
+
+/// <summary>A "current relation" filter choice, keyed by the row's current-relation text; null = all.</summary>
+public sealed record FactionRelationFilter(string Label, string? Key)
+{
+    public override string ToString() => Label;
+}
+
+/// <summary>A relation-group choice for a row's combo.</summary>
+public sealed record FactionGroupOption(uint Key, string Name)
+{
+    public override string ToString() => Name;
 }
 
 /// <summary>One relation choice for a row's combo.</summary>
@@ -206,15 +257,19 @@ public sealed partial class FactionRelationRow : ObservableObject
 {
     internal FactionRelationRow(
         FactionRelationEntry entry, string factionName, string typicalMembers, string displayName,
-        int memberCount, string leaderName, string groupName)
+        int memberCount, string leaderName, IReadOnlyList<FactionGroupOption> groupOptions,
+        Func<uint, FactionRelation?> groupEffect)
     {
+        _groupEffect = groupEffect;
         Entry = entry;
         FactionName = factionName;
         TypicalMembers = typicalMembers;
         DisplayName = displayName;
         MemberCount = memberCount;
         LeaderName = leaderName;
-        GroupName = groupName;
+        GroupOptions = groupOptions;
+        _newGroup = groupOptions.FirstOrDefault(g => g.Key == entry.RelationGroupKey);
+        GroupName = _newGroup?.Name ?? entry.RelationGroupKey.ToString(CultureInfo.InvariantCulture);
         Options = FactionRelationOption.For(entry.PlayerToFaction);
         _newRelation = Options.First(o => o.Value == entry.PlayerToFaction);
     }
@@ -240,11 +295,40 @@ public sealed partial class FactionRelationRow : ObservableObject
     public string GroupName { get; }
     public IReadOnlyList<FactionRelationOption> Options { get; }
 
-    /// <summary>Current relation; "A / B" when the two directions disagree.</summary>
+    private readonly Func<uint, FactionRelation?> _groupEffect;
+
+    /// <summary>
+    /// Current relation; "A / B" when the two directions disagree; for no row,
+    /// what the faction's group makes it ("Group default → War").
+    /// </summary>
     public string CurrentText => Entry.IsMismatched
         ? $"{FactionRelationOption.LabelOf(Entry.PlayerToFaction)} / {FactionRelationOption.LabelOf(Entry.FactionToPlayer)}"
-        : FactionRelationOption.LabelOf(Entry.PlayerToFaction);
+        : Entry.PlayerToFaction == FactionRelation.GroupDefault
+            ? $"{FactionRelationOption.LabelOf(FactionRelation.GroupDefault)} → {EffectLabel(Entry.RelationGroupKey)}"
+            : FactionRelationOption.LabelOf(Entry.PlayerToFaction);
+
+    /// <summary>
+    /// What the selected relation group makes this faction toward the player
+    /// by default — follows the group combo, so a change previews here.
+    /// </summary>
+    public string GroupEffectText => EffectLabel(NewGroup?.Key ?? Entry.RelationGroupKey);
+
+    private string EffectLabel(uint group) => _groupEffect(group) is { } r
+        ? FactionRelationOption.LabelOf(r)
+        : UiText.Get("RelGroupEffectUndefined", "Undefined");
+
+    partial void OnNewGroupChanged(FactionGroupOption? value) => OnPropertyChanged(nameof(GroupEffectText));
 
     [ObservableProperty]
     private FactionRelationOption? _newRelation;
+
+    /// <summary>The relation groups a faction can be moved to.</summary>
+    public IReadOnlyList<FactionGroupOption> GroupOptions { get; }
+
+    /// <summary>
+    /// The faction's relation group, editable: it decides the faction's stance
+    /// toward every faction it has no relation row with.
+    /// </summary>
+    [ObservableProperty]
+    private FactionGroupOption? _newGroup;
 }

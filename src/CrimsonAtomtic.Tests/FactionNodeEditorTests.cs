@@ -69,6 +69,7 @@ public sealed class FactionNodeRowTests
     [InlineData("Node_Dem_SungroveManor_Marcella", "Demeniss")]
     [InlineData("Node_Crim_RockVillage", "Crimson Desert")]
     [InlineData("Node_Kwe_SpireOfRingingTruth", "Kweiden")]
+    [InlineData("Node_Ocean_SamoraIsland_WatchTower", "Great Ocean")]
     [InlineData("Node_Odeck_Something", "Other")]
     public void Region_IsGuessedFromThePrefix(string internalName, string region)
     {

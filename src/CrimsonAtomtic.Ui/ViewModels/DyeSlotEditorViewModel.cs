@@ -427,7 +427,8 @@ public sealed partial class DyeSlotRow : ObservableObject
         _fields = fields;
         SlotIndex = slotIndex;
         SlotNo = slotNo;
-        SlotLabel = slotNo >= 0 ? $"Slot {slotNo}" : $"Slot #{slotIndex} (no _dyeSlotNo)";
+        // An absent _dyeSlotNo reads as dye slot 0 (crimson-rs PR #122).
+        SlotLabel = $"Slot {(slotNo >= 0 ? slotNo : 0)}";
         MaterialLayers = materialLayers;
         _r = r; _g = g; _b = b; _a = a; _grime = grime;
         _origR = r; _origG = g; _origB = b; _origA = a; _origGrime = grime;
@@ -505,13 +506,10 @@ public sealed partial class DyeSlotRow : ObservableObject
                 if (opt.Key == materialKey) { selMat = opt; break; }
             }
         }
-        // Gamedata material-layer hint. The picker seeds a slot's
-        // _dyeSlotNo from the prefab's slot index, so _dyeSlotNo is the
-        // gamedata slot index; fall back to the list position when the
-        // scalar is absent (best-effort — the hint is informational).
-        var gamedataSlotIdx = slotNo >= 0 ? slotNo : slotIndex;
+        // Gamedata material hint. _dyeSlotNo is the prefab's dye slot
+        // number (crimson-rs PR #122), and an absent field reads as 0.
         var materialLayers =
-            localization.DescribeDyeSlotLayers(itemRow.ItemKey, gamedataSlotIdx)
+            localization.DescribeDyeSlot(itemRow.ItemKey, slotNo >= 0 ? slotNo : 0)
             ?? string.Empty;
         return new DyeSlotRow(parent, slotIndex, slotNo, fields,
             r, g, b, a, grime, colorGroupKey, materialKey,

@@ -554,6 +554,12 @@ public sealed class LocalizationProvider : IDisposable
         }
         _gameRoot = gameRoot;
         _factionMembers = null; // rebuilt from the characterinfo loaded below
+        lock (_itemDyeJoinLock)
+        {
+            _itemDyeJoin?.Dispose();
+            _itemDyeJoin = null;
+            _itemDyeJoinTried = false;
+        }
 
         // ── Read meta/0.paver FIRST so the caller (App startup) can
         // surface a warning dialog if the install's game-data version
@@ -1420,53 +1426,129 @@ public sealed class LocalizationProvider : IDisposable
     /// </summary>
     public NativeItemPartPrefabCatalog? ItemPartPrefab => _itemPartPrefab;
 
-    /// <summary>
-    /// One-shot "how many dye slots does this item have?". Returns
-    /// <c>null</c> when either backing catalog is unavailable or the
-    /// resolver can't pin a slot count (mesh-variant items without a
-    /// partprefab entry — see
-    /// <see cref="DyeSlotCountSource.NotResolvedNoPartPrefab"/>).
-    /// Drives the Dye editor's per-row slot-count column + the Add Dye
-    /// slot-picker.
-    /// </summary>
-    public int? LookupDyeSlotCount(uint itemKey)
-    {
-        if (_itemPartPrefab is null || _dyeSlotInfo is null) return null;
-        var (count, source) = _itemPartPrefab.ResolveDyeSlotCount(itemKey, _dyeSlotInfo);
-        return source == DyeSlotCountSource.Direct ? count : null;
-    }
+    private NativeItemPartPrefabCatalog? _itemDyeJoin;
+    private bool _itemDyeJoinTried;
+    private readonly object _itemDyeJoinLock = new();
 
     /// <summary>
-    /// Describe a dye slot's gamedata material layers as a short display
-    /// hint. Returns the primary-layer default material and, for 1.13's
-    /// expanded dyeable gear (cloaks / shields / quivers / skullknight
-    /// set), the second (extra) layer's material — e.g.
-    /// <c>"leather + cloth"</c>. Shows only the primary when the slot has
-    /// no extra layer (<c>"leather"</c>). Returns <c>null</c> when the
-    /// item's partprefab join or the slot-info bridge is unavailable, or
-    /// when neither layer names a material.
+    /// The item → dye-row join through each item's <c>.prefab</c> files
+    /// (crimson-rs PR #123), built on first use because it reads group 0009
+    /// and takes about 2 s. It reaches body-type armour, which the name join
+    /// behind <see cref="ItemPartPrefab"/> misses (909 of 917 dyeable items
+    /// on 2.06, against 70). Null when the install can't provide it.
     /// </summary>
-    public string? DescribeDyeSlotLayers(uint itemKey, int slotIdx)
+    private NativeItemPartPrefabCatalog? ItemDyeJoin()
     {
-        if (_itemPartPrefab is null || _dyeSlotInfo is null || slotIdx < 0) return null;
-        try
+        lock (_itemDyeJoinLock)
         {
-            if (_itemPartPrefab.LookupFirstPrefabKey(itemKey) is not { } prefabKey)
+            if (_itemDyeJoinTried)
+            {
+                return _itemDyeJoin;
+            }
+            _itemDyeJoinTried = true;
+            if (_gameRoot is not { } root)
             {
                 return null;
             }
-            var primary = _dyeSlotInfo.LookupSlotDefaultMaterial(prefabKey, slotIdx, 0);
-            string? extra = null;
-            if ((_dyeSlotInfo.LookupSlotExtraLayerCount(prefabKey, slotIdx) ?? 0) >= 1)
+            var pamt = Path.Combine(root, GameDataLayout.GameDataGroup, "0.pamt");
+            var prefabPamt = Path.Combine(root, PrefabGroup, "0.pamt");
+            if (!File.Exists(pamt) || !File.Exists(prefabPamt))
             {
-                extra = _dyeSlotInfo.LookupSlotExtraLayerMaterial(prefabKey, slotIdx, 0, 0);
+                return null;
             }
-            var hasPrimary = !string.IsNullOrEmpty(primary);
-            var hasExtra = !string.IsNullOrEmpty(extra);
-            if (hasPrimary && hasExtra) return $"{primary} + {extra}";
-            if (hasPrimary) return primary;
-            if (hasExtra) return extra;
+            try
+            {
+                _itemDyeJoin = NativeItemPartPrefabCatalog.LoadFromBytes(
+                    _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(ItemInfoTable)),
+                    _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(StringInfoTable)),
+                    _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(DyeSlotInfoTable)),
+                    _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Header(DyeSlotInfoTable)),
+                    prefabPamt);
+            }
+            catch (CrimsonSaveException) { }
+            catch (IOException) { }
+            if (_itemDyeJoin is { } join)
+            {
+                MergeDlcDyeJoin(root, join);
+            }
+            return _itemDyeJoin;
+        }
+    }
+
+    /// <summary>
+    /// Merge each installed DLC's items into the dye join (crimson-rs PR #124):
+    /// on 2.06 dlc_01 adds 89 items, 82 of its 85 DLC-only dyeable ones; the
+    /// DLC meshes' dye rows are already in the base table. Skipped without the
+    /// DLC's prefab group; a failed merge leaves the join as it was.
+    /// </summary>
+    private void MergeDlcDyeJoin(string root, NativeItemPartPrefabCatalog join)
+    {
+        foreach (var dlc in GameDataLayout.DlcNames(root))
+        {
+            var dlcRoot = Path.Combine(root, GameDataLayout.DlcDirectory, dlc);
+            var dlcPamt = Path.Combine(dlcRoot, GameDataLayout.GameDataGroup, "0.pamt");
+            var dlcPrefabPamt = Path.Combine(dlcRoot, PrefabGroup, "0.pamt");
+            if (!File.Exists(dlcPamt) || !File.Exists(dlcPrefabPamt))
+            {
+                continue;
+            }
+            try
+            {
+                join.MergeDlcFromBytes(
+                    _paz.ExtractFile(dlcPamt, _layout.BinDirectory,
+                        _layout.Body(GameDataLayout.DlcTableStem(ItemInfoTable, dlc))),
+                    _paz.ExtractFile(dlcPamt, _layout.BinDirectory,
+                        _layout.Body(GameDataLayout.DlcTableStem(StringInfoTable, dlc))),
+                    dlcPrefabPamt);
+            }
+            catch (CrimsonSaveException) { }
+            catch (IOException) { }
+        }
+    }
+
+    /// <summary>The asset group holding the items' <c>.prefab</c> files.</summary>
+    private const string PrefabGroup = "0009";
+
+    /// <summary>
+    /// The dye slot numbers the item offers — the <c>_dyeSlotNo</c> values of
+    /// its save dye elements — ascending and often sparse (0, 1, 7, …): the
+    /// union over every mesh of the item's prefabs and every body type. Each
+    /// slot's material channels name a dye slot number and the 12-byte mask
+    /// flags the dyeable ones (crimson-rs PR #122). Null when the item has no
+    /// dye rows or the join is unavailable. The first call builds the join.
+    /// </summary>
+    public IReadOnlyList<int>? LookupDyeSlotNumbers(uint itemKey)
+    {
+        try
+        {
+            return ItemDyeJoin()?.LookupDyeSlotNumbers(itemKey);
+        }
+        catch (CrimsonSaveException)
+        {
             return null;
+        }
+    }
+
+    /// <summary>
+    /// How many dye slots the item offers: the number of
+    /// <see cref="LookupDyeSlotNumbers"/>. Not a prefab's slot count, which
+    /// counts sub-meshes. Null when unresolved.
+    /// </summary>
+    public int? LookupDyeSlotCount(uint itemKey) => LookupDyeSlotNumbers(itemKey)?.Count;
+
+    /// <summary>
+    /// The default material of the item's dye slot <paramref name="dyeSlotNo"/>
+    /// ("leather", "metal", …) as a short display hint. Null when unresolved
+    /// or unnamed.
+    /// </summary>
+    public string? DescribeDyeSlot(uint itemKey, int dyeSlotNo)
+    {
+        if (dyeSlotNo < 0) return null;
+        try
+        {
+            return ItemDyeJoin()?.LookupDyeSlotMaterial(itemKey, dyeSlotNo) is { Length: > 0 } material
+                ? material
+                : null;
         }
         catch (CrimsonSaveException)
         {
@@ -1959,6 +2041,39 @@ public sealed class LocalizationProvider : IDisposable
     }
 
     /// <summary>
+    /// Every faction group's name, English → secondary language (null without
+    /// one): "Hernand" → "埃爾南德". In practice the groups are regions, so
+    /// this localizes region labels that are keyed by their English name.
+    /// </summary>
+    public IReadOnlyDictionary<string, string?> FactionGroupNames()
+    {
+        var names = new Dictionary<string, string?>(StringComparer.Ordinal);
+        if (_factionInfo is not { } factions)
+        {
+            return names;
+        }
+        for (var i = 0; i < factions.EntryCount; i++)
+        {
+            if (factions.GetEntryKey(i) is { } key
+                && ResolveFactionDisplayName(key) is { English: { } english } pair
+                && (!names.TryGetValue(english, out var known) || known is null))
+            {
+                names[english] = pair.Secondary;
+            }
+        }
+        return names;
+    }
+
+    /// <summary>
+    /// What two relation groups are to each other by default — the stance a
+    /// faction takes toward another when the save has no relation row between
+    /// them: War or BloodAlly (game data, crimson-rs PR #121). Null for an
+    /// unknown group or a group with itself.
+    /// </summary>
+    public FactionRelation? GroupRelation(uint groupA, uint groupB) =>
+        _factionRelationGroupInfo?.LookupRelation(groupA, groupB) is { } r ? (FactionRelation)(int)r : null;
+
+    /// <summary>
     /// A label a player recognises for <paramref name="factionKey"/>: its most
     /// common member name ("Hernandian Guard / 埃爾南德警衛隊"), else its
     /// internal row name, else the key.
@@ -2392,6 +2507,11 @@ public sealed class LocalizationProvider : IDisposable
         _dyeSlotInfo = null;
         _itemPartPrefab?.Dispose();
         _itemPartPrefab = null;
+        lock (_itemDyeJoinLock)
+        {
+            _itemDyeJoin?.Dispose();
+            _itemDyeJoin = null;
+        }
         _storeInfo?.Dispose();
         _storeInfo = null;
         // 13 niche bridges.

@@ -16,23 +16,31 @@ public sealed partial class MainWindowViewModel
             ? []
             : FactionRelations.Scan(_loadedPath, blocks);
 
+    /// <summary>The player's faction's relation group, or null. Pure read.</summary>
+    internal uint? PlayerRelationGroup() =>
+        _loadedPath is null || Summary is not { Blocks: { } blocks }
+            ? null
+            : FactionRelations.PlayerRelationGroup(_loadedPath, blocks);
+
     /// <summary>Apply relation changes on a background thread, then refresh and journal.</summary>
-    internal async Task<FactionRelationApplyResult> ApplyFactionRelationsAsync(IReadOnlyList<FactionRelationChange> changes)
+    internal async Task<FactionRelationApplyResult> ApplyFactionRelationsAsync(
+        IReadOnlyList<FactionRelationChange> changes, IReadOnlyList<FactionGroupChange> groupChanges)
     {
-        if (_loadedPath is null || Summary is not { Blocks: { } blocks } || changes.Count == 0)
+        if (_loadedPath is null || Summary is not { Blocks: { } blocks } || changes.Count + groupChanges.Count == 0)
         {
             return new FactionRelationApplyResult(0, null);
         }
         var path = _loadedPath;
         var service = FactionRelations;
-        var result = await Task.Run(() => service.Apply(path, blocks, changes)).ConfigureAwait(true);
+        var result = await Task.Run(() => service.Apply(path, blocks, changes, groupChanges)).ConfigureAwait(true);
 
         RefreshSelectedBlockSilently();
-        if (result.Applied > 0)
+        if (result.Applied + result.GroupsApplied > 0)
         {
             IsDirty = true;
             Journal.Log(UiText.Get("JournalCatFactionRelations", "Faction relations"),
-                UiText.Format("JournalFactionRelations", "Set the relation with {0} faction(s)", result.Applied));
+                UiText.Format("JournalFactionRelations", "Set the relation with {0} faction(s) and the relation group of {1}",
+                    result.Applied, result.GroupsApplied));
             OnPropertyChanged(nameof(WindowTitle));
         }
         return result;

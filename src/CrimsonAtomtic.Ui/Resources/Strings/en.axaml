@@ -88,7 +88,6 @@
   <sys:String x:Key="MenuEditContributions">Edit _Contributions (faction currencies)…</sys:String>
   <sys:String x:Key="MenuEditFactionRelations">Edit Faction _Relations (war / ally with your faction)…</sys:String>
   <sys:String x:Key="MenuEditItemDyes">Edit Item _Dyes… (unsupported since 2.01)</sys:String>
-  <sys:String x:Key="MenuEditItemDyesUnavailableTip">Disabled since Crimson Desert 2.01: the per-slot dye mask widened from 3 bytes to 12 and its contents were re-encoded, so the editor would read a third of all slots as empty and write edits from that wrong reading. Returns once the new mask groups are decoded.</sys:String>
   <sys:String x:Key="MenuVendorBuyback">_Vendor Buyback…</sys:String>
   <sys:String x:Key="MenuReviewChanges">_Review Pending Changes…</sys:String>
 
@@ -257,6 +256,7 @@
   <sys:String x:Key="FactionNodeFilterRegion">Region:</sys:String>
   <sys:String x:Key="FactionNodeFilterAllRegions">All regions</sys:String>
   <sys:String x:Key="FactionNodeRegionOther">Other</sys:String>
+  <sys:String x:Key="FactionNodeRegionIslands">Islands</sys:String>
   <sys:String x:Key="FactionNodeSelectAll">Select all</sys:String>
   <sys:String x:Key="FactionNodeUnselectAll">Unselect all</sys:String>
   <sys:String x:Key="FactionNodeInvert">Invert selection</sys:String>
@@ -283,8 +283,10 @@
   <sys:String x:Key="ContribColNew">New amount</sys:String>
   <sys:String x:Key="RelWindowTitle">Edit Faction Relations</sys:String>
   <sys:String x:Key="RelHeader">Each faction's relation with yours. Factions have no names in the game, so a faction is shown by its members' most common names (e.g. Hernandian Guard) and sorted by member count — the faction a place's rank-and-file NPCs belong to is what turns it hostile. With no relation row a faction follows its relation group (Group default); a row overrides it (War and Blood ally confirmed in-game). Changes are written both ways; saves to the file on next File → Save.</sys:String>
-  <sys:String x:Key="RelSearchHint">Filter by member name, faction, key, leader, region, or group…</sys:String>
+  <sys:String x:Key="RelSearchHint">Filter by member name, faction, key, leader, region, group, or current relation…</sys:String>
   <sys:String x:Key="RelOnlyWithRows">Only factions with a relation row</sys:String>
+  <sys:String x:Key="RelFilterRelation">Current:</sys:String>
+  <sys:String x:Key="RelFilterAllRelations">All relations</sys:String>
   <sys:String x:Key="RelApply">Apply</sys:String>
   <sys:String x:Key="RelClose">Close</sys:String>
   <sys:String x:Key="RelColFaction">Faction (internal name)</sys:String>
@@ -293,7 +295,9 @@
   <sys:String x:Key="RelColTypical">Typical members</sys:String>
   <sys:String x:Key="RelColKey">Key</sys:String>
   <sys:String x:Key="RelColLeader">Leader</sys:String>
-  <sys:String x:Key="RelColGroup">Relation group</sys:String>
+  <sys:String x:Key="RelColGroup">Relation group (editable)</sys:String>
+  <sys:String x:Key="RelColGroupEffect">Group default</sys:String>
+  <sys:String x:Key="RelGroupEffectUndefined">Undefined</sys:String>
   <sys:String x:Key="RelColCurrent">Current</sys:String>
   <sys:String x:Key="RelColNew">New relation</sys:String>
   <sys:String x:Key="MenuFontSize">_Font Size</sys:String>
@@ -653,7 +657,7 @@
   <sys:String x:Key="JournalCatContributions">Contributions</sys:String>
   <sys:String x:Key="JournalContributions">Set {0} contribution stack(s), added {1}</sys:String>
   <sys:String x:Key="JournalCatFactionRelations">Faction relations</sys:String>
-  <sys:String x:Key="JournalFactionRelations">Set the relation with {0} faction(s)</sys:String>
+  <sys:String x:Key="JournalFactionRelations">Set the relation with {0} faction(s) and the relation group of {1}</sys:String>
   <sys:String x:Key="JournalCatAddItem">Add item</sys:String>
   <sys:String x:Key="JournalCatMountUnlock">Mount unlock</sys:String>
 
@@ -913,10 +917,10 @@
   <sys:String x:Key="RelNoFactions">No factions found — this save has no FactionSaveData._factionElementSaveDataList.</sys:String>
   <sys:String x:Key="RelNoChanges">Nothing changed.</sys:String>
   <sys:String x:Key="RelConfirmTitle">Apply faction relations?</sys:String>
-  <sys:String x:Key="RelConfirmBody" xml:space="preserve">Set the relation with {0} faction(s), both directions?&#10;&#10;Reversible by reloading the save without writing.</sys:String>
+  <sys:String x:Key="RelConfirmBody" xml:space="preserve">Set the relation with {0} faction(s), both directions, and the relation group of {1}?&#10;&#10;Reversible by reloading the save without writing.</sys:String>
   <sys:String x:Key="RelApplying">Applying…</sys:String>
-  <sys:String x:Key="RelDone">Done: set {0} faction(s). Saved to the file on File → Save.</sys:String>
-  <sys:String x:Key="RelFailed">Stopped after {0} faction(s): {1}. Reload without writing to revert.</sys:String>
+  <sys:String x:Key="RelDone">Done: set {0} relation(s) and {1} relation group(s). Saved to the file on File → Save.</sys:String>
+  <sys:String x:Key="RelFailed">Stopped after {0} relation(s) and {1} group(s): {2}. Reload without writing to revert.</sys:String>
   <sys:String x:Key="RelErrNoBlock">This save has no FactionSaveData block.</sys:String>
   <sys:String x:Key="RelErrNoFaction">Faction {0} is not in this save's faction list.</sys:String>
   <sys:String x:Key="RelGroupDefault">Group default (no row)</sys:String>
