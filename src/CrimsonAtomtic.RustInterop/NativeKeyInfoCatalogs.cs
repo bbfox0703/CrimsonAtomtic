@@ -129,17 +129,24 @@ public sealed class NativeMissionInfoCatalog : IDisposable
         }
     }
 
-    public static NativeMissionInfoCatalog LoadFromBytes(ReadOnlySpan<byte> bytes)
+    /// <summary>
+    /// Load from the table's body and header. 2.06 moved every row's name
+    /// into the header, so the body alone yields no rows there; on older
+    /// installs the header is ignored.
+    /// </summary>
+    public static NativeMissionInfoCatalog LoadFromBytes(ReadOnlySpan<byte> body, ReadOnlySpan<byte> header)
     {
         unsafe
         {
-            fixed (byte* p = bytes)
+            fixed (byte* p = body)
+            fixed (byte* h = header)
             {
-                var rc = NativeMethods.MissionInfoLoadFromBytes(p, (nuint)bytes.Length, out var raw);
+                var rc = NativeMethods.MissionInfoLoadFromBytesWithHeader(
+                    p, (nuint)body.Length, h, (nuint)header.Length, out var raw);
                 if (rc != NativeMethods.OK)
                 {
                     throw new CrimsonSaveException(rc,
-                        $"crimson_missioninfo_load_from_bytes(len={bytes.Length}) failed: {NameBuffer.ErrorName(rc)}");
+                        $"crimson_missioninfo_load_from_bytes_with_header(len={body.Length}, header={header.Length}) failed: {NameBuffer.ErrorName(rc)}");
                 }
                 var handle = CrimsonMissionInfoHandle.FromOwnedPointer(raw);
                 var rcCount = NativeMethods.MissionInfoEntryCount(handle, out var count);
@@ -300,35 +307,11 @@ public sealed class NativeQuestInfoCatalog : IDisposable
         get { ObjectDisposedException.ThrowIf(_disposed, this); return _entryCount; }
     }
 
-    public static NativeQuestInfoCatalog LoadFromBytes(ReadOnlySpan<byte> bytes)
-    {
-        unsafe
-        {
-            fixed (byte* p = bytes)
-            {
-                var rc = NativeMethods.QuestInfoLoadFromBytes(p, (nuint)bytes.Length, out var raw);
-                if (rc != NativeMethods.OK)
-                {
-                    throw new CrimsonSaveException(rc,
-                        $"crimson_questinfo_load_from_bytes(len={bytes.Length}) failed: {NameBuffer.ErrorName(rc)}");
-                }
-                var handle = CrimsonQuestInfoHandle.FromOwnedPointer(raw);
-                var rcCount = NativeMethods.QuestInfoEntryCount(handle, out var count);
-                if (rcCount != NativeMethods.OK)
-                {
-                    handle.Dispose();
-                    throw new CrimsonSaveException(rcCount,
-                        $"crimson_questinfo_entry_count failed: {NameBuffer.ErrorName(rcCount)}");
-                }
-                return new NativeQuestInfoCatalog(handle, (int)count);
-            }
-        }
-    }
-
     /// <summary>
-    /// Load through the table's index, the game's own row list. Unlike the
-    /// headerless scan of <see cref="LoadFromBytes(ReadOnlySpan{byte})"/> it
-    /// keeps rows whose name fails the scan's validation.
+    /// Load through the table's index, the game's own row list. The only
+    /// loader: the old headerless body scan dropped rows whose name failed
+    /// its validation, and on 2.06, where names moved into the index, it
+    /// found no rows at all.
     /// </summary>
     public static NativeQuestInfoCatalog LoadFromBytes(ReadOnlySpan<byte> pabgb, ReadOnlySpan<byte> pabgh)
     {
@@ -438,35 +421,10 @@ public sealed class NativeStageInfoCatalog : IDisposable
         get { ObjectDisposedException.ThrowIf(_disposed, this); return _entryCount; }
     }
 
-    public static NativeStageInfoCatalog LoadFromBytes(ReadOnlySpan<byte> bytes)
-    {
-        unsafe
-        {
-            fixed (byte* p = bytes)
-            {
-                var rc = NativeMethods.StageInfoLoadFromBytes(p, (nuint)bytes.Length, out var raw);
-                if (rc != NativeMethods.OK)
-                {
-                    throw new CrimsonSaveException(rc,
-                        $"crimson_stageinfo_load_from_bytes(len={bytes.Length}) failed: {NameBuffer.ErrorName(rc)}");
-                }
-                var handle = CrimsonStageInfoHandle.FromOwnedPointer(raw);
-                var rcCount = NativeMethods.StageInfoEntryCount(handle, out var count);
-                if (rcCount != NativeMethods.OK)
-                {
-                    handle.Dispose();
-                    throw new CrimsonSaveException(rcCount,
-                        $"crimson_stageinfo_entry_count failed: {NameBuffer.ErrorName(rcCount)}");
-                }
-                return new NativeStageInfoCatalog(handle, (int)count);
-            }
-        }
-    }
-
     /// <summary>
-    /// Load through the table's index, the game's own row list. The
-    /// headerless scan of <see cref="LoadFromBytes(ReadOnlySpan{byte})"/>
-    /// misses thousands of rows on 2.04.
+    /// Load through the table's index, the game's own row list. The only
+    /// loader: the old headerless body scan missed thousands of rows on
+    /// 2.04, and on 2.06, where names moved into the index, it found none.
     /// </summary>
     public static NativeStageInfoCatalog LoadFromBytes(ReadOnlySpan<byte> pabgb, ReadOnlySpan<byte> pabgh)
     {
@@ -575,17 +533,24 @@ public sealed class NativeKnowledgeInfoCatalog : IDisposable
         get { ObjectDisposedException.ThrowIf(_disposed, this); return _entryCount; }
     }
 
-    public static NativeKnowledgeInfoCatalog LoadFromBytes(ReadOnlySpan<byte> bytes)
+    /// <summary>
+    /// Load from the table's body and header. 2.06 moved every row's name
+    /// into the header, so the body alone yields no rows there; on older
+    /// installs the header is ignored.
+    /// </summary>
+    public static NativeKnowledgeInfoCatalog LoadFromBytes(ReadOnlySpan<byte> body, ReadOnlySpan<byte> header)
     {
         unsafe
         {
-            fixed (byte* p = bytes)
+            fixed (byte* p = body)
+            fixed (byte* h = header)
             {
-                var rc = NativeMethods.KnowledgeInfoLoadFromBytes(p, (nuint)bytes.Length, out var raw);
+                var rc = NativeMethods.KnowledgeInfoLoadFromBytesWithHeader(
+                    p, (nuint)body.Length, h, (nuint)header.Length, out var raw);
                 if (rc != NativeMethods.OK)
                 {
                     throw new CrimsonSaveException(rc,
-                        $"crimson_knowledgeinfo_load_from_bytes(len={bytes.Length}) failed: {NameBuffer.ErrorName(rc)}");
+                        $"crimson_knowledgeinfo_load_from_bytes_with_header(len={body.Length}, header={header.Length}) failed: {NameBuffer.ErrorName(rc)}");
                 }
                 var handle = CrimsonKnowledgeInfoHandle.FromOwnedPointer(raw);
                 var rcCount = NativeMethods.KnowledgeInfoEntryCount(handle, out var count);
@@ -728,17 +693,24 @@ public sealed class NativeQuestGaugeInfoCatalog : IDisposable
         get { ObjectDisposedException.ThrowIf(_disposed, this); return _entryCount; }
     }
 
-    public static NativeQuestGaugeInfoCatalog LoadFromBytes(ReadOnlySpan<byte> bytes)
+    /// <summary>
+    /// Load from the table's body and header. 2.06 moved every row's name
+    /// into the header, so the body alone yields no rows there; on older
+    /// installs the header is ignored.
+    /// </summary>
+    public static NativeQuestGaugeInfoCatalog LoadFromBytes(ReadOnlySpan<byte> body, ReadOnlySpan<byte> header)
     {
         unsafe
         {
-            fixed (byte* p = bytes)
+            fixed (byte* p = body)
+            fixed (byte* h = header)
             {
-                var rc = NativeMethods.QuestGaugeInfoLoadFromBytes(p, (nuint)bytes.Length, out var raw);
+                var rc = NativeMethods.QuestGaugeInfoLoadFromBytesWithHeader(
+                    p, (nuint)body.Length, h, (nuint)header.Length, out var raw);
                 if (rc != NativeMethods.OK)
                 {
                     throw new CrimsonSaveException(rc,
-                        $"crimson_questgaugeinfo_load_from_bytes(len={bytes.Length}) failed: {NameBuffer.ErrorName(rc)}");
+                        $"crimson_questgaugeinfo_load_from_bytes_with_header(len={body.Length}, header={header.Length}) failed: {NameBuffer.ErrorName(rc)}");
                 }
                 var handle = CrimsonQuestGaugeInfoHandle.FromOwnedPointer(raw);
                 var rcCount = NativeMethods.QuestGaugeInfoEntryCount(handle, out var count);
@@ -1060,17 +1032,24 @@ public sealed class NativeGimmickInfoCatalog : IDisposable
         get { ObjectDisposedException.ThrowIf(_disposed, this); return _entryCount; }
     }
 
-    public static NativeGimmickInfoCatalog LoadFromBytes(ReadOnlySpan<byte> bytes)
+    /// <summary>
+    /// Load from the table's body and header. 2.06 moved every row's name
+    /// into the header, so the body alone yields no rows there; on older
+    /// installs the header is ignored.
+    /// </summary>
+    public static NativeGimmickInfoCatalog LoadFromBytes(ReadOnlySpan<byte> body, ReadOnlySpan<byte> header)
     {
         unsafe
         {
-            fixed (byte* p = bytes)
+            fixed (byte* p = body)
+            fixed (byte* h = header)
             {
-                var rc = NativeMethods.GimmickInfoLoadFromBytes(p, (nuint)bytes.Length, out var raw);
+                var rc = NativeMethods.GimmickInfoLoadFromBytesWithHeader(
+                    p, (nuint)body.Length, h, (nuint)header.Length, out var raw);
                 if (rc != NativeMethods.OK)
                 {
                     throw new CrimsonSaveException(rc,
-                        $"crimson_gimmickinfo_load_from_bytes(len={bytes.Length}) failed: {NameBuffer.ErrorName(rc)}");
+                        $"crimson_gimmickinfo_load_from_bytes_with_header(len={body.Length}, header={header.Length}) failed: {NameBuffer.ErrorName(rc)}");
                 }
                 var handle = CrimsonGimmickInfoHandle.FromOwnedPointer(raw);
                 var rcCount = NativeMethods.GimmickInfoEntryCount(handle, out var count);
@@ -1236,17 +1215,24 @@ public sealed class NativeCharacterInfoCatalog : IDisposable
         get { ObjectDisposedException.ThrowIf(_disposed, this); return _entryCount; }
     }
 
-    public static NativeCharacterInfoCatalog LoadFromBytes(ReadOnlySpan<byte> bytes)
+    /// <summary>
+    /// Load from the table's body and header. 2.06 moved every row's name
+    /// into the header, so the body alone yields no rows there; on older
+    /// installs the header is ignored.
+    /// </summary>
+    public static NativeCharacterInfoCatalog LoadFromBytes(ReadOnlySpan<byte> body, ReadOnlySpan<byte> header)
     {
         unsafe
         {
-            fixed (byte* p = bytes)
+            fixed (byte* p = body)
+            fixed (byte* h = header)
             {
-                var rc = NativeMethods.CharacterInfoLoadFromBytes(p, (nuint)bytes.Length, out var raw);
+                var rc = NativeMethods.CharacterInfoLoadFromBytesWithHeader(
+                    p, (nuint)body.Length, h, (nuint)header.Length, out var raw);
                 if (rc != NativeMethods.OK)
                 {
                     throw new CrimsonSaveException(rc,
-                        $"crimson_characterinfo_load_from_bytes(len={bytes.Length}) failed: {NameBuffer.ErrorName(rc)}");
+                        $"crimson_characterinfo_load_from_bytes_with_header(len={body.Length}, header={header.Length}) failed: {NameBuffer.ErrorName(rc)}");
                 }
                 var handle = CrimsonCharacterInfoHandle.FromOwnedPointer(raw);
                 var rcCount = NativeMethods.CharacterInfoEntryCount(handle, out var count);
@@ -1484,17 +1470,24 @@ public sealed class NativeSubLevelInfoCatalog : IDisposable
         get { ObjectDisposedException.ThrowIf(_disposed, this); return _entryCount; }
     }
 
-    public static NativeSubLevelInfoCatalog LoadFromBytes(ReadOnlySpan<byte> bytes)
+    /// <summary>
+    /// Load from the table's body and header. 2.06 moved every row's name
+    /// into the header, so the body alone yields no rows there; on older
+    /// installs the header is ignored.
+    /// </summary>
+    public static NativeSubLevelInfoCatalog LoadFromBytes(ReadOnlySpan<byte> body, ReadOnlySpan<byte> header)
     {
         unsafe
         {
-            fixed (byte* p = bytes)
+            fixed (byte* p = body)
+            fixed (byte* h = header)
             {
-                var rc = NativeMethods.SubLevelInfoLoadFromBytes(p, (nuint)bytes.Length, out var raw);
+                var rc = NativeMethods.SubLevelInfoLoadFromBytesWithHeader(
+                    p, (nuint)body.Length, h, (nuint)header.Length, out var raw);
                 if (rc != NativeMethods.OK)
                 {
                     throw new CrimsonSaveException(rc,
-                        $"crimson_sublevelinfo_load_from_bytes(len={bytes.Length}) failed: {NameBuffer.ErrorName(rc)}");
+                        $"crimson_sublevelinfo_load_from_bytes_with_header(len={body.Length}, header={header.Length}) failed: {NameBuffer.ErrorName(rc)}");
                 }
                 var handle = CrimsonSubLevelInfoHandle.FromOwnedPointer(raw);
                 var rcCount = NativeMethods.SubLevelInfoEntryCount(handle, out var count);

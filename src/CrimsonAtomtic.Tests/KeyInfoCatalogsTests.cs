@@ -61,7 +61,7 @@ public sealed class KeyInfoCatalogsTests
         var (paz, p0008, p0020) = live.Value;
 
         var missionBytes = LiveInstall.Body(paz, p0008, "missioninfo");
-        using var cat = NativeMissionInfoCatalog.LoadFromBytes(missionBytes);
+        using var cat = NativeMissionInfoCatalog.LoadFromBytes(missionBytes, LiveInstall.Header(paz, p0008, "missioninfo"));
         Assert.True(cat.EntryCount > 1_000, $"expected >1k missions, got {cat.EntryCount}");
 
         // Internal name fallback from the upstream's verified table.
@@ -97,7 +97,7 @@ public sealed class KeyInfoCatalogsTests
         var (paz, p0008, _) = live.Value;
 
         var bytes = LiveInstall.Body(paz, p0008, "questinfo");
-        using var cat = NativeQuestInfoCatalog.LoadFromBytes(bytes);
+        using var cat = NativeQuestInfoCatalog.LoadFromBytes(bytes, LiveInstall.Header(paz, p0008, "questinfo"));
         Assert.True(cat.EntryCount > 0);
         // We don't pin a specific quest-arc heading here because the
         // upstream session didn't publish a ground-truth value for
@@ -117,7 +117,7 @@ public sealed class KeyInfoCatalogsTests
         var (paz, p0008, _) = live.Value;
 
         var bytes = LiveInstall.Body(paz, p0008, "stageinfo");
-        using var cat = NativeStageInfoCatalog.LoadFromBytes(bytes);
+        using var cat = NativeStageInfoCatalog.LoadFromBytes(bytes, LiveInstall.Header(paz, p0008, "stageinfo"));
         // 57,094 identifiers per the upstream session.
         Assert.True(cat.EntryCount > 10_000,
                     $"expected >10k stages, got {cat.EntryCount}");
@@ -134,7 +134,7 @@ public sealed class KeyInfoCatalogsTests
         var (paz, p0008, p0020) = live.Value;
 
         var bytes = LiveInstall.Body(paz, p0008, "knowledgeinfo");
-        using var cat = NativeKnowledgeInfoCatalog.LoadFromBytes(bytes);
+        using var cat = NativeKnowledgeInfoCatalog.LoadFromBytes(bytes, LiveInstall.Header(paz, p0008, "knowledgeinfo"));
         Assert.True(cat.EntryCount > 1_000,
                     $"expected >1k knowledge entries, got {cat.EntryCount}");
 
@@ -158,7 +158,7 @@ public sealed class KeyInfoCatalogsTests
         var (paz, p0008, _) = live.Value;
 
         var bytes = LiveInstall.Body(paz, p0008, "questgaugeinfo");
-        using var cat = NativeQuestGaugeInfoCatalog.LoadFromBytes(bytes);
+        using var cat = NativeQuestGaugeInfoCatalog.LoadFromBytes(bytes, LiveInstall.Header(paz, p0008, "questgaugeinfo"));
         Assert.True(cat.EntryCount > 0);
         Assert.Null(cat.LookupStringKey(uint.MaxValue));
     }
@@ -191,7 +191,7 @@ public sealed class KeyInfoCatalogsTests
         var (paz, p0008, p0020) = live.Value;
 
         var bytes = LiveInstall.Body(paz, p0008, "gimmickinfo");
-        using var cat = NativeGimmickInfoCatalog.LoadFromBytes(bytes);
+        using var cat = NativeGimmickInfoCatalog.LoadFromBytes(bytes, LiveInstall.Header(paz, p0008, "gimmickinfo"));
         Assert.True(cat.EntryCount > 1_000,
                     $"expected >1k gimmicks, got {cat.EntryCount}");
 
@@ -213,7 +213,7 @@ public sealed class KeyInfoCatalogsTests
         var (paz, p0008, p0020) = live.Value;
 
         var bytes = LiveInstall.Body(paz, p0008, "characterinfo");
-        using var cat = NativeCharacterInfoCatalog.LoadFromBytes(bytes);
+        using var cat = NativeCharacterInfoCatalog.LoadFromBytes(bytes, LiveInstall.Header(paz, p0008, "characterinfo"));
         Assert.True(cat.EntryCount > 100,
                     $"expected >100 character entries, got {cat.EntryCount}");
 
@@ -259,7 +259,7 @@ public sealed class KeyInfoCatalogsTests
 
         // Step 2: load characterinfo + English PALOC.
         var charBytes = LiveInstall.Body(paz, p0008, "characterinfo");
-        using var cat = NativeCharacterInfoCatalog.LoadFromBytes(charBytes);
+        using var cat = NativeCharacterInfoCatalog.LoadFromBytes(charBytes, LiveInstall.Header(paz, p0008, "characterinfo"));
         using var paloc = LoadEnglishPaloc(paz, p0020);
 
         // Step 3: bogus key returns null cleanly (no throw).
@@ -291,7 +291,7 @@ public sealed class KeyInfoCatalogsTests
         var (paz, p0008, _) = live.Value;
 
         var bytes = LiveInstall.Body(paz, p0008, "sublevelinfo");
-        using var cat = NativeSubLevelInfoCatalog.LoadFromBytes(bytes);
+        using var cat = NativeSubLevelInfoCatalog.LoadFromBytes(bytes, LiveInstall.Header(paz, p0008, "sublevelinfo"));
         Assert.True(cat.EntryCount > 0);
         Assert.Null(cat.LookupStringKey(uint.MaxValue));
     }
@@ -649,7 +649,7 @@ public sealed class KeyInfoCatalogsTests
         var (paz, p0008, _) = live.Value;
 
         var bytes = LiveInstall.Body(paz, p0008, "missioninfo");
-        var cat = NativeMissionInfoCatalog.LoadFromBytes(bytes);
+        var cat = NativeMissionInfoCatalog.LoadFromBytes(bytes, LiveInstall.Header(paz, p0008, "missioninfo"));
         cat.Dispose();
         Assert.Throws<ObjectDisposedException>(() => cat.LookupStringKey(1000083));
         // Double-dispose is a no-op.

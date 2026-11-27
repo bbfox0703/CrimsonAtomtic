@@ -61,6 +61,36 @@ public sealed class NativeItemInfoCatalog : IItemInfoCatalog
         }
     }
 
+    /// <summary>
+    /// Load iteminfo from its body and header. 2.06 keeps every item's string
+    /// key in the header; without it the rows parse but their names are
+    /// empty. crimson-rs rejects a pre-2.06 header with <c>BODY_PARSE</c>,
+    /// and those installs keep their names in the body, so that case falls
+    /// back to the body-only loader.
+    /// </summary>
+    public static NativeItemInfoCatalog LoadFromBytes(ReadOnlySpan<byte> body, ReadOnlySpan<byte> header)
+    {
+        unsafe
+        {
+            fixed (byte* p = body)
+            fixed (byte* h = header)
+            {
+                var rc = NativeMethods.ItemInfoLoadFromBytesWithHeader(
+                    p, (nuint)body.Length, h, (nuint)header.Length, out var raw);
+                if (rc == NativeMethods.BODY_PARSE)
+                {
+                    return LoadFromBytes(body);
+                }
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_iteminfo_load_from_bytes_with_header(bytes={body.Length}, header={header.Length}) failed: {ErrorName(rc)}");
+                }
+                return Build(CrimsonItemInfoHandle.FromOwnedPointer(raw));
+            }
+        }
+    }
+
     private static NativeItemInfoCatalog Build(CrimsonItemInfoHandle handle)
     {
         var rc = NativeMethods.ItemInfoEntryCount(handle, out var count);

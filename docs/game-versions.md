@@ -2,7 +2,7 @@
 
 ## Current install
 
-`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 2.05.01**
+`D:\SteamLibrary\steamapps\common\Crimson Desert` — **version 2.06**
 
 Top-level layout:
 
@@ -31,10 +31,11 @@ Crimson Desert/
   patch. **Game 2.00 is the first major bump, and it RESETS the minor**
   (1.18 → 2.00 is `18` → `0`), so a bare minor no longer identifies a schema:
   minor `0` means 2.00 today and would have meant a hypothetical 1.00
-  yesterday. Live 2.05.01 install:
-  `02 00 05 00 01 00 01 00 00 00 06 00 00 00 "dlc_01" 09 00 00 00 86 be f4 4e`
-  → major 2, minor 5, patch 1, DLC `dlc_01` revision 9, build `0x4ef4be86`.
-  (2.05.00 was `02 00 05 00 00 00 …` with `dlc_01` revision 8, build
+  yesterday. Live 2.06.00 install:
+  `02 00 06 00 00 00 01 00 00 00 06 00 00 00 "dlc_01" 0b 00 00 00 40 98 bd e1`
+  → major 2, minor 6, patch 0, DLC `dlc_01` revision 11, build `0xe1bd9840`.
+  (2.05.01 was `02 00 05 00 01 00 …` with `dlc_01` revision 9, build
+  `0x4ef4be86`; 2.05.00 was `02 00 05 00 00 00 …` with `dlc_01` revision 8, build
   `0x6b551ea7`; 2.04.08 was `02 00 04 00 08 00 …` with `dlc_01` revision 7, build
   `0xe4d53a97`; 2.04.03 was
   `02 00 04 00 03 00 01 00 00 00 06 00 00 00 "dlc_01" 02 00 00 00 e2 7e be 3e`,
@@ -57,8 +58,8 @@ Crimson Desert/
   install's `(major, minor)` isn't one the parser can load —
   `GameDataVersion.IsCompatibleWithParser` now gates on
   `Major == ParserTargetMajor` **and** `Minor ∈ CompatibleMinors`
-  (currently `2` and `{5}`), and, on the target minor, `Patch >=
-  ParserMinPatch` (currently `1`, set at 2.05.01; it was `8` for 2.04, see 2.04.08 below, and `0` for 2.05.00). The major half was added at the 2.00 alignment
+  (currently `2` and `{6}`), and, on the target minor, `Patch >=
+  ParserMinPatch` (currently `0`, any patch; it was `8` for 2.04 and `1` for 2.05, see 2.04.08 and 2.05.01 below). The major half was added at the 2.00 alignment
   and is not cosmetic: with the minor reset to `0`, the old minor-only test
   would have reported a hypothetical `1.00.xx` install as compatible with the
   2.00 parser. **2.00 carries two iteminfo layout drifts** (crimson-rs commit
@@ -261,3 +262,7 @@ Editor side: the manual `VerMinor` 4 → 5 bump (`VerPatch` back to 1) and the p
 The minor is still 5, so crimson-rs raised `PARSER_MIN_GAMEDATA_PATCH` 0 → 1 and a 2.05.00 install now reads incompatible (`2.05.01+` in the dialog). The C ABI surface is unchanged and the C# gate needed nothing.
 
 Editor side: `VerPatch` 1 → 2, so the next release is v2.05.02, and the paver pins (live → 2.05.01, previous → 2.05.00, which the patch floor now rejects; floor pin 0 → 1). The untouched suite failed exactly three paver pins of 408. Unresolved distinct keys per TypeName on slot102 (2.05.01-written) are identical to slot1 (2.05.00-written), both read against the 2.05.01 install: ItemKey 753 of 753 resolve; the only blanks are the known MissionKey 1,420, CharacterKey 106, FactionKey 60, InventoryKey 8 and StringInfoKey 1. Upstream checked the save body: slot102 and slot107 decode (v2 / `0x0080`, HMAC ok), with 0 trailing-pad bytes and idempotent round-trips.
+
+**2.05.01 → 2.06 moved every static-info row's name into the table header.** Vendored from `crimson-rs` `main` at `2983e1e` (PR #115; the work is `95fa25f`), validated against the live install (paver `2/6/0/0xe1bd9840`, `dlc_01` revision 11, Steam build 26949954, 2026-11-27). Each `.staticinfoheader` now lists `[key][u32 len][name][u32 offset][u32 size]` per row, and each body row opens `[key][u32 row index]` before the unchanged 2.05.01 remainder. `dyecolorgroupinfo` colour records also grew from 8 to 22 bytes. crimson-rs reads the new header everywhere: the table parsers that already took body + header rebuild the pre-2.06 layout internally, and the nine bridges that took only the body gained additive `*_load_from_bytes_with_header` C ABI. Target minor 6, `CompatibleMinors` `{6}`, `ParserMinPatch` back to `0`.
+
+Editor side, the first real interop change since 2.04: the body-only loaders find **no rows** on 2.06, so `LocalizationProvider` now extracts each table's header with its body. Mission, knowledge, quest gauge, gimmick, character and sub-level (base and `dlc_01`) call `_with_header`; quest and stage already went through `_with_pabgh`, which upstream left working, so their now-useless body-only overloads were removed along with the six replaced ones. Iteminfo (base and DLC) calls `crimson_iteminfo_load_from_bytes_with_header`, which rejects a pre-2.06 header with `BODY_PARSE`; that case falls back to the body-only loader, the path older installs need. `VerMinor` 5 → 6, `VerPatch` back to 1 (next release v2.06.01). The untouched suite failed 16 of 408: six paver pins, the eight key-info bridge tests and the iteminfo name round-trip (all body-only loads), and `Bootstrap_LiveInstall_ResolvesAndOffersDlcRows`. Unresolved distinct keys per TypeName on slot0 and slot102 (both 2.06-written) equal 2.05.01's: ItemKey 752 of 752 resolve, and the only blanks are the known MissionKey 1,420, CharacterKey 106, FactionKey 60, InventoryKey 8 and StringInfoKey 1.

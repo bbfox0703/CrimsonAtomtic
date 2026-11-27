@@ -48,8 +48,10 @@ public sealed class ItemInfoCatalogTests
         }
         var extractor = new NativePazExtractor();
         var bytes = LiveInstall.Body(extractor, pamt, "iteminfo");
+        // 2.06 keeps every item's string key in the header.
+        var header = LiveInstall.Header(extractor, pamt, "iteminfo");
 
-        using var cat = NativeItemInfoCatalog.LoadFromBytes(bytes);
+        using var cat = NativeItemInfoCatalog.LoadFromBytes(bytes, header);
         // 1.05 had ~6,236; 1.06 has ~6,400. Just assert plausibly populated.
         Assert.True(cat.EntryCount > 5_000,
             $"expected >5k items, got {cat.EntryCount}");
