@@ -1,4 +1,5 @@
 using CrimsonAtomtic.RustInterop;
+using CrimsonAtomtic.SaveModel;
 using CrimsonAtomtic.Ui.Services;
 using Xunit;
 
@@ -116,6 +117,127 @@ public sealed class LocalizationProviderTests
         Assert.Equal("dlc_01", loc.ItemDlcName(DlcItem));
         Assert.Null(loc.ItemDlcName(2200)); // Pyeonjeon_Arrow, a base item
     }
+
+    /// <summary>
+    /// <c>FactionKey</c> resolves through the <c>faction</c> table. It used to
+    /// go through PALOC type byte 0x30, which is <c>character.paloc</c>'s:
+    /// factions and characters share the 1,000,000+ key range, so the
+    /// player's own faction 1000000 read as <c>CharacterKey 1000000</c>
+    /// "Hernandian Guard", and 1000035 / 1000058 / 1000063 all read as
+    /// "Dusksong". Faction rows carry no localized name; the internal row
+    /// name is what the game ships.
+    /// </summary>
+    [Fact]
+    public void Bootstrap_LiveInstall_ResolvesFactionKeysThroughTheFactionTable()
+    {
+        if (!File.Exists("crimson_rs.dll"))
+        {
+            return;
+        }
+        var pamt = LiveInstall.FindGroupPamt(GameDataLayout.GameDataGroup);
+        if (pamt is null)
+        {
+            return;
+        }
+        var gameRoot = Path.GetDirectoryName(Path.GetDirectoryName(pamt))!;
+        using var loc = new LocalizationProvider(new NativePazExtractor());
+        Assert.True(loc.TryBootstrapFromGameRoot(gameRoot));
+
+        Assert.Equal("Faction_Graymane", loc.ResolveByFieldTypeName("FactionKey", 1000000));
+        Assert.Equal("Faction_Abyss", loc.ResolveByFieldTypeName("FactionKey", 1000063));
+        Assert.Equal("Faction_Elimoor", loc.ResolveByFieldTypeName("FactionKey", 1000035));
+        Assert.Equal("Faction_GoblinSandfang", loc.ResolveByFieldTypeName("FactionKey", 1000058));
+        Assert.Equal("Faction_ThiefDusksong", loc.ResolveByFieldTypeName("FactionKey", 1000065));
+        // A key outside the faction table must not fall back to a
+        // character name (CharacterKey 1000006 is "Grey-0").
+        Assert.Equal(string.Empty, loc.ResolveByFieldTypeName("FactionKey", 0));
+        // The same number as a CharacterKey still resolves as a character.
+        Assert.NotEqual("Faction_Graymane", loc.ResolveByFieldTypeName("CharacterKey", 1000000));
+
+        if (GameDataLayout.DlcNames(gameRoot).Contains("dlc_01"))
+        {
+            // Only faction.dlc_01 holds this row.
+            Assert.Equal("Faction_Leviathan", loc.ResolveByFieldTypeName("FactionKey", 1000113));
+        }
+    }
+
+    /// <summary>
+    /// The same fix, checked against what the game wrote: in the newest
+    /// save, the faction whose leader is <c>CharacterKey 1</c> (Kliff, the
+    /// player) is the Greymanes, and every <c>FactionKey</c> the faction
+    /// block holds resolves to a faction row.
+    /// </summary>
+    [Fact]
+    public void NewestSave_FactionKeysResolveToFactionRows()
+    {
+        if (!File.Exists("crimson_rs.dll"))
+        {
+            return;
+        }
+        var pamt = LiveInstall.FindGroupPamt(GameDataLayout.GameDataGroup);
+        var savePath = LiveSaves.Newest();
+        if (pamt is null || savePath is null)
+        {
+            return;
+        }
+        var gameRoot = Path.GetDirectoryName(Path.GetDirectoryName(pamt))!;
+        using var loc = new LocalizationProvider(new NativePazExtractor());
+        Assert.True(loc.TryBootstrapFromGameRoot(gameRoot));
+
+        var loader = new NativeSaveLoader();
+        var summary = loader.Load(savePath);
+        var block = summary.Blocks.FirstOrDefault(b => b.ClassName == "FactionSaveData");
+        if (block is null)
+        {
+            return;
+        }
+        var details = loader.LoadBlockDetails(savePath, block.Index);
+
+        uint? playerFaction = null;
+        var factionKeys = new HashSet<uint>();
+        Walk(details);
+        Assert.NotEmpty(factionKeys);
+        Assert.Equal(1000000u, playerFaction);
+        Assert.Equal("Faction_Graymane", loc.ResolveByFieldTypeName("FactionKey", playerFaction!.Value));
+        var unresolved = factionKeys
+            .Where(k => k != 0 && !loc.ResolveByFieldTypeName("FactionKey", k).StartsWith("Faction_", StringComparison.Ordinal))
+            .ToList();
+        Assert.True(unresolved.Count == 0,
+            $"{LiveSaves.Describe(savePath)}: FactionKeys with no faction row: {string.Join(", ", unresolved)}");
+
+        void Walk(BlockDetails b)
+        {
+            uint? faction = null, leader = null;
+            foreach (var f in b.Fields)
+            {
+                if (TryU32(f) is { } v)
+                {
+                    if (f.TypeName == "FactionKey")
+                    {
+                        factionKeys.Add(v);
+                        if (f.Name == "_ownerFactionKey") faction = v;
+                    }
+                    else if (f.Name == "_leaderCharacterKey")
+                    {
+                        leader = v;
+                    }
+                }
+                if (f.Child is { } child) Walk(child);
+                foreach (var e in f.Elements ?? []) Walk(e);
+            }
+            if (leader == 1 && faction is not null)
+            {
+                playerFaction = faction;
+            }
+        }
+    }
+
+    private static uint? TryU32(DecodedFieldRow f) =>
+        ScalarFieldEditing.TryParse(f.Value, out var raw, out _)
+        && uint.TryParse(raw, System.Globalization.NumberStyles.Integer,
+                         System.Globalization.CultureInfo.InvariantCulture, out var v)
+            ? v
+            : null;
 
     /// <summary>
     /// An install without DLC, and one whose DLC files are broken, must

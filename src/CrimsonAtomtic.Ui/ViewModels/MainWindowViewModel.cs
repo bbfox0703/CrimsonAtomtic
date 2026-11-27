@@ -2674,7 +2674,7 @@ public sealed partial class MainWindowViewModel(
     /// <see cref="StateFieldIndex"/> is the <c>_factionState</c> scalar
     /// within it. <see cref="OwnerKey"/> is a <c>FactionNodeKey</c>
     /// (resolve via the factionnode bridge); <see cref="ConquerorKey"/> is
-    /// a <c>FactionKey</c> (PALOC).
+    /// a <c>FactionKey</c> (faction table bridge).
     /// </summary>
     internal readonly record struct FactionNodeTarget(
         int BlockIndex,

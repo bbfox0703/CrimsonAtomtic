@@ -2760,6 +2760,99 @@ internal sealed class CrimsonRegionInfoHandle : SafeHandle
     }
 }
 
+// ── FactionInfo ─────────────────────────────────────────────────────────────
+
+/// <summary>
+/// <c>FactionKey (u32)</c> → row internal name (e.g. <c>"Faction_Graymane"</c>
+/// for 1000000, the player's faction; <c>"Faction_ThiefDusksong"</c>).
+/// 135 rows in 2.06. Name-only: faction rows carry no localizable string,
+/// and the PALOC type-byte 0x30 lookup <c>FactionKey</c> used to go through
+/// answers with <i>character</i> names, because factions and characters
+/// share the 1,000,000+ key range.
+/// </summary>
+public sealed class NativeFactionInfoCatalog : IDisposable
+{
+    private readonly CrimsonFactionInfoHandle _handle;
+    private readonly int _entryCount;
+    private bool _disposed;
+
+    private NativeFactionInfoCatalog(CrimsonFactionInfoHandle handle, int entryCount)
+    {
+        _handle = handle;
+        _entryCount = entryCount;
+    }
+
+    public int EntryCount
+    {
+        get { ObjectDisposedException.ThrowIf(_disposed, this); return _entryCount; }
+    }
+
+    public static NativeFactionInfoCatalog LoadFromBytes(
+        ReadOnlySpan<byte> pabgb, ReadOnlySpan<byte> pabgh)
+    {
+        unsafe
+        {
+            fixed (byte* pb = pabgb)
+            fixed (byte* ph = pabgh)
+            {
+                var rc = NativeMethods.FactionInfoLoadFromBytes(
+                    pb, (nuint)pabgb.Length, ph, (nuint)pabgh.Length, out var raw);
+                if (rc != NativeMethods.OK)
+                {
+                    throw new CrimsonSaveException(rc,
+                        $"crimson_faction_info_load_from_bytes(pabgb={pabgb.Length},pabgh={pabgh.Length}) " +
+                        $"failed: {NameBuffer.ErrorName(rc)}");
+                }
+                var handle = CrimsonFactionInfoHandle.FromOwnedPointer(raw);
+                var rcCount = NativeMethods.FactionInfoEntryCount(handle, out var count);
+                if (rcCount != NativeMethods.OK)
+                {
+                    handle.Dispose();
+                    throw new CrimsonSaveException(rcCount,
+                        $"crimson_faction_info_entry_count failed: {NameBuffer.ErrorName(rcCount)}");
+                }
+                return new NativeFactionInfoCatalog(handle, (int)count);
+            }
+        }
+    }
+
+    public string? LookupStringKey(uint factionKey)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        unsafe
+        {
+            return NameBuffer.ReadString(
+                (byte* buf, nuint bufLen, out nuint required) =>
+                    NativeMethods.FactionInfoLookupStringKey(_handle, factionKey, buf, bufLen, out required),
+                $"crimson_faction_info_lookup_string_key({factionKey})");
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _handle.Dispose();
+    }
+}
+
+internal sealed class CrimsonFactionInfoHandle : SafeHandle
+{
+    public CrimsonFactionInfoHandle() : base(IntPtr.Zero, ownsHandle: true) { }
+    public static CrimsonFactionInfoHandle FromOwnedPointer(IntPtr ptr)
+    {
+        var h = new CrimsonFactionInfoHandle();
+        h.SetHandle(ptr);
+        return h;
+    }
+    public override bool IsInvalid => handle == IntPtr.Zero;
+    protected override bool ReleaseHandle()
+    {
+        NativeMethods.FactionInfoFree(handle);
+        return true;
+    }
+}
+
 // ── ItemGroupInfo ───────────────────────────────────────────────────────────
 
 /// <summary>
