@@ -7,7 +7,28 @@
 > **[status-archive.md](status-archive.md)** — look there only when you need
 > the deep history behind a decision.
 >
-> Last updated: **2026-11-21** — the editor is aligned to game **2.05.01**
+> Last updated: **2026-11-27** — the editor is aligned to game **2.06**
+> (paver `2/6/0/0xe1bd9840`, `dlc_01` revision 11, Steam build 26949954,
+> live since 2026-11-27), **on `dev`, not committed or released**. 2.06
+> moved every static-info row's name from the table body into its header, so
+> **v2.05.02 shows item, mission, character, knowledge and gimmick names
+> blank on 2.06**. crimson-rs PR #115 (vendored at `2983e1e`) reads the new
+> header and adds `*_load_from_bytes_with_header` for the nine body-only
+> bridges; `LocalizationProvider` now extracts each table's header with its
+> body and calls them (iteminfo falls back to the body-only loader on a
+> pre-2.06 header). The body-only overloads of the six replaced bridges and
+> of quest / stage (whose `_with_pabgh` path still works) are gone.
+> `VerMinor` 5 → 6, `VerPatch` 1 (next release **v2.06.01**). The untouched
+> suite failed 16 of 408; now **408 C# tests green**. Unresolved distinct keys
+> per TypeName on slot0 / slot102 (2.06-written) equal 2.05.01's, ItemKey
+> 752/752 resolved; AOT publish has zero IL/trim warnings and launches as
+> `v2.06.01.36`. Not checked: anything in-game. Details in
+> [game-versions.md](game-versions.md). **Next task: commit, then
+> 「啟動 release CI」 for v2.06.01.**
+>
+> **Below this line is the 2.05.01 history.**
+>
+> On **2026-11-21** the editor was aligned to game **2.05.01**
 > (paver `2/5/1/0x4ef4be86`, `dlc_01` revision 9, Steam build 26776744,
 > live since 2026-11-19), and **v2.05.02 is tagged, built and PUBLISHED**
 > (2026-11-21T03:19:28Z, marked Latest): tag → `7adecad` (PR #53 merge), CI
@@ -16,8 +37,7 @@
 > digest and the run log). The downloaded zip was checked before
 > publishing: its `.sha256` matches, it holds the four expected files with
 > no `crimson_rs.dll`, the exe's ProductVersion ends in `7adecad`, and it
-> launches as `CrimsonAtomtic v2.05.02.36`. **Next task: none queued** —
-> pick from the backlog below.
+> launches as `CrimsonAtomtic v2.05.02.36`.
 >
 > The 2.05.01 alignment itself: like
 > 2.04.08, 2.05.01 changed the iteminfo layout without moving the minor (a

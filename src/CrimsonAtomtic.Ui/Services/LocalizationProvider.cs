@@ -593,22 +593,24 @@ public sealed class LocalizationProvider : IDisposable
         // lookups also need the English PALOC to be loaded below, but
         // the bridge-load step can run before that since
         // LookupDisplayName only needs the paloc handle at call time.
-        TryBootstrapKeyInfoCatalog(gameRoot, MissionInfoTable,
-            NativeMissionInfoCatalog.LoadFromBytes, ref _missionInfo);
+        // 2.06 moved every row's name into the table's header, so each of
+        // these loads the header with the body.
         var gameDataPamt = Path.Combine(gameRoot, GameDataLayout.GameDataGroup, "0.pamt");
+        TryLoadNicheBridge(gameDataPamt, MissionInfoTable,
+            NativeMissionInfoCatalog.LoadFromBytes, ref _missionInfo);
         TryLoadNicheBridge(gameDataPamt, QuestInfoTable,
             NativeQuestInfoCatalog.LoadFromBytes, ref _questInfo);
         TryLoadNicheBridge(gameDataPamt, StageInfoTable,
             NativeStageInfoCatalog.LoadFromBytes, ref _stageInfo);
-        TryBootstrapKeyInfoCatalog(gameRoot, KnowledgeInfoTable,
+        TryLoadNicheBridge(gameDataPamt, KnowledgeInfoTable,
             NativeKnowledgeInfoCatalog.LoadFromBytes, ref _knowledgeInfo);
-        TryBootstrapKeyInfoCatalog(gameRoot, QuestGaugeInfoTable,
+        TryLoadNicheBridge(gameDataPamt, QuestGaugeInfoTable,
             NativeQuestGaugeInfoCatalog.LoadFromBytes, ref _questGaugeInfo);
-        TryBootstrapKeyInfoCatalog(gameRoot, GimmickInfoTable,
+        TryLoadNicheBridge(gameDataPamt, GimmickInfoTable,
             NativeGimmickInfoCatalog.LoadFromBytes, ref _gimmickInfo);
-        TryBootstrapKeyInfoCatalog(gameRoot, CharacterInfoTable,
+        TryLoadNicheBridge(gameDataPamt, CharacterInfoTable,
             NativeCharacterInfoCatalog.LoadFromBytes, ref _characterInfo);
-        TryBootstrapKeyInfoCatalog(gameRoot, SubLevelInfoTable,
+        TryLoadNicheBridge(gameDataPamt, SubLevelInfoTable,
             NativeSubLevelInfoCatalog.LoadFromBytes, ref _subLevelInfo);
         TryBootstrapSkillInfo(gameRoot);
         TryBootstrapDyeGamedata(gameRoot);
@@ -639,8 +641,9 @@ public sealed class LocalizationProvider : IDisposable
         try
         {
             var bytes = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(ItemInfoTable));
+            var header = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Header(ItemInfoTable));
             _itemInfo?.Dispose();
-            _itemInfo = NativeItemInfoCatalog.LoadFromBytes(bytes);
+            _itemInfo = NativeItemInfoCatalog.LoadFromBytes(bytes, header);
         }
         catch (CrimsonSaveException)
         {
@@ -689,9 +692,10 @@ public sealed class LocalizationProvider : IDisposable
                 gameRoot, GameDataLayout.DlcDirectory, dlc, GameDataLayout.GameDataGroup, "0.pamt");
             try
             {
-                var bytes = _paz.ExtractFile(pamt, _layout.BinDirectory,
-                    _layout.Body(GameDataLayout.DlcTableStem(ItemInfoTable, dlc)));
-                var catalog = NativeItemInfoCatalog.LoadFromBytes(bytes);
+                var stem = GameDataLayout.DlcTableStem(ItemInfoTable, dlc);
+                var bytes = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(stem));
+                var header = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Header(stem));
+                var catalog = NativeItemInfoCatalog.LoadFromBytes(bytes, header);
                 _dlcItemInfo.Add(catalog);
                 for (var i = 0; i < catalog.EntryCount; i++)
                 {
@@ -731,20 +735,20 @@ public sealed class LocalizationProvider : IDisposable
         {
             var pamt = Path.Combine(
                 gameRoot, GameDataLayout.DlcDirectory, dlc, GameDataLayout.GameDataGroup, "0.pamt");
-            RegisterDlcKeyTable(pamt, dlc, MissionInfoTable, (b, _) => NativeMissionInfoCatalog.LoadFromBytes(b),
+            RegisterDlcKeyTable(pamt, dlc, MissionInfoTable, (b, h) => NativeMissionInfoCatalog.LoadFromBytes(b, h),
                 (t, k, p) => t.LookupDisplayName(k, p), (t, k) => t.LookupStringKey(k), "MissionKey");
             RegisterDlcKeyTable(pamt, dlc, QuestInfoTable, (b, h) => NativeQuestInfoCatalog.LoadFromBytes(b, h),
                 (t, k, p) => t.LookupDisplayName(k, p), (t, k) => t.LookupStringKey(k), "QuestKey");
             RegisterDlcKeyTable(pamt, dlc, StageInfoTable, (b, h) => NativeStageInfoCatalog.LoadFromBytes(b, h),
                 (t, k, p) => t.LookupDisplayName(k, p), (t, k) => t.LookupStringKey(k), "StageKey");
-            RegisterDlcKeyTable(pamt, dlc, KnowledgeInfoTable, (b, _) => NativeKnowledgeInfoCatalog.LoadFromBytes(b),
+            RegisterDlcKeyTable(pamt, dlc, KnowledgeInfoTable, (b, h) => NativeKnowledgeInfoCatalog.LoadFromBytes(b, h),
                 (t, k, p) => t.LookupDisplayName(k, p), (t, k) => t.LookupStringKey(k), "KnowledgeKey");
-            RegisterDlcKeyTable(pamt, dlc, GimmickInfoTable, (b, _) => NativeGimmickInfoCatalog.LoadFromBytes(b),
+            RegisterDlcKeyTable(pamt, dlc, GimmickInfoTable, (b, h) => NativeGimmickInfoCatalog.LoadFromBytes(b, h),
                 (t, k, p) => t.LookupDisplayName(k, p), (t, k) => t.LookupStringKey(k),
                 "GimmickInfoKey", "LevelGimmickSceneObjectInfoKey");
-            RegisterDlcKeyTable(pamt, dlc, CharacterInfoTable, (b, _) => NativeCharacterInfoCatalog.LoadFromBytes(b),
+            RegisterDlcKeyTable(pamt, dlc, CharacterInfoTable, (b, h) => NativeCharacterInfoCatalog.LoadFromBytes(b, h),
                 (t, k, p) => t.LookupDisplayName(k, p), (t, k) => t.LookupStringKey(k), "CharacterKey");
-            RegisterDlcKeyTable(pamt, dlc, QuestGaugeInfoTable, (b, _) => NativeQuestGaugeInfoCatalog.LoadFromBytes(b),
+            RegisterDlcKeyTable(pamt, dlc, QuestGaugeInfoTable, (b, h) => NativeQuestGaugeInfoCatalog.LoadFromBytes(b, h),
                 null, (t, k) => t.LookupStringKey(k), "QuestGaugeKey");
             RegisterDlcKeyTable(pamt, dlc, SkillTable, (b, h) => NativeSkillInfoCatalog.LoadFromBytes(h, b),
                 null, (t, k) => t.LookupStringKey(k), "SkillKey");
@@ -841,40 +845,6 @@ public sealed class LocalizationProvider : IDisposable
             }
         }
         return null;
-    }
-
-    /// <summary>
-    /// Generic loader for the Mission / Quest / Stage / Knowledge / Gauge
-    /// catalogs — same group, same directory, same one-file-load shape.
-    /// Failures degrade silently: the corresponding TypeName just stops
-    /// resolving in <see cref="ResolveViaKeyTable"/> until the next
-    /// successful bootstrap.
-    /// </summary>
-    private void TryBootstrapKeyInfoCatalog<T>(
-        string gameRoot,
-        string tableStem,
-        Func<ReadOnlySpan<byte>, T> loader,
-        ref T? slot)
-        where T : class, IDisposable
-    {
-        var pamt = Path.Combine(gameRoot, "0008", "0.pamt");
-        if (!File.Exists(pamt))
-        {
-            return;
-        }
-        try
-        {
-            var bytes = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(tableStem));
-            slot?.Dispose();
-            slot = loader(bytes);
-        }
-        catch (CrimsonSaveException)
-        {
-            // File missing or parse failure — degrade gracefully.
-        }
-        catch (IOException)
-        {
-        }
     }
 
     /// <summary>

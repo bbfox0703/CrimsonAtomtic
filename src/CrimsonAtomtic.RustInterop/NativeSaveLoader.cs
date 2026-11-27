@@ -2395,6 +2395,12 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "crimson_iteminfo_load_from_bytes")]
     public static unsafe partial int ItemInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
 
+    // 2.06: item string keys live in the header. Older installs' headers are
+    // rejected with BODY_PARSE — load those with the body-only entry point.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_iteminfo_load_from_bytes_with_header")]
+    public static unsafe partial int ItemInfoLoadFromBytesWithHeader(
+        byte* data, nuint dataLen, byte* header, nuint headerLen, out IntPtr handle);
+
     [LibraryImport(LibraryName, EntryPoint = "crimson_iteminfo_free")]
     public static partial void ItemInfoFree(IntPtr handle);
 
@@ -2550,8 +2556,10 @@ internal static partial class NativeMethods
                    StringMarshalling = StringMarshalling.Utf8)]
     public static partial int MissionInfoLoadFromFile(string path, out IntPtr handle);
 
-    [LibraryImport(LibraryName, EntryPoint = "crimson_missioninfo_load_from_bytes")]
-    public static unsafe partial int MissionInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
+    // 2.06: row names live in the header; the body-only loader finds no rows.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_missioninfo_load_from_bytes_with_header")]
+    public static unsafe partial int MissionInfoLoadFromBytesWithHeader(
+        byte* data, nuint dataLen, byte* header, nuint headerLen, out IntPtr handle);
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_missioninfo_free")]
     public static partial void MissionInfoFree(IntPtr handle);
@@ -2581,9 +2589,6 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "crimson_questinfo_load_from_file",
                    StringMarshalling = StringMarshalling.Utf8)]
     public static partial int QuestInfoLoadFromFile(string path, out IntPtr handle);
-
-    [LibraryImport(LibraryName, EntryPoint = "crimson_questinfo_load_from_bytes")]
-    public static unsafe partial int QuestInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_questinfo_load_from_bytes_with_pabgh")]
     public static unsafe partial int QuestInfoLoadFromBytesWithPabgh(
@@ -2618,9 +2623,6 @@ internal static partial class NativeMethods
                    StringMarshalling = StringMarshalling.Utf8)]
     public static partial int StageInfoLoadFromFile(string path, out IntPtr handle);
 
-    [LibraryImport(LibraryName, EntryPoint = "crimson_stageinfo_load_from_bytes")]
-    public static unsafe partial int StageInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
-
     [LibraryImport(LibraryName, EntryPoint = "crimson_stageinfo_load_from_bytes_with_pabgh")]
     public static unsafe partial int StageInfoLoadFromBytesWithPabgh(
         byte* pabgb, nuint pabgbLen, byte* pabgh, nuint pabghLen, out IntPtr handle);
@@ -2654,8 +2656,10 @@ internal static partial class NativeMethods
                    StringMarshalling = StringMarshalling.Utf8)]
     public static partial int KnowledgeInfoLoadFromFile(string path, out IntPtr handle);
 
-    [LibraryImport(LibraryName, EntryPoint = "crimson_knowledgeinfo_load_from_bytes")]
-    public static unsafe partial int KnowledgeInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
+    // 2.06: row names live in the header; the body-only loader finds no rows.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_knowledgeinfo_load_from_bytes_with_header")]
+    public static unsafe partial int KnowledgeInfoLoadFromBytesWithHeader(
+        byte* data, nuint dataLen, byte* header, nuint headerLen, out IntPtr handle);
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_knowledgeinfo_free")]
     public static partial void KnowledgeInfoFree(IntPtr handle);
@@ -2690,8 +2694,10 @@ internal static partial class NativeMethods
                    StringMarshalling = StringMarshalling.Utf8)]
     public static partial int QuestGaugeInfoLoadFromFile(string path, out IntPtr handle);
 
-    [LibraryImport(LibraryName, EntryPoint = "crimson_questgaugeinfo_load_from_bytes")]
-    public static unsafe partial int QuestGaugeInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
+    // 2.06: row names live in the header; the body-only loader finds no rows.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_questgaugeinfo_load_from_bytes_with_header")]
+    public static unsafe partial int QuestGaugeInfoLoadFromBytesWithHeader(
+        byte* data, nuint dataLen, byte* header, nuint headerLen, out IntPtr handle);
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_questgaugeinfo_free")]
     public static partial void QuestGaugeInfoFree(IntPtr handle);
@@ -3152,8 +3158,10 @@ internal static partial class NativeMethods
                    StringMarshalling = StringMarshalling.Utf8)]
     public static partial int GimmickInfoLoadFromFile(string path, out IntPtr handle);
 
-    [LibraryImport(LibraryName, EntryPoint = "crimson_gimmickinfo_load_from_bytes")]
-    public static unsafe partial int GimmickInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
+    // 2.06: row names live in the header; the body-only loader finds no rows.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_gimmickinfo_load_from_bytes_with_header")]
+    public static unsafe partial int GimmickInfoLoadFromBytesWithHeader(
+        byte* data, nuint dataLen, byte* header, nuint headerLen, out IntPtr handle);
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_gimmickinfo_free")]
     public static partial void GimmickInfoFree(IntPtr handle);
@@ -3196,8 +3204,10 @@ internal static partial class NativeMethods
                    StringMarshalling = StringMarshalling.Utf8)]
     public static partial int CharacterInfoLoadFromFile(string path, out IntPtr handle);
 
-    [LibraryImport(LibraryName, EntryPoint = "crimson_characterinfo_load_from_bytes")]
-    public static unsafe partial int CharacterInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
+    // 2.06: row names live in the header; the body-only loader finds no rows.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_characterinfo_load_from_bytes_with_header")]
+    public static unsafe partial int CharacterInfoLoadFromBytesWithHeader(
+        byte* data, nuint dataLen, byte* header, nuint headerLen, out IntPtr handle);
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_characterinfo_free")]
     public static partial void CharacterInfoFree(IntPtr handle);
@@ -3251,8 +3261,10 @@ internal static partial class NativeMethods
                    StringMarshalling = StringMarshalling.Utf8)]
     public static partial int SubLevelInfoLoadFromFile(string path, out IntPtr handle);
 
-    [LibraryImport(LibraryName, EntryPoint = "crimson_sublevelinfo_load_from_bytes")]
-    public static unsafe partial int SubLevelInfoLoadFromBytes(byte* data, nuint dataLen, out IntPtr handle);
+    // 2.06: row names live in the header; the body-only loader finds no rows.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_sublevelinfo_load_from_bytes_with_header")]
+    public static unsafe partial int SubLevelInfoLoadFromBytesWithHeader(
+        byte* data, nuint dataLen, byte* header, nuint headerLen, out IntPtr handle);
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_sublevelinfo_free")]
     public static partial void SubLevelInfoFree(IntPtr handle);
