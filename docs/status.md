@@ -19,6 +19,23 @@
 > launches as `CrimsonAtomtic v2.06.01.36`. **Next task: none queued** —
 > pick from the backlog below.
 >
+> **FactionKey names were wrong (fixed 2026-11-27).**
+> `FactionKey` resolved through PALOC type byte `0x30`, which is
+> `character.paloc`'s; factions and characters share the 1,000,000+ key
+> range, so the player's faction 1000000 read as `CharacterKey 1000000`
+> "Hernandian Guard" and six factions as "Dusksong". Faction rows carry no
+> localized name (`faction.paloc` holds factiongroup / operation strings,
+> not faction-keyed ones), so the fix is a name-only `faction` table bridge:
+> crimson-rs `src/faction_info` + `crimson_faction_info_*` (PR #116,
+> merged to `main` as `ebd95c4` and vendored), C#
+> `NativeFactionInfoCatalog`, and `FactionKey` moved to the table-driven
+> path with the `faction.dlc_01` fallback (11 DLC-only rows). The PALOC
+> `0x30` name slice had no other consumer and was dropped. All 146 distinct
+> FactionKeys in slot0 / slot2 now resolve to `Faction_*` rows (60 were
+> blank, the rest character names). Pinned by
+> `LocalizationProviderTests.Bootstrap_LiveInstall_ResolvesFactionKeysThroughTheFactionTable`
+> and `NewestSave_FactionKeysResolveToFactionRows`.
+>
 > The 2.06 alignment itself: 2.06
 > moved every static-info row's name from the table body into its header, so
 > **v2.05.02 shows item, mission, character, knowledge and gimmick names

@@ -63,6 +63,7 @@ public sealed class LocalizationProvider : IDisposable
     // "info" suffix (royalsupply, globalgameevent, globalgameeventgroup,
     // reserveslot) - copy literally.
     private const string FactionNodeTable            = "factionnode";
+    private const string FactionInfoTable            = "faction";
     private const string HouseInfoTable              = "houseinfo";
     private const string RoyalSupplyTable            = "royalsupply";
     private const string CraftToolInfoTable          = "crafttoolinfo";
@@ -164,16 +165,6 @@ public sealed class LocalizationProvider : IDisposable
     private const byte ItemNameTypeByte = 0x70;
 
     /// <summary>
-    /// Type byte shared by character and faction names. Empirically
-    /// confirmed against 1.06: <c>CharacterKey 704 → "Carl"</c>,
-    /// <c>CharacterKey 51306 → "Greymane"</c>,
-    /// <c>FactionKey 1000063 → "Dusksong"</c> all sit at this byte.
-    /// The numeric ranges don't collide (factions are 1,000,000+,
-    /// characters are 0..999,999), so one map for both works.
-    /// </summary>
-    private const byte CharacterNameTypeByte = 0x30;
-
-    /// <summary>
     /// Type byte for in-world interactable / scenery names — the home
     /// of <c>GimmickInfoKey</c>. Confirmed against 1.06: every
     /// harvested GimmickInfo key value (1002143 → "Grindstone", 1004966
@@ -187,7 +178,6 @@ public sealed class LocalizationProvider : IDisposable
     private static readonly HashSet<byte> NameTypeBytes =
     [
         ItemNameTypeByte,
-        CharacterNameTypeByte,
         GimmickNameTypeByte,
     ];
 
@@ -209,15 +199,20 @@ public sealed class LocalizationProvider : IDisposable
     /// so leaving it on the byte path would surface wrong-namespace
     /// matches for FieldNPC spawn rows.
     /// </para>
+    /// <para>
+    /// <c>FactionKey</c> must never come back here. It used to map to
+    /// byte 0x30, but that byte is <c>character.paloc</c>'s: factions and
+    /// characters share the 1,000,000+ key range, so <c>FactionKey
+    /// 1000000</c> (Faction_Graymane, the player's faction) read as
+    /// <c>CharacterKey 1000000</c> "Hernandian Guard" and six factions read
+    /// as "Dusksong". Faction rows carry no localized name at all; the
+    /// <c>faction</c> table bridge resolves the internal name.
+    /// </para>
     /// </summary>
     private static readonly Dictionary<string, byte> TypeNameToTypeByte =
         new(StringComparer.Ordinal)
         {
             ["ItemKey"]                        = ItemNameTypeByte,
-            // FactionKey shares PALOC byte 0x30 with character display
-            // names but lives outside characterinfo.pabgb — keep it on
-            // the raw byte path, no cat-byte strip needed.
-            ["FactionKey"]                     = CharacterNameTypeByte,
             ["GimmickInfoKey"]                 = GimmickNameTypeByte,
             // Scene-object gimmicks (discovered interactables in the
             // open world) live at the same 0x00 byte as GimmickInfo.
@@ -292,6 +287,7 @@ public sealed class LocalizationProvider : IDisposable
         "RegionKey",                 // 1,004 rows
         "ItemGroupKey",              // 1,500 rows
         "FactionNodeKey",            // 1,158 rows — faction-stronghold node names
+        "FactionKey",                // 135 rows (2.06) — "Faction_Graymane", …; no PALOC chain
     };
 
     /// <summary>
@@ -373,6 +369,7 @@ public sealed class LocalizationProvider : IDisposable
     private NativeStoreInfoCatalog? _storeInfo;
     // 13 niche name-only bridges, group 0008 (impl_name_only_bridge!).
     private NativeFactionNodeInfoCatalog? _factionNodeInfo;
+    private NativeFactionInfoCatalog? _factionInfo;
     private NativeHouseInfoCatalog? _houseInfo;
     private NativeRoyalSupplyInfoCatalog? _royalSupplyInfo;
     private NativeCraftToolInfoCatalog? _craftToolInfo;
@@ -756,6 +753,8 @@ public sealed class LocalizationProvider : IDisposable
                 null, (t, k) => t.LookupStringKey(k), "StoreKey");
             RegisterDlcKeyTable(pamt, dlc, FactionNodeTable, (b, h) => NativeFactionNodeInfoCatalog.LoadFromBytes(b, h),
                 null, (t, k) => t.LookupStringKey(k), "FactionNodeKey");
+            RegisterDlcKeyTable(pamt, dlc, FactionInfoTable, (b, h) => NativeFactionInfoCatalog.LoadFromBytes(b, h),
+                null, (t, k) => t.LookupStringKey(k), "FactionKey");
             RegisterDlcKeyTable(pamt, dlc, HouseInfoTable, (b, h) => NativeHouseInfoCatalog.LoadFromBytes(b, h),
                 null, (t, k) => t.LookupStringKey(k), "HouseKey");
             RegisterDlcKeyTable(pamt, dlc, GamePlayVariableInfoTable, (b, h) => NativeGamePlayVariableInfoCatalog.LoadFromBytes(b, h),
@@ -989,6 +988,8 @@ public sealed class LocalizationProvider : IDisposable
         }
         TryLoadNicheBridge(pamt, FactionNodeTable,
             NativeFactionNodeInfoCatalog.LoadFromBytes, ref _factionNodeInfo);
+        TryLoadNicheBridge(pamt, FactionInfoTable,
+            NativeFactionInfoCatalog.LoadFromBytes, ref _factionInfo);
         TryLoadNicheBridge(pamt, HouseInfoTable,
             NativeHouseInfoCatalog.LoadFromBytes, ref _houseInfo);
         TryLoadNicheBridge(pamt, RoyalSupplyTable,
@@ -1810,8 +1811,8 @@ public sealed class LocalizationProvider : IDisposable
 
     /// <summary>
     /// True when the given save-schema field <c>TypeName</c> has a
-    /// name-resolution path — PALOC-backed (item / faction / character /
-    /// gimmick), table-driven (mission / quest / stage / knowledge /
+    /// name-resolution path — PALOC-backed (item / gimmick),
+    /// table-driven (mission / quest / stage / knowledge / character / faction /
     /// gauge / skill), or hardcoded (InventoryKey). Lets callers
     /// cheaply gate UI work without trying a lookup that's bound to
     /// come back empty.
@@ -2040,6 +2041,7 @@ public sealed class LocalizationProvider : IDisposable
             // Same convention as Store / QuestGauge / Skill: secondary
             // language intentionally echoes the English column.
             "FactionNodeKey"          => _factionNodeInfo?.LookupStringKey(key),
+            "FactionKey"              => _factionInfo?.LookupStringKey(key),
             "HouseKey"                => _houseInfo?.LookupStringKey(key),
             "RoyalSupplyKey"          => _royalSupplyInfo?.LookupStringKey(key),
             "CraftToolKey"            => _craftToolInfo?.LookupStringKey(key),
@@ -2192,6 +2194,7 @@ public sealed class LocalizationProvider : IDisposable
         _storeInfo = null;
         // 13 niche bridges.
         _factionNodeInfo?.Dispose(); _factionNodeInfo = null;
+        _factionInfo?.Dispose(); _factionInfo = null;
         _houseInfo?.Dispose(); _houseInfo = null;
         _royalSupplyInfo?.Dispose(); _royalSupplyInfo = null;
         _craftToolInfo?.Dispose(); _craftToolInfo = null;

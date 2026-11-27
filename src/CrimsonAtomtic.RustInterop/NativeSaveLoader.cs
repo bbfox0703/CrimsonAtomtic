@@ -3110,6 +3110,25 @@ internal static partial class NativeMethods
         CrimsonRegionInfoHandle handle, uint idx, out uint outKey,
         byte* buf, nuint bufLen, out nuint required);
 
+    // ── FactionInfo bridge (faction.pabgb + faction.pabgh) ──────────────────
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_faction_info_load_from_bytes")]
+    public static unsafe partial int FactionInfoLoadFromBytes(
+        byte* pabgbData, nuint pabgbLen,
+        byte* pabghData, nuint pabghLen,
+        out IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_faction_info_free")]
+    public static partial void FactionInfoFree(IntPtr handle);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_faction_info_entry_count")]
+    public static partial int FactionInfoEntryCount(CrimsonFactionInfoHandle handle, out uint count);
+
+    [LibraryImport(LibraryName, EntryPoint = "crimson_faction_info_lookup_string_key")]
+    public static unsafe partial int FactionInfoLookupStringKey(
+        CrimsonFactionInfoHandle handle, uint factionKey,
+        byte* buf, nuint bufLen, out nuint required);
+
     // ── ItemGroupInfo bridge (itemgroupinfo.pabgb + itemgroupinfo.pabgh) ────
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_item_group_info_load_from_bytes")]
