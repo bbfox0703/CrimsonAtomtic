@@ -3848,11 +3848,12 @@ public sealed partial class MainWindowViewModel(
                 UiText.Format("JournalAddItem", "Added {0} (ItemKey {1}, qty {2}) to inventory",
                     addedName, itemKey, newStackCount));
             OnPropertyChanged(nameof(WindowTitle));
+            var learnedNote = await LearnItemKnowledgeAsync(itemKey);
             BulkOpStatus = string.Format(
                 System.Globalization.CultureInfo.CurrentCulture,
                 LookupUiResourceString("AddItemStatusSuccess")
                     ?? "Added item {0} from {1} (qty {2}, slot {3}, itemNo {4}).",
-                itemKey, cloneSourceLabel, newStackCount, newSlotNo, newItemNo);
+                itemKey, cloneSourceLabel, newStackCount, newSlotNo, newItemNo) + learnedNote;
         }
         else
         {
@@ -4041,8 +4042,35 @@ public sealed partial class MainWindowViewModel(
             UiText.Format("JournalMountGrant", "Granted {0} (ItemKey {1}) into container _inventoryKey={2}",
                 name, itemKey, inventoryKey));
         OnPropertyChanged(nameof(WindowTitle));
+        var learnedNote = await LearnItemKnowledgeAsync(itemKey);
         return (true,
-            UiText.Format("MountGrantDone", "Granted {0} (slot {1}, itemNo {2}).", name, newSlotNo, newItemNo));
+            UiText.Format("MountGrantDone", "Granted {0} (slot {1}, itemNo {2}).", name, newSlotNo, newItemNo)
+            + learnedNote);
+    }
+
+    /// <summary>
+    /// Learn the knowledge an added item names (iteminfo <c>KnowledgeInfo</c>)
+    /// when the save lacks it. The game teaches it when an item is obtained
+    /// through its own paths; an item only placed in the bag shows as
+    /// "Unknown item" without it (dye items, verified in-game 2026-11-27).
+    /// Returns a note for the status line, empty when nothing was learned.
+    /// </summary>
+    private async Task<string> LearnItemKnowledgeAsync(uint itemKey)
+    {
+        if (localization.LookupItemInfoSummary(itemKey) is not { KnowledgeInfo: not 0 } summary
+            || GetLearnedKnowledgeKeys() is not { } learned
+            || learned.Contains(summary.KnowledgeInfo))
+        {
+            return string.Empty;
+        }
+        var (ok, applied, message) = await LearnKnowledgeAsync([summary.KnowledgeInfo]);
+        if (applied == 0)
+        {
+            return ok ? string.Empty : " " + message;
+        }
+        var knowledge = localization.ResolveByFieldTypeName("KnowledgeKey", summary.KnowledgeInfo)
+                        ?? summary.KnowledgeInfo.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return " " + UiText.Format("AddItemLearnedKnowledge", "Also learned its knowledge: {0}.", knowledge);
     }
 
     /// <summary>

@@ -297,11 +297,8 @@ public sealed partial class FactionNodeEditorViewModel : ObservableObject
         {
             if (!regionLabels.TryGetValue(r.Region, out var label))
             {
-                // Faction groups name most regions. Kweiden and Calphade are
-                // not groups and have no standalone PALOC string, so they stay
-                // English; "Islands" / "Other" come from the UI strings.
-                var secondary = groupNames.TryGetValue(r.Region, out var g) ? g : null;
-                label = secondary is not null && secondary != r.Region ? $"{r.Region} / {secondary}" : r.Region;
+                // "Islands" / "Other" come from the UI strings.
+                label = GameRegions.Label(r.Region, groupNames);
                 regionLabels[r.Region] = label;
             }
             r.RegionLabel = label;
@@ -369,20 +366,9 @@ public sealed partial class FactionNodeRow : ObservableObject
     {
         var parts = internalName.Split(" / ")[0].Split('_');
         var code = parts.Length > 2 && parts[0] == "Node" ? parts[1] : string.Empty;
-        return code switch
-        {
-            "Her" or "Hernand" => "Hernand",
-            "Dem" => "Demeniss",
-            "Del" => "Delesyia",
-            "Crim" or "Crimson" => "Crimson Desert",
-            "Kwe" => "Kweiden",
-            "Cal" => "Calphade",
-            "Pailune" => "Pailune",
-            "Island" => UiText.Get("FactionNodeRegionIslands", "Islands"),
-            "Ocean" or "Pywel" => "Great Ocean",
-            "Abyss" or "Abyssone" => "Abyss",
-            _ => UiText.Get("FactionNodeRegionOther", "Other"),
-        };
+        return code == "Island"
+            ? UiText.Get("FactionNodeRegionIslands", "Islands")
+            : GameRegions.FromCode(code) ?? UiText.Get("FactionNodeRegionOther", "Other");
     }
 
     /// <summary>The place name the game shows ("Hernand Castle / 埃爾南德城"); empty for unnamed nodes.</summary>

@@ -764,9 +764,135 @@ are in [status-archive.md](status-archive.md).
   absent against repair 33 / 20 / 0 in the UI (fits repair = 100 − grime ×
   100 / 127 with absent = 127; two points only, range unconfirmed). Pins in
   `DyeSlotNumberTests`: 111147 → 0..7 (⊇ 0, 1, 7), 9102 → {0,2,3,6,7,9},
-  DLC 1004390 → 0..4, > 800 base items resolve. A slot103 test (equipped
-  gloves 12406 dyed red/green/blue on slots 0/1/2) was built but not
-  installed, at the user's request. History below.
+  DLC 1004390 → 0..4, > 800 base items resolve. **Write side confirmed
+  in-game on 2.06**: slot103 with gloves 12406 dyed pure red / green / blue
+  on slots 0 / 1 / 2 (`_dyeColorGroupInfoKey` 3363967477) shows the three
+  zones in exactly those colours, so the editor's writes load and
+  **off-palette RGB renders as written** (none of the three is a palette
+  colour). History below.
+- ✅ **Dye follow-ups (2026-11-27, after the in-game check).** (1) The
+  palette picker gained a free colour picker (Avalonia `ColorPicker`, any
+  RGB, alpha off) next to the theme grid; the off-palette banner no longer
+  says the engine snaps. (2) The menu item lost its "(unsupported since
+  2.01)" suffix in all three languages. (3) **Known dyes are knowledge, not
+  an item flag**: every `dyecolorgroupinfo` colour record is gated by an
+  inline `CheckKnowledge(<KnowledgeKey>)` (crimson-rs
+  `dye_color_group_info/mod.rs`, 2.06 22-byte records), and the keys are
+  `Knowledge_<Theme>_DyeColor_<1..5>` (each unlocks about two palette rows;
+  `Knowledge_<Theme>_DyeColor` is the theme itself, e.g. "Theoric") plus
+  `Knowledge_Collection_Prop_Dyewater_NNNN` for the dye items. slot102 holds
+  Her 1/2/4, Por 1/3/4, Grey 5 and the two themes: 128 dye/colour
+  knowledge rows exist.
+- ✅ **Tools → Known Dye Colours (2026-11-27).** `Services/KnownDyeService`
+  parses `Knowledge_<Theme>[_<I..III>]_DyeColor[_<n>]` (10 themes with a
+  dyer-named theme entry × 5 shades, Grey × 10 with no theme entry) and
+  matches each colour to its dye item's collection entry by English name
+  ("Bright Red" ↔ "Bright Red Dye"). `KnownDyesViewModel` / Window: theme
+  filter with known/total counts, search, unknown-only, learn selected /
+  learn all shown; learning a colour also learns its theme; "also collect
+  the dye items" is opt-in (codex / achievements). Writes through
+  `LearnKnowledgeAsync` (the Knowledge editor's inject); learn only, no
+  forget. Pinned by `KnownDyeServiceTests` (parse cases, theme / shade
+  sets, Her_1 = 1000297 / theme 2147483454 / dye item 1001352). A test save
+  built from slot102 (7 → 60 of 60 colours, 61 keys, list 1,988 → 2,049,
+  nothing lost) is at the session scratchpad `factiontest/slot103-knowndyes.save`,
+  installed in slot103 (backup `data/_saves/slot103-before-knowndyes-test-20261127`).
+  **In-game, first look (2026-11-27):** the journal page Adventure Log →
+  Knowledge → "Dye recipes" stayed at 7/50 — that page counts the 50
+  `Knowledge_Collection_Prop_Dyewater_*` dye items (red 4/5 = Dyewater
+  0001–0004, exactly slot102's), which the test deliberately left out. Whether
+  the dyehouse palette unlocked is **not checked yet**; the DyeColor entries
+  may not show in the journal at all. **Asked crimson-rs** ("crimson-rs main
+  session") for `crimson_dye_color_group_info_palette_knowledge_at` (the
+  KnowledgeKey of each palette position's inline `CheckKnowledge`) plus the
+  RE answers: DyeColor vs Dyewater keys, keys per group, any group-level
+  condition, group ↔ theme code / display name. **Upstream answered the same
+  day (uncommitted there, waiting for the user's commit / PR call):** new
+  `crimson_dye_color_group_info_palette_knowledge_at` (UNSUPPORTED_VERSION on
+  pre-2.06 8-byte records) and `..._lookup_display_name` (PALOC theme name,
+  "Hernandian Dye"; the three Dem groups share "Demenissian Dye"). The 1,090
+  records use exactly the 60 DyeColor keys (no Dyewater, so the journal's
+  7/50 is a separate system — confirms the reading above). Every group:
+  positions 0–8 = its own Grey_DyeColor_n (Her 1, Dem_I 2, Dem_II 3, Dem_III 4,
+  Kwe 5, Del 6, Cal 7, Por 8, Tom 9, Bar 10), then 20 positions per shade 1..5
+  (9–28, 29–48, 49–68, 69–88, 89–108); no key is shared between groups. So the
+  editor's name mapping is right, except that "Grey (every theme)" is wrong:
+  each Grey_n belongs to one theme. The theme entries
+  `Knowledge_<Theme>_DyeColor` are not referenced by dyecolorgroupinfo, and
+  no group-level condition exists, so what puts a theme on the dyer's list is
+  still open — the slot103 in-game check decides it.
+  **Merged as crimson-rs PR #125 (`0a551a6`), vendored and integrated the
+  same day**: `NativeDyeColorGroupInfoCatalog.PaletteKnowledgeAt` /
+  `LookupDisplayName`, `LocalizationProvider.ResolveDyeThemeName`;
+  `KnownDyeService.Scan` now builds entries from the palette (falls back to
+  the names without it): each theme has six rows, shade 0 = its own grey
+  (9 colours) and shades 1–5 (20 each), each with the swatches it unlocks;
+  the theme label is the game's name ("Hernandian Dye / 埃爾南德染劑 (Her)").
+  Pinned by `KnownDyeServiceTests.LivePalette_MapsSixKeysPerTheme`.
+  **In-game (2026-11-27): the colour knowledge works.** With all 60 colours
+  + 10 themes learned, the Hernand dyer's palette is fully unlocked (every
+  "?" gone, grey row and the previously missing Red / Deep Red shades
+  included). Only the Hernandian theme shows there: a dyer offers their own
+  theme, so the other nine need their dyers (or a made dye) to check. Next
+  test in slot103 (backup `data/_saves/slot103-before-dyeitems-test-20261127`):
+  2 each of Bright Blue / Bright Green / Bright Purple Dye (1001630 /
+  1001645 / 1001625; bag 2, cat 3001, type 31, stack 50, each item's
+  KnowledgeInfo is its Dyewater collection entry), cloned from a type-31
+  stack in bag 2 — to see what using a made dye does.
+  **Result (2026-11-27):** the three stacks show in the bag but as "Unknown
+  item" (? icon); using one gives no message and teaches nothing (journal
+  stays 7/50). After a reload, selling them to the dyer and opening Buyback,
+  they were recognised before buying back ("also obtain 2 knowledge"); bought
+  back, the journal reads 10/50 (Bright Purple / Bright Blue / … each 1/5).
+  So an item is "known" through its iteminfo `KnowledgeInfo` (here the
+  `Knowledge_Collection_Prop_Dyewater_*` entry = the journal's "dye
+  recipes"), which the game teaches when the item is acquired through its
+  own paths, not when it merely appears in the bag. Using a dye unlocks no
+  theme at a dyer: each dyer still offers only their own theme. **Lesson for
+  Add Item:** an added item whose KnowledgeInfo is unlearned shows as
+  unknown — **done (2026-11-27)**: `AddItemToCurrentListAsync` and
+  `GrantItemToContainerAsync` now learn the item's KnowledgeInfo when the
+  save lacks it (`LearnItemKnowledgeAsync`, noted in the status line).
+- ✅ **Dye UI text (2026-11-27).** The slot editor's theme combo (column now
+  "Dye theme") shows the game's names ("Demenissian Dye / 德梅尼斯染劑
+  (Dem II)"); the palette picker's header / sub-header are localized, it
+  explains that a dyer offers only their own theme and only known colours,
+  each cell's tooltip names the knowledge that unlocks it, and the grid
+  starts at column 1 so its rows line up with the dyehouse's (empty first
+  cell, then the 9 greys).
+- ✅ **Dye slot editor: add / remove slots (2026-11-27).** The user found Edit
+  could only change existing elements and "+ Add" made exactly one. The slot
+  editor now has an "Add dye slot" combo (the item's dye slot numbers no
+  element uses, "Slot 2 (cloth)") that clones element 0 and clears every
+  scalar but `_dyeSlotNo` (the same blank element "+ Add" makes; on an
+  absent list it materialises one from a sibling template), and a per-row
+  Remove (`ListRemoveElement`; the last one makes the list absent, like an
+  undyed item). Both reload the rows. Exercised on slot102's 111147 in
+  memory: add 2, remove 1, remove all, add 7 from empty, add 0, write, reload
+  — clean, 0 undecoded. Not checked in-game.
+- ✅ **Abyss gate editor: region, altitude, position, filters
+  (2026-11-27).** `_ownerLevelName` is an inline `staticstringA`; the
+  dialog showed "<18 items, 18 bytes>" until it read the bytes through
+  `GetInlineBytesField`. Region is guessed from the level name
+  (`AbyssRuins_Her_0030`, `Challenge_Sealed_Artifact_Dem`; `AbyssIsland_`,
+  `AbyssBridge_`, `AbyssOne_` = Abyss) through the shared
+  `Services/GameRegions.cs` (also the faction-node editor's mapping now).
+  Height comes from `ListFieldPositions` (gimmick transforms): on slot102
+  ground ruins sit at 367–1,035 and sky pieces at 1,775–3,0xx, so
+  `SkyMinHeight` = 1,400 splits them (211 ground / 195 sky of 406 rows).
+  Search box + region / altitude combos; pinned by `AbyssGateRegionTests`.
+- ✅ **NuGet refresh (2026-11-27).** Avalonia 12.1.1 → 12.2.0 (BuildServices
+  12.0.0, ColorPicker added at 12.2.0; DataGrid 12.1.2 is still its
+  latest), MicroCom.Runtime 0.11.7 (Avalonia 12.2 needs it), xunit.v3 4.0.3
+  / runner 4.0.1, Test SDK 18.12, MTP 2.5.3, Microsoft.Extensions.* and
+  System.* 11.0.0 (they ship net10.0 builds), Azure / OpenTelemetry /
+  ApplicationInsights to latest, OpenTelemetry 1.21 pinned transitively.
+  **Held on purpose**: SkiaSharp 3.119.4 and HarfBuzzSharp 8.3.1.5 (Avalonia
+  12.2.0 is built against 3.x / 8.x; 4.x / 15.x are new majors),
+  Tmds.DBus.Protocol 0.94.2 (Avalonia.FreeDesktop needs ≥ 0.94.1; 0.95 is a
+  0.x minor), `runtime.win-x64.Microsoft.DotNet.ILCompiler` 10.0.15 (must
+  match the .NET 10 runtime; 11.0.0 is .NET 11's). 439 tests green, AOT 0
+  warnings.
 - ~~Dye editor is disabled since 2.01 — parked~~ (the user's call, stated in the v2.03.01 release notes,
   2026-09-18); it needs the mask-group RE. **Re-checked 2026-11-27 on 2.06
   (the user thought upstream had fixed it): it has not.** No crimson-rs

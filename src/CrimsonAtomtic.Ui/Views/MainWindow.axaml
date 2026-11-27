@@ -139,6 +139,9 @@
         <MenuItem Header="{DynamicResource MenuEditItemDyes}"
                   Click="OnEditItemDyesClick"
                   IsEnabled="{Binding IsDyeEditorAvailable}" />
+        <MenuItem Header="{DynamicResource MenuKnownDyes}"
+                  Click="OnKnownDyesClick"
+                  IsEnabled="{Binding HasSave}" />
         <MenuItem Header="{DynamicResource MenuVendorBuyback}"
                   Click="OnVendorBuybackClick"
                   IsEnabled="{Binding HasSave}" />

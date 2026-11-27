@@ -1,0 +1,162 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:CrimsonAtomtic.Ui.ViewModels"
+        mc:Ignorable="d"
+        d:DesignWidth="1000"
+        d:DesignHeight="620"
+        x:Class="CrimsonAtomtic.Ui.Views.KnownDyesWindow"
+        x:DataType="vm:KnownDyesViewModel"
+        xmlns:media="using:Avalonia.Media"
+        Title="{DynamicResource KnownDyesWindowTitle}"
+        Icon="/Assets/MainIcon.ico"
+        Width="1040" Height="640"
+        MinWidth="760" MinHeight="380"
+        FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
+
+  <DockPanel LastChildFill="True" Margin="12">
+    <TextBlock DockPanel.Dock="Top"
+               Text="{DynamicResource KnownDyesHeader}"
+               TextWrapping="Wrap"
+               Opacity="0.7"
+               Margin="0,0,0,8" />
+
+    <!-- Filters -->
+    <Grid DockPanel.Dock="Top"
+          ColumnDefinitions="Auto,Auto,*,Auto"
+          ColumnSpacing="8"
+          Margin="0,0,0,8">
+      <TextBlock Grid.Column="0" Text="{DynamicResource KnownDyesTheme}"
+                 VerticalAlignment="Center" />
+      <ComboBox Grid.Column="1"
+                MinWidth="240"
+                ItemsSource="{Binding ThemeFilters}"
+                SelectedItem="{Binding SelectedThemeFilter}" />
+      <TextBox Grid.Column="2"
+               Text="{Binding SearchText}"
+               PlaceholderText="{DynamicResource KnownDyesSearchHint}" />
+      <CheckBox Grid.Column="3" Content="{DynamicResource KnownDyesUnknownOnly}"
+                IsChecked="{Binding ShowUnknownOnly}" VerticalAlignment="Center" />
+    </Grid>
+
+    <!-- Selection toolbar -->
+    <Grid DockPanel.Dock="Top"
+          ColumnDefinitions="Auto,Auto,*"
+          ColumnSpacing="8"
+          Margin="0,0,0,8">
+      <Button Grid.Column="0"
+              Content="{DynamicResource KnowledgeSelectAll}"
+              Command="{Binding SelectAllCommand}"
+              Padding="8,2" />
+      <Button Grid.Column="1"
+              Content="{DynamicResource KnowledgeUnselectAll}"
+              Command="{Binding UnselectAllCommand}"
+              Padding="8,2" />
+      <TextBlock Grid.Column="2"
+                 Text="{Binding FilterSummary}"
+                 Opacity="0.55"
+                 VerticalAlignment="Center"
+                 HorizontalAlignment="Right" />
+    </Grid>
+
+    <!-- Status footer + actions -->
+    <Grid DockPanel.Dock="Bottom"
+          ColumnDefinitions="*,Auto,Auto,Auto,Auto"
+          ColumnSpacing="8"
+          Margin="0,8,0,0">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding StatusMessage}"
+                 Opacity="0.75"
+                 VerticalAlignment="Center"
+                 TextWrapping="Wrap" />
+      <CheckBox Grid.Column="1"
+                Content="{DynamicResource KnownDyesIncludeItems}"
+                ToolTip.Tip="{DynamicResource KnownDyesIncludeItemsTip}"
+                IsChecked="{Binding IncludeDyeItems}"
+                VerticalAlignment="Center" />
+      <Button Grid.Column="2"
+              Content="{DynamicResource KnowledgeLearnSelected}"
+              Command="{Binding LearnSelectedCommand}"
+              MinWidth="120" />
+      <Button Grid.Column="3"
+              Content="{DynamicResource KnownDyesLearnShown}"
+              Command="{Binding LearnAllShownCommand}"
+              MinWidth="140" />
+      <Button Grid.Column="4"
+              Content="{DynamicResource KnowledgeClose}"
+              Click="OnCloseClick"
+              MinWidth="80" />
+    </Grid>
+
+    <DataGrid ItemsSource="{Binding Rows}"
+              CanUserResizeColumns="True"
+              CanUserSortColumns="True"
+              GridLinesVisibility="Horizontal"
+              HeadersVisibility="Column"
+              AutoGenerateColumns="False">
+      <DataGrid.Columns>
+        <DataGridTemplateColumn Width="44" CanUserSort="False">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate DataType="vm:KnownDyeRow">
+              <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                        IsEnabled="{Binding !IsKnown}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTextColumn Header="{DynamicResource KnownDyesColTheme}"
+                            Binding="{Binding ThemeLabel}"
+                            IsReadOnly="True"
+                            Width="220" />
+        <DataGridTextColumn Header="{DynamicResource KnownDyesColShade}"
+                            Binding="{Binding ShadeText}"
+                            SortMemberPath="Shade"
+                            IsReadOnly="True"
+                            Width="70" />
+        <DataGridTextColumn Header="{DynamicResource KnownDyesColColor}"
+                            Binding="{Binding ColorName}"
+                            IsReadOnly="True"
+                            Width="170" />
+        <!-- The palette colours this knowledge unlocks (crimson-rs PR #125). -->
+        <DataGridTemplateColumn Header="{DynamicResource KnownDyesColSwatches}" Width="*" CanUserSort="False">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate DataType="vm:KnownDyeRow">
+              <ItemsControl ItemsSource="{Binding Swatches}" VerticalAlignment="Center">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="1" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="media:IBrush">
+                    <Border Width="12" Height="18" Background="{Binding}"
+                            BorderBrush="#40000000" BorderThickness="1" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTextColumn Header="{DynamicResource KnownDyesColStatus}"
+                            Binding="{Binding StatusText}"
+                            IsReadOnly="True"
+                            Width="90" />
+        <DataGridTextColumn Header="{DynamicResource KnownDyesColThemeStatus}"
+                            Binding="{Binding ThemeStatusText}"
+                            IsReadOnly="True"
+                            Width="90" />
+        <DataGridTextColumn Header="{DynamicResource KnownDyesColDyeItem}"
+                            Binding="{Binding DyeItemText}"
+                            IsReadOnly="True"
+                            Width="110" />
+        <DataGridTextColumn Header="{DynamicResource KnowledgeColKey}"
+                            Binding="{Binding KeyText}"
+                            IsReadOnly="True"
+                            Width="100"
+                            FontFamily="Consolas, Menlo, monospace" />
+      </DataGrid.Columns>
+    </DataGrid>
+  </DockPanel>
+</Window>

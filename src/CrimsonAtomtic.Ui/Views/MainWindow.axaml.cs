@@ -1382,6 +1382,24 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Tools → Known Dyes: the dye colours the save knows (knowledge
+    /// entries), with learn-selected. Writes through
+    /// <see cref="MainWindowViewModel.LearnKnowledgeAsync"/>.
+    /// </summary>
+    private async void OnKnownDyesClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm
+            || vm.LoadedPath is null
+            || vm.Summary is not { Blocks: not null })
+        {
+            return;
+        }
+        var dialogVm = await KnownDyesViewModel.CreateAsync(vm, vm.Localization);
+        var child = new KnownDyesWindow { DataContext = dialogVm };
+        child.Show(this);
+    }
+
+    /// <summary>
     /// Tools → Complete Sealed Abyss Artifact Challenges. Scans for
     /// eligible challenges, then opens a checkbox preview so the user
     /// picks which to mark complete (replaces the former one-shot bulk

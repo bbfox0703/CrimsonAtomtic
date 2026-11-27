@@ -5,22 +5,24 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Avalonia UI 12 -->
-    <PackageVersion Include="Avalonia" Version="12.1.1" />
+    <PackageVersion Include="Avalonia" Version="12.2.0" />
     <PackageVersion Include="Avalonia.Angle.Windows.Natives" Version="2.1.27548.20260419" />
-    <PackageVersion Include="Avalonia.BuildServices" Version="11.3.2" />
-    <PackageVersion Include="Avalonia.Desktop" Version="12.1.1" />
-    <PackageVersion Include="Avalonia.FreeDesktop" Version="12.1.1" />
-    <PackageVersion Include="Avalonia.HarfBuzz" Version="12.1.1" />
-    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.1" />
-    <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.1.1" />
-    <!-- DataGrid now leads Avalonia core (12.1.2 vs 12.1.1) — it ships on
-         its own cadence, so the two versions are not expected to match. -->
+    <PackageVersion Include="Avalonia.BuildServices" Version="12.0.0" />
+    <PackageVersion Include="Avalonia.Desktop" Version="12.2.0" />
+    <PackageVersion Include="Avalonia.FreeDesktop" Version="12.2.0" />
+    <PackageVersion Include="Avalonia.HarfBuzz" Version="12.2.0" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.2.0" />
+    <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.2.0" />
+    <!-- ColorView / ColorPicker: the Dye editor's free-color picker. -->
+    <PackageVersion Include="Avalonia.Controls.ColorPicker" Version="12.2.0" />
+    <!-- DataGrid ships on its own cadence (12.1.2 is its latest while core
+         is 12.2.0), so the two versions are not expected to match. -->
     <PackageVersion Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
     <!-- Avalonia.Diagnostics is 11.x only as of 2026-05; once a 12.x is
          published we'll add it back behind a Debug condition. -->
     <!-- MVVM source generators (AOT-safe) -->
-    <PackageVersion Include="Azure.Core" Version="1.61.0" />
-    <PackageVersion Include="Azure.Monitor.OpenTelemetry.Exporter" Version="1.8.3" />
+    <PackageVersion Include="Azure.Core" Version="1.65.0" />
+    <PackageVersion Include="Azure.Monitor.OpenTelemetry.Exporter" Version="1.10.0" />
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <!-- Testing -->
     <PackageVersion Include="HarfBuzzSharp" Version="8.3.1.5" />
@@ -28,29 +30,34 @@
     <PackageVersion Include="HarfBuzzSharp.NativeAssets.macOS" Version="8.3.1.5" />
     <PackageVersion Include="HarfBuzzSharp.NativeAssets.WebAssembly" Version="8.3.1.5" />
     <PackageVersion Include="HarfBuzzSharp.NativeAssets.Win32" Version="8.3.1.5" />
-    <PackageVersion Include="MicroCom.Runtime" Version="0.11.6" />
-    <PackageVersion Include="Microsoft.ApplicationInsights" Version="3.1.2" />
-    <PackageVersion Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.CodeCoverage" Version="18.9.0" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Diagnostics.Abstractions" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.FileProviders.Abstractions" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Configuration" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.87.0" />
-    <PackageVersion Include="Microsoft.IdentityModel.Abstractions" Version="8.22.0" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
-    <PackageVersion Include="Microsoft.Testing.Extensions.Telemetry" Version="2.2.3" />
-    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport.Abstractions" Version="2.2.3" />
-    <PackageVersion Include="Microsoft.Testing.Platform" Version="2.2.3" />
-    <PackageVersion Include="Microsoft.Testing.Platform.MSBuild" Version="2.2.3" />
-    <PackageVersion Include="OpenTelemetry.PersistentStorage.Abstractions" Version="1.1.1" />
-    <PackageVersion Include="OpenTelemetry.PersistentStorage.FileSystem" Version="1.1.1" />
+    <PackageVersion Include="MicroCom.Runtime" Version="0.11.7" />
+    <PackageVersion Include="Microsoft.ApplicationInsights" Version="3.2.0" />
+    <PackageVersion Include="Microsoft.Bcl.AsyncInterfaces" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.CodeCoverage" Version="18.12.0" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.Abstractions" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.FileProviders.Abstractions" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Configuration" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.92.0" />
+    <PackageVersion Include="Microsoft.IdentityModel.Abstractions" Version="8.23.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.Telemetry" Version="2.5.3" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport.Abstractions" Version="2.5.3" />
+    <PackageVersion Include="Microsoft.Testing.Platform" Version="2.5.3" />
+    <PackageVersion Include="Microsoft.Testing.Platform.MSBuild" Version="2.5.3" />
+    <PackageVersion Include="OpenTelemetry" Version="1.21.0" />
+    <PackageVersion Include="OpenTelemetry.Api" Version="1.21.0" />
+    <PackageVersion Include="OpenTelemetry.Api.ProviderBuilderExtensions" Version="1.21.0" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.21.0" />
+    <PackageVersion Include="OpenTelemetry.PersistentStorage.Abstractions" Version="1.2.0" />
+    <PackageVersion Include="OpenTelemetry.PersistentStorage.FileSystem" Version="1.2.0" />
     <!-- Must match the installed .NET runtime: PublishAot auto-injects
          Microsoft.DotNet.ILCompiler at the runtime's version, which then
          requires runtime.win-x64.Microsoft.DotNet.ILCompiler >= that
@@ -60,11 +67,17 @@
          equal-or-higher pin still satisfies an older SDK whose meta-package
          needs a lower floor, so it is safe across CI runners. -->
     <PackageVersion Include="runtime.win-x64.Microsoft.DotNet.ILCompiler" Version="10.0.15" />
+    <!-- SkiaSharp 3.x / HarfBuzzSharp 8.x: what Avalonia 12.2.0 is built
+         against (Avalonia.Skia → SkiaSharp 3.119.4, Avalonia.HarfBuzz →
+         HarfBuzzSharp >= 8.3.1.3). SkiaSharp 4.x and HarfBuzzSharp 15.x are
+         new majors Avalonia does not support yet: do not take them until an
+         Avalonia release depends on them. Tmds.DBus.Protocol likewise tracks
+         Avalonia.FreeDesktop (>= 0.94.1); 0.95 is a breaking 0.x minor. -->
     <PackageVersion Include="SkiaSharp" Version="3.119.4" />
-    <PackageVersion Include="System.Memory.Data" Version="10.0.11" />
-    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.11" />
+    <PackageVersion Include="System.Memory.Data" Version="11.0.0" />
+    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="11.0.0" />
     <PackageVersion Include="Tmds.DBus.Protocol" Version="0.94.2" />
-    <PackageVersion Include="xunit.v3" Version="3.2.2" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="xunit.v3" Version="4.0.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
   </ItemGroup>
 </Project>
