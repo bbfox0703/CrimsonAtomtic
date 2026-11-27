@@ -12,7 +12,10 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 /// <summary>
 /// VM for the per-item slot editor dialog. Lists every slot in one
 /// item's <c>_itemDyeDataList</c>, exposes R/G/B/A + grime + palette
-/// key + color-group key per slot with Apply.
+/// key + color-group key per slot with Apply, and adds or removes slots:
+/// <see cref="AddSlotCommand"/> appends an element for one of the item's
+/// unused dye slot numbers, <see cref="DyeSlotRow.RemoveCommand"/> drops
+/// one (the last one makes the list absent again, as on an undyed item).
 ///
 /// <para>
 /// Reads the current scalar values out of the cached BlockDetails
@@ -50,6 +53,15 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
 
     public bool IsDirty { get; private set; }
 
+    /// <summary>The item's dye slot numbers no element uses yet.</summary>
+    public ObservableCollection<DyeSlotPickerOption> AddableSlots { get; } = [];
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddSlotCommand))]
+    private DyeSlotPickerOption? _selectedAddSlot;
+
+    public bool HasAddableSlots => AddableSlots.Count > 0;
+
     public DyeSlotEditorViewModel(
         ISaveLoader loader,
         LocalizationProvider localization,
@@ -68,8 +80,9 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
         _savePath = savePath;
         _itemRow = itemRow;
 
-        HeaderText = $"Dye slots — {itemRow.ItemNameEnglish}";
-        SubHeaderText = $"Bag: {itemRow.BagLabel}   ItemKey: {itemRow.ItemKey}";
+        HeaderText = UiText.Format("DyeSlotEditorHeader", "Dye slots — {0}", itemRow.ItemName);
+        SubHeaderText = UiText.Format("DyeSlotEditorSubHeader", "Bag: {0}   ItemKey: {1}",
+            itemRow.BagLabel, itemRow.ItemKey);
 
         BuildDropdownOptions();
         LoadSlots();
@@ -84,7 +97,12 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
             {
                 var entry = cg.GetEntry(i);
                 if (entry is not { } e) continue;
-                ColorGroupOptions.Add(new DyeColorGroupOption(e.Key, e.Name));
+                var (english, secondary) = _localization.ResolveDyeThemeName(e.Key);
+                var shown = english is null ? null
+                    : secondary is null || secondary == english ? english
+                    : $"{english} / {secondary}";
+                ColorGroupOptions.Add(new DyeColorGroupOption(e.Key, e.Name,
+                    shown is null ? null : $"{shown} ({DyeColorGroupOption.ShortCode(e.Name)})"));
             }
         }
         // Material/palette dropdown: enumerate, label each with its
@@ -106,6 +124,154 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
     }
 
     private void LoadSlots()
+    {
+        try
+        {
+            LoadSlotsCore();
+        }
+        finally
+        {
+            BuildAddableSlots();
+        }
+    }
+
+    /// <summary>The item's dye slot numbers minus those its elements use (absent = 0).</summary>
+    private void BuildAddableSlots()
+    {
+        AddableSlots.Clear();
+        var used = Slots.Select(s => s.SlotNo >= 0 ? (int)s.SlotNo : 0).ToHashSet();
+        foreach (var n in _localization.LookupDyeSlotNumbers(_itemRow.ItemKey) ?? [])
+        {
+            if (used.Contains(n)) continue;
+            var material = _localization.DescribeDyeSlot(_itemRow.ItemKey, n);
+            AddableSlots.Add(new DyeSlotPickerOption(n, string.IsNullOrEmpty(material)
+                ? string.Format(CultureInfo.InvariantCulture, "Slot {0}", n)
+                : string.Format(CultureInfo.InvariantCulture, "Slot {0} ({1})", n, material)));
+        }
+        SelectedAddSlot = AddableSlots.FirstOrDefault();
+        OnPropertyChanged(nameof(HasAddableSlots));
+    }
+
+    private bool CanAddSlot => SelectedAddSlot is not null;
+
+    /// <summary>
+    /// Append a dye element for <see cref="SelectedAddSlot"/>. The new
+    /// element is a clone of element 0 with every scalar cleared except
+    /// <c>_dyeSlotNo</c> (the same blank element "+ Add" makes); on an item
+    /// whose list is absent the list is materialised first. Pick a colour
+    /// and Apply afterwards. Reloads the rows, so unapplied edits on other
+    /// rows are dropped.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanAddSlot))]
+    private void AddSlot()
+    {
+        if (SelectedAddSlot is not { } pick) return;
+        var itemPath = _itemRow.BuildPathToItem();
+        var listField = (int)_itemRow.DyeListFieldIndex;
+        var index = Slots.Count;
+        var newPath = itemPath.Append(new PathStep((uint)listField, (uint)index)).ToArray();
+        try
+        {
+            if (index == 0)
+            {
+                // Template comes from a sibling item; all fields absent.
+                _loader.SetObjectListPresent(_itemRow.BlockIndex, itemPath, listField, makePresent: true);
+            }
+            else
+            {
+                _loader.ListCloneElement(_itemRow.BlockIndex, itemPath, listField, sourceIndex: 0, destinationIndex: index);
+            }
+            if (LoadElement(index) is not { } element)
+            {
+                StatusMessage = UiText.Get("DyeItemNotFound", "Item not found (schema drift?).");
+                return;
+            }
+            _loader.RunDeferred(() =>
+            {
+                foreach (var f in element.Fields)
+                {
+                    if (f.Name == "_dyeSlotNo")
+                    {
+                        if (f.Present)
+                            _loader.SetScalarField(_itemRow.BlockIndex, newPath, f.FieldIndex, [(byte)pick.SlotIndex]);
+                        else
+                            _loader.SetScalarFieldPresent(_itemRow.BlockIndex, newPath, f.FieldIndex,
+                                makePresent: true, initialBytes: [(byte)pick.SlotIndex]);
+                    }
+                    else if (f.Present && f.Kind != "object_list" && f.Kind != "object_locator")
+                    {
+                        _loader.SetScalarFieldPresent(_itemRow.BlockIndex, newPath, f.FieldIndex,
+                            makePresent: false, initialBytes: ReadOnlySpan<byte>.Empty);
+                    }
+                }
+            });
+        }
+        catch (CrimsonSaveException ex) when (ex.ErrorCode == -16 && index == 0)
+        {
+            StatusMessage = UiText.Get("DyeEditorAddNoTemplateBody",
+                "Dye one item in-game first to establish a template.");
+            return;
+        }
+        catch (CrimsonSaveException ex)
+        {
+            StatusMessage = UiText.Format("DyeSlotAddFailed", "Could not add {0}: {1} (code {2})",
+                pick.DisplayLabel, ex.Message, ex.ErrorCode);
+            LoadSlots();
+            return;
+        }
+        IsDirty = true;
+        _journal.Log(UiText.Get("JournalCatDye", "Dye"),
+            UiText.Format("JournalDyeSlotAdded", "Added dye {0} to {1}", pick.DisplayLabel, _itemRow.ItemNameEnglish));
+        LoadSlots();
+        StatusMessage = UiText.Format("DyeSlotAdded", "Added {0}. Pick its colour, then Apply.", pick.DisplayLabel);
+    }
+
+    /// <summary>
+    /// Remove one dye element. Removing the last one makes the list absent,
+    /// which is how the game stores an undyed item. Reloads the rows.
+    /// </summary>
+    internal void RemoveSlot(DyeSlotRow row)
+    {
+        var itemPath = _itemRow.BuildPathToItem();
+        var listField = (int)_itemRow.DyeListFieldIndex;
+        try
+        {
+            if (Slots.Count == 1)
+            {
+                _loader.SetObjectListPresent(_itemRow.BlockIndex, itemPath, listField, makePresent: false);
+            }
+            else
+            {
+                _loader.ListRemoveElement(_itemRow.BlockIndex, itemPath, listField, row.SlotIndex);
+            }
+        }
+        catch (CrimsonSaveException ex)
+        {
+            row.LastError = $"{ex.Message} (code {ex.ErrorCode})";
+            return;
+        }
+        IsDirty = true;
+        _journal.Log(UiText.Get("JournalCatDye", "Dye"),
+            UiText.Format("JournalDyeSlotRemoved", "Removed dye {0} from {1}", row.SlotLabel, _itemRow.ItemNameEnglish));
+        LoadSlots();
+        StatusMessage = UiText.Format("DyeSlotRemoved", "Removed {0}.", row.SlotLabel);
+    }
+
+    /// <summary>The dye element at <paramref name="index"/>, freshly read.</summary>
+    private BlockDetails? LoadElement(int index)
+    {
+        var details = _loader.LoadBlockDetails(_savePath, _itemRow.BlockIndex);
+        if (!TryDescend(details, _itemRow.FirstStepFieldIndex, _itemRow.FirstStepElementIndex, out var step1)
+            || !TryDescend(step1, _itemRow.SecondStepFieldIndex, _itemRow.SecondStepElementIndex, out var item))
+        {
+            return null;
+        }
+        var list = item.Fields.FirstOrDefault(f =>
+            string.Equals(f.Name, DyeEditorViewModel.DyeListFieldName, StringComparison.Ordinal));
+        return list?.Elements is { } els && index < els.Count ? els[index] : null;
+    }
+
+    private void LoadSlotsCore()
     {
         Slots.Clear();
         BlockDetails details;
@@ -272,6 +438,10 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
     /// </summary>
     public NativeDyeColorGroupInfoCatalog? DyeColorGroupCatalog =>
         _localization.DyeColorGroupInfo;
+
+    /// <summary>A knowledge entry's display name ("Bright Red / 亮紅色"), for the picker's cell tooltips.</summary>
+    public string? KnowledgeName(uint knowledgeKey) =>
+        _localization.ResolveByFieldTypeName("KnowledgeKey", knowledgeKey);
 
     /// <summary>
     /// Apply one scalar mutation against a specific dye-slot scalar
@@ -526,6 +696,10 @@ public sealed partial class DyeSlotRow : ObservableObject
     [RelayCommand]
     private void RequestPickColor() => _parent.RequestPickColor(this);
 
+    /// <summary>Remove this dye slot from the item (see <see cref="DyeSlotEditorViewModel.RemoveSlot"/>).</summary>
+    [RelayCommand]
+    private void Remove() => _parent.RemoveSlot(this);
+
     /// <summary>
     /// Called by the editor window's code-behind after the modal
     /// picker dialog closed with a chosen RGB. Updates the row's
@@ -674,8 +848,20 @@ public sealed record DyeMaterialOption(uint Key, string PrimaryMaterialName, int
         : $"{Key} — {PrimaryMaterialName} ({SubCount} sub)";
 }
 
-/// <summary>Dropdown option for the color-group picker.</summary>
-public sealed record DyeColorGroupOption(uint Key, string Name)
+/// <summary>
+/// Dropdown option for the dye theme (<c>_dyeColorGroupInfoKey</c>): the
+/// game's theme name ("Hernandian Dye / 埃爾南德染劑 (Her)", crimson-rs
+/// PR #125) when the PALOC has it, else the internal name.
+/// </summary>
+public sealed record DyeColorGroupOption(uint Key, string Name, string? DisplayName = null)
 {
-    public string Display => string.IsNullOrEmpty(Name) ? $"0x{Key:X8}" : Name;
+    public string Display => DisplayName ?? (string.IsNullOrEmpty(Name) ? $"0x{Key:X8}" : Name);
+
+    /// <summary><c>Her_Color_Group_I</c> → "Her"; <c>Dem_Color_Group_II</c> → "Dem II" (the three Dem themes share a name).</summary>
+    public static string ShortCode(string internalName)
+    {
+        var parts = internalName.Split('_');
+        if (parts.Length < 2) return internalName;
+        return parts[0] == "Dem" ? $"{parts[0]} {parts[^1]}" : parts[0];
+    }
 }

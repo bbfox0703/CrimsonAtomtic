@@ -2024,6 +2024,27 @@ public sealed class LocalizationProvider : IDisposable
     /// Castle" / "埃爾南德城"), primary and secondary language. A node has no
     /// name of its own; it names a knowledge row whose title is the place.
     /// </summary>
+    /// <summary>
+    /// A dye theme's name as the game shows it, English and secondary
+    /// language: ("Hernandian Dye", "埃爾南德染劑"). (null, null) when the
+    /// table or the PALOC lacks it.
+    /// </summary>
+    public (string? English, string? Secondary) ResolveDyeThemeName(uint colorGroupKey)
+    {
+        if (_dyeColorGroupInfo is not { } groups)
+        {
+            return (null, null);
+        }
+        string? One(string lang)
+        {
+            _palocParts.TryGetValue(lang, out var parts);
+            return DisplayOrFallback(groups, parts, (b, part) => b.LookupDisplayName(colorGroupKey, part), _ => null);
+        }
+        var english = One(DefaultLanguage);
+        var secondary = _secondaryLanguage is { } lang && lang != DefaultLanguage ? One(lang) : null;
+        return (english, secondary);
+    }
+
     public (string? English, string? Secondary) ResolveFactionNodeName(uint nodeKey)
     {
         if (_factionNodeInfo is not { } nodes || _knowledgeInfo is not { } knowledge)

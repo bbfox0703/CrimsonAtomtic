@@ -86,10 +86,93 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
     private readonly ChangeJournal _journal;
     private readonly string _savePath;
 
+    /// <summary>
+    /// Height above which a gimmick is in the sky. On 2.06 ground ruins sit
+    /// at 367–1,035 and the sky islands and bridges at 1,775–2,055 (slot102,
+    /// 258 abyss gimmicks), so anything in the gap splits them cleanly.
+    /// </summary>
+    public const float SkyMinHeight = 1400f;
+
     [ObservableProperty]
     private string? _statusMessage;
 
+    /// <summary>The rows the filters let through.</summary>
     public ObservableCollection<AbyssGateRow> Rows { get; } = new();
+
+    private List<AbyssGateRow> _allRows = [];
+
+    [ObservableProperty]
+    private string? _searchText;
+
+    /// <summary>"All regions" plus each region the level names name, with counts.</summary>
+    public ObservableCollection<NodeFilterOption> RegionFilters { get; } = [];
+
+    [ObservableProperty]
+    private NodeFilterOption? _selectedRegionFilter;
+
+    /// <summary>"Ground and sky", "Ground" and "Sky", with counts.</summary>
+    public ObservableCollection<NodeFilterOption> AltitudeFilters { get; } = [];
+
+    [ObservableProperty]
+    private NodeFilterOption? _selectedAltitudeFilter;
+
+    partial void OnSearchTextChanged(string? value) => ApplyFilter();
+
+    partial void OnSelectedRegionFilterChanged(NodeFilterOption? value) => ApplyFilter();
+
+    partial void OnSelectedAltitudeFilterChanged(NodeFilterOption? value) => ApplyFilter();
+
+    private void ApplyFilter()
+    {
+        var search = SearchText?.Trim();
+        var hasSearch = !string.IsNullOrEmpty(search);
+        Rows.Clear();
+        foreach (var r in _allRows)
+        {
+            if (SelectedRegionFilter?.Text is { } region && r.Region != region) continue;
+            if (SelectedAltitudeFilter?.Text is { } altitude && r.Altitude != altitude) continue;
+            if (hasSearch
+                && !r.OwnerLevelName.Contains(search!, StringComparison.OrdinalIgnoreCase)
+                && !r.GimmickName.Contains(search!, StringComparison.OrdinalIgnoreCase)
+                && !r.RegionLabel.Contains(search!, StringComparison.OrdinalIgnoreCase)
+                && !r.FieldGimmickSaveDataKey.ToString(CultureInfo.InvariantCulture).Contains(search!, StringComparison.Ordinal))
+            {
+                continue;
+            }
+            Rows.Add(r);
+        }
+    }
+
+    private void BuildFilters(IReadOnlyDictionary<string, string?> groupNames)
+    {
+        var regionLabels = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var r in _allRows)
+        {
+            if (!regionLabels.TryGetValue(r.Region, out var label))
+            {
+                label = r.Region.Length == 0
+                    ? UiText.Get("AbyssGatesRegionOther", "Other")
+                    : GameRegions.Label(r.Region, groupNames);
+                regionLabels[r.Region] = label;
+            }
+            r.RegionLabel = label;
+        }
+        RegionFilters.Clear();
+        RegionFilters.Add(new NodeFilterOption(UiText.Get("AbyssGatesFilterAllRegions", "All regions"), null));
+        foreach (var g in _allRows.GroupBy(r => r.Region).OrderByDescending(g => g.Count()))
+        {
+            RegionFilters.Add(new NodeFilterOption($"{regionLabels[g.Key]} ({g.Count():N0})", null, g.Key));
+        }
+        AltitudeFilters.Clear();
+        AltitudeFilters.Add(new NodeFilterOption(UiText.Get("AbyssGatesFilterAllAltitudes", "Ground and sky"), null));
+        foreach (var g in _allRows.GroupBy(r => r.Altitude).OrderBy(g => g.Key, StringComparer.Ordinal))
+        {
+            AltitudeFilters.Add(new NodeFilterOption($"{g.First().AltitudeLabel} ({g.Count():N0})", null, g.Key));
+        }
+        SelectedRegionFilter = RegionFilters[0];
+        SelectedAltitudeFilter = AltitudeFilters[0];
+        ApplyFilter();
+    }
 
     private AbyssGatesViewModel(
         ISaveLoader loader, LocalizationProvider localization,
@@ -149,6 +232,23 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
         var scannedElements = 0;
         await Task.Run(() =>
         {
+            // World positions of every gimmick with a transform, keyed by
+            // (FieldSaveData block, list element).
+            var positions = new Dictionary<(uint Block, uint Element), PositionedEntityRecord>();
+            try
+            {
+                foreach (var p in loader.ListFieldPositions(out _))
+                {
+                    if (p.KindValue == (uint)PositionKind.Gimmick)
+                    {
+                        positions.TryAdd((p.BlockIndex, p.ElementIndex), p);
+                    }
+                }
+            }
+            catch (CrimsonSaveException)
+            {
+                // No positions: the rows still list, without height.
+            }
             for (var i = 0; i < roots.Count; i++)
             {
                 progress?.Report((i, roots.Count));
@@ -184,6 +284,8 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
                     scannedElements++;
                     if (TryBuildRow(
                             vm,
+                            loader,
+                            positions,
                             roots[i].Index,
                             listFieldIdx,
                             (uint)elemIdx,
@@ -207,10 +309,8 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
             var c = string.CompareOrdinal(a.OwnerLevelName, b.OwnerLevelName);
             return c != 0 ? c : string.CompareOrdinal(a.GimmickName, b.GimmickName);
         });
-        foreach (var r in built)
-        {
-            vm.Rows.Add(r);
-        }
+        vm._allRows = built;
+        vm.BuildFilters(localization.FactionGroupNames());
         vm.StatusMessage = built.Count == 0
             ? UiText.Format("AbyssGateNoneMatched",
                 "Scanned {0} nested gimmick element(s) across {1} {2} root(s) — "
@@ -225,6 +325,8 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
 
     private static bool TryBuildRow(
         AbyssGatesViewModel parent,
+        ISaveLoader loader,
+        Dictionary<(uint Block, uint Element), PositionedEntityRecord> positions,
         int rootBlockIdx,
         uint listFieldIdx,
         uint elementIdx,
@@ -240,6 +342,7 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
         bool haveStateHash = false;
         int stateHashFieldIdx = -1;
         string ownerLevelName = string.Empty;
+        var ownerLevelFieldIdx = -1;
         uint fieldGimmickSaveKey = 0;
 
         foreach (var f in element.Fields)
@@ -258,9 +361,10 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
                 haveStateHash = true;
                 stateHashFieldIdx = f.FieldIndex;
             }
-            else if (string.Equals(f.Name, OwnerLevelNameField, StringComparison.Ordinal))
+            else if (string.Equals(f.Name, OwnerLevelNameField, StringComparison.Ordinal) && f.Present)
             {
                 ownerLevelName = ExtractStringValue(f.Value);
+                ownerLevelFieldIdx = f.FieldIndex;
             }
             else if (string.Equals(f.Name, FieldGimmickSaveKeyField, StringComparison.Ordinal)
                      && TryParseScalarUInt(f.Value, out var fk) && fk <= uint.MaxValue)
@@ -287,6 +391,24 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
         }
 
         var path = new[] { new PathStep(listFieldIdx, elementIdx) };
+        // _ownerLevelName is an inline staticstringA ("AbyssRuins_Her_0030");
+        // the formatted value only says "<19 items, 19 bytes>".
+        if (ownerLevelFieldIdx >= 0)
+        {
+            try
+            {
+                ownerLevelName = System.Text.Encoding.UTF8
+                    .GetString(loader.GetInlineBytesField(rootBlockIdx, path, ownerLevelFieldIdx))
+                    .TrimEnd('\0');
+            }
+            catch (CrimsonSaveException)
+            {
+                // Keep the formatted value.
+            }
+        }
+        PositionedEntityRecord? position = positions.TryGetValue(((uint)rootBlockIdx, elementIdx), out var pos)
+            ? pos
+            : null;
         row = new AbyssGateRow(
             parent,
             rootBlockIdx,
@@ -296,8 +418,34 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
             gimmickName,
             string.IsNullOrEmpty(ownerLevelName) ? "(no owner-level name)" : ownerLevelName,
             fieldGimmickSaveKey,
-            stateHash);
+            stateHash,
+            RegionOfLevel(ownerLevelName),
+            position);
         return true;
+    }
+
+    /// <summary>
+    /// Region from the owner level's name: <c>AbyssRuins_Her_0030</c> and
+    /// <c>Challenge_Sealed_Artifact_Dem</c> carry a region code;
+    /// <c>AbyssIsland_*</c>, <c>AbyssBridge_*</c> and <c>AbyssOne_*</c> (the light
+    /// connectors) are in the Abyss (the sky).
+    /// Empty when the name names none.
+    /// </summary>
+    public static string RegionOfLevel(string levelName)
+    {
+        var parts = levelName.Split('_');
+        if (parts[0] is "AbyssIsland" or "AbyssBridge" or "AbyssOne")
+        {
+            return GameRegions.Abyss;
+        }
+        foreach (var part in parts.Skip(1))
+        {
+            if (GameRegions.FromCode(part) is { } region)
+            {
+                return region;
+            }
+        }
+        return string.Empty;
     }
 
     /// <summary>
@@ -403,9 +551,23 @@ public sealed partial class AbyssGateRow : ObservableObject
         string gimmickName,
         string ownerLevelName,
         uint fieldGimmickSaveDataKey,
-        uint currentStateHash)
+        uint currentStateHash,
+        string region = "",
+        PositionedEntityRecord? position = null)
     {
         _parent = parent;
+        Region = region;
+        RegionLabel = region;
+        if (position is { } p)
+        {
+            Altitude = p.PosY >= AbyssGatesViewModel.SkyMinHeight ? SkyKey : GroundKey;
+            PositionText = string.Create(CultureInfo.InvariantCulture, $"{p.PosX:N0}, {p.PosZ:N0}  (\u2191{p.PosY:N0})");
+        }
+        else
+        {
+            Altitude = UnknownKey;
+            PositionText = string.Empty;
+        }
         BlockIndex = blockIndex;
         _path = path;
         StateHashFieldIndex = stateHashFieldIndex;
@@ -435,6 +597,29 @@ public sealed partial class AbyssGateRow : ObservableObject
     public string GimmickName { get; }
     public string OwnerLevelName { get; }
     public uint FieldGimmickSaveDataKey { get; }
+
+    private const string GroundKey = "1-ground";
+    private const string SkyKey = "2-sky";
+    private const string UnknownKey = "3-unknown";
+
+    /// <summary>Region (English key) guessed from <see cref="OwnerLevelName"/>; empty when none.</summary>
+    public string Region { get; }
+
+    /// <summary>Localized <see cref="Region"/>, set once the dialog knows the faction-group names.</summary>
+    public string RegionLabel { get; set; }
+
+    /// <summary>Sort/filter key: ground, sky or unknown (no transform).</summary>
+    public string Altitude { get; }
+
+    public string AltitudeLabel => Altitude switch
+    {
+        GroundKey => UiText.Get("AbyssGatesGround", "Ground"),
+        SkyKey => UiText.Get("AbyssGatesSky", "Sky"),
+        _ => UiText.Get("AbyssGatesNoPosition", "Unknown"),
+    };
+
+    /// <summary>World X, Z and height; empty without a transform.</summary>
+    public string PositionText { get; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StateLabel))]

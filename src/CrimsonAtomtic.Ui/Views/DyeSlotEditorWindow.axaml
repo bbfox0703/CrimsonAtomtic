@@ -20,6 +20,23 @@
       <TextBlock Text="{Binding SubHeaderText}" Opacity="0.7" />
     </StackPanel>
 
+    <!-- Add a dye slot: the item's dye slot numbers not used yet. -->
+    <StackPanel DockPanel.Dock="Top"
+                Orientation="Horizontal"
+                Spacing="8"
+                Margin="0,0,0,8">
+      <TextBlock Text="{DynamicResource DyeSlotAddLabel}" VerticalAlignment="Center" />
+      <ComboBox MinWidth="200"
+                ItemsSource="{Binding AddableSlots}"
+                SelectedItem="{Binding SelectedAddSlot}"
+                DisplayMemberBinding="{Binding DisplayLabel}"
+                IsEnabled="{Binding HasAddableSlots}" />
+      <Button Content="{DynamicResource DyeSlotAddButton}"
+              ToolTip.Tip="{DynamicResource DyeSlotAddTip}"
+              Command="{Binding AddSlotCommand}"
+              Padding="8,2" />
+    </StackPanel>
+
     <Grid DockPanel.Dock="Bottom"
           ColumnDefinitions="*,Auto"
           ColumnSpacing="12"
@@ -58,16 +75,8 @@
                             Binding="{Binding MaterialLayers}"
                             Width="140"
                             IsReadOnly="True" />
-        <!-- Color column: replaces the previous R/G/B/A NumericUpDowns
-             with a visual swatch + "Pick…" button. The engine snaps
-             every in-game dye to one of the color group's 109 palette
-             positions (see vendor/crimson-rs/docs/dye-editor-scope.md
-             §"Recommended C# editor UX"), so the off-grid byte-level
-             control that NumericUpDowns gave was an illusion — the
-             palette grid is the correct UX. Off-grid CE-modified
-             values still work (Apply writes whatever R/G/B is in the
-             row; the picker just won't highlight a current cell for
-             them). -->
+        <!-- Color column: swatch + "Pick…" (palette grid or any RGB; 2.06
+             shows off-palette colours as written, verified in-game). -->
         <DataGridTemplateColumn Header="{DynamicResource DyeSlotColColor}" Width="170">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:DyeSlotRow">
@@ -115,13 +124,20 @@
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
-        <DataGridTemplateColumn Header="{DynamicResource DyeSlotColAction}" Width="90">
+        <DataGridTemplateColumn Header="{DynamicResource DyeSlotColAction}" Width="150">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="vm:DyeSlotRow">
-              <Button Content="{DynamicResource DyeSlotApply}"
-                      Command="{Binding ApplyCommand}"
-                      Padding="6,2"
-                      MinHeight="0" />
+              <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <Button Content="{DynamicResource DyeSlotApply}"
+                        Command="{Binding ApplyCommand}"
+                        Padding="6,2"
+                        MinHeight="0" />
+                <Button Content="{DynamicResource DyeSlotRemove}"
+                        ToolTip.Tip="{DynamicResource DyeSlotRemoveTip}"
+                        Command="{Binding RemoveCommand}"
+                        Padding="6,2"
+                        MinHeight="0" />
+              </StackPanel>
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>

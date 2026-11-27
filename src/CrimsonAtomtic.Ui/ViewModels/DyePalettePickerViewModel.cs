@@ -3,6 +3,7 @@ using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CrimsonAtomtic.RustInterop;
+using CrimsonAtomtic.Ui.Services;
 
 namespace CrimsonAtomtic.Ui.ViewModels;
 
@@ -15,11 +16,10 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 /// </summary>
 /// <remarks>
 /// Source spec: <c>vendor/crimson-rs/docs/dye-editor-scope.md</c>
-/// §"Recommended C# editor UX". Replaces the freeform R/G/B
-/// NumericUpDown columns the editor previously used — those gave the
-/// illusion of fine-grained control but the engine snaps every
-/// in-game dye to one of the 109 palette positions, so off-grid
-/// values are visually unreachable.
+/// §"Recommended C# editor UX". The grid is the theme's 109 palette
+/// positions; <see cref="CustomColor"/> sets any RGB instead. On 2.06 the
+/// game shows off-palette colors as written (pure red / green / blue on
+/// gloves 12406, verified in-game 2026-11-27), so the free picker is real.
 /// </remarks>
 public sealed partial class DyePalettePickerViewModel : ObservableObject
 {
@@ -63,6 +63,10 @@ public sealed partial class DyePalettePickerViewModel : ObservableObject
     /// </summary>
     public event Action? CloseRequested;
 
+    /// <summary>The free picker's color; starts at the slot's current RGB.</summary>
+    [ObservableProperty]
+    private Color _customColor;
+
     public DyePalettePickerViewModel(
         NativeDyeColorGroupInfoCatalog catalog,
         uint colorGroupKey,
@@ -70,13 +74,16 @@ public sealed partial class DyePalettePickerViewModel : ObservableObject
         byte currentR,
         byte currentG,
         byte currentB,
-        string slotLabel)
+        string slotLabel,
+        Func<uint, string?>? knowledgeName = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         _catalog = catalog;
         _colorGroupKey = colorGroupKey;
-        HeaderText = $"Pick a color — {colorGroupName}";
-        SubHeaderText = $"{slotLabel} · current: #{currentR:X2}{currentG:X2}{currentB:X2}";
+        HeaderText = UiText.Format("DyePalettePickerHeader", "Pick a colour — {0}", colorGroupName);
+        _customColor = Color.FromRgb(currentR, currentG, currentB);
+        SubHeaderText = UiText.Format("DyePalettePickerSubHeader", "{0} · current: #{1}",
+            slotLabel, $"{currentR:X2}{currentG:X2}{currentB:X2}");
 
         // Build the grid: enumerate every palette position into a cell
         // VM. The grid layout (9 grayscale + 10×10 chromatic) emerges
@@ -86,7 +93,13 @@ public sealed partial class DyePalettePickerViewModel : ObservableObject
         {
             var rgba = catalog.PaletteAt(colorGroupKey, i);
             if (rgba is not { } v) continue;
-            Cells.Add(new DyePaletteCell(this, i, v.R, v.G, v.B));
+            // Which knowledge unlocks this colour in-game (crimson-rs PR #125).
+            string? unlockedBy = null;
+            if (knowledgeName is not null && catalog.PaletteKnowledgeAt(colorGroupKey, i) is { } k)
+            {
+                unlockedBy = knowledgeName(k) ?? k.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+            Cells.Add(new DyePaletteCell(this, i, v.R, v.G, v.B, unlockedBy));
         }
 
         // Highlight the currently-applied cell when it's on-grid.
@@ -113,6 +126,17 @@ public sealed partial class DyePalettePickerViewModel : ObservableObject
         HasResult = true;
         CloseRequested?.Invoke();
     }
+
+    /// <summary>Confirm <see cref="CustomColor"/> (alpha is ignored; dyes are opaque).</summary>
+    [RelayCommand]
+    private void UseCustomColor()
+    {
+        ResultR = CustomColor.R;
+        ResultG = CustomColor.G;
+        ResultB = CustomColor.B;
+        HasResult = true;
+        CloseRequested?.Invoke();
+    }
 }
 
 /// <summary>
@@ -135,7 +159,8 @@ public sealed partial class DyePaletteCell : ObservableObject
     [ObservableProperty]
     private bool _isCurrent;
 
-    public DyePaletteCell(DyePalettePickerViewModel parent, int position, byte r, byte g, byte b)
+    public DyePaletteCell(DyePalettePickerViewModel parent, int position, byte r, byte g, byte b,
+        string? unlockedBy = null)
     {
         _parent = parent;
         Position = position;
@@ -143,7 +168,10 @@ public sealed partial class DyePaletteCell : ObservableObject
         G = g;
         B = b;
         Brush = new SolidColorBrush(Color.FromRgb(r, g, b));
-        Tooltip = $"Position {position} · #{r:X2}{g:X2}{b:X2}";
+        Tooltip = unlockedBy is null
+            ? UiText.Format("DyePaletteCellTip", "Position {0} · #{1}", position, $"{r:X2}{g:X2}{b:X2}")
+            : UiText.Format("DyePaletteCellTipKnowledge", "Position {0} · #{1} · unlocked in-game by: {2}",
+                position, $"{r:X2}{g:X2}{b:X2}", unlockedBy);
     }
 
     [RelayCommand]

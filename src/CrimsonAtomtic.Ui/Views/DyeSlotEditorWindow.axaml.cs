@@ -45,7 +45,8 @@ public sealed partial class DyeSlotEditorWindow : Window
             cg.Key,
             cg.Display,
             row.R, row.G, row.B,
-            row.SlotLabel);
+            row.SlotLabel,
+            vm.KnowledgeName);
         var rgb = await DyePalettePickerWindow.ShowAsync(this, pickerVm);
         if (rgb is { } v)
         {

@@ -10,7 +10,7 @@
         x:DataType="vm:DyePalettePickerViewModel"
         Title="{DynamicResource DyePalettePickerWindowTitle}"
         Icon="/Assets/MainIcon.ico"
-        Width="480" Height="520"
+        Width="560" Height="640"
         MinWidth="380" MinHeight="380"
         CanResize="True"
         WindowStartupLocation="CenterOwner"
@@ -20,6 +20,11 @@
     <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,8">
       <TextBlock Text="{Binding HeaderText}" FontWeight="Bold" />
       <TextBlock Text="{Binding SubHeaderText}" Opacity="0.7" />
+      <TextBlock Text="{DynamicResource DyePalettePickerHelp}"
+                 TextWrapping="Wrap"
+                 FontSize="12"
+                 Opacity="0.7"
+                 Margin="0,4,0,0" />
       <!-- Off-grid banner shown when the current dye's RGB doesn't
            match any palette position (CE-modified saves or values
            set via the raw scalar editor). Picking will replace it
@@ -37,15 +42,30 @@
       </Border>
     </StackPanel>
 
-    <StackPanel DockPanel.Dock="Bottom"
-                Orientation="Horizontal"
-                HorizontalAlignment="Right"
-                Spacing="8"
-                Margin="0,8,0,0">
-      <Button Content="{DynamicResource DyePalettePickerCancel}"
+    <!-- Free color: any RGB, not only the theme's palette (the game shows
+         off-palette colors as written on 2.06). -->
+    <Grid DockPanel.Dock="Bottom"
+          ColumnDefinitions="Auto,Auto,Auto,*,Auto"
+          ColumnSpacing="8"
+          Margin="0,8,0,0">
+      <TextBlock Grid.Column="0"
+                 Text="{DynamicResource DyePalettePickerCustomLabel}"
+                 VerticalAlignment="Center" />
+      <ColorPicker Grid.Column="1"
+                   Color="{Binding CustomColor}"
+                   IsAlphaEnabled="False"
+                   IsAlphaVisible="False"
+                   ToolTip.Tip="{DynamicResource DyePalettePickerCustomTip}"
+                   VerticalAlignment="Center" />
+      <Button Grid.Column="2"
+              Content="{DynamicResource DyePalettePickerUseCustom}"
+              ToolTip.Tip="{DynamicResource DyePalettePickerCustomTip}"
+              Command="{Binding UseCustomColorCommand}" />
+      <Button Grid.Column="4"
+              Content="{DynamicResource DyePalettePickerCancel}"
               Click="OnCancelClick"
               MinWidth="80" />
-    </StackPanel>
+    </Grid>
 
     <!-- Palette grid. 10-column UniformGrid lays the 109 cells out as
          9 grayscale (row 0, col 0-8) + 10 chromatic tiers × 10 cols
@@ -58,7 +78,10 @@
       <ItemsControl ItemsSource="{Binding Cells}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>
-            <UniformGrid Columns="10" />
+            <!-- FirstColumn=1: the game's grid opens with an empty "no dye"
+                 cell, so the 9 greys end the first row and every shade row
+                 lines up as in the dyehouse. -->
+            <UniformGrid Columns="10" FirstColumn="1" />
           </ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>

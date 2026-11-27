@@ -3422,6 +3422,20 @@ internal static partial class NativeMethods
         CrimsonDyeColorGroupInfoHandle handle, uint colorGroupKey, uint positionIdx,
         out byte outR, out byte outG, out byte outB, out byte outA);
 
+    // 2.06: the KnowledgeKey of a palette position's inline CheckKnowledge
+    // (crimson-rs PR #125). NOT_FOUND = unknown group / no condition,
+    // OUT_OF_RANGE = past the palette, UNSUPPORTED_VERSION = pre-2.06 record.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_dye_color_group_info_palette_knowledge_at")]
+    public static partial int DyeColorGroupInfoPaletteKnowledgeAt(
+        CrimsonDyeColorGroupInfoHandle handle, uint colorGroupKey, uint position,
+        out uint outKnowledgeKey);
+
+    // The theme's localized name ("Hernandian Dye") in the PALOC's language.
+    [LibraryImport(LibraryName, EntryPoint = "crimson_dye_color_group_info_lookup_display_name")]
+    public static unsafe partial int DyeColorGroupInfoLookupDisplayName(
+        CrimsonDyeColorGroupInfoHandle handle, CrimsonPalocHandle paloc, uint colorGroupKey,
+        byte* buf, nuint bufLen, out nuint required);
+
     [LibraryImport(LibraryName, EntryPoint = "crimson_dye_color_group_info_position_for_rgb")]
     public static partial int DyeColorGroupInfoPositionForRgb(
         CrimsonDyeColorGroupInfoHandle handle, uint colorGroupKey,

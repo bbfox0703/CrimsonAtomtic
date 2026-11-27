@@ -10,7 +10,7 @@
         x:DataType="vm:AbyssGatesViewModel"
         Title="{DynamicResource AbyssGatesWindowTitle}"
         Icon="/Assets/MainIcon.ico"
-        Width="1080" Height="600"
+        Width="1280" Height="640"
         MinWidth="700" MinHeight="320"
         FontSize="{Binding $parent[Window].FontSize, FallbackValue=14}">
 
@@ -39,6 +39,30 @@
               MinWidth="80" />
     </Grid>
 
+    <!-- Filters -->
+    <Grid DockPanel.Dock="Top"
+          ColumnDefinitions="*,Auto,Auto,Auto,Auto"
+          ColumnSpacing="8"
+          Margin="0,0,0,8">
+      <TextBox Grid.Column="0"
+               Text="{Binding SearchText}"
+               PlaceholderText="{DynamicResource AbyssGatesSearchHint}" />
+      <TextBlock Grid.Column="1"
+                 Text="{DynamicResource AbyssGatesFilterRegion}"
+                 VerticalAlignment="Center" />
+      <ComboBox Grid.Column="2"
+                MinWidth="200"
+                ItemsSource="{Binding RegionFilters}"
+                SelectedItem="{Binding SelectedRegionFilter}" />
+      <TextBlock Grid.Column="3"
+                 Text="{DynamicResource AbyssGatesFilterAltitude}"
+                 VerticalAlignment="Center" />
+      <ComboBox Grid.Column="4"
+                MinWidth="150"
+                ItemsSource="{Binding AltitudeFilters}"
+                SelectedItem="{Binding SelectedAltitudeFilter}" />
+    </Grid>
+
     <!-- Rows grid. Default sort: OwnerLevelName then GimmickName,
          matching how the upstream's probe groups its sample. -->
     <DataGrid ItemsSource="{Binding Rows}"
@@ -49,12 +73,23 @@
               HeadersVisibility="Column"
               AutoGenerateColumns="False">
       <DataGrid.Columns>
+        <DataGridTextColumn Header="{DynamicResource AbyssGatesColRegion}"
+                            Binding="{Binding RegionLabel}"
+                            Width="150" />
+        <DataGridTextColumn Header="{DynamicResource AbyssGatesColAltitude}"
+                            Binding="{Binding AltitudeLabel}"
+                            SortMemberPath="Altitude"
+                            Width="80" />
         <DataGridTextColumn Header="{DynamicResource AbyssGatesColOwnerLevel}"
                             Binding="{Binding OwnerLevelName}"
-                            Width="240" />
+                            Width="230" />
         <DataGridTextColumn Header="{DynamicResource AbyssGatesColGimmick}"
                             Binding="{Binding GimmickName}"
                             Width="*" />
+        <DataGridTextColumn Header="{DynamicResource AbyssGatesColPosition}"
+                            Binding="{Binding PositionText}"
+                            Width="190"
+                            FontFamily="Consolas, Menlo, monospace" />
         <DataGridTextColumn Header="{DynamicResource AbyssGatesColSaveKey}"
                             Binding="{Binding FieldGimmickSaveDataKey}"
                             Width="110" />

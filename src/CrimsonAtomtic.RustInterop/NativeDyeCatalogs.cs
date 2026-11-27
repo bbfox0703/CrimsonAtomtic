@@ -141,6 +141,59 @@ public sealed class NativeDyeColorGroupInfoCatalog : IDisposable
     /// save's <c>_dyeColorR/G/B/A</c> u8 scalars. Returns null when the
     /// key or position is out of range.
     /// </summary>
+    /// <summary>
+    /// The knowledge that unlocks palette position <paramref name="positionIdx"/>
+    /// (2.06 inline <c>CheckKnowledge</c>, crimson-rs PR #125). On 2.06 every
+    /// group uses six: positions 0–8 its own <c>Knowledge_Grey_DyeColor_n</c>,
+    /// then 20 positions per <c>Knowledge_&lt;Theme&gt;_DyeColor_1..5</c>.
+    /// Null for an unknown group, a position past the palette, an ungated
+    /// colour, or a pre-2.06 table (whose records name a ConditionInfoKey).
+    /// </summary>
+    public uint? PaletteKnowledgeAt(uint colorGroupKey, int positionIdx)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentOutOfRangeException.ThrowIfNegative(positionIdx);
+        var rc = NativeMethods.DyeColorGroupInfoPaletteKnowledgeAt(
+            _handle, colorGroupKey, (uint)positionIdx, out var key);
+        if (rc is NativeMethods.NOT_FOUND or NativeMethods.OUT_OF_RANGE or NativeMethods.UNSUPPORTED_VERSION)
+        {
+            return null;
+        }
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_dye_color_group_info_palette_knowledge_at({colorGroupKey}, {positionIdx}) failed: "
+                + NameBuffer.ErrorName(rc));
+        }
+        return key;
+    }
+
+    /// <summary>
+    /// The theme's name as the game shows it ("Hernandian Dye" / 埃爾南德染劑)
+    /// in <paramref name="paloc"/>'s language; null when missing. The three
+    /// Demeniss groups share one name.
+    /// </summary>
+    public string? LookupDisplayName(uint colorGroupKey, NativePalocCatalog paloc)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(paloc);
+        try
+        {
+            unsafe
+            {
+                return NameBuffer.ReadString(
+                    (byte* buf, nuint bufLen, out nuint required) =>
+                        NativeMethods.DyeColorGroupInfoLookupDisplayName(
+                            _handle, paloc.NativeHandle, colorGroupKey, buf, bufLen, out required),
+                    $"crimson_dye_color_group_info_lookup_display_name({colorGroupKey})");
+            }
+        }
+        catch (CrimsonSaveException ex) when (ex.ErrorCode == NativeMethods.NOT_FOUND)
+        {
+            return null;
+        }
+    }
+
     public (byte R, byte G, byte B, byte A)? PaletteAt(uint colorGroupKey, int positionIdx)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
