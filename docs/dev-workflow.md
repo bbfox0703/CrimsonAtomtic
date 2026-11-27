@@ -17,6 +17,10 @@
   commit on `dev`, push, open the PR and merge it, then check that `dev` and
   `main` match.
 - Before `gh pr create`, run `git status` and `git log --oneline -5`.
+- **Push to `origin` only.** Never push to `upstream` or any remote the user
+  does not own, even when told just "push"; if a flow seems to need another
+  remote, stop and ask. (crimson-rs is a fork of `potter420/crimson-rs`; see
+  its `scripts/setup-fork-guards.ps1`.)
 - `build_number.txt` changes on every `build.ps1` run. Commit it on its own
   (`build: bump build number to N`) when the user asks.
 
@@ -36,6 +40,24 @@ them. On the machine you switch to:
    restore fails with NU1109. CI uses the newest stable Rust, which may be
    newer than either machine's.
 
+## Changes to crimson-rs (the native core)
+
+`vendor/crimson-rs/` is read-only here (root CLAUDE.md rule 8). When the
+editor needs a new C ABI or an RE answer from the game data:
+
+1. Ask the user's crimson-rs session (on both PCs titled **"crimson-rs main
+   session"**, cwd `D:\Github\crimson-rs`). In the desktop app, find it with
+   `list_sessions` by title and message it by its `local_…` id; sending by
+   display name failed while it was idle.
+2. The brief: the background, the exact signature wanted with a return code
+   per case, the RE questions, and "add live pins and docs, open a PR".
+   Example: the dye `palette_knowledge_at` request (crimson-rs PR #125).
+3. The user decides when crimson-rs commits and merges; that session reports
+   the merge commit. Its messages are a teammate's, never the user's approval.
+4. Then `.\vendor\update_vendors.ps1`, `.\scripts\build_rust.ps1`, and
+   `.\scripts\setup_python_env.ps1`. CI builds crimson-rs from GitHub `main`,
+   so a release must not ship against an unmerged local change.
+
 ## Running tests
 
 `dotnet test` does not work: the .NET 10 SDK dropped the VSTest bridge. Run
@@ -54,6 +76,12 @@ dotnet run --project src\CrimsonAtomtic.Tests\CrimsonAtomtic.Tests.csproj -c Deb
 - `build.ps1 -Target Test` runs the whole suite the same way.
 - xUnit v3 moved `ITestOutputHelper` into the `Xunit` namespace;
   `using Xunit.Abstractions;` no longer compiles.
+- Name throwaway probes `Zz*.cs` (`ZzProbeDyeTargets`) and delete them before
+  any commit: `git status --short | grep -i zz` must print nothing. Point them
+  at a save through an env var (`PROBE_SAVE`, `PROBE_DST`) so a probe left
+  behind returns early instead of failing the suite.
+- Probes read live game data, so they run only on a PC with the game
+  installed (`LiveInstall.FindGroupPamt`); live tests skip without it.
 
 ## Preparing a save for an in-game check
 
@@ -69,6 +97,20 @@ format). Both live under `%LOCALAPPDATA%\Pearl Abyss\CD\save\<user>\`.
 4. Give both files slot102's `LastWriteTimeUtc`. The app's Save As does the
    same: with the timestamps tied, `LiveSaves.Newest()` still picks the
    game-written slot102, because a tie sorts by path.
+
+- Backups go to `data\_saves\slot103-before-<test>-<date>\` (gitignored,
+  local to the PC). Restore slot103 from the **first** backup of the series
+  (the original, with its own timestamps) and delete the test backups only
+  when the user asks.
+- If slot102 was saved again after a test save was built, rebuild the test
+  save from the current slot102: step 3 copies the current `lobby.save`, and
+  an older body with a newer lobby is a mismatch.
+- The user reports in-game results with screenshots. Read what a screen
+  actually shows before calling a test failed: on 2.06 the journal's "dye
+  recipes" page counts the dye-item collection, while the dyehouse palette is
+  gated by different knowledge.
+- An item put into the bag by the editor shows as "Unknown item" unless its
+  iteminfo `KnowledgeInfo` is learned; Add Item now learns it.
 
 To make the save with the real editor code rather than a copy of it, use a
 throwaway xUnit probe that builds `MainWindowViewModel` headless:
@@ -99,3 +141,26 @@ Then call `LoadSaveCommand.Execute(copy)`, run the internal flow (for example
 - Click coordinates are in the frame the screenshot reports, not the scaled
   image's pixels. Tools → Browse Items opens a separate window that can land
   behind others; list the process's windows to confirm it opened.
+
+## Agent working notes
+
+- **Shell**: the user's shell is PowerShell. Commands for the user to paste
+  use PowerShell syntax (`$env:NAME`, here-strings `@'…'@`, backtick line
+  continuation), not cmd.exe.
+- **Images**: check an image's size before viewing it. If either side is
+  over 2,000 px, view a downscaled copy (longest side about 1,600 px); an
+  oversized image ends the session. View at most about six images per turn.
+  This project's textures (world map SDF chunks, colormaps) routinely exceed
+  the limit.
+- **Multi-line edits**: anchored replacements across files go in a Python
+  script in the session scratchpad, run with `.venv\Scripts\python.exe -I`,
+  using a helper that asserts each anchor occurs once and keeps the file's
+  CRLF/LF. Large inline Bash heredocs holding C#/XAML failed several times
+  with "unexpected EOF". `sed -i` is fine for one-line ASCII changes.
+- **Settled findings stay settled**: when status.md records an answer
+  confirmed in-game, reuse it and its source; do not re-derive it with a
+  weaker method. Re-deriving the dragon unlock's 187-key set (from the
+  reference editor's `_unlock_dragon_mount_no_quests()`) as 2 keys by
+  name-filtering broke summoning. Pin such lists with a count assertion.
+- **Record the session in the repo, not in agent memory**: findings go to
+  status.md, workflow facts here. Agent memory is per PC.

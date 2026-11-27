@@ -58,6 +58,8 @@ auto-detection. Cross-platform goal: Windows (must), Linux, macOS.
 - **Refactoring**: when asked to refactor/rename, change the code (move files, update imports, rename classes) — not just docs.
 - **Debugging**: verify a fix against the actual bytes / data structure it touches, not the expected shape.
 - **PRs**: before `gh pr create`, run `git status` and `git log --oneline -5`; resolve any divergence.
+- **Push target**: `origin` only — never `upstream` or any remote the user does not own.
+- **Images**: if either side of an image is over 2,000 px, view a downscaled copy (an oversized image ends the session).
 
 ## Pointers
 
@@ -69,6 +71,6 @@ auto-detection. Cross-platform goal: Windows (must), Linux, macOS.
 - Asset containers (PAZ, PAMT, PAPGT, PALOC): [docs/paz-containers.md](docs/paz-containers.md)
 - CrimsonForge coverage gaps (the canonical RE-reference repo for CD formats): [docs/crimsonforge-coverage-gaps.md](docs/crimsonforge-coverage-gaps.md)
 - **「啟動 release CI」** = run the runbook in [docs/release-process.md](docs/release-process.md) end to end (pre-flight → player-facing bilingual notes → annotated tag → CI draft → replace notes → verify; publishing stays the user's call)
-- Dev workflow (branch/merge flow, switching machines, running tests, in-game test saves, driving the UI): [docs/dev-workflow.md](docs/dev-workflow.md). Workflow facts go there, not in machine-local agent memory.
+- Dev workflow (branch/merge flow, switching machines, crimson-rs requests, running tests, in-game test saves, driving the UI, agent working notes): [docs/dev-workflow.md](docs/dev-workflow.md). Workflow facts go there, not in machine-local agent memory.
 - Python toolchain conventions: [tools/CLAUDE.md](tools/CLAUDE.md)
 - Rust core (our fork): [vendor/crimson-rs/README.md](vendor/crimson-rs/README.md)
