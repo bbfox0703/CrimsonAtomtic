@@ -1013,8 +1013,7 @@ public sealed partial class MainWindow : Window
     private void OnEditItemDyesClick(object? sender, RoutedEventArgs e)
     {
         // IsDyeEditorAvailable also gates the menu item's IsEnabled; re-check
-        // here so no accelerator or future call path can open an editor that
-        // would mis-read 2.01 dye masks.
+        // here so no accelerator or future call path can bypass it.
         if (DataContext is not MainWindowViewModel vm
             || !vm.IsDyeEditorAvailable
             || vm.LoadedPath is not { } loadedPath
@@ -1070,19 +1069,16 @@ public sealed partial class MainWindow : Window
         };
 
         // Per-row "+ Add" → run slot picker → materialize dye element
-        // → patch its _dyeSlotNo to the user-picked value. The slot
-        // picker requires LookupDyeSlotCount to have returned non-null
-        // at scan time (which is the gate for surfacing the + Add
-        // button), so we can re-derive the count here without another
-        // null check.
+        // → patch its _dyeSlotNo to the user-picked dye slot number. The
+        // picker offers the prefab's own (sparse) dye slot numbers.
         masterVm.AddDyeRequested += async row =>
         {
-            if (row.GamedataSlotCount is not int slotCount || slotCount <= 0)
+            if (vm.Localization.LookupDyeSlotNumbers(row.ItemKey) is not { Count: > 0 } dyeSlotNumbers)
             {
                 return;
             }
             var pickerVm = new DyeSlotPickerViewModel(
-                row.ItemKey, row.ItemName, slotCount, vm.Localization);
+                row.ItemKey, row.ItemName, dyeSlotNumbers, vm.Localization);
             int? pickedSlot = await DyeSlotPickerWindow.ShowAsync(this, pickerVm);
             if (pickedSlot is not int slotIdx)
             {
@@ -1099,9 +1095,8 @@ public sealed partial class MainWindow : Window
                     (int)row.DyeListFieldIndex,
                     makePresent: true);
                 // Step 2: patch _dyeSlotNo on the new element to the
-                // picked slot. _dyeSlotNo is an i8 (signed), but slot
-                // values 0..N-1 always fit in a u8 representation; the
-                // wire encoding is identical for non-negative values.
+                // picked dye slot number. _dyeSlotNo is an i8 (signed), but
+                // dye slot numbers are 0..11, so the u8 encoding is identical.
                 var newElementPath = new[]
                 {
                     new PathStep(row.FirstStepFieldIndex, row.FirstStepElementIndex),

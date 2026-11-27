@@ -1097,30 +1097,18 @@ public sealed partial class MainWindowViewModel(
     public bool HasSave => Summary is not null;
 
     /// <summary>
-    /// Whether the Dye editor may be opened. Hard <c>false</c> since game
-    /// 2.01.
+    /// Whether the Dye editor may be opened. Off from 2.01 until 2026-11-27.
     ///
     /// <para>
-    /// 2.01 widened <c>partprefabdyeslotinfo</c>'s per-slot mask from 3
-    /// bytes to 12 <i>and re-encoded its contents</i> — the old three are
-    /// not a prefix or any contiguous window of the new twelve. The twelve
-    /// read as four groups of three, and which group a given slot uses is
-    /// not yet reverse-engineered. Measured through the release dll over
-    /// all 1,645 prefabs / 6,634 slots on live 2.03, the legacy 3-byte
-    /// getter the editor calls reads all-zero on 2,212 slots (33.3%) whose
-    /// full field is non-zero — i.e. a third of the dye UI would render
-    /// blank, and edits made on that reading would be wrong. (2.01 and
-    /// 2.02: 2,196 of 6,585 slots over 1,626 prefabs — 2.03 added rows,
-    /// not a new mask shape.)
-    /// </para>
-    ///
-    /// <para>
-    /// Per the foundation-over-workaround rule this stays off until the
-    /// mask groups are decoded upstream and the editor moves to the
-    /// <c>..._lookup_slot_mask_full</c> bridges; the alternative is an
-    /// editor that silently corrupts appearance data. See
-    /// <c>vendor/crimson-rs/docs/dye-editor-scope.md</c>, "Cross-version
-    /// drift (2.01)".
+    /// 2.01 widened <c>partprefabdyeslotinfo</c>'s per-slot mask from 3 bytes
+    /// to 12, and the legacy 3-byte getter then read a third of all slots as
+    /// blank (2,304 of 6,955 on 2.06). crimson-rs PR #122 decoded it: each
+    /// material channel's <c>mat_indices</c> entry is a dye slot number, and
+    /// mask byte <c>n</c> flags dye slot <c>n</c>; the save's
+    /// <c>_dyeSlotNo</c> is that number. The editor now offers the prefab's
+    /// dye slot numbers (<see cref="LocalizationProvider.LookupDyeSlotNumbers"/>)
+    /// instead of a sub-mesh count and no longer reads the legacy mask, so it
+    /// is back on. The save side is confirmed only on a 1.10 save upstream.
     /// </para>
     /// </summary>
 #pragma warning disable CA1822 // must stay an instance member: the menu
@@ -1129,7 +1117,7 @@ public sealed partial class MainWindowViewModel(
                               // instance, and a binding that fails to
                               // resolve leaves IsEnabled at its default
                               // (true) — the exact failure this guards.
-    public bool IsDyeEditorAvailable => false;
+    public bool IsDyeEditorAvailable => true;
 #pragma warning restore CA1822
     public bool HasSelectedBlock => SelectedBlock is not null;
 

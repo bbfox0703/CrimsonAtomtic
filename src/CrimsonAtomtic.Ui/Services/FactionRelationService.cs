@@ -42,8 +42,14 @@ public sealed record FactionRelationEntry(
 /// <summary>A requested relation between the player and <see cref="FactionKey"/>.</summary>
 public sealed record FactionRelationChange(uint FactionKey, FactionRelation Relation);
 
+/// <summary>
+/// A requested relation group for <see cref="FactionKey"/>: the group whose
+/// defaults decide the faction's stance wherever it has no relation row.
+/// </summary>
+public sealed record FactionGroupChange(uint FactionKey, uint RelationGroupKey);
+
 /// <summary>Outcome of <see cref="FactionRelationService.Apply"/>.</summary>
-public sealed record FactionRelationApplyResult(int Applied, string? Error);
+public sealed record FactionRelationApplyResult(int Applied, string? Error, int GroupsApplied = 0);
 
 /// <summary>
 /// Reads and writes faction relations with the player's faction.
@@ -65,6 +71,11 @@ public sealed record FactionRelationApplyResult(int Applied, string? Error);
 /// <see cref="FactionRelation.GroupDefault"/> removes the rows; removing a
 /// faction's last row makes the list absent again, the game's shape for a
 /// faction with none.
+/// </para>
+/// <para>
+/// A faction's <c>_relationGroupKey</c> (u16; Graymane / FriendlyCombat /
+/// HostileCombat / NPC_Common / Monster_Common) is also in the save; the
+/// group-to-group stances it selects are game data, not save data.
 /// </para>
 /// <para>
 /// The player's faction is the element whose leader is <c>CharacterKey 1</c>
@@ -115,6 +126,12 @@ public sealed class FactionRelationService(ISaveLoader loader)
         return result;
     }
 
+    /// <summary>The player's faction's relation group (Graymane on every save seen), or null.</summary>
+    public uint? PlayerRelationGroup(string savePath, IReadOnlyList<BlockSummary> blocks) =>
+        Load(savePath, blocks) is { } ctx && ctx.IndexOf(ctx.PlayerFaction) is { } i
+            ? Key(ctx.Elements[i], GroupField)
+            : null;
+
     /// <summary>The player's faction key in this save, or null without a faction block.</summary>
     public uint? PlayerFaction(string savePath, IReadOnlyList<BlockSummary> blocks) =>
         Load(savePath, blocks)?.PlayerFaction;
@@ -124,7 +141,8 @@ public sealed class FactionRelationService(ISaveLoader loader)
     /// count says how many changes fully landed before it.
     /// </summary>
     public FactionRelationApplyResult Apply(
-        string savePath, IReadOnlyList<BlockSummary> blocks, IReadOnlyList<FactionRelationChange> changes)
+        string savePath, IReadOnlyList<BlockSummary> blocks, IReadOnlyList<FactionRelationChange> changes,
+        IReadOnlyList<FactionGroupChange>? groupChanges = null)
     {
         if (Load(savePath, blocks) is not { } first)
         {
@@ -155,7 +173,27 @@ public sealed class FactionRelationService(ISaveLoader loader)
         {
             return new FactionRelationApplyResult(applied, ex.Message);
         }
-        return new FactionRelationApplyResult(applied, null);
+        var groups = 0;
+        try
+        {
+            foreach (var g in groupChanges ?? [])
+            {
+                var ctx = Load(savePath, blocks)!;
+                if (ctx.IndexOf(g.FactionKey) is not { } ei)
+                {
+                    return new FactionRelationApplyResult(applied,
+                        UiText.Format("RelErrNoFaction", "Faction {0} is not in this save's faction list.", g.FactionKey), groups);
+                }
+                var path = new[] { new PathStep((uint)ctx.ElementListField, (uint)ei) };
+                SetScalar(ctx.Block, path, ctx.Elements[ei], GroupField, BitConverter.GetBytes((ushort)g.RelationGroupKey));
+                groups++;
+            }
+        }
+        catch (CrimsonSaveException ex)
+        {
+            return new FactionRelationApplyResult(applied, ex.Message, groups);
+        }
+        return new FactionRelationApplyResult(applied, null, groups);
     }
 
     /// <summary>Make <paramref name="owner"/>'s row toward <paramref name="target"/> express <paramref name="relation"/>.</summary>
@@ -228,7 +266,7 @@ public sealed class FactionRelationService(ISaveLoader loader)
     private void SetScalar(int block, PathStep[] path, BlockDetails element, string field, byte[] bytes)
     {
         var f = SaveFieldValues.Field(element, field)
-                ?? throw new InvalidOperationException($"{field} missing from the relation row schema");
+                ?? throw new InvalidOperationException($"{field} missing from the {element.ClassName} schema");
         if (f.Present)
         {
             loader.SetScalarField(block, path, f.FieldIndex, bytes);

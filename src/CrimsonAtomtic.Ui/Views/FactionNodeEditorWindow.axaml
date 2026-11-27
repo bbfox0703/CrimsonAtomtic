@@ -130,7 +130,7 @@
                             IsReadOnly="True"
                             Width="*" />
         <DataGridTextColumn Header="{DynamicResource FactionNodeColRegion}"
-                            Binding="{Binding Region}"
+                            Binding="{Binding RegionLabel}"
                             IsReadOnly="True"
                             Width="150" />
         <DataGridTextColumn Header="{DynamicResource FactionNodeColOwner}"

@@ -95,7 +95,6 @@
   <sys:String x:Key="MenuEditContributions">貢献度を編集 (勢力通貨)(_C)…</sys:String>
   <sys:String x:Key="MenuEditFactionRelations">勢力関係を編集 (自勢力との戦争 / 同盟)(_R)…</sys:String>
   <sys:String x:Key="MenuEditItemDyes">アイテムの染色を編集(_D)…（2.01 以降未対応）</sys:String>
-  <sys:String x:Key="MenuEditItemDyesUnavailableTip">Crimson Desert 2.01 以降は無効：スロットごとの染色 mask が 3 バイトから 12 バイトに拡張され、内容も再エンコードされました。旧形式で読むと約 3 分の 1 のスロットが空に見え、誤った値を書き戻します。新しい mask グループの解析後に再有効化されます。</sys:String>
   <sys:String x:Key="MenuVendorBuyback">商人の買い戻しリスト(_V)…</sys:String>
   <sys:String x:Key="MenuReviewChanges">未保存の変更を確認(_R)…</sys:String>
 
@@ -264,6 +263,7 @@
   <sys:String x:Key="FactionNodeFilterRegion">地域:</sys:String>
   <sys:String x:Key="FactionNodeFilterAllRegions">すべての地域</sys:String>
   <sys:String x:Key="FactionNodeRegionOther">その他</sys:String>
+  <sys:String x:Key="FactionNodeRegionIslands">島々</sys:String>
   <sys:String x:Key="FactionNodeSelectAll">すべて選択</sys:String>
   <sys:String x:Key="FactionNodeUnselectAll">すべて解除</sys:String>
   <sys:String x:Key="FactionNodeInvert">選択を反転</sys:String>
@@ -290,8 +290,10 @@
   <sys:String x:Key="ContribColNew">新しい数</sys:String>
   <sys:String x:Key="RelWindowTitle">勢力関係を編集</sys:String>
   <sys:String x:Key="RelHeader">各勢力と自勢力の関係です。ゲームは勢力に名前を付けていないため、メンバーの最も多い名前（例: エルナンド衛兵隊）で表示し、メンバー数順に並べます — その土地の一般 NPC が属する勢力が敵対を決めます。関係の行がない勢力は関係グループに従い（グループ既定）、行があればそちらが優先されます（戦争・血盟はゲーム内で確認済み）。変更は双方向に書き込み、次の ファイル → 保存 でファイルに書き込みます。</sys:String>
-  <sys:String x:Key="RelSearchHint">メンバー名、勢力、キー、首領、地域、グループで絞り込み…</sys:String>
+  <sys:String x:Key="RelSearchHint">メンバー名、勢力、キー、首領、地域、グループ、現在の関係で絞り込み…</sys:String>
   <sys:String x:Key="RelOnlyWithRows">関係の行がある勢力のみ</sys:String>
+  <sys:String x:Key="RelFilterRelation">現在の関係:</sys:String>
+  <sys:String x:Key="RelFilterAllRelations">すべての関係</sys:String>
   <sys:String x:Key="RelApply">適用</sys:String>
   <sys:String x:Key="RelClose">閉じる</sys:String>
   <sys:String x:Key="RelColFaction">勢力（内部名）</sys:String>
@@ -300,7 +302,9 @@
   <sys:String x:Key="RelColTypical">代表的なメンバー</sys:String>
   <sys:String x:Key="RelColKey">キー</sys:String>
   <sys:String x:Key="RelColLeader">首領</sys:String>
-  <sys:String x:Key="RelColGroup">関係グループ</sys:String>
+  <sys:String x:Key="RelColGroup">関係グループ（変更可）</sys:String>
+  <sys:String x:Key="RelColGroupEffect">グループ既定の効果</sys:String>
+  <sys:String x:Key="RelGroupEffectUndefined">未定義</sys:String>
   <sys:String x:Key="RelColCurrent">現在</sys:String>
   <sys:String x:Key="RelColNew">新しい関係</sys:String>
   <sys:String x:Key="MenuFontSize">フォントサイズ(_F)</sys:String>
@@ -656,7 +660,7 @@
   <sys:String x:Key="JournalCatContributions">貢献度</sys:String>
   <sys:String x:Key="JournalContributions">貢献度 {0} 件を設定、{1} 件を追加</sys:String>
   <sys:String x:Key="JournalCatFactionRelations">勢力関係</sys:String>
-  <sys:String x:Key="JournalFactionRelations">{0} 勢力との関係を設定</sys:String>
+  <sys:String x:Key="JournalFactionRelations">{0} 勢力との関係と {1} 勢力の関係グループを設定</sys:String>
   <sys:String x:Key="JournalCatAddItem">アイテム追加</sys:String>
   <sys:String x:Key="JournalCatMountUnlock">マウント解放</sys:String>
 
@@ -916,10 +920,10 @@
   <sys:String x:Key="RelNoFactions">勢力が見つかりません — このセーブには FactionSaveData._factionElementSaveDataList がありません。</sys:String>
   <sys:String x:Key="RelNoChanges">変更はありません。</sys:String>
   <sys:String x:Key="RelConfirmTitle">勢力関係を適用しますか？</sys:String>
-  <sys:String x:Key="RelConfirmBody" xml:space="preserve">{0} 勢力との関係を双方向に設定しますか？&#10;&#10;書き込まずに再読み込みすれば元に戻せます。</sys:String>
+  <sys:String x:Key="RelConfirmBody" xml:space="preserve">{0} 勢力との関係を双方向に設定し、{1} 勢力の関係グループを変更しますか？&#10;&#10;書き込まずに再読み込みすれば元に戻せます。</sys:String>
   <sys:String x:Key="RelApplying">適用中…</sys:String>
-  <sys:String x:Key="RelDone">完了: {0} 勢力を設定しました。次の ファイル → 保存 でファイルに書き込みます。</sys:String>
-  <sys:String x:Key="RelFailed">{0} 勢力を設定した後に停止: {1}。書き込まずに再読み込みすれば元に戻せます。</sys:String>
+  <sys:String x:Key="RelDone">完了: 関係 {0} 件、関係グループ {1} 件を設定しました。次の ファイル → 保存 でファイルに書き込みます。</sys:String>
+  <sys:String x:Key="RelFailed">関係 {0} 件、グループ {1} 件の設定後に停止: {2}。書き込まずに再読み込みすれば元に戻せます。</sys:String>
   <sys:String x:Key="RelErrNoBlock">このセーブには FactionSaveData ブロックがありません。</sys:String>
   <sys:String x:Key="RelErrNoFaction">勢力 {0} はこのセーブの勢力一覧にありません。</sys:String>
   <sys:String x:Key="RelGroupDefault">グループ既定（行なし）</sys:String>

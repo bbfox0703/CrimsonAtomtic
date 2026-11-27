@@ -89,6 +89,26 @@
 > changes. Dye-mask RE: queued as its own crimson-rs session (the user
 > starts it); it reports straight back here.
 >
+> **Follow-ups from the user's review (2026-11-27, on `dev`).** Relation
+> editor: search also matches the Current column, plus a Current-relation
+> filter combo (typing 血 used to hit 赤血沙漠 in Region instead of
+> BloodAlly rows); the Relation group column is now an editable combo —
+> a faction's `_relationGroupKey` (u16) is in the save
+> (`FactionGroupChange`, pinned by `Apply_ChangesARelationGroup_AndReadsBack`);
+> **not yet tested in-game**. Node editor: region labels localized from
+> the game's faction-group names (`FactionGroupNames`: Hernand / 埃爾南德,
+> Great Ocean / 大洋, …); Kweiden and Calphade are not groups and have no
+> standalone PALOC string, so they stay English. The group-to-group matrix
+> is game data, not save data: crimson-rs decoded it (list1 = War, list2 =
+> BloodAlly; PR #121, vendored at `aa5aa53`) and
+> `LocalizationProvider.GroupRelation` wraps
+> `crimson_factionrelationgroup_lookup_relation`. The player's Graymane is
+> War with HostileCombat / Monster_Common and BloodAlly with FriendlyCombat
+> / NPC_Common. The editor now shows "Group default → War" in Current (and
+> as a filter choice), plus a "Group default" column that follows the
+> group combo, so a regroup previews its effect. **425 C# tests green**;
+> AOT zero warnings.
+>
 > **Faction relations — `1` = War confirmed in-game (2026-11-27).**
 > `FactionSaveData._factionElementSaveDataList[i]._factionRelationDataList[j]`
 > = `{_targetFactionKey, _relationTypeRaw u8, _dueDate u32}`. The exe's
@@ -714,8 +734,40 @@ are in [status-archive.md](status-archive.md).
 - **Mission keys the bridge cannot name.** 1,420 distinct `MissionKey` values
   in slot102 stay blank, 1,415 of them already in the 2.03 snapshot. Mission
   has no `_with_pabgh` loader in crimson-rs; stage and quest do.
-- **⏸️ Dye editor is disabled since 2.01 — parked, no plan to fix it for
-  now** (the user's call, stated in the v2.03.01 release notes,
+- **✅ Dye editor re-enabled 2026-11-27 (on `dev`; save side not yet
+  checked in-game).** crimson-rs PR #122 (vendored at `c8f699d`) decoded
+  the 12-byte mask: there are no groups. Each material channel's
+  `mat_indices` entry is a **dye slot number** (0..11, `0xFF` = none),
+  mask byte `n` flags dye slot `n`, and the save's `_dyeSlotNo` is that
+  number (absent = 0); a dye element's colour applies to every channel of
+  the prefab carrying its number. The editor was wrong on two counts: it
+  offered `_dyeSlotNo` 0..N-1 with N = the prefab's *sub-mesh* count, and
+  labelled slots from the legacy 3-byte mask. Now
+  `LocalizationProvider.LookupDyeSlotNumbers` (`..._lookup_dye_slot_bits`,
+  sparse, e.g. 0,1,2,4,5,6) feeds the slot count, the Add-Dye picker and
+  `DescribeDyeSlot` (`..._lookup_dye_slot_material`); an absent
+  `_dyeSlotNo` shows as Slot 0; `IsDyeEditorAvailable` is true and the
+  "disabled" tooltip is gone. **Reach, then fixed the same day:** the old
+  item → prefab *name* join reached 102 items on 2.06 and none of the
+  body-type armour players actually dye (it was also wrong on 5, e.g. a
+  spear resolving to a saddle hook). crimson-rs PR #123 joins through each
+  item's `.prefab` files in group 0009 — a prefab lists every mesh of the
+  outfit, and an item's dye slot numbers are the union over those meshes
+  and over body types (`crimson_item_part_prefab_lookup_dye_slot_bits` /
+  `_lookup_dye_slot_material`, ~2 s to build, so `LocalizationProvider`
+  builds it lazily on the first dye lookup, which the editor runs off the
+  UI thread). PR #124 merges dlc_01's items into it. Coverage: 909 of 917
+  base dyeable items, 991 of 1,002 with the DLC. Vendored at `ab62800`.
+  **Save side confirmed on 2.06**: the user dyed 111147 (Demeniss Honor
+  Armor) in-game — 3 parts — and the save holds `_dyeSlotNo` absent(0) / 1
+  / 7, `_texturePalleteKey` 1 on the first, `_grimeOpacity` 85 / 101 /
+  absent against repair 33 / 20 / 0 in the UI (fits repair = 100 − grime ×
+  100 / 127 with absent = 127; two points only, range unconfirmed). Pins in
+  `DyeSlotNumberTests`: 111147 → 0..7 (⊇ 0, 1, 7), 9102 → {0,2,3,6,7,9},
+  DLC 1004390 → 0..4, > 800 base items resolve. A slot103 test (equipped
+  gloves 12406 dyed red/green/blue on slots 0/1/2) was built but not
+  installed, at the user's request. History below.
+- ~~Dye editor is disabled since 2.01 — parked~~ (the user's call, stated in the v2.03.01 release notes,
   2026-09-18); it needs the mask-group RE. **Re-checked 2026-11-27 on 2.06
   (the user thought upstream had fixed it): it has not.** No crimson-rs
   branch touches the mask after 2.05's named-row fix (that one restored

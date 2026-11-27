@@ -95,7 +95,6 @@
   <sys:String x:Key="MenuEditContributions">編輯貢獻度 (勢力貨幣)(_C)…</sys:String>
   <sys:String x:Key="MenuEditFactionRelations">編輯勢力關係 (與我方的戰爭 / 同盟)(_R)…</sys:String>
   <sys:String x:Key="MenuEditItemDyes">編輯物品染色(_D)…（2.01 起尚未支援）</sys:String>
-  <sys:String x:Key="MenuEditItemDyesUnavailableTip">自紅漠（Crimson Desert）2.01 起停用：每個染色槽位的 mask 從 3 bytes 擴大為 12 bytes，且內容已重新編碼。若依照舊格式讀取，約三分之一的槽位會顯示為空，並依錯誤資料寫回。等新的 mask 分組解析完成後會重新啟用。</sys:String>
   <sys:String x:Key="MenuVendorBuyback">商人回購清單(_V)…</sys:String>
   <sys:String x:Key="MenuReviewChanges">檢視待寫入的變更(_R)…</sys:String>
 
@@ -264,6 +263,7 @@
   <sys:String x:Key="FactionNodeFilterRegion">地區：</sys:String>
   <sys:String x:Key="FactionNodeFilterAllRegions">全部地區</sys:String>
   <sys:String x:Key="FactionNodeRegionOther">其他</sys:String>
+  <sys:String x:Key="FactionNodeRegionIslands">島嶼</sys:String>
   <sys:String x:Key="FactionNodeSelectAll">全選</sys:String>
   <sys:String x:Key="FactionNodeUnselectAll">取消全選</sys:String>
   <sys:String x:Key="FactionNodeInvert">反向選擇</sys:String>
@@ -290,8 +290,10 @@
   <sys:String x:Key="ContribColNew">新數量</sys:String>
   <sys:String x:Key="RelWindowTitle">編輯勢力關係</sys:String>
   <sys:String x:Key="RelHeader">各勢力與我方的關係。遊戲沒有替勢力命名，所以用成員最常見的名稱（例如「埃爾南德警衛隊」）來表示，並依成員數排序——決定一個地方會不會敵對的，是當地一般 NPC 所屬的勢力。沒有關係紀錄的勢力依其關係群組決定敵友（群組預設），有紀錄時以紀錄為準（戰爭、血盟已在遊戲內確認）。變更會雙向寫入；下次 檔案 → 儲存 時寫入檔案。</sys:String>
-  <sys:String x:Key="RelSearchHint">依成員名稱、勢力、key、首領、地區或群組篩選…</sys:String>
+  <sys:String x:Key="RelSearchHint">依成員名稱、勢力、key、首領、地區、群組或目前關係篩選…</sys:String>
   <sys:String x:Key="RelOnlyWithRows">只顯示有關係紀錄的勢力</sys:String>
+  <sys:String x:Key="RelFilterRelation">目前關係：</sys:String>
+  <sys:String x:Key="RelFilterAllRelations">全部關係</sys:String>
   <sys:String x:Key="RelApply">套用</sys:String>
   <sys:String x:Key="RelClose">關閉</sys:String>
   <sys:String x:Key="RelColFaction">勢力（內部名稱）</sys:String>
@@ -300,7 +302,9 @@
   <sys:String x:Key="RelColTypical">典型成員</sys:String>
   <sys:String x:Key="RelColKey">Key</sys:String>
   <sys:String x:Key="RelColLeader">首領</sys:String>
-  <sys:String x:Key="RelColGroup">關係群組</sys:String>
+  <sys:String x:Key="RelColGroup">關係群組（可改）</sys:String>
+  <sys:String x:Key="RelColGroupEffect">群組預設效果</sys:String>
+  <sys:String x:Key="RelGroupEffectUndefined">未定義</sys:String>
   <sys:String x:Key="RelColCurrent">目前</sys:String>
   <sys:String x:Key="RelColNew">新關係</sys:String>
   <sys:String x:Key="MenuFontSize">字型大小(_F)</sys:String>
@@ -655,7 +659,7 @@
   <sys:String x:Key="JournalCatContributions">貢獻度</sys:String>
   <sys:String x:Key="JournalContributions">已設定 {0} 筆貢獻度，新增 {1} 筆</sys:String>
   <sys:String x:Key="JournalCatFactionRelations">勢力關係</sys:String>
-  <sys:String x:Key="JournalFactionRelations">已設定與 {0} 個勢力的關係</sys:String>
+  <sys:String x:Key="JournalFactionRelations">已設定與 {0} 個勢力的關係，並變更 {1} 個關係群組</sys:String>
   <sys:String x:Key="JournalCatAddItem">新增道具</sys:String>
   <sys:String x:Key="JournalCatMountUnlock">坐騎解鎖</sys:String>
 
@@ -915,10 +919,10 @@
   <sys:String x:Key="RelNoFactions">找不到勢力——此存檔沒有 FactionSaveData._factionElementSaveDataList。</sys:String>
   <sys:String x:Key="RelNoChanges">沒有任何變更。</sys:String>
   <sys:String x:Key="RelConfirmTitle">套用勢力關係？</sys:String>
-  <sys:String x:Key="RelConfirmBody" xml:space="preserve">要雙向設定與 {0} 個勢力的關係嗎？&#10;&#10;不寫入直接重新載入即可回復。</sys:String>
+  <sys:String x:Key="RelConfirmBody" xml:space="preserve">要雙向設定與 {0} 個勢力的關係，並變更 {1} 個勢力的關係群組嗎？&#10;&#10;不寫入直接重新載入即可回復。</sys:String>
   <sys:String x:Key="RelApplying">套用中…</sys:String>
-  <sys:String x:Key="RelDone">完成：已設定 {0} 個勢力。下次 檔案 → 儲存 時寫入檔案。</sys:String>
-  <sys:String x:Key="RelFailed">設定 {0} 個勢力後中止：{1}。不寫入直接重新載入即可回復。</sys:String>
+  <sys:String x:Key="RelDone">完成：已設定 {0} 個關係、{1} 個關係群組。下次 檔案 → 儲存 時寫入檔案。</sys:String>
+  <sys:String x:Key="RelFailed">設定 {0} 個關係、{1} 個群組後中止：{2}。不寫入直接重新載入即可回復。</sys:String>
   <sys:String x:Key="RelErrNoBlock">此存檔沒有 FactionSaveData 區塊。</sys:String>
   <sys:String x:Key="RelErrNoFaction">勢力 {0} 不在此存檔的勢力清單中。</sys:String>
   <sys:String x:Key="RelGroupDefault">群組預設（無紀錄）</sys:String>

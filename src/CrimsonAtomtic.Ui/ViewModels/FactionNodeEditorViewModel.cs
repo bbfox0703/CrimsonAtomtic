@@ -289,12 +289,29 @@ public sealed partial class FactionNodeEditorViewModel : ObservableObject
         });
         _allRows = rows;
 
+        // Regions are keyed by English name; the game's faction-group names
+        // give the localized label ("Hernand / 埃爾南德").
+        var groupNames = loc.FactionGroupNames();
+        var regionLabels = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var r in rows)
+        {
+            if (!regionLabels.TryGetValue(r.Region, out var label))
+            {
+                // Faction groups name most regions. Kweiden and Calphade are
+                // not groups and have no standalone PALOC string, so they stay
+                // English; "Islands" / "Other" come from the UI strings.
+                var secondary = groupNames.TryGetValue(r.Region, out var g) ? g : null;
+                label = secondary is not null && secondary != r.Region ? $"{r.Region} / {secondary}" : r.Region;
+                regionLabels[r.Region] = label;
+            }
+            r.RegionLabel = label;
+        }
         var keepRegion = SelectedRegionFilter?.Text;
         RegionFilters.Clear();
         RegionFilters.Add(new NodeFilterOption(UiText.Get("FactionNodeFilterAllRegions", "All regions"), null));
         foreach (var g in rows.GroupBy(r => r.Region).OrderByDescending(g => g.Count()))
         {
-            RegionFilters.Add(new NodeFilterOption($"{g.Key} ({g.Count():N0})", null, g.Key));
+            RegionFilters.Add(new NodeFilterOption($"{g.First().RegionLabel} ({g.Count():N0})", null, g.Key));
         }
         SelectedRegionFilter = RegionFilters.FirstOrDefault(o => o.Text == keepRegion) ?? RegionFilters[0];
 
@@ -361,8 +378,8 @@ public sealed partial class FactionNodeRow : ObservableObject
             "Kwe" => "Kweiden",
             "Cal" => "Calphade",
             "Pailune" => "Pailune",
-            "Island" => "Islands",
-            "Ocean" or "Pywel" => "Ocean",
+            "Island" => UiText.Get("FactionNodeRegionIslands", "Islands"),
+            "Ocean" or "Pywel" => "Great Ocean",
             "Abyss" or "Abyssone" => "Abyss",
             _ => UiText.Get("FactionNodeRegionOther", "Other"),
         };
@@ -371,8 +388,11 @@ public sealed partial class FactionNodeRow : ObservableObject
     /// <summary>The place name the game shows ("Hernand Castle / 埃爾南德城"); empty for unnamed nodes.</summary>
     public string PlaceName { get; }
 
-    /// <summary>See <see cref="RegionOf"/> — a guess.</summary>
+    /// <summary>See <see cref="RegionOf"/> — a guess, keyed by the game's English region name.</summary>
     public string Region { get; }
+
+    /// <summary><see cref="Region"/> as displayed, localized from the game's faction-group names.</summary>
+    public string RegionLabel { get; internal set; } = string.Empty;
 
     internal MainWindowViewModel.FactionNodeTarget Target { get; }
 

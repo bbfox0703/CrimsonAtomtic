@@ -2964,6 +2964,19 @@ public sealed class NativeFactionInfoCatalog : IDisposable
         }
     }
 
+    /// <summary>The FactionKey at insertion index <paramref name="index"/>, or null past the end.</summary>
+    public uint? GetEntryKey(int index)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentOutOfRangeException.ThrowIfNegative(index);
+        unsafe
+        {
+            // The size query alone fills the key.
+            var rc = NativeMethods.FactionInfoGetEntry(_handle, (uint)index, out var key, null, 0, out _);
+            return rc is NativeMethods.OK or NativeMethods.BUFFER_TOO_SMALL ? key : null;
+        }
+    }
+
     /// <summary>
     /// The localized name of the faction's group in <paramref name="paloc"/>
     /// (e.g. "Hernand" for Faction_Celeste_Hernand, "Greymanes" for
@@ -3103,6 +3116,19 @@ public sealed class NativeFactionRelationGroupCatalog : IDisposable
                     NativeMethods.FactionRelationGroupLookupStringKey(_handle, relationGroupKey, buf, bufLen, out required),
                 $"crimson_factionrelationgroup_lookup_string_key({relationGroupKey})");
         }
+    }
+
+    /// <summary>
+    /// The relation type between two distinct groups (1 War or 3 BloodAlly
+    /// on every pair since 1.03.01; the table is symmetric). Null for an
+    /// unknown group or a group with itself, which the game leaves undefined.
+    /// </summary>
+    public uint? LookupRelation(uint groupA, uint groupB)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return NativeMethods.FactionRelationGroupLookupRelation(_handle, groupA, groupB, out var relation) == NativeMethods.OK
+            ? relation
+            : null;
     }
 
     public void Dispose()
