@@ -71,7 +71,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B1-17 | `RunDeferred` 對 abort 或 commit 失敗的處理不完整 | risk | 確認 | P3 | 已修 | `951ac21` | commit 失敗時 version 現在往前移；take() 之後的 PANIC 不變。 |
 | B1-18 | Rule 7：magic strings 沒有集中管理，錯誤碼名稱表重複 8 份且內容不一致 | rule violation | 確認 | P9 | 已修 | `ff24f9a` `1836867` | 變嚴重：−26 LIST_PARTIALLY_DECODED、−27 ELEMENT_CLASS_MISMATCH、−28 HMAC_UNVERIFIED 不在常數與 8 份名稱表內。P0 先補常數與單一名稱表。 P0 建立 CrimsonErrorCode 單一名稱表並補 −26/−27/−28；其餘 magic strings 仍在 P9。 P9 完成其餘 magic strings。 |
 | B1-19 | 整個專案抑制 CA1416，且理由已過時（削弱 Rule 4 的防線） | rule violation | 確認 | P10 | 已修 | `4cbcef7` | 純 C# 問題。 抑制已移除；專案內無 CA1416 警告。 |
-| B1-20 | 文件與註解過時或錯置 | cleanup | 確認 | P12 | 待修 |  | ISaveLoader 的「每次成功 mutation 剛好 +1」在新版更錯；NativePaverReader「最新 export」註解過時。 |
+| B1-20 | 文件與註解過時或錯置 | cleanup | 確認 | P12 | 已修 | `79c7d80` | ISaveLoader 的「每次成功 mutation 剛好 +1」在新版更錯；NativePaverReader「最新 export」註解過時。 paver 文件改寫為現行 gate；mutation version 註解改為只前進契約；KeyInfo 檔頭不再計數；ItemInfoSummary 測試名；跨層 cref 移除；dye-slot bridge 說明。 |
 | B1-21 | 例外訊息未本地化就直接送到 UI | cleanup | 確認 | P8 | 待修 | `6a8c473` | 純 C# 問題。 原生例外訊息直接顯示，需錯誤碼對應的本地化訊息。 |
 | B1-22 | 檔案規模與重複（只談結構） | cleanup | 確認 | P14 | 待修 |  | 純結構。 |
 | B1-23 | `IItemInfoCatalog` 缺少 `LookupSummary` / `LookupFlags` | cleanup | 確認 | P5 | 已修 | `559a80b` | 純 C# 問題。 |
@@ -107,7 +107,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B2-24 | Rule 12：absent 欄位的型別是由消費端用 schema TypeName 猜出來的 | rule violation | 部分 | P5 | 待上游 | `559a80b` | TypeName 別名表與 *Key→u32 猜測確實是 Rule 12 workaround；i32/u32 風險不成立，實際代價是未知 typedef 無法編輯。需上游為 absent scalar 提供 type_tag。 需 crimson-rs 回報 absent scalar 的 type_tag。 |
 | B2-25 | UI 字串寫死英文，沒有放進三語系資源 | rule violation | 確認 | P8 | 已修 | `6a8c473` | 多處寫死英文。 |
 | B2-26 | `MainWindow.axaml.cs`（1,997 行）中有應該放在 ViewModel / Service 的邏輯 | cleanup | 確認 | P14 | 待修 |  | 約 20 個複製貼上的工具啟動器；Add Dye 邏輯在 View。 |
-| B2-27 | 過時或錯誤的註解與文件 | cleanup | 確認 | P12 | 部分 | `ff24f9a` | 多處過時註解；孤立 summary 已在 P0 由註解檢查修掉一部分。 P0 修掉孤立 summary 2 處。 |
+| B2-27 | 過時或錯誤的註解與文件 | cleanup | 確認 | P12 | 已修 | `ff24f9a` `79c7d80` | 多處過時註解；孤立 summary 已在 P0 由註解檢查修掉一部分。 P0 修掉孤立 summary 2 處。 任意深度可編輯、legacy 備份永不 prune、mutex 名稱說明、UiLanguage 偵測來源；Fields 密集排列寫入 BlockDetails 文件並以 live-save 測試釘住。 |
 | B2-28 | `ChangeJournal` 的執行緒安全只是表面上的 | cleanup | 確認 | P6 | 已修 | `8577638` | CollectionChanged 在呼叫端執行緒觸發；目前沒有背景呼叫端。 |
 | B2-29 | 平台探測的穩健性 | cleanup | 確認 | P10 | 已修 | `4cbcef7` | IgnoreInaccessible=false，一個無權限子目錄就讓整個掃描回 null。 EnumerationOptions.IgnoreInaccessible = true。 |
 | B2-30 | 測試缺口 | cleanup | 確認 | P13 | 待修 |  | 沒有 MainWindowViewModel 生命週期測試。 |
@@ -135,7 +135,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B3-17 | UI 字串寫死在 C#，沒有進三語系 `Strings/*.axaml` | rule violation | 確認 | P8 | 部分 | `6a8c473` | 合併至 UI 字串批次。 ItemPicker 內部分字串未改。 |
 | B3-18 | `FormatPair` 對只有 internal name 的 key 顯示「X / X」 | cleanup | 確認 | P5 | 已修 | `559a80b` | 只有 internal name 的 key 顯示「X / X」。 |
 | B3-19 | 重複的 helper 與死碼 | cleanup | 確認 | P14 | 待修 |  | LookupUiResourceString 三份、死碼。 |
-| B3-20 | XML doc 錯置、孤立，以及過時的註解 | cleanup | 確認 | P12 | 部分 | `ff24f9a` | 孤立 summary 在 P0 已修（4 處）；剩 Avalonia 版本與計數文字。 |
+| B3-20 | XML doc 錯置、孤立，以及過時的註解 | cleanup | 確認 | P12 | 已修 | `ff24f9a` `79c7d80` | 孤立 summary 在 P0 已修（4 處）；剩 Avalonia 版本與計數文字。 Avalonia 合併字典推理以 12.2.0 原始碼核對；PALOC 版本敘述與 niche bridge 計數移除。 |
 | B3-21 | `LocalizationProvider.cs`（2,569 行）的結構：可以按職責拆分，DLC 表也重複載入 | cleanup | 確認 | P14 | 待修 |  | DLC 表 merge 後又載入成 resolver；拆分 LocalizationProvider。 |
 | B3-22 | 所有載入失敗都靜默吞掉，沒有任何診斷資訊；`UiLanguageService` 用了裸 `catch` | cleanup | 確認 | P4 | 已修 | `5127921` | 16 個空的 catch；改收集 LoadFailures。 |
 
@@ -170,7 +170,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B4-25 | Rule：UI 字串寫死在 C#（含原生例外訊息直接顯示） | rule violation | 確認 | P8 | 部分 | `6a8c473` | 寫死英文與原生例外訊息直接顯示。 新增訊息皆已進字典；工具視窗內既有英文狀態與原生例外訊息未全面改。 |
 | B4-26 | Rule 7：magic string 沒有集中；錯誤碼寫成 `-16` 字面值 | rule violation | 確認 | P9 | 已修 | `1836867` | 合併至 magic-strings 批次。 |
 | B4-27 | Rule 3：同步檔案 I/O 與耗時的 FFI 跑在 UI 執行緒 | rule violation | 確認 | P7 | 部分 | `f3f25a8` | 設定檔 I/O 與 FFI 在 UI 執行緒。 Socket/Buyback 掃描已移到背景；設定檔 I/O 與 dye slot editor（含 brush）未改。 |
-| B4-28 | 文件漂移與錯置的 XML doc | cleanup | 確認 | P12 | 部分 | `ff24f9a` | 孤立 summary 在 P0 已修（SocketEditor）；其餘過時說明。 |
+| B4-28 | 文件漂移與錯置的 XML doc | cleanup | 確認 | P12 | 已修 | `ff24f9a` `79c7d80` | 孤立 summary 在 P0 已修（SocketEditor）；其餘過時說明。 ItemIdentity、TryCreate 回傳條件、DyeSlotPicker 稀疏 slot、FindItems IsStale、GemSetsSaved 訊息（三語）。status.md gotcha 已於 X-03 處理。 |
 | B4-29 | 重複的 helper 與死碼 | cleanup | 確認 | P14 | 待修 |  | 重複 helper 與死碼。 |
 | B4-30 | Add Item / Grant 寫死 scalar 的 byte 寬度，沒有依 type tag 編碼 | cleanup | 確認 | P3 | 已修 | `951ac21` | scalar byte 寬度寫死。 |
 | B4-31 | 結構與大小 | cleanup | 確認 | P14 | 待修 |  | 純結構。 |
@@ -200,7 +200,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B5-18 | Rule 7：magic strings 分散且重複（Pre-scan #4 在 Block 5 範圍確認） | rule violation | 確認 | P9 | 已修 | `1836867` | 合併至 magic-strings 批次。 |
 | B5-19 | UI 字串寫死英文；三語系字典的鍵一致，但用詞不一致 | rule violation | 確認 | P8 | 部分 | `6a8c473` | 另 zh-TW 混用阿比斯之門 / 深淵之門。 狀態標籤與 zh-TW 用詞已改；skip reason 仍為英文診斷字串。 |
 | B5-20 | Rule 12：消費端的 workaround | rule violation | 確認 | P5 | 已修 | `559a80b` | WorldMap 以 " / " 切名稱；TryParseScalarUInt 複製三份。 |
-| B5-21 | 過時或錯置的註解與文件 | cleanup | 確認 | P12 | 部分 | `ff24f9a` | 孤立 summary 在 P0 已修（SA bulk）；其餘過時說明。 |
+| B5-21 | 過時或錯置的註解與文件 | cleanup | 確認 | P12 | 已修 | `ff24f9a` `79c7d80` | 孤立 summary 在 P0 已修（SA bulk）；其餘過時說明。 held-artifact gate 文件移除、batch 語意（RunDeferred 回滾）、knowledge inject 成本說明。RenameMercenary 部分先前已修。 |
 | B5-22 | Skip reason 用英文子字串分類 | cleanup | 確認 | P8 | 已修 | `6a8c473` | 以英文子字串分類 skip reason。 |
 | B5-23 | 結構：Sealed Abyss 佔 `MainWindowViewModel.cs` 約 1,300 行（Pre-scan #5 確認） | cleanup | 確認 | P14 | 待修 |  | 純結構。 |
 | B5-24 | 零碎項目 | cleanup | 部分 | P4 | 已修 | `5127921` | return default 那處不可達；FAR 重讀與 catch-all 屬實。 FAR 重讀保留（B1-01 已修後無害）。 |
@@ -234,12 +234,12 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B6-23 | Rule 10：同一張圖的衍生格式與複本被 commit | rule violation | 確認 | P11 | 已修 | `354681e` | 需決定：重複圖檔保留一份。 使用者決定：只留一份。 刪除 img/Logo.jpg、img/MainIcon.ico（與 Assets 同 blob）；img/README.md + data-policy 例外。 |
 | B6-24 | Rule 7：路徑與常數散落各處，沒有集中定義 | rule violation | 確認 | P9 | 已修 | `1836867` `354681e` | DLL 路徑重複七處；與 magic-strings 批次合併。 MSBuild 已統一；PowerShell 腳本與 Python 工具的路徑在 P11。 P9 MSBuild；P11 scripts/paths.ps1 與 tools/common/crimson_abi.py。 |
 | B6-25 | tools 規則 6：在 Python 裡做 byte 層級解析，並繞過 PyO3 直接用 ctypes 呼叫 C ABI | rule violation | 確認 | P11 | 待修 |  | 需上游提供 missioninfo PyO3 binding。 需請上游提供 missioninfo PyO3 binding。 |
-| B6-26 | `docs/architecture.md` 與現況大幅脫節（Pre-scan #2 確認並補充） | cleanup | 確認 | P12 | 待修 |  | architecture.md 大幅脫節。 |
-| B6-27 | `README.md` / `scripts/README.md` / root `CLAUDE.md` 的建置說明與實際不符 | cleanup | 確認 | P12 | 待修 |  | README / scripts/README 建置說明不符。 |
-| B6-28 | `tools/` 各 README 的清單與實際檔案不一致 | cleanup | 確認 | P12 | 待修 |  | tools README 清單不符。 |
-| B6-29 | 其他文件中的過時事實（`target-py`、DataGrid、game 1.10） | cleanup | 確認 | P12 | 待修 |  | status.md 等過時事實。 |
+| B6-26 | `docs/architecture.md` 與現況大幅脫節（Pre-scan #2 確認並補充） | cleanup | 確認 | P12 | 已修 | `79c7d80` | architecture.md 大幅脫節。 architecture.md 依現況重寫。 |
+| B6-27 | `README.md` / `scripts/README.md` / root `CLAUDE.md` 的建置說明與實際不符 | cleanup | 確認 | P12 | 已修 | `79c7d80` | README / scripts/README 建置說明不符。 README / scripts/README 建置步驟；root CLAUDE.md Rule 8 更正。 |
+| B6-28 | `tools/` 各 README 的清單與實際檔案不一致 | cleanup | 確認 | P12 | 已修 | `79c7d80` | tools README 清單不符。 tools 各 README 清單與檔案一致。 |
+| B6-29 | 其他文件中的過時事實（`target-py`、DataGrid、game 1.10） | cleanup | 確認 | P12 | 已修 | `79c7d80` | status.md 等過時事實。 target/py、DataGrid、2.06 等過時事實；gamedata_layout.py docstring。status-archive 為凍結歷史，不改。 |
 | B6-30 | `Directory.Packages.props` 註解錯位；測試專案把一長串 transitive 套件提升成直接引用 | cleanup | 確認 | P11 | 已修 | `354681e` | 需決定：精簡測試專案的 transitive 引用。 使用者決定：精簡。 測試專案只留 xunit.v3 / Test.Sdk / runner；註解移到正確位置；ILCompiler 註解去歷史。 |
-| B6-31 | `<NoWarn>IL2104;IL3053</NoWarn>` 的理由已過時，是否仍需要沒有驗證 | cleanup | 部分 | P12 | 待修 |  | NoWarn 在 2026-08-18 已重新驗證仍需要；只有註解過時。 |
+| B6-31 | `<NoWarn>IL2104;IL3053</NoWarn>` 的理由已過時，是否仍需要沒有驗證 | cleanup | 部分 | P12 | 已修 | `79c7d80` | NoWarn 在 2026-08-18 已重新驗證仍需要；只有註解過時。 重新 publish 驗證仍需要（僅 DataGrid 12.1.2 觸發），註解改寫並附重驗方法。 |
 | B6-32 | `ClaudeMdSizeTests` 先走完整棵樹才過濾，且沒有跳過 `.venv` | cleanup | 確認 | P13 | 待修 |  | ClaudeMdSizeTests 先走完整棵樹。 |
 | B6-33 | Build 腳本的小問題 | cleanup | 確認 | P11 | 已修 | `354681e` | build.cmd 退回 PS 5.1 等小問題。 build.cmd 無 pwsh 直接報錯；刪未用變數；Clean 失敗發 warning；Invoke-Step 先歸零。runtime 參數不加（只有 win-x64）。 |
 | B6-34 | `.gitignore` 的矛盾與冗餘規則 | cleanup | 確認 | P11 | 已修 | `354681e` | .gitignore 重複規則。 刪重複規則、.vscode 策略統一、/Backup*/ 只作用於根目錄。 |
@@ -253,11 +253,11 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | X-01 | crimson-rs −28 HMAC_UNVERIFIED：載入時 HMAC 失敗的存檔，Save 會被拒絕 | bug | 確認 | P0 | 已修 | `ff24f9a` | 來自 crimson-rs ebf7304；C# 不檢查 HmacOk，搭配 B2-04 會崩潰。 |
 | X-02 | NativeItemInfoCatalog 把 _with_header 的 BODY_PARSE 退回 body-only 載入（Rule 12） | risk | 確認 | P4 | 已修 | `5127921` | 上游 header 檢查變嚴，退回後物品全部沒有名稱且不報錯。 |
 | X-03 | status.md 的 gotcha「promote then write in place」與 set_object_list_present(1) 語意已過時 | cleanup | 確認 | P0 | 已修 | `ff24f9a` | 上游 G-08 / G-03 改變行為。 |
-| X-04 | ResolveDyeSlotCount 的意義改為 dye-slot bit 數；LookupSlotCount 是 sub-mesh 數 | cleanup | 確認 | P12 | 待修 |  | 目前沒有 UI 呼叫 ResolveDyeSlotCount；更新 C# 文件。 |
+| X-04 | ResolveDyeSlotCount 的意義改為 dye-slot bit 數；LookupSlotCount 是 sub-mesh 數 | cleanup | 確認 | P12 | 已修 | `79c7d80` | 目前沒有 UI 呼叫 ResolveDyeSlotCount；更新 C# 文件。 ResolveDyeSlotCount（dye slot 數）與 LookupSlotCount（sub-mesh 數）文件各自說明。 |
 | X-05 | Transplant 在同一個 handle 內已允許，C# 端的禁止可放寬 | cleanup | 確認 | P3 | 已修 | `951ac21` | 上游 G-15。 |
 | X-06 | FindItemsWindow 使用 ThemeAccentBrush2 / ThemeBorderLowBrush / ThemeForegroundBrush，Fluent 主題沒有定義 | bug | 確認 | P8 | 已修 | `6a8c473` | 字串鍵比對時發現；需確認畫面上是否失色。 |
 | X-07 | 還原備份視窗是非 modal、fire-and-forget，可重複開啟並同時還原 | bug | 確認 | P1 | 已修 | `09394d6` | Block 2 確認時發現。 |
-| X-08 | 註解規則（docs/code-comments.md）與 CommentRulesTests：行號、稽核/PR/commit id、重複 summary 歸零；歷史語句 ratchet | rule | 確認 | P0/P12 | 部分 | `ff24f9a` | 使用者要求，參考 UE5CEDumper。 P0：行號/ID/重複 summary 歸零，歷史語句 ratchet 基準 43 行（22 檔）。 |
+| X-08 | 註解規則（docs/code-comments.md）與 CommentRulesTests：行號、稽核/PR/commit id、重複 summary 歸零；歷史語句 ratchet | rule | 確認 | P0/P12 | 已修 | `ff24f9a` `79c7d80` | 使用者要求，參考 UE5CEDumper。 P0：行號/ID/重複 summary 歸零，歷史語句 ratchet 基準 43 行（22 檔）。 歷史語句歸零；ratchet 改為硬規則，baseline 檔刪除。 |
 
 ## 統計（確認後）
 
