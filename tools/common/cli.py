@@ -22,6 +22,7 @@ The canonical pattern:
 from __future__ import annotations
 
 import argparse
+import io
 import sys
 
 
@@ -33,6 +34,20 @@ def require_args(parser: argparse.ArgumentParser, *, exit_code: int = 2) -> None
     Future-us (and Claude) should be able to discover a tool by running it
     naked. Exit code 2 follows the argparse convention for usage errors.
     """
+    tolerate_unencodable_output()
     if len(sys.argv) <= 1:
         parser.print_help(sys.stderr)
         sys.exit(exit_code)
+
+
+def tolerate_unencodable_output() -> None:
+    """Escape, rather than crash on, characters the console cannot encode.
+
+    A console code page (cp1252 on a stock Windows runner, cp950 here) lacks
+    some characters the tools print (arrows in help text, game names), and
+    Python's default is to raise mid-print. The stream keeps its encoding;
+    only the error handler changes.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(errors="backslashreplace")

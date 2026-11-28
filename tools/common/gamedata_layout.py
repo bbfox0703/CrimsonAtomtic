@@ -69,11 +69,13 @@ def _read_pamt(game_dir: str | Path, group: str) -> dict | None:
     to the parser's error: hiding it would read as a missing install, while
     the usual cause is a `crimson_rs` build older than the game's format.
     """
-    import crimson_rs  # type: ignore[import-not-found]
-
     pamt_path = Path(game_dir) / group / "0.pamt"
     if not pamt_path.is_file():
         return None
+    # Imported only once there is something to parse, so an absent group
+    # needs no native module.
+    import crimson_rs  # type: ignore[import-not-found]
+
     try:
         return crimson_rs.parse_pamt_bytes(pamt_path.read_bytes())
     except (OSError, ValueError) as e:
