@@ -57,7 +57,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B1-03 | batch 的 `FailedOpIndex` 在 PANIC 或提早返回時誤報為 op 0 | bug | 確認 | P3 | 已修 | `951ac21` | NULL_ARG 提早返回與 PANIC 仍不寫 out_failed_op_index；成功時改為 usize::MAX。 |
 | B1-04 | two-call pattern 丟棄第二次呼叫回報的長度或筆數 | risk | 確認 | P5 | 已修 | `559a80b` | two-call 語意不變（第二次回報實際長度/筆數）；列舉改為加鎖，不再有 data race，但兩次呼叫之間仍可能被插入。 catalog 讀取（itemInfo/paloc/stringinfo/mainquest）載入後不變，未改。 |
 | B1-05 | handle 層級的 batch 狀態沒有 C# 端的單一寫入者保證（跨執行緒 mutation 會混入別人的 batch） | risk | 確認 | P3 | 已修 | `951ac21` | batch 狀態仍屬於 handle，C# 端沒有單一寫入者；與 B4-21、B5-13 同一個 mutation gate。 |
-| B1-06 | catalog 的 `MergeDlcFromBytes` 與並行 lookup 不安全，C# 端沒有防護也沒有文件 | risk | 確認 | P6 | 待修 |  | Rust 文件仍寫「不能與並行 lookup 同時進行」；merge 現在可能回傳 BODY_PARSE。 |
+| B1-06 | catalog 的 `MergeDlcFromBytes` 與並行 lookup 不安全，C# 端沒有防護也沒有文件 | risk | 確認 | P6 | 部分 | `8577638` | Rust 文件仍寫「不能與並行 lookup 同時進行」；merge 現在可能回傳 BODY_PARSE。 merge 只在 bootstrap 時執行；P7 將 bootstrap 移出 UI 執行緒時一併處理。 |
 | B1-07 | 部分 catalog lookup 把所有錯誤碼默默轉成「找不到」或 0 | risk | 確認 | P4 | 已修 | `5127921` | faction get_entry / lookup_count 改為先清零 out 參數，錯誤一律讀成「找不到」。 |
 | B1-08 | `GameDataLayout.TryListDir` 吞掉所有 `CrimsonSaveException` | risk | 確認 | P4 | 已修 | `5127921` | 新增更多 BODY_PARSE 來源（未知 PAMT flag），TryListDir 仍全吞。 |
 | B1-09 | `NativePaverReader.TryReadFromInstall` 宣稱「Never throws」，實際會丟例外 | risk | 確認 | P4 | 已修 | `5127921` | 可改用新的 crimson_parser_supports；仍需捕捉 DllNotFound / EntryPointNotFound。 |
@@ -65,8 +65,8 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B1-11 | `ItemRecord.ToPathSteps` 在 `PathLen > 2` 時默默補零 | risk | 確認 | P4 | 已修 | `5127921` | path_len 上限仍為 2；改為超出時丟例外。 |
 | B1-12 | 從 ABI 讀出的列舉值沒有驗證就直接轉型 | risk | 確認 | P4 | 已修 | `5127921` | 列舉值沒有新增；仍需驗證範圍。 |
 | B1-13 | 綁定了 2.01 以後語意已錯的 3-byte dye mask ABI | risk | 確認 | P5 | 已修 | `559a80b` | 3-byte mask 保留做相容；_mask_full / _dye_slot_bits 等新函式尚未綁定。 移除 3-byte 包裝。 |
-| B1-14 | PAZ 每抽取一個檔案都做兩次完整的 PAMT 解析與解密解壓 | risk | 確認 | P6 | 待修 |  | PAZ 仍每次重新解析 PAMT；沒有 allocate-and-free API。 |
-| B1-15 | `LoadBlockDetails` 持有 `_cacheLock` 期間做 1–2 秒的 FFI 與 JSON 反序列化 | risk | 確認 | P6 | 待修 |  | 純 C# 問題。 |
+| B1-14 | PAZ 每抽取一個檔案都做兩次完整的 PAMT 解析與解密解壓 | risk | 確認 | P6 | 待上游 | `8577638` | PAZ 仍每次重新解析 PAMT；沒有 allocate-and-free API。 需 crimson-rs 提供 PAMT 快取或一次解析多檔的 API。 |
+| B1-15 | `LoadBlockDetails` 持有 `_cacheLock` 期間做 1–2 秒的 FFI 與 JSON 反序列化 | risk | 確認 | P6 | 已修 | `8577638` | 純 C# 問題。 |
 | B1-16 | `HasStructuralEdit` 與 deferred 狀態不同步 | risk | 確認 | P3 | 已修 | `951ac21` | 新增 −26/−27 部分失敗路徑。 |
 | B1-17 | `RunDeferred` 對 abort 或 commit 失敗的處理不完整 | risk | 確認 | P3 | 已修 | `951ac21` | commit 失敗時 version 現在往前移；take() 之後的 PANIC 不變。 |
 | B1-18 | Rule 7：magic strings 沒有集中管理，錯誤碼名稱表重複 8 份且內容不一致 | rule violation | 確認 | P9 | 已修 | `ff24f9a` | 變嚴重：−26 LIST_PARTIALLY_DECODED、−27 ELEMENT_CLASS_MISMATCH、−28 HMAC_UNVERIFIED 不在常數與 8 份名稱表內。P0 先補常數與單一名稱表。 P0 建立 CrimsonErrorCode 單一名稱表並補 −26/−27/−28；其餘 magic strings 仍在 P9。 |
@@ -108,7 +108,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B2-25 | UI 字串寫死英文，沒有放進三語系資源 | rule violation | 確認 | P8 | 待修 |  | 多處寫死英文。 |
 | B2-26 | `MainWindow.axaml.cs`（1,997 行）中有應該放在 ViewModel / Service 的邏輯 | cleanup | 確認 | P14 | 待修 |  | 約 20 個複製貼上的工具啟動器；Add Dye 邏輯在 View。 |
 | B2-27 | 過時或錯誤的註解與文件 | cleanup | 確認 | P12 | 部分 | `ff24f9a` | 多處過時註解；孤立 summary 已在 P0 由註解檢查修掉一部分。 P0 修掉孤立 summary 2 處。 |
-| B2-28 | `ChangeJournal` 的執行緒安全只是表面上的 | cleanup | 確認 | P6 | 待修 |  | CollectionChanged 在呼叫端執行緒觸發；目前沒有背景呼叫端。 |
+| B2-28 | `ChangeJournal` 的執行緒安全只是表面上的 | cleanup | 確認 | P6 | 已修 | `8577638` | CollectionChanged 在呼叫端執行緒觸發；目前沒有背景呼叫端。 |
 | B2-29 | 平台探測的穩健性 | cleanup | 確認 | P10 | 待修 |  | IgnoreInaccessible=false，一個無權限子目錄就讓整個掃描回 null。 |
 | B2-30 | 測試缺口 | cleanup | 確認 | P13 | 待修 |  | 沒有 MainWindowViewModel 生命週期測試。 |
 
@@ -116,16 +116,16 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 
 | ID | 標題 | 嚴重度 | 確認 | 批次 | 狀態 | 修正 | 備註 |
 |---|---|---|---|---|---|---|---|
-| B3-01 | 重新 bootstrap 不會重載 PALOC：新安裝的 bridge 配上舊安裝的語言表 | bug | 確認 | P6 | 待修 |  | 重新 bootstrap 不清 catalog / PALOC / mission map；DLC 會被重複 merge。 |
-| B3-02 | `EnsurePortraitList` race：同時開始的頭像載入，大多數拿到 null 並被永久快取 | bug | 確認 | P6 | 待修 |  | 頭像清單 race，null 被永久快取。最容易重現。 |
-| B3-03 | 圖示 / 頭像快取寫入不是原子操作；寫壞的檔案會被當成「已快取」，永遠不重抽 | bug | 確認 | P6 | 待修 |  | 圖示 / 頭像快取寫入非原子，壞檔永遠不重抽。 |
+| B3-01 | 重新 bootstrap 不會重載 PALOC：新安裝的 bridge 配上舊安裝的語言表 | bug | 確認 | P6 | 已修 | `8577638` | 重新 bootstrap 不清 catalog / PALOC / mission map；DLC 會被重複 merge。 |
+| B3-02 | `EnsurePortraitList` race：同時開始的頭像載入，大多數拿到 null 並被永久快取 | bug | 確認 | P6 | 已修 | `8577638` | 頭像清單 race，null 被永久快取。最容易重現。 |
+| B3-03 | 圖示 / 頭像快取寫入不是原子操作；寫壞的檔案會被當成「已快取」，永遠不重抽 | bug | 確認 | P6 | 已修 | `8577638` | 圖示 / 頭像快取寫入非原子，壞檔永遠不重抽。 |
 | B3-04 | 換掉 icon / portrait provider 後，開著的非 modal picker 仍綁著已 Dispose 的 Bitmap | risk | 部分 | P2 | 已修 | `30dd0ce` | Dispose 沒有 _disposed 旗標；Avalonia 畫已 Dispose 的 Bitmap 的行為需執行時確認。 |
-| B3-05 | `LocalizationProvider` 被背景執行緒讀取，同時又在 UI 執行緒上被修改 | risk | 確認 | P6 | 待修 |  | 背景讀、UI 寫同一批 Dictionary；改 immutable snapshot。 |
-| B3-06 | DDS 解碼器的尺寸運算會整數溢位，並且在驗證長度之前就配置記憶體 | risk | 確認 | P6 | 待修 |  | DDS 尺寸運算溢位、先配置後驗證；只在遊戲檔損毀時觸發。 |
-| B3-07 | 快取沒有版本或失效機制：遊戲更新後，圖示與頭像永遠是舊的 | risk | 確認 | P6 | 待修 |  | 快取沒有版本戳記，遊戲更新後不會重抽。 |
+| B3-05 | `LocalizationProvider` 被背景執行緒讀取，同時又在 UI 執行緒上被修改 | risk | 確認 | P6 | 已修 | `8577638` | 背景讀、UI 寫同一批 Dictionary；改 immutable snapshot。 |
+| B3-06 | DDS 解碼器的尺寸運算會整數溢位，並且在驗證長度之前就配置記憶體 | risk | 確認 | P6 | 已修 | `8577638` | DDS 尺寸運算溢位、先配置後驗證；只在遊戲檔損毀時觸發。 |
+| B3-07 | 快取沒有版本或失效機制：遊戲更新後，圖示與頭像永遠是舊的 | risk | 確認 | P6 | 已修 | `8577638` | 快取沒有版本戳記，遊戲更新後不會重抽。 |
 | B3-08 | Character Picker 的 pick mode 寫入 lo24 key，丟掉原值的 cat byte | risk | 待資料 | P5 | 待資料 | `559a80b` | 程式確實寫 lo24；characterinfo 現在有 32-bit hashed key，報告建議的修法會寫壞。需用實際存檔確認。 picker 寫入 characterinfo 列本身的鍵（hashed 列為 32 位元）；60 筆高位元組非 0 的鍵是否帶 cat byte 仍待比對。 |
 | B3-09 | 三個複製按鈕的 handler 是沒有 try/catch 的 `async void`，剪貼簿例外會讓 process 崩潰 | risk | 確認 | P4 | 已修 | `5127921` | 另有第四處 FindItemsWindow。 |
-| B3-10 | 每個載入過的語言都常駐記憶體，切換次要語言會累積 | risk | 確認 | P6 | 待修 |  | 必須在 B3-05 之後做，否則 use-after-dispose。 |
+| B3-10 | 每個載入過的語言都常駐記憶體，切換次要語言會累積 | risk | 確認 | P6 | 已修 | `8577638` | 必須在 B3-05 之後做，否則 use-after-dispose。 |
 | B3-11 | `GameDataLayout.DlcNames` 的檔案系統例外沒有被捕捉，可能讓 app 啟動失敗 | risk | 確認 | P4 | 已修 | `5127921` | DlcNames 的檔案系統例外沒有捕捉，可能讓啟動失敗。 |
 | B3-12 | `LevelGimmickSceneObjectInfoKey` 先查 gimmickinfo 表，兩個 namespace 的數值範圍重疊（Rule 12） | risk | 待資料 | P5 | 待資料 |  | 兩個 TypeName 已共用 PALOC byte 0x00，可能本來就是同一個 namespace；需資料比對。 |
 | B3-13 | 沒有任何測試斷言「最新存檔的每個 key TypeName 都能解析」 | risk | 確認 | P13 | 待修 |  | 沒有「最新存檔每個 TypeName 都能解析」的測試。 |
