@@ -83,7 +83,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 |---|---|---|---|---|---|---|---|
 | B2-01 | File → Exit 呼叫 `desktop.Shutdown()`，繞過未存檔提示 | bug | 確認 | P1 | 已修 | `09394d6` | desktop.Shutdown() 會忽略 e.Cancel；改走 Close()。需實機確認一次。 需實機確認一次。 |
 | B2-02 | 開啟存檔、還原備份、Review→Discard 都經由 `LoadSave`，而 `LoadSave` 不檢查未存檔變更 | bug | 確認 | P1 | 已修 | `09394d6` | Open / Restore 前沒有未存檔確認；Review→Discard 是使用者自己選的，不算缺陷。 |
-| B2-03 | 非 modal 工具視窗在 Open / Save As / Restore 之後仍持有舊路徑與舊索引：讀舊檔、寫新文件 | bug | 確認 | P2 | 待修 |  | 工具視窗用 Show(this)，Load / SaveAs 不關閉；與 B5-01、B4-01、B4-10、B5-02 一起用文件世代 token 修。 |
+| B2-03 | 非 modal 工具視窗在 Open / Save As / Restore 之後仍持有舊路徑與舊索引：讀舊檔、寫新文件 | bug | 確認 | P2 | 已修 | `30dd0ce` | 工具視窗用 Show(this)，Load / SaveAs 不關閉；與 B5-01、B4-01、B4-10、B5-02 一起用文件世代 token 修。 |
 | B2-04 | File → Save 直接綁定 `SaveCommand`：寫檔失敗會讓 process 崩潰並遺失所有編輯 | bug | 確認 | P1 | 已修 | `09394d6` | Save 失敗直接讓 process 崩潰；HMAC_UNVERIFIED（−28）讓這條更容易觸發。 |
 | B2-05 | 備份目標固定是 `save.save` / `lobby.save`，不是實際要被覆寫的檔案 | bug | 確認 | P1 | 已修 | `09394d6` | 備份永遠複製 save.save / lobby.save，*.edited.save 從未被備份。 |
 | B2-06 | Add Dye 流程修改了存檔卻沒有寫 Journal，關閉時不會出現未存檔提示 | bug | 確認 | P1 | 已修 | `09394d6` | Add Dye 不記 Journal；根因是 B2-14 兩個 dirty 來源。 |
@@ -119,7 +119,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B3-01 | 重新 bootstrap 不會重載 PALOC：新安裝的 bridge 配上舊安裝的語言表 | bug | 確認 | P6 | 待修 |  | 重新 bootstrap 不清 catalog / PALOC / mission map；DLC 會被重複 merge。 |
 | B3-02 | `EnsurePortraitList` race：同時開始的頭像載入，大多數拿到 null 並被永久快取 | bug | 確認 | P6 | 待修 |  | 頭像清單 race，null 被永久快取。最容易重現。 |
 | B3-03 | 圖示 / 頭像快取寫入不是原子操作；寫壞的檔案會被當成「已快取」，永遠不重抽 | bug | 確認 | P6 | 待修 |  | 圖示 / 頭像快取寫入非原子，壞檔永遠不重抽。 |
-| B3-04 | 換掉 icon / portrait provider 後，開著的非 modal picker 仍綁著已 Dispose 的 Bitmap | risk | 部分 | P2 | 待修 |  | Dispose 沒有 _disposed 旗標；Avalonia 畫已 Dispose 的 Bitmap 的行為需執行時確認。 |
+| B3-04 | 換掉 icon / portrait provider 後，開著的非 modal picker 仍綁著已 Dispose 的 Bitmap | risk | 部分 | P2 | 已修 | `30dd0ce` | Dispose 沒有 _disposed 旗標；Avalonia 畫已 Dispose 的 Bitmap 的行為需執行時確認。 |
 | B3-05 | `LocalizationProvider` 被背景執行緒讀取，同時又在 UI 執行緒上被修改 | risk | 確認 | P6 | 待修 |  | 背景讀、UI 寫同一批 Dictionary；改 immutable snapshot。 |
 | B3-06 | DDS 解碼器的尺寸運算會整數溢位，並且在驗證長度之前就配置記憶體 | risk | 確認 | P6 | 待修 |  | DDS 尺寸運算溢位、先配置後驗證；只在遊戲檔損毀時觸發。 |
 | B3-07 | 快取沒有版本或失效機制：遊戲更新後，圖示與頭像永遠是舊的 | risk | 確認 | P6 | 待修 |  | 快取沒有版本戳記，遊戲更新後不會重抽。 |
@@ -143,7 +143,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 
 | ID | 標題 | 嚴重度 | 確認 | 批次 | 狀態 | 修正 | 備註 |
 |---|---|---|---|---|---|---|---|
-| B4-01 | Dye 與 Vendor Buyback 沒有 snapshot 過期檢查；其他視窗做了 length-changing 編輯後，會寫到錯的物品 | bug | 確認 | P2 | 待修 |  | Dye 完全成立；Buyback 較窄（只在同一商店的 sold list 被動到時）。 |
+| B4-01 | Dye 與 Vendor Buyback 沒有 snapshot 過期檢查；其他視窗做了 length-changing 編輯後，會寫到錯的物品 | bug | 確認 | P2 | 已修 | `30dd0ce` | Dye 完全成立；Buyback 較窄（只在同一商店的 sold list 被動到時）。 |
 | B4-02 | 「+ Add dye」流程分兩步寫入、失敗時不回復；找不到 `_dyeSlotNo` 時仍回報成功 | bug | 確認 | P3 | 待修 |  | Add dye 兩步寫入、失敗不回復、找不到 _dyeSlotNo 仍回報成功。 |
 | B4-03 | `DyeSlotEditorViewModel.AddSlot`：batch 外先 clone，後續失敗時留下一份完整複製的 element 0 | bug | 確認 | P3 | 待修 |  | AddSlot 在 batch 外 clone，失敗時留下複本。 |
 | B4-04 | `DyeSlotRow` 的原始值在 Apply 後不會更新：改回原值時不會寫入，畫面與存檔不一致 | bug | 確認 | P5 | 待修 |  | _orig* 不更新；第二次 Apply 的 present(1) 在新版 crimson-rs 是 no-op（G-03）。 |
@@ -152,8 +152,8 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B4-07 | `ApplyGemPick` 開啟 socket 後回傳 false：自己的寫入讓之後的編輯全被擋下，也沒有記帳 | bug | 確認 | P3 | 待修 |  | 開了 socket 卻回傳 false，之後的編輯全被擋。 |
 | B4-08 | Apply-Set 的 commit 失敗會回滾存檔，但 row 狀態與 Journal 仍宣稱已套用 | bug | 確認 | P3 | 待修 |  | commit 失敗回滾存檔，但 row 狀態與 Journal 仍宣稱已套用。 |
 | B4-09 | Add Item / Grant：clone 與修改欄位不是原子操作，失敗時留下會讓遊戲崩潰的重複物品 | bug | 確認 | P3 | 待修 |  | clone / batch / new-mark 三次獨立 commit；上游 G-08 讓 batch 內 clone 後寫入變可行。 |
-| B4-10 | Find Items 的「Go」不檢查 snapshot 是否過期，會導航到別的物品 | risk | 確認 | P2 | 待修 |  | Find Items 的 Go 不檢查 IsStale。 |
-| B4-11 | Bulk fill 在「掃描 → 確認對話框 → 套用」之間沒有重新檢查 version | risk | 確認 | P2 | 待修 |  | Bulk fill 確認對話框前後不檢查 version。 |
+| B4-10 | Find Items 的「Go」不檢查 snapshot 是否過期，會導航到別的物品 | risk | 確認 | P2 | 已修 | `30dd0ce` | Find Items 的 Go 不檢查 IsStale。 |
+| B4-11 | Bulk fill 在「掃描 → 確認對話框 → 套用」之間沒有重新檢查 version | risk | 確認 | P2 | 已修 | `30dd0ce` | Bulk fill 確認對話框前後不檢查 version。 |
 | B4-12 | `_itemNo` 唯一性的範圍不一致：Add Item / Grant 只看同一個 list，Contributions 看整個 block | risk | 確認 | P3 | 待修 |  | _itemNo 唯一性範圍不一致。 |
 | B4-13 | Stack fill 忽略 iteminfo 的 `ApplyMaxStackCap` 旗標，會寫出超過上限的數量 | risk | 部分 | P5 | 待修 |  | 只會把已超過上限的 stack 往上取整，不會把未滿的推過上限；仍應尊重 ApplyMaxStackCap。 |
 | B4-14 | 選 slot 0 時把 `_dyeSlotNo` 明確寫成 0；遊戲對 slot 0 的寫法是 absent | risk | 待資料 | P5 | 待資料 |  | 程式確實寫 present 0；遊戲是否接受需掃描存檔。 |
@@ -180,8 +180,8 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 
 | ID | 標題 | 嚴重度 | 確認 | 批次 | 狀態 | 修正 | 備註 |
 |---|---|---|---|---|---|---|---|
-| B5-01 | 非 modal 的 Block 5 工具視窗在開另一個存檔後，仍用舊索引寫進新文件 | bug | 確認 | P2 | 待修 |  | 與 B2-03 同修。Faction Relations / Knowledge / Mount 在套用時依 key 重新解析，只會顯示舊資料。 |
-| B5-02 | 同一份文件內也會過期：Sealed Abyss 重複套用、Contributions 寫到隔壁物品 | bug | 確認 | P2 | 待修 |  | 另：SA 對話框 applied==0 時不重掃，重試會重複 clone FAR。 |
+| B5-01 | 非 modal 的 Block 5 工具視窗在開另一個存檔後，仍用舊索引寫進新文件 | bug | 確認 | P2 | 已修 | `30dd0ce` | 與 B2-03 同修。Faction Relations / Knowledge / Mount 在套用時依 key 重新解析，只會顯示舊資料。 |
+| B5-02 | 同一份文件內也會過期：Sealed Abyss 重複套用、Contributions 寫到隔壁物品 | bug | 確認 | P2 | 已修 | `30dd0ce` | 另：SA 對話框 applied==0 時不重掃，重試會重複 clone FAR。 |
 | B5-03 | 多步驟寫入失敗時留下半套結果，而且成功筆數為 0 時不設 dirty、不記 Journal | bug | 確認 | P3 | 待修 |  | 單筆 Mark 失敗不設 dirty；bulk / knowledge 在 RunDeferred 內 return 會 commit 半套。 |
 | B5-04 | Abyss Gates 的 Lock / Unlock 在狀態改變後不會重新評估 CanExecute | bug | 確認 | P5 | 待修 |  | Lock / Unlock 不重新評估 CanExecute。 |
 | B5-05 | Faction Nodes 的 `_isCapital` 是 bool，卻用只接受整數的 parser，★ 永遠不會顯示 | bug | 確認 | P5 | 待修 |  | _isCapital 是 bool，61 個節點為 true，★ 永遠不顯示（存檔探測確認）。 |
@@ -189,7 +189,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B5-07 | Knowledge 注入以 element 0 為模板，未覆寫的欄位（如 `_level`）全部沿用 | risk | 部分 | P5 | 待修 |  | _level 是 TLevel u32（不是 u8），_list[0] 永遠是 key 1 level 2；遊戲自己的寫法是 level 1、時間與新標記 absent。注入配方已在實機確認可用，需實機 A/B 才能改。 |
 | B5-08 | 非 `CrimsonSaveException` 的例外會讓 process 崩潰 | risk | 確認 | P4 | 待修 |  | 沒有全域例外處理。 |
 | B5-09 | Faction Relations 的 Apply 會默默改寫所有「兩側不一致」的 faction | risk | 確認 | P5 | 待修 |  | Apply 會默默改寫所有兩側不一致的 faction。 |
-| B5-10 | Sealed Abyss 對話框會套用被篩選隱藏、但仍勾選的列 | risk | 確認 | P5 | 待修 |  | 套用被篩選隱藏但仍勾選的列。 |
+| B5-10 | Sealed Abyss 對話框會套用被篩選隱藏、但仍勾選的列 | risk | 確認 | P5 | 已修 | `30dd0ce` | 套用被篩選隱藏但仍勾選的列。 P2 一併修正。 |
 | B5-11 | Mark Challenge 的警告文字仍宣稱「至少持有一件 SA 遺物才會啟用」，但這道檢查已經移除 | risk | 確認 | P8 | 待修 |  | 三語系警告文字仍寫「需持有遺物」。 |
 | B5-12 | Rename Mercenary：清空名稱寫成「present + 長度 0」，長度也沒有上限 | risk | 確認 | P5 | 待修 |  | _mercenaryName 98 筆中 95 筆 absent；清空寫成 present 長度 0、沒有長度上限。 |
 | B5-13 | Mount 對話框允許多列同時解鎖，工具視窗之間的 mutation 也沒有序列化 | risk | 確認 | P3 | 待修 |  | IsBusy 只到列；兩次快速點擊可能算出相同 _itemNo。 |
