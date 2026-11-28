@@ -75,7 +75,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B1-21 | 例外訊息未本地化就直接送到 UI | cleanup | 確認 | P8 | 待修 | `6a8c473` | 純 C# 問題。 原生例外訊息直接顯示，需錯誤碼對應的本地化訊息。 |
 | B1-22 | 檔案規模與重複（只談結構） | cleanup | 確認 | P14 | 待修 |  | 純結構。 |
 | B1-23 | `IItemInfoCatalog` 缺少 `LookupSummary` / `LookupFlags` | cleanup | 確認 | P5 | 已修 | `559a80b` | 純 C# 問題。 |
-| B1-24 | 測試缺口 | cleanup | 部分 | P13 | 待修 |  | B1-01 的 rollback 測試在新版變成有效；C# 仍沒有自己的 layout 測試。 |
+| B1-24 | 測試缺口 | cleanup | 部分 | P13 | 已修 | `fdcbb79` | B1-01 的 rollback 測試在新版變成有效；C# 仍沒有自己的 layout 測試。 7 個 C ABI struct 的大小與 offset 測試；deferred 失敗語意測試（batch 內前面的 op 保留、只有 throw 才回滾）。B1-01 已由既有 abort 測試涵蓋。 |
 
 ### Block 2
 
@@ -110,7 +110,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B2-27 | 過時或錯誤的註解與文件 | cleanup | 確認 | P12 | 已修 | `ff24f9a` `79c7d80` | 多處過時註解；孤立 summary 已在 P0 由註解檢查修掉一部分。 P0 修掉孤立 summary 2 處。 任意深度可編輯、legacy 備份永不 prune、mutex 名稱說明、UiLanguage 偵測來源；Fields 密集排列寫入 BlockDetails 文件並以 live-save 測試釘住。 |
 | B2-28 | `ChangeJournal` 的執行緒安全只是表面上的 | cleanup | 確認 | P6 | 已修 | `8577638` | CollectionChanged 在呼叫端執行緒觸發；目前沒有背景呼叫端。 |
 | B2-29 | 平台探測的穩健性 | cleanup | 確認 | P10 | 已修 | `4cbcef7` | IgnoreInaccessible=false，一個無權限子目錄就讓整個掃描回 null。 EnumerationOptions.IgnoreInaccessible = true。 |
-| B2-30 | 測試缺口 | cleanup | 確認 | P13 | 待修 |  | 沒有 MainWindowViewModel 生命週期測試。 |
+| B2-30 | 測試缺口 | cleanup | 確認 | P13 | 部分 | `fdcbb79` | 沒有 MainWindowViewModel 生命週期測試。 服務層補上無法開啟的備份資料夾、損毀 settings 測試；VM 生命週期測試需先拆出 seam（UiLanguageService 需要 Avalonia Application）。 |
 
 ### Block 3
 
@@ -128,15 +128,15 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B3-10 | 每個載入過的語言都常駐記憶體，切換次要語言會累積 | risk | 確認 | P6 | 已修 | `8577638` | 必須在 B3-05 之後做，否則 use-after-dispose。 |
 | B3-11 | `GameDataLayout.DlcNames` 的檔案系統例外沒有被捕捉，可能讓 app 啟動失敗 | risk | 確認 | P4 | 已修 | `5127921` | DlcNames 的檔案系統例外沒有捕捉，可能讓啟動失敗。 |
 | B3-12 | `LevelGimmickSceneObjectInfoKey` 先查 gimmickinfo 表，兩個 namespace 的數值範圍重疊（Rule 12） | risk | 待資料 | P5 | 待資料 |  | 兩個 TypeName 已共用 PALOC byte 0x00，可能本來就是同一個 namespace；需資料比對。 |
-| B3-13 | 沒有任何測試斷言「最新存檔的每個 key TypeName 都能解析」 | risk | 確認 | P13 | 待修 |  | 沒有「最新存檔每個 TypeName 都能解析」的測試。 |
+| B3-13 | 沒有任何測試斷言「最新存檔的每個 key TypeName 都能解析」 | risk | 確認 | P13 | 已修 | `fdcbb79` | 沒有「最新存檔每個 TypeName 都能解析」的測試。 KeyResolutionCoverageTests + key_resolution_baseline.json（MissionKey 5、StringInfoKey 1 未解析；9 種 key 無 resolver）。 |
 | B3-14 | Rule 4：`UiLanguageService` 直接 P/Invoke `kernel32!GetUserDefaultUILanguage` | rule violation | 確認 | P10 | 已修 | `4cbcef7` | kernel32 P/Invoke 在 Ui；fallback 被 InvariantGlobalization 弄壞。 Core 的 IOsUiLanguage（Win32 LCID / POSIX locale 變數），不依賴 CultureInfo。 |
 | B3-15 | Rule 3：同步 I/O 與長時間工作跑在 UI 執行緒 | rule violation | 確認 | P7 | 已修 | `f3f25a8` | bootstrap、語言載入、180k 掃描、圖示解碼都在 UI 執行緒。 圖示在 converter 解碼一次後快取，未改。 |
 | B3-16 | Rule 7：magic string 散落各處，沒有集中檔案 | rule violation | 確認 | P9 | 已修 | `1836867` | 合併至 magic-strings 批次。 |
 | B3-17 | UI 字串寫死在 C#，沒有進三語系 `Strings/*.axaml` | rule violation | 確認 | P8 | 部分 | `6a8c473` | 合併至 UI 字串批次。 ItemPicker 內部分字串未改。 |
 | B3-18 | `FormatPair` 對只有 internal name 的 key 顯示「X / X」 | cleanup | 確認 | P5 | 已修 | `559a80b` | 只有 internal name 的 key 顯示「X / X」。 |
-| B3-19 | 重複的 helper 與死碼 | cleanup | 確認 | P14 | 待修 |  | LookupUiResourceString 三份、死碼。 |
+| B3-19 | 重複的 helper 與死碼 | cleanup | 確認 | P14 | 部分 | `fdcbb79` | LookupUiResourceString 三份、死碼。 LookupUiResourceString 三份改為 UiText.Find；其餘死碼未處理。 |
 | B3-20 | XML doc 錯置、孤立，以及過時的註解 | cleanup | 確認 | P12 | 已修 | `ff24f9a` `79c7d80` | 孤立 summary 在 P0 已修（4 處）；剩 Avalonia 版本與計數文字。 Avalonia 合併字典推理以 12.2.0 原始碼核對；PALOC 版本敘述與 niche bridge 計數移除。 |
-| B3-21 | `LocalizationProvider.cs`（2,569 行）的結構：可以按職責拆分，DLC 表也重複載入 | cleanup | 確認 | P14 | 待修 |  | DLC 表 merge 後又載入成 resolver；拆分 LocalizationProvider。 |
+| B3-21 | `LocalizationProvider.cs`（2,569 行）的結構：可以按職責拆分，DLC 表也重複載入 | cleanup | 確認 | P14 | 部分 | `fdcbb79` | DLC 表 merge 後又載入成 resolver；拆分 LocalizationProvider。 已 merge 的 DLC 表不再另外載入 resolver；LocalizationProvider 拆分未做。 |
 | B3-22 | 所有載入失敗都靜默吞掉，沒有任何診斷資訊；`UiLanguageService` 用了裸 `catch` | cleanup | 確認 | P4 | 已修 | `5127921` | 16 個空的 catch；改收集 LoadFailures。 |
 
 ### Block 4
@@ -240,7 +240,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B6-29 | 其他文件中的過時事實（`target-py`、DataGrid、game 1.10） | cleanup | 確認 | P12 | 已修 | `79c7d80` | status.md 等過時事實。 target/py、DataGrid、2.06 等過時事實；gamedata_layout.py docstring。status-archive 為凍結歷史，不改。 |
 | B6-30 | `Directory.Packages.props` 註解錯位；測試專案把一長串 transitive 套件提升成直接引用 | cleanup | 確認 | P11 | 已修 | `354681e` | 需決定：精簡測試專案的 transitive 引用。 使用者決定：精簡。 測試專案只留 xunit.v3 / Test.Sdk / runner；註解移到正確位置；ILCompiler 註解去歷史。 |
 | B6-31 | `<NoWarn>IL2104;IL3053</NoWarn>` 的理由已過時，是否仍需要沒有驗證 | cleanup | 部分 | P12 | 已修 | `79c7d80` | NoWarn 在 2026-08-18 已重新驗證仍需要；只有註解過時。 重新 publish 驗證仍需要（僅 DataGrid 12.1.2 觸發），註解改寫並附重驗方法。 |
-| B6-32 | `ClaudeMdSizeTests` 先走完整棵樹才過濾，且沒有跳過 `.venv` | cleanup | 確認 | P13 | 待修 |  | ClaudeMdSizeTests 先走完整棵樹。 |
+| B6-32 | `ClaudeMdSizeTests` 先走完整棵樹才過濾，且沒有跳過 `.venv` | cleanup | 確認 | P13 | 已修 | `fdcbb79` | ClaudeMdSizeTests 先走完整棵樹。 進入目錄前依名稱剪枝；data/out/dist 只在根目錄跳過。 |
 | B6-33 | Build 腳本的小問題 | cleanup | 確認 | P11 | 已修 | `354681e` | build.cmd 退回 PS 5.1 等小問題。 build.cmd 無 pwsh 直接報錯；刪未用變數；Clean 失敗發 warning；Invoke-Step 先歸零。runtime 參數不加（只有 win-x64）。 |
 | B6-34 | `.gitignore` 的矛盾與冗餘規則 | cleanup | 確認 | P11 | 已修 | `354681e` | .gitignore 重複規則。 刪重複規則、.vscode 策略統一、/Backup*/ 只作用於根目錄。 |
 | B6-35 | `tools/` 衛生問題：沒有測試、錯誤路徑 exit 0、handle 洩漏、`sys.path` 指錯位置 | cleanup | 部分 | P11 | 已修 | `354681e` | tools 沒有測試、錯誤路徑 exit 0；paloc 失敗路徑其實有釋放 handle。 tools/tests（60）、exit code、handle try/finally、setup_python_env 檢查 3.12+。ruff 未進 CI（既有 finding）。 |
