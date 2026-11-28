@@ -69,7 +69,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B1-15 | `LoadBlockDetails` 持有 `_cacheLock` 期間做 1–2 秒的 FFI 與 JSON 反序列化 | risk | 確認 | P6 | 已修 | `8577638` | 純 C# 問題。 |
 | B1-16 | `HasStructuralEdit` 與 deferred 狀態不同步 | risk | 確認 | P3 | 已修 | `951ac21` | 新增 −26/−27 部分失敗路徑。 |
 | B1-17 | `RunDeferred` 對 abort 或 commit 失敗的處理不完整 | risk | 確認 | P3 | 已修 | `951ac21` | commit 失敗時 version 現在往前移；take() 之後的 PANIC 不變。 |
-| B1-18 | Rule 7：magic strings 沒有集中管理，錯誤碼名稱表重複 8 份且內容不一致 | rule violation | 確認 | P9 | 已修 | `ff24f9a` | 變嚴重：−26 LIST_PARTIALLY_DECODED、−27 ELEMENT_CLASS_MISMATCH、−28 HMAC_UNVERIFIED 不在常數與 8 份名稱表內。P0 先補常數與單一名稱表。 P0 建立 CrimsonErrorCode 單一名稱表並補 −26/−27/−28；其餘 magic strings 仍在 P9。 |
+| B1-18 | Rule 7：magic strings 沒有集中管理，錯誤碼名稱表重複 8 份且內容不一致 | rule violation | 確認 | P9 | 已修 | `ff24f9a` `1836867` | 變嚴重：−26 LIST_PARTIALLY_DECODED、−27 ELEMENT_CLASS_MISMATCH、−28 HMAC_UNVERIFIED 不在常數與 8 份名稱表內。P0 先補常數與單一名稱表。 P0 建立 CrimsonErrorCode 單一名稱表並補 −26/−27/−28；其餘 magic strings 仍在 P9。 P9 完成其餘 magic strings。 |
 | B1-19 | 整個專案抑制 CA1416，且理由已過時（削弱 Rule 4 的防線） | rule violation | 確認 | P10 | 待修 |  | 純 C# 問題。 |
 | B1-20 | 文件與註解過時或錯置 | cleanup | 確認 | P12 | 待修 |  | ISaveLoader 的「每次成功 mutation 剛好 +1」在新版更錯；NativePaverReader「最新 export」註解過時。 |
 | B1-21 | 例外訊息未本地化就直接送到 UI | cleanup | 確認 | P8 | 待修 | `6a8c473` | 純 C# 問題。 原生例外訊息直接顯示，需錯誤碼對應的本地化訊息。 |
@@ -102,7 +102,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B2-19 | async void handler 與 fire-and-forget 的失敗不會被使用者看到 | risk | 確認 | P4 | 已修 | `5127921` | 六個 async void 工具 handler 沒有 try；SafeFireAndForget 只 Trace。 以全域處理器涵蓋。 |
 | B2-20 | Rule 3：檔案 I/O 與重 FFI 在 UI 執行緒同步執行 | rule violation | 確認 | P7 | 已修 | `f3f25a8` | LoadSave 同步、備份清單在 ctor、DiscoverSaveRoots 每次全樹掃描。 備份檔複製仍在 UI 執行緒（小檔）。 |
 | B2-21 | Rule 6：沒有任何日誌實作（Pre-scan #1 確認） | rule violation | 確認 | P10 | 待修 |  | 沒有任何日誌實作。 |
-| B2-22 | Rule 7：沒有集中的 magic-string 檔（Pre-scan #4，Block 2 範圍確認） | rule violation | 確認 | P9 | 待修 |  | 與 B1-18、B3-16、B4-26、B5-18、B6-24 合併。 |
+| B2-22 | Rule 7：沒有集中的 magic-string 檔（Pre-scan #4，Block 2 範圍確認） | rule violation | 確認 | P9 | 已修 | `1836867` | 與 B1-18、B3-16、B4-26、B5-18、B6-24 合併。 VM 自組 Windows 存檔路徑併入 P10（B2-23）。 |
 | B2-23 | Rule 4：平台相關的路徑知識與具體實作洩漏到 ViewModel / composition root 之外 | rule violation | 確認 | P10 | 待修 |  | VM 自己組 Windows 存檔路徑、直接呼叫 SteamLibraryProbe。 |
 | B2-24 | Rule 12：absent 欄位的型別是由消費端用 schema TypeName 猜出來的 | rule violation | 部分 | P5 | 待上游 | `559a80b` | TypeName 別名表與 *Key→u32 猜測確實是 Rule 12 workaround；i32/u32 風險不成立，實際代價是未知 typedef 無法編輯。需上游為 absent scalar 提供 type_tag。 需 crimson-rs 回報 absent scalar 的 type_tag。 |
 | B2-25 | UI 字串寫死英文，沒有放進三語系資源 | rule violation | 確認 | P8 | 已修 | `6a8c473` | 多處寫死英文。 |
@@ -131,7 +131,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B3-13 | 沒有任何測試斷言「最新存檔的每個 key TypeName 都能解析」 | risk | 確認 | P13 | 待修 |  | 沒有「最新存檔每個 TypeName 都能解析」的測試。 |
 | B3-14 | Rule 4：`UiLanguageService` 直接 P/Invoke `kernel32!GetUserDefaultUILanguage` | rule violation | 確認 | P10 | 待修 |  | kernel32 P/Invoke 在 Ui；fallback 被 InvariantGlobalization 弄壞。 |
 | B3-15 | Rule 3：同步 I/O 與長時間工作跑在 UI 執行緒 | rule violation | 確認 | P7 | 已修 | `f3f25a8` | bootstrap、語言載入、180k 掃描、圖示解碼都在 UI 執行緒。 圖示在 converter 解碼一次後快取，未改。 |
-| B3-16 | Rule 7：magic string 散落各處，沒有集中檔案 | rule violation | 確認 | P9 | 待修 |  | 合併至 magic-strings 批次。 |
+| B3-16 | Rule 7：magic string 散落各處，沒有集中檔案 | rule violation | 確認 | P9 | 已修 | `1836867` | 合併至 magic-strings 批次。 |
 | B3-17 | UI 字串寫死在 C#，沒有進三語系 `Strings/*.axaml` | rule violation | 確認 | P8 | 部分 | `6a8c473` | 合併至 UI 字串批次。 ItemPicker 內部分字串未改。 |
 | B3-18 | `FormatPair` 對只有 internal name 的 key 顯示「X / X」 | cleanup | 確認 | P5 | 已修 | `559a80b` | 只有 internal name 的 key 顯示「X / X」。 |
 | B3-19 | 重複的 helper 與死碼 | cleanup | 確認 | P14 | 待修 |  | LookupUiResourceString 三份、死碼。 |
@@ -168,7 +168,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B4-23 | 掃描時讀取失敗的 block 被靜默跳過，結果不完整也不告知使用者 | risk | 確認 | P4 | 已修 | `5127921` | 掃描讀取失敗的 block 被靜默跳過。 Dye 主清單只避免重複讀取，未顯示數量。 |
 | B4-24 | Rule：五個 UI 字串鍵在三個語系字典中都不存在 | rule violation | 確認 | P8 | 已修 | `ff24f9a` | 五個字串鍵三語系都缺；P0 補上並加鍵值測試。 |
 | B4-25 | Rule：UI 字串寫死在 C#（含原生例外訊息直接顯示） | rule violation | 確認 | P8 | 部分 | `6a8c473` | 寫死英文與原生例外訊息直接顯示。 新增訊息皆已進字典；工具視窗內既有英文狀態與原生例外訊息未全面改。 |
-| B4-26 | Rule 7：magic string 沒有集中；錯誤碼寫成 `-16` 字面值 | rule violation | 確認 | P9 | 待修 |  | 合併至 magic-strings 批次。 |
+| B4-26 | Rule 7：magic string 沒有集中；錯誤碼寫成 `-16` 字面值 | rule violation | 確認 | P9 | 已修 | `1836867` | 合併至 magic-strings 批次。 |
 | B4-27 | Rule 3：同步檔案 I/O 與耗時的 FFI 跑在 UI 執行緒 | rule violation | 確認 | P7 | 部分 | `f3f25a8` | 設定檔 I/O 與 FFI 在 UI 執行緒。 Socket/Buyback 掃描已移到背景；設定檔 I/O 與 dye slot editor（含 brush）未改。 |
 | B4-28 | 文件漂移與錯置的 XML doc | cleanup | 確認 | P12 | 部分 | `ff24f9a` | 孤立 summary 在 P0 已修（SocketEditor）；其餘過時說明。 |
 | B4-29 | 重複的 helper 與死碼 | cleanup | 確認 | P14 | 待修 |  | 重複 helper 與死碼。 |
@@ -197,7 +197,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B5-15 | 掃描時吞掉讀取錯誤，可能讓 `_completedTime` watermark 偏低，也讓清單少項目 | risk | 確認 | P4 | 已修 | `5127921` | 掃描吞讀取錯誤，_completedTime watermark 可能偏低。 SA 預覽清單未顯示略過數量。 |
 | B5-16 | 測試缺口 | risk | 確認 | P13 | 待修 |  | 多個 world 工具沒有測試。 |
 | B5-17 | Rule 3：UI 執行緒上的同步 FFI 與檔案 I/O | rule violation | 部分 | P7 | 已修 | `f3f25a8` | LoadBlockDetails 有快取；同步工作在 Rename、WorldMap 點陣圖、KnowledgeEditor。 |
-| B5-18 | Rule 7：magic strings 分散且重複（Pre-scan #4 在 Block 5 範圍確認） | rule violation | 確認 | P9 | 待修 |  | 合併至 magic-strings 批次。 |
+| B5-18 | Rule 7：magic strings 分散且重複（Pre-scan #4 在 Block 5 範圍確認） | rule violation | 確認 | P9 | 已修 | `1836867` | 合併至 magic-strings 批次。 |
 | B5-19 | UI 字串寫死英文；三語系字典的鍵一致，但用詞不一致 | rule violation | 確認 | P8 | 部分 | `6a8c473` | 另 zh-TW 混用阿比斯之門 / 深淵之門。 狀態標籤與 zh-TW 用詞已改；skip reason 仍為英文診斷字串。 |
 | B5-20 | Rule 12：消費端的 workaround | rule violation | 確認 | P5 | 已修 | `559a80b` | WorldMap 以 " / " 切名稱；TryParseScalarUInt 複製三份。 |
 | B5-21 | 過時或錯置的註解與文件 | cleanup | 確認 | P12 | 部分 | `ff24f9a` | 孤立 summary 在 P0 已修（SA bulk）；其餘過時說明。 |
@@ -232,7 +232,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B6-21 | Rule 9：`tools/inspect/sa-investigations/` 的 8 支腳本都沒有 usage，無參數就直接執行 | rule violation | 確認 | P11 | 待修 |  | 需決定：刪除或補 usage。 使用者決定：刪除。 |
 | B6-22 | Rule 9（跨平台）：`extract_save.py` 建 parser 時就呼叫 `save_root()`，非 Windows 上 `--help` 也會 crash | rule violation | 確認 | P11 | 待修 |  | 已重現：LOCALAPPDATA 未設時 --help 崩潰。 |
 | B6-23 | Rule 10：同一張圖的衍生格式與複本被 commit | rule violation | 確認 | P11 | 待修 |  | 需決定：重複圖檔保留一份。 使用者決定：只留一份。 |
-| B6-24 | Rule 7：路徑與常數散落各處，沒有集中定義 | rule violation | 確認 | P9 | 待修 |  | DLL 路徑重複七處；與 magic-strings 批次合併。 |
+| B6-24 | Rule 7：路徑與常數散落各處，沒有集中定義 | rule violation | 確認 | P9 | 部分 | `1836867` | DLL 路徑重複七處；與 magic-strings 批次合併。 MSBuild 已統一；PowerShell 腳本與 Python 工具的路徑在 P11。 |
 | B6-25 | tools 規則 6：在 Python 裡做 byte 層級解析，並繞過 PyO3 直接用 ctypes 呼叫 C ABI | rule violation | 確認 | P11 | 待修 |  | 需上游提供 missioninfo PyO3 binding。 需請上游提供 missioninfo PyO3 binding。 |
 | B6-26 | `docs/architecture.md` 與現況大幅脫節（Pre-scan #2 確認並補充） | cleanup | 確認 | P12 | 待修 |  | architecture.md 大幅脫節。 |
 | B6-27 | `README.md` / `scripts/README.md` / root `CLAUDE.md` 的建置說明與實際不符 | cleanup | 確認 | P12 | 待修 |  | README / scripts/README 建置說明不符。 |
