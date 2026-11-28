@@ -352,21 +352,17 @@ window-restore quirks, etc.) is in
   never above. Treating it as a sentinel is what let the editor write 65535
   into a gem capped at 100 — a value the engine rejects. When two values look
   like "normal" and "sentinel", check whether one table already explains both.
-- **Inside a deferred batch, you cannot promote a field and then write
-  it in place.** `toggle_one_scalar_presence_in_place` says so in its own
-  comment — *"start/end are stale but the encoder ignores them; they'll be
-  refreshed by the re-decode"* — and in a `RunDeferred` batch that re-decode
-  only happens at commit. So a follow-up `set_scalar_field_path` on the field
-  computes `expected = end - start = 0`, and a 1-byte write fails
-  `LENGTH_MISMATCH`. Immediate mode re-decodes after every call and never
-  shows it, which is exactly why this reached a green test suite: single Fill
-  was covered, Apply-Set (the only `RunDeferred` caller) was not. The way out
-  is the presence surface, which writes from `init_bytes` and never reads
-  start/end — but `present(1)` on an already-present field is a documented
-  no-op, so it takes a `present(0)` + `present(1, value)` pair. **Generalise:
-  a deferred batch changes which mutation primitives are valid, not just how
-  fast they are. Any code path that only ever runs immediate is untested
-  against the deferred contract.**
+- **A deferred batch changes which primitives are valid, not just how fast
+  they are.** Inside a `RunDeferred` batch the tree is re-decoded only at
+  commit, so any code path that has only ever run in immediate mode is
+  untested against the deferred contract. With crimson-rs `ebf7304`
+  vendored: a field promoted inside a batch can be written in place (its
+  length is checked against the schema size, not a stale range);
+  `set_object_list_present(1)` on a list that is already present is a
+  no-op; earlier ops in a batch stay applied when a later one fails (no
+  savepoint), so a batch body throws to abort rather than returning; and
+  the mutation version only moves forward, an abort included. The history
+  is in dev-log.md (2026-11-28).
 - **`(BlockIndex, BagIndex, ItemIndex)` does NOT identify an item.** One
   top-level block hosts several item lists, so the equipped list and the
   quick-use reserve list both address their first item as bag 0 / item 0 —

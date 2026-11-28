@@ -48,7 +48,7 @@ public sealed class KnownDyeServiceTests
     }
 
     /// <summary>
-    /// 2.06 through the palette mapping (crimson-rs PR #125): ten themes, each
+    /// 2.06 through the palette mapping: ten themes, each
     /// with six keys — its own grey (palette 0–8, 9 colours) and five shades of
     /// 20 — so the ten greys belong to one theme each (Her = Grey_1).
     /// </summary>

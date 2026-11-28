@@ -634,6 +634,13 @@
   <!-- 構造的（長さが変わる）保存の警告 -->
   <sys:String x:Key="StructuralEditWarningTitle">構造的な変更 — 読み込めない可能性</sys:String>
   <sys:String x:Key="StructuralEditWarningBody" xml:space="preserve">このセーブには長さが変わる（構造的な）変更が含まれています。封印アビス遺物チャレンジの完了や、リスト項目の追加／削除などです。&#10;&#10;データ自体は正しく書き込まれますが、Crimson Desert 本体のセーブローダーにはバグがあり、一部の高進行度セーブはこうした変更後の読み込みでクラッシュすることがあります。その場での変更（アイテム数・状態・ゲート/フラグの切り替え）は安全です。&#10;&#10;元ファイルのバックアップは保持されます。それでも保存しますか？</sys:String>
+  <sys:String x:Key="HmacRewrapWarningTitle">セーブの整合性チェックに失敗</sys:String>
+  <sys:String x:Key="HmacRewrapWarningBody" xml:space="preserve">このセーブは開いたときに HMAC の検証に失敗しました。ファイルが壊れているか、別のツールで編集された可能性があります。&#10;&#10;保存すると署名し直されるため、ゲームは現在の内容をそのまま受け入れます。元ファイルのバックアップは保持されます。それでも保存しますか？</sys:String>
+  <sys:String x:Key="DyeSlotAdded">{0} を追加しました。色を選んでから適用してください。</sys:String>
+  <sys:String x:Key="DyeSlotAddFailed">{0} を追加できませんでした: {1}（コード {2}）</sys:String>
+  <sys:String x:Key="DyeSlotRemoved">{0} を削除しました。</sys:String>
+  <sys:String x:Key="JournalDyeSlotAdded">{1} に染色 {0} を追加</sys:String>
+  <sys:String x:Key="JournalDyeSlotRemoved">{1} から染色 {0} を削除</sys:String>
 
   <!-- 封印遺物「チャレンジ完了をマーク」確認ダイアログ。Detail は書式文字列：
        {0}=チャレンジキー、{1}=内部名、{2}=ツインキー、{3}=FAR idx、{4}=FAR key、

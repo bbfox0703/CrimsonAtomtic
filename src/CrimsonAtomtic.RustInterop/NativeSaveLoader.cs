@@ -941,6 +941,27 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         }
     }
 
+    public void SetAllowHmacRewrap(bool allow)
+    {
+        CrimsonSaveHandle? cached;
+        lock (_cacheLock)
+        {
+            cached = _cachedHandle;
+        }
+        if (cached is null || cached.IsInvalid)
+        {
+            throw new InvalidOperationException(
+                "No save is currently loaded. Call Load(savePath) before SetAllowHmacRewrap.");
+        }
+
+        var rc = NativeMethods.SetAllowHmacRewrap(cached, allow ? (byte)1 : (byte)0);
+        if (rc != NativeMethods.OK)
+        {
+            throw new CrimsonSaveException(rc,
+                $"crimson_save_set_allow_hmac_rewrap failed: {ErrorName(rc)}");
+        }
+    }
+
     // ── Length-changing edits (PR B) ───────────────────────────────────────
 
     public void ListRemoveElement(
@@ -1623,37 +1644,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         }
     }
 
-    private static string ErrorName(int code) => code switch
-    {
-        NativeMethods.OK                    => "OK",
-        NativeMethods.NULL_ARG              => "NULL_ARG",
-        NativeMethods.INVALID_PATH          => "INVALID_PATH",
-        NativeMethods.IO                    => "IO",
-        NativeMethods.TOO_SMALL             => "TOO_SMALL",
-        NativeMethods.BAD_MAGIC             => "BAD_MAGIC",
-        NativeMethods.UNSUPPORTED_VERSION   => "UNSUPPORTED_VERSION",
-        NativeMethods.PAYLOAD_OUT_OF_RANGE  => "PAYLOAD_OUT_OF_RANGE",
-        NativeMethods.DECOMPRESS            => "DECOMPRESS",
-        NativeMethods.BODY_PARSE            => "BODY_PARSE",
-        NativeMethods.OUT_OF_RANGE          => "OUT_OF_RANGE",
-        NativeMethods.BUFFER_TOO_SMALL      => "BUFFER_TOO_SMALL",
-        NativeMethods.NOT_SCALAR            => "NOT_SCALAR",
-        NativeMethods.LENGTH_MISMATCH       => "LENGTH_MISMATCH",
-        NativeMethods.WRITE_FAILED          => "WRITE_FAILED",
-        NativeMethods.NOT_NAVIGABLE         => "NOT_NAVIGABLE",
-        NativeMethods.NOT_FOUND             => "NOT_FOUND",
-        NativeMethods.LIST_VARIANT_UNSUPPORTED => "LIST_VARIANT_UNSUPPORTED",
-        NativeMethods.NOT_SCALAR_FIELD_KIND => "NOT_SCALAR_FIELD_KIND",
-        NativeMethods.MUTATION_INVALID      => "MUTATION_INVALID",
-        NativeMethods.NOT_INLINE_BYTES      => "NOT_INLINE_BYTES",
-        NativeMethods.BATCH_IN_PROGRESS     => "BATCH_IN_PROGRESS",
-        NativeMethods.BATCH_NOT_OPEN        => "BATCH_NOT_OPEN",
-        NativeMethods.NOT_OBJECT_LIST       => "NOT_OBJECT_LIST",
-        NativeMethods.TRANSPLANT_TYPE_MISSING => "TRANSPLANT_TYPE_MISSING",
-        NativeMethods.TEMPLATE_MISMATCH     => "TEMPLATE_MISMATCH",
-        NativeMethods.PANIC                 => "PANIC",
-        _                                   => $"UNKNOWN({code})",
-    };
+    private static string ErrorName(int code) => CrimsonErrorCode.Name(code);
 }
 
 /// <summary>
@@ -1723,42 +1714,37 @@ internal static partial class NativeMethods
 {
     private const string LibraryName = "crimson_rs";
 
-    // Error codes — must match `c_abi::error` in the Rust source.
-    public const int OK                    = 0;
-    public const int NULL_ARG              = -1;
-    public const int INVALID_PATH          = -2;
-    public const int IO                    = -3;
-    public const int TOO_SMALL             = -4;
-    public const int BAD_MAGIC             = -5;
-    public const int UNSUPPORTED_VERSION   = -6;
-    public const int PAYLOAD_OUT_OF_RANGE  = -7;
-    public const int DECOMPRESS            = -8;
-    public const int BODY_PARSE            = -9;
-    public const int OUT_OF_RANGE          = -10;
-    public const int BUFFER_TOO_SMALL      = -11;
-    public const int NOT_SCALAR            = -12;
-    public const int LENGTH_MISMATCH       = -13;
-    public const int WRITE_FAILED          = -14;
-    public const int NOT_NAVIGABLE         = -15;
-    public const int NOT_FOUND             = -16;
-    // Length-changing edit error codes (PR B).
-    public const int LIST_VARIANT_UNSUPPORTED = -17;
-    public const int NOT_SCALAR_FIELD_KIND    = -18;
-    public const int MUTATION_INVALID         = -19;
-    public const int NOT_INLINE_BYTES         = -20;
-    // Deferred-redecode batch error codes (per
-    // vendor/crimson-rs/docs/save-deferred-redecode.md).
-    public const int BATCH_IN_PROGRESS        = -21;
-    public const int BATCH_NOT_OPEN           = -22;
-    // Object-list presence-toggle error (per
-    // vendor/crimson-rs/docs/dye-editor-scope.md §v2).
-    public const int NOT_OBJECT_LIST          = -23;
-    // Cross-save element errors: a class the element names is missing
-    // from the target schema, and (element templates only) a field whose
-    // kind or size no longer matches the target's same-named field.
-    public const int TRANSPLANT_TYPE_MISSING  = -24;
-    public const int TEMPLATE_MISMATCH        = -25;
-    public const int PANIC                 = -99;
+    // The status codes, named as in the Rust source; values live in CrimsonErrorCode.
+    public const int OK                       = CrimsonErrorCode.Ok;
+    public const int NULL_ARG                 = CrimsonErrorCode.NullArg;
+    public const int INVALID_PATH             = CrimsonErrorCode.InvalidPath;
+    public const int IO                       = CrimsonErrorCode.Io;
+    public const int TOO_SMALL                = CrimsonErrorCode.TooSmall;
+    public const int BAD_MAGIC                = CrimsonErrorCode.BadMagic;
+    public const int UNSUPPORTED_VERSION      = CrimsonErrorCode.UnsupportedVersion;
+    public const int PAYLOAD_OUT_OF_RANGE     = CrimsonErrorCode.PayloadOutOfRange;
+    public const int DECOMPRESS               = CrimsonErrorCode.Decompress;
+    public const int BODY_PARSE               = CrimsonErrorCode.BodyParse;
+    public const int OUT_OF_RANGE             = CrimsonErrorCode.OutOfRange;
+    public const int BUFFER_TOO_SMALL         = CrimsonErrorCode.BufferTooSmall;
+    public const int NOT_SCALAR               = CrimsonErrorCode.NotScalar;
+    public const int LENGTH_MISMATCH          = CrimsonErrorCode.LengthMismatch;
+    public const int WRITE_FAILED             = CrimsonErrorCode.WriteFailed;
+    public const int NOT_NAVIGABLE            = CrimsonErrorCode.NotNavigable;
+    public const int NOT_FOUND                = CrimsonErrorCode.NotFound;
+    public const int LIST_VARIANT_UNSUPPORTED = CrimsonErrorCode.ListVariantUnsupported;
+    public const int NOT_SCALAR_FIELD_KIND    = CrimsonErrorCode.NotScalarFieldKind;
+    public const int MUTATION_INVALID         = CrimsonErrorCode.MutationInvalid;
+    public const int NOT_INLINE_BYTES         = CrimsonErrorCode.NotInlineBytes;
+    public const int BATCH_IN_PROGRESS        = CrimsonErrorCode.BatchInProgress;
+    public const int BATCH_NOT_OPEN           = CrimsonErrorCode.BatchNotOpen;
+    public const int NOT_OBJECT_LIST          = CrimsonErrorCode.NotObjectList;
+    public const int TRANSPLANT_TYPE_MISSING  = CrimsonErrorCode.TransplantTypeMissing;
+    public const int TEMPLATE_MISMATCH        = CrimsonErrorCode.TemplateMismatch;
+    public const int LIST_PARTIALLY_DECODED   = CrimsonErrorCode.ListPartiallyDecoded;
+    public const int ELEMENT_CLASS_MISMATCH   = CrimsonErrorCode.ElementClassMismatch;
+    public const int HMAC_UNVERIFIED          = CrimsonErrorCode.HmacUnverified;
+    public const int PANIC                    = CrimsonErrorCode.Panic;
 
     [StructLayout(LayoutKind.Sequential)]
     public struct CrimsonBlockInfo
@@ -1939,6 +1925,9 @@ internal static partial class NativeMethods
                    StringMarshalling = StringMarshalling.Utf8)]
     public static partial int WriteToFile(CrimsonSaveHandle handle, string path);
 
+    [LibraryImport(LibraryName, EntryPoint = "crimson_save_set_allow_hmac_rewrap")]
+    public static partial int SetAllowHmacRewrap(CrimsonSaveHandle handle, byte allow);
+
     // ── Length-changing edits (PR B) ────────────────────────────────────────
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_save_list_remove_element")]
@@ -2072,8 +2061,7 @@ internal static partial class NativeMethods
     // COMPATIBLE_GAMEDATA_MINORS (vendor/crimson-rs/src/binary/paver.rs).
     // GameDataVersion.ParserTargetMajor / ParserTargetMinor / CompatibleMinors
     // read them here instead of hand-bumping a C# constant every patch — Rust
-    // is the single source of truth. See vendor/crimson-rs/src/c_abi/paver.rs
-    // (minor + compatible set added in commit a3ab5ee, major in 0f2363b).
+    // is the single source of truth. See vendor/crimson-rs/src/c_abi/paver.rs.
 
     // Infallible, direct u16 returns — no error code, no out-pointer.
 
@@ -3423,7 +3411,7 @@ internal static partial class NativeMethods
         out byte outR, out byte outG, out byte outB, out byte outA);
 
     // 2.06: the KnowledgeKey of a palette position's inline CheckKnowledge
-    // (crimson-rs PR #125). NOT_FOUND = unknown group / no condition,
+    //. NOT_FOUND = unknown group / no condition,
     // OUT_OF_RANGE = past the palette, UNSUPPORTED_VERSION = pre-2.06 record.
     [LibraryImport(LibraryName, EntryPoint = "crimson_dye_color_group_info_palette_knowledge_at")]
     public static partial int DyeColorGroupInfoPaletteKnowledgeAt(
@@ -3621,7 +3609,7 @@ internal static partial class NativeMethods
         out IntPtr handle);
 
     // The join through each item's .prefab files (group 0009): every mesh the
-    // outfit lists, so body-type armour resolves too (crimson-rs PR #123).
+    // outfit lists, so body-type armour resolves too.
     [LibraryImport(LibraryName, EntryPoint = "crimson_item_part_prefab_load_from_bytes_with_prefab_pamt",
                    StringMarshalling = StringMarshalling.Utf8)]
     public static unsafe partial int ItemPartPrefabLoadFromBytesWithPrefabPamt(

@@ -78,14 +78,6 @@ public sealed class UiLanguageService
     }
 
     /// <summary>
-    /// Walk <c>App.Resources.MergedDictionaries</c> ONCE at construction
-    /// time and capture each language dictionary's
-    /// <see cref="IResourceProvider"/> by code. After this, every
-    /// <see cref="Apply"/> call is positional — no URI re-parsing per
-    /// swap, no AOT-fragile <c>AbsolutePath</c> dependency in the hot
-    /// path.
-    /// </summary>
-    /// <summary>
     /// Marker key each shipped language dictionary carries with the
     /// language's own code as its value. The XAML compiler in Avalonia
     /// 11.3 inlines <c>&lt;ResourceInclude&gt;</c> targets directly as
@@ -98,6 +90,14 @@ public sealed class UiLanguageService
     /// </summary>
     private const string LangCodeMarkerKey = "__UiLangCode__";
 
+    /// <summary>
+    /// Walk <c>App.Resources.MergedDictionaries</c> ONCE at construction
+    /// time and capture each language dictionary's
+    /// <see cref="IResourceProvider"/> by code. After this, every
+    /// <see cref="Apply"/> call is positional — no URI re-parsing per
+    /// swap, no AOT-fragile <c>AbsolutePath</c> dependency in the hot
+    /// path.
+    /// </summary>
     private void SnapshotDictionaries()
     {
         var merged = _app.Resources.MergedDictionaries;

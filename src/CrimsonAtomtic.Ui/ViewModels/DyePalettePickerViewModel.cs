@@ -93,7 +93,7 @@ public sealed partial class DyePalettePickerViewModel : ObservableObject
         {
             var rgba = catalog.PaletteAt(colorGroupKey, i);
             if (rgba is not { } v) continue;
-            // Which knowledge unlocks this colour in-game (crimson-rs PR #125).
+            // Which knowledge unlocks this colour in-game.
             string? unlockedBy = null;
             if (knowledgeName is not null && catalog.PaletteKnowledgeAt(colorGroupKey, i) is { } k)
             {

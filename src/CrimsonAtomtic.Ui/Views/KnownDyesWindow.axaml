@@ -119,7 +119,7 @@
                             Binding="{Binding ColorName}"
                             IsReadOnly="True"
                             Width="170" />
-        <!-- The palette colours this knowledge unlocks (crimson-rs PR #125). -->
+        <!-- The palette colours this knowledge unlocks. -->
         <DataGridTemplateColumn Header="{DynamicResource KnownDyesColSwatches}" Width="*" CanUserSort="False">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate DataType="vm:KnownDyeRow">

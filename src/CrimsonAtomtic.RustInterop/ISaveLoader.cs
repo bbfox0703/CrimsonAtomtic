@@ -24,12 +24,14 @@ public interface ISaveLoader
     BlockDetails LoadBlockDetails(string savePath, int blockIndex, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Read the loaded handle's monotonic mutation counter. The counter
-    /// starts at 0 on <see cref="Load"/> and bumps by exactly 1 on every
-    /// successful mutation through this interface (<c>SetScalarField</c>,
-    /// <c>ListRemoveElement</c>, batch variants, …). Pure reads
-    /// (<see cref="LoadBlockDetails"/>, <see cref="ListInventoryItems"/>,
-    /// …) DO NOT bump it.
+    /// Read the loaded handle's mutation counter. It starts at 0 on
+    /// <see cref="Load"/> and only moves forward: every mutation bumps it,
+    /// inside a deferred batch too (a failed or partial in-batch mutation
+    /// included), a commit bumps it once more, and an abort or a failed
+    /// commit moves it forward when the batch had changed anything. Two
+    /// equal readings therefore mean the tree did not change in between.
+    /// Pure reads (<see cref="LoadBlockDetails"/>,
+    /// <see cref="ListInventoryItems"/>, …) do not bump it.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -68,7 +70,7 @@ public interface ISaveLoader
     /// <summary>
     /// Commit the deferred batch — runs one
     /// <c>encode + parse + decode_blocks</c> pass over the accumulated
-    /// tree and bumps the mutation version exactly once. Throws
+    /// tree and bumps the mutation version. Throws
     /// <see cref="CrimsonSaveException"/> with code
     /// <c>MUTATION_INVALID</c> when the accumulated tree fails to
     /// encode or re-parse (handle is auto-rolled-back to the
@@ -358,8 +360,21 @@ public interface ISaveLoader
     /// <remarks>
     /// Requires a prior <see cref="Load"/> call. Throws
     /// <see cref="InvalidOperationException"/> when no save is loaded.
+    /// The file is written to a temporary name and renamed over the
+    /// target, so a failed write leaves the old file in place. A save
+    /// whose HMAC did not verify on load (<c>SaveSummary.HmacOk</c>
+    /// false) is refused with <see cref="CrimsonErrorCode.HmacUnverified"/>
+    /// until <see cref="SetAllowHmacRewrap"/> allows it.
     /// </remarks>
     void WriteToFile(string destinationPath);
+
+    /// <summary>
+    /// Allow (or forbid again) <see cref="WriteToFile"/> to re-sign a save
+    /// whose HMAC did not verify when it was loaded. Writing such a save
+    /// replaces a signature the game would have rejected with a valid one,
+    /// so the caller asks the user first. Reset by every <see cref="Load"/>.
+    /// </summary>
+    void SetAllowHmacRewrap(bool allow);
 
     // ── Length-changing edits (PR B) ───────────────────────────────────────
     //

@@ -1043,37 +1043,6 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Make sure the parent item's <c>_validSocketCount</c> covers
-    /// <paramref name="row"/>'s slot index, so the slot is actually
-    /// open in-game. Returns <c>true</c> when the slot is (now) open
-    /// and the caller may write the gem.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Two distinct starting states, and getting them confused is what
-    /// broke socket editing outright:
-    /// </para>
-    /// <list type="bullet">
-    ///   <item><b>Field present</b> (the item has had at least one
-    ///     socket opened): an in-place
-    ///     <see cref="ISaveLoader.SetScalarField"/> raising the u8 is
-    ///     enough.</item>
-    ///   <item><b>Field ABSENT</b> (a never-socketed item — the game's
-    ///     encoding for "zero opened sockets"; it never writes an
-    ///     explicit 0): the field has no byte range, so the in-place
-    ///     setter fails with <c>NOT_SCALAR (-12)</c> and the count
-    ///     stays absent. It has to be promoted absent → present via
-    ///     <see cref="ISaveLoader.SetScalarFieldPresent"/>.</item>
-    /// </list>
-    /// <para>
-    /// The old code only ever did the in-place write and swallowed the
-    /// failure into <c>row.LastError</c>, so every fill on a
-    /// never-socketed item produced a gem in a socket the engine
-    /// considers unopened. The game treats that as bad data and
-    /// re-seals every socket on the item.
-    /// </para>
-    /// </remarks>
-    /// <summary>
     /// True when the save has been mutated by something other than this
     /// dialog since its rows were built, so every row's
     /// <c>(bag, item)</c> element index may now address a different item.
@@ -1148,6 +1117,34 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         return true;
     }
 
+    /// <summary>
+    /// Make sure the parent item's <c>_validSocketCount</c> covers
+    /// <paramref name="row"/>'s slot index, so the slot is actually
+    /// open in-game. Returns <c>true</c> when the slot is (now) open
+    /// and the caller may write the gem.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two distinct starting states, which need different writes:
+    ///
+    /// </para>
+    /// <list type="bullet">
+    ///   <item><b>Field present</b> (the item has had at least one
+    ///     socket opened): an in-place
+    ///     <see cref="ISaveLoader.SetScalarField"/> raising the u8 is
+    ///     enough.</item>
+    ///   <item><b>Field ABSENT</b> (a never-socketed item — the game's
+    ///     encoding for "zero opened sockets"; it never writes an
+    ///     explicit 0): the field has no byte range, so the in-place
+    ///     setter fails with <c>NOT_SCALAR (-12)</c> and the count
+    ///     stays absent. It has to be promoted absent → present via
+    ///     <see cref="ISaveLoader.SetScalarFieldPresent"/>.</item>
+    /// </list>
+    /// <para>
+    /// A gem written into a socket the engine considers unopened is
+    /// bad data to the game, and it re-seals every socket on the item.
+    /// </para>
+    /// </remarks>
     private bool TryEnsureSocketOpened(SocketRow row)
     {
         if (row.ValidSocketCountFieldIdx < 0)

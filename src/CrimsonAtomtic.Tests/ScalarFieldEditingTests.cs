@@ -15,8 +15,8 @@ public sealed class ScalarFieldEditingTests
     [InlineData("1.5 <f32>",       "1.5",      "f32")]
     [InlineData("-7 <i8>",         "-7",       "i8")]
     [InlineData("100 bytes <bytes>", "100 bytes", "bytes")]
-    // Composite-scalar tags landed in vendor/crimson-rs commit 94c7a96
-    // (typed F32x3 / F32x4 / U32x4 ScalarValue variants). The raw value
+    // Composite-scalar tags (the typed F32x3 / F32x4 / U32x4 ScalarValue
+    // variants). The raw value
     // is bracketed and comma-separated; the LastIndexOf-space split
     // still puts the trailing "<tag>" cleanly on the tag side.
     [InlineData("[1.5, 2, -3.25] <f32x3>",          "[1.5, 2, -3.25]",          "f32x3")]

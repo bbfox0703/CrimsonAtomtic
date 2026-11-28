@@ -317,14 +317,5 @@ public static class NativeSideQuestFaction
         return Encoding.UTF8.GetString(buf, 0, (int)required - 1);
     }
 
-    private static string ErrorName(int code) => code switch
-    {
-        NativeMethods.OK                    => "OK",
-        NativeMethods.NULL_ARG              => "NULL_ARG",
-        NativeMethods.OUT_OF_RANGE          => "OUT_OF_RANGE",
-        NativeMethods.BUFFER_TOO_SMALL      => "BUFFER_TOO_SMALL",
-        NativeMethods.NOT_FOUND             => "NOT_FOUND",
-        NativeMethods.PANIC                 => "PANIC",
-        _                                   => $"UNKNOWN({code})",
-    };
+    private static string ErrorName(int code) => CrimsonErrorCode.Name(code);
 }

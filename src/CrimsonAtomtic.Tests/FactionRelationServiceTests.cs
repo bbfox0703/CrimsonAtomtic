@@ -204,7 +204,7 @@ public sealed class FactionRelationServiceTests(ITestOutputHelper output)
 
     /// <summary>
     /// A faction node has no name of its own; it names a knowledge row whose
-    /// title is the place the game shows (crimson-rs PR #118).
+    /// title is the place the game shows.
     /// </summary>
     [Fact]
     public void FactionNodePlaceNames_Live()
@@ -224,7 +224,7 @@ public sealed class FactionRelationServiceTests(ITestOutputHelper output)
 
     /// <summary>
     /// dlc_01's copies of factionnode / knowledge / faction / characterinfo
-    /// are merged into the base handles (crimson-rs PR #119), so DLC rows
+    /// are merged into the base handles, so DLC rows
     /// resolve too. Skipped on an install without the DLC.
     /// </summary>
     [Fact]

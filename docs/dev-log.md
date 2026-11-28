@@ -28,6 +28,40 @@ read from the top.
 
 -----
 
+## 2026-11-28 (no release) — Code audit P0: crimson-rs ebf7304, error codes, HMAC re-sign, comment rules
+
+- **What changes:** the 2026-11-28 code audit (168 findings in six blocks) is verified and tracked in
+  [code-audit-2026-11-28-control.md](code-audit-2026-11-28-control.md); this is its first fix batch.
+  - crimson-rs is vendored at `ebf7304` (96 commits, crimson-rs's own audit). No export was removed
+    or renamed and no signature changed: all 298 C# entry points match (checked mechanically).
+  - The mutation version now only moves forward: every in-batch mutation bumps it, commit bumps it
+    again, and an abort that rolled changes back moves it forward. That alone fixes B1-01, the
+    details cache serving rolled-back data after an abort. Four deferred tests pinned the old
+    contract (abort restores the version, commit bumps exactly once); they now pin the new one, and
+    the abort test also reads inside the batch, which is the case B1-01 described.
+  - `CrimsonErrorCode` is the one public list of status codes and names. The eight per-file name
+    tables delegate to it, and it has the three new codes: −26 `LIST_PARTIALLY_DECODED`,
+    −27 `ELEMENT_CLASS_MISMATCH`, −28 `HMAC_UNVERIFIED` (B1-18).
+  - crimson-rs now refuses to write a save whose HMAC failed on load. Save and Save As ask first
+    (the file may be damaged or edited by another tool), then call the new
+    `crimson_save_set_allow_hmac_rewrap`; headless hosts never re-sign (X-01).
+  - The five dye-slot status and journal strings the slot editor used had no entry in any language
+    (B4-24); they exist in all three now.
+  - Comment rules from UE5CEDumper, adapted: [code-comments.md](code-comments.md), gated by
+    `CommentRulesTests`. Line references, audit / PR / commit ids and stacked `<summary>` blocks
+    must be zero; history phrases are a per-file ratchet (43 lines in 22 files at the start, target
+    zero). P0 cleared 10 stacked doc blocks (each moved onto its member, or dropped when the member
+    is gone) and 25 PR / commit ids.
+- **Found on the way:** status.md's gotcha "you cannot promote a field and then write it in place
+  inside a batch" is no longer true with this crimson-rs (the length is checked against the schema
+  size); it now states the current deferred contract. The audit agents' leftovers are done: the
+  test baseline (453 green at `fad6d47`), the full symbol comparison, the string-key comparison
+  (852 keys, identical in all three dictionaries) and three report errata.
+- **Tests:** baseline 453; with the new crimson-rs 4 deferred tests failed on the old contract and
+  pass on the new one; `CommentRulesTests` adds 4.
+
+-----
+
 ## 2026-11-28 (no release) — Every CLAUDE.md is capped at 40 KB
 
 - **What changes:** root CLAUDE.md's Rule 0 now caps every `CLAUDE.md` at 40,960 bytes, the limit

@@ -6,8 +6,8 @@ namespace CrimsonAtomtic.Tests;
 
 /// <summary>
 /// The Dye editor's slot numbers: an item offers the dye slot numbers its
-/// meshes' masks flag (crimson-rs PR #122), unioned over every mesh its
-/// prefabs list and every body type (PR #123). They are the save's
+/// meshes' masks flag, unioned over every mesh its
+/// prefabs list and every body type. They are the save's
 /// <c>_dyeSlotNo</c> values — sparse, not 0..N-1 over sub-meshes.
 /// </summary>
 public sealed class DyeSlotNumberTests
@@ -44,7 +44,7 @@ public sealed class DyeSlotNumberTests
 
     /// <summary>
     /// dlc_01's items join through the DLC's own prefabs once merged
-    /// (crimson-rs PR #124). Skipped on an install without the DLC.
+    ///. Skipped on an install without the DLC.
     /// </summary>
     [Fact]
     public void DlcItems_ResolveAfterTheMerge()

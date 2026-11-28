@@ -136,14 +136,8 @@ public sealed class NativeDyeColorGroupInfoCatalog : IDisposable
     }
 
     /// <summary>
-    /// Logical RGBA at the given palette position. The four bytes are
-    /// in <c>(R, G, B, A)</c> order — ready to write straight into the
-    /// save's <c>_dyeColorR/G/B/A</c> u8 scalars. Returns null when the
-    /// key or position is out of range.
-    /// </summary>
-    /// <summary>
     /// The knowledge that unlocks palette position <paramref name="positionIdx"/>
-    /// (2.06 inline <c>CheckKnowledge</c>, crimson-rs PR #125). On 2.06 every
+    /// (2.06 inline <c>CheckKnowledge</c>). On 2.06 every
     /// group uses six: positions 0–8 its own <c>Knowledge_Grey_DyeColor_n</c>,
     /// then 20 positions per <c>Knowledge_&lt;Theme&gt;_DyeColor_1..5</c>.
     /// Null for an unknown group, a position past the palette, an ungated
@@ -194,6 +188,12 @@ public sealed class NativeDyeColorGroupInfoCatalog : IDisposable
         }
     }
 
+    /// <summary>
+    /// Logical RGBA at the given palette position. The four bytes are
+    /// in <c>(R, G, B, A)</c> order — ready to write straight into the
+    /// save's <c>_dyeColorR/G/B/A</c> u8 scalars. Returns null when the
+    /// key or position is out of range.
+    /// </summary>
     public (byte R, byte G, byte B, byte A)? PaletteAt(uint colorGroupKey, int positionIdx)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -565,7 +565,7 @@ public sealed class NativePartPrefabDyeSlotInfoCatalog : IDisposable
     /// The dye slot numbers the prefab offers — the <c>_dyeSlotNo</c> values
     /// a save's dye elements use — ascending. Each slot's three material
     /// channels carry a dye slot number in <c>mat_indices</c>, and the
-    /// 12-byte mask flags which numbers are dyeable (crimson-rs PR #122);
+    /// 12-byte mask flags which numbers are dyeable;
     /// this is the union over the prefab's slots and extra layers. The
     /// numbers are sparse (e.g. 0, 1, 2, 4, 5, 6). Null when the prefab
     /// isn't in the table.
@@ -926,11 +926,6 @@ public sealed class NativeItemPartPrefabCatalog : IDisposable
     }
 
     /// <summary>
-    /// Number of items with at least one resolvable partprefab key.
-    /// Useful for diagnostics — divide by iteminfo's total item count
-    /// to get a coverage estimate.
-    /// </summary>
-    /// <summary>
     /// Build the join through each item's <c>.prefab</c> files in
     /// <paramref name="prefabPamtPath"/> (<c>&lt;game&gt;/0009/0.pamt</c>): a
     /// prefab lists every mesh of the outfit, so body-type armour resolves
@@ -1053,6 +1048,11 @@ public sealed class NativeItemPartPrefabCatalog : IDisposable
         }
     }
 
+    /// <summary>
+    /// Number of items with at least one resolvable partprefab key.
+    /// Useful for diagnostics — divide by iteminfo's total item count
+    /// to get a coverage estimate.
+    /// </summary>
     public int ResolvedItemCount
     {
         get

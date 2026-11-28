@@ -597,7 +597,7 @@ public sealed partial class DyeSlotRow : ObservableObject
         _fields = fields;
         SlotIndex = slotIndex;
         SlotNo = slotNo;
-        // An absent _dyeSlotNo reads as dye slot 0 (crimson-rs PR #122).
+        // An absent _dyeSlotNo reads as dye slot 0.
         SlotLabel = $"Slot {(slotNo >= 0 ? slotNo : 0)}";
         MaterialLayers = materialLayers;
         _r = r; _g = g; _b = b; _a = a; _grime = grime;
@@ -677,7 +677,7 @@ public sealed partial class DyeSlotRow : ObservableObject
             }
         }
         // Gamedata material hint. _dyeSlotNo is the prefab's dye slot
-        // number (crimson-rs PR #122), and an absent field reads as 0.
+        // number, and an absent field reads as 0.
         var materialLayers =
             localization.DescribeDyeSlot(itemRow.ItemKey, slotNo >= 0 ? slotNo : 0)
             ?? string.Empty;
@@ -850,8 +850,8 @@ public sealed record DyeMaterialOption(uint Key, string PrimaryMaterialName, int
 
 /// <summary>
 /// Dropdown option for the dye theme (<c>_dyeColorGroupInfoKey</c>): the
-/// game's theme name ("Hernandian Dye / 埃爾南德染劑 (Her)", crimson-rs
-/// PR #125) when the PALOC has it, else the internal name.
+/// game's theme name ("Hernandian Dye / 埃爾南德染劑 (Her)") when the
+/// PALOC has it, else the internal name.
 /// </summary>
 public sealed record DyeColorGroupOption(uint Key, string Name, string? DisplayName = null)
 {

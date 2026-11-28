@@ -14,9 +14,8 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 /// dye (+ Add action). Slot counts come from the
 /// <c>partprefabdyeslotinfo</c> gamedata table via
 /// <see cref="LocalizationProvider.LookupDyeSlotCount"/>, so the Add
-/// flow can present a real slot picker instead of forcing every new
-/// element onto slot 0 (the soundness bug that pulled the original
-/// + Add UX back out in commit 5b107d4).
+/// flow presents a real slot picker: putting every new element on slot 0
+/// writes dye the item does not have.
 /// </summary>
 public sealed partial class DyeEditorViewModel : ObservableObject
 {

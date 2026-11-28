@@ -78,8 +78,8 @@ public sealed class NativePaverReaderTests
 
     /// <summary>
     /// A 2.04+ stamp on an install without DLC: the list is present with a
-    /// count of 0. crimson-rs read <c>build</c> as 0 here until PR #103;
-    /// the version gate never depended on it, so this pins both.
+    /// count of 0, and <c>build</c> follows the empty list. The version
+    /// gate does not depend on <c>build</c>; this pins both.
     /// </summary>
     [Fact]
     public void TryReadFromBytes_DlcLessStamp_ReadsBuildAndIsCompatible()

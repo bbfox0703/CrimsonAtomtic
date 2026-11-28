@@ -971,13 +971,6 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Tools → Browse Items. Same degrade-silently rule as Browse
-    /// Localization: needs an iteminfo bridge loaded to be useful,
-    /// so skip opening when no items are available — the status
-    /// footer is the user-facing signal that bootstrap didn't find
-    /// the install.
-    /// </summary>
-    /// <summary>
     /// File → Restore from Backup… opens the picker dialog. The dialog
     /// surfaces every backup currently under
     /// %LOCALAPPDATA%\CrimsonAtomtic\Backups\; click-Restore on a row
@@ -1652,6 +1645,13 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Tools → Browse Items. Same degrade-silently rule as Browse
+    /// Localization: needs an iteminfo bridge loaded to be useful,
+    /// so skip opening when no items are available — the status
+    /// footer is the user-facing signal that bootstrap didn't find
+    /// the install.
+    /// </summary>
     private void OnBrowseItemsClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is MainWindowViewModel vm)

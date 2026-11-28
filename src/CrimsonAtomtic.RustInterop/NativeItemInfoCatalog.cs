@@ -429,19 +429,7 @@ public sealed class NativeItemInfoCatalog : IItemInfoCatalog
         _handle.Dispose();
     }
 
-    private static string ErrorName(int code) => code switch
-    {
-        NativeMethods.OK                    => "OK",
-        NativeMethods.NULL_ARG              => "NULL_ARG",
-        NativeMethods.INVALID_PATH          => "INVALID_PATH",
-        NativeMethods.IO                    => "IO",
-        NativeMethods.BODY_PARSE            => "BODY_PARSE",
-        NativeMethods.OUT_OF_RANGE          => "OUT_OF_RANGE",
-        NativeMethods.BUFFER_TOO_SMALL      => "BUFFER_TOO_SMALL",
-        NativeMethods.NOT_FOUND             => "NOT_FOUND",
-        NativeMethods.PANIC                 => "PANIC",
-        _                                   => $"UNKNOWN({code})",
-    };
+    private static string ErrorName(int code) => CrimsonErrorCode.Name(code);
 }
 
 /// <summary>

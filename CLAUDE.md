@@ -64,6 +64,7 @@ auto-detection. Cross-platform goal: Windows (must), Linux, macOS.
 - **Refactoring**: when asked to refactor/rename, change the code (move files, update imports, rename classes) — not just docs.
 - **Debugging**: verify a fix against the actual bytes / data structure it touches, not the expected shape.
 - **PRs**: before `gh pr create`, run `git status` and `git log --oneline -5`; resolve any divergence.
+- **Code comments**: say why, never restate the code; no history, line numbers, audit / PR ids, enumerations to keep in sync, unenforced "only" claims or plan wording — [docs/code-comments.md](docs/code-comments.md), gated by `CommentRulesTests`.
 - **Push target**: `origin` only — never `upstream` or any remote the user does not own.
 - **Images**: if either side of an image is over 2,000 px, view a downscaled copy (an oversized image ends the session).
 

@@ -628,6 +628,13 @@
        when the pending edits change the body length. -->
   <sys:String x:Key="StructuralEditWarningTitle">Structural edit — may not load</sys:String>
   <sys:String x:Key="StructuralEditWarningBody" xml:space="preserve">This save has length-changing (structural) edits, such as completing a sealed abyss artifact challenge or adding/removing list items.&#10;&#10;The data is written correctly, but Crimson Desert's own save loader has a bug that can make some heavily-progressed saves crash on load after such an edit. In-place edits (item counts, states, gate/flag toggles) are safe.&#10;&#10;A backup of the original is kept. Save anyway?</sys:String>
+  <sys:String x:Key="HmacRewrapWarningTitle">Save failed its integrity check</sys:String>
+  <sys:String x:Key="HmacRewrapWarningBody" xml:space="preserve">This save's HMAC did not verify when it was opened: the file may be damaged or edited by another tool.&#10;&#10;Saving re-signs it, so the game will accept whatever it now contains. A backup of the original is kept. Save anyway?</sys:String>
+  <sys:String x:Key="DyeSlotAdded">Added {0}. Pick its colour, then Apply.</sys:String>
+  <sys:String x:Key="DyeSlotAddFailed">Could not add {0}: {1} (code {2})</sys:String>
+  <sys:String x:Key="DyeSlotRemoved">Removed {0}.</sys:String>
+  <sys:String x:Key="JournalDyeSlotAdded">Added dye {0} to {1}</sys:String>
+  <sys:String x:Key="JournalDyeSlotRemoved">Removed dye {0} from {1}</sys:String>
 
   <!-- Sealed-artifact "Mark Challenge Complete" confirm dialog. Detail is a
        format string: {0}=challenge key, {1}=internal name, {2}=twin key,

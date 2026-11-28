@@ -39,7 +39,7 @@ public readonly record struct DyeSwatch(byte R, byte G, byte B);
 /// Cal, Bar, Tom, Por) × 5 shades, Grey × 10 and 50 dye items. The exact
 /// position → knowledge mapping comes from
 /// <see cref="CrimsonAtomtic.RustInterop.NativeDyeColorGroupInfoCatalog.PaletteKnowledgeAt"/>
-/// (crimson-rs PR #125): each theme's 109 colours use six keys, its own grey
+///: each theme's 109 colours use six keys, its own grey
 /// (positions 0–8, Grey_1 for Her … Grey_10 for Bar) and its five shades
 /// (20 positions each). The 50 dye items gate nothing in the palette; they
 /// are the journal's "dye recipes" collection.

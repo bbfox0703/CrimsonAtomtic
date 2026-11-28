@@ -2092,9 +2092,11 @@ public sealed class NativeSaveLoaderTests
     // Contract from vendor/crimson-rs/docs/save-deferred-redecode.md:
     // - begin doesn't nest (BATCH_IN_PROGRESS on second open).
     // - end / abort with no batch open returns BATCH_NOT_OPEN.
-    // - end commits + bumps mutation_version exactly once for the
-    //   whole batch.
-    // - abort restores blocks + mutation_version to pre-begin state.
+    // - the mutation version only moves forward: every in-batch
+    //   mutation bumps it, commit bumps it again, and an abort that
+    //   rolled changes back moves it forward too, so a cached read is
+    //   never mistaken for the current tree.
+    // - abort restores the blocks to the pre-begin state.
     // - WriteToFile is rejected mid-batch (BATCH_IN_PROGRESS).
     //
     // These tests pin the C# wiring against the live save; the
@@ -2120,38 +2122,48 @@ public sealed class NativeSaveLoaderTests
         ReadOnlySpan<byte> sentinel = [0xAB, 0xCD, 0xEF, 0x01];
         loader.SetScalarField(0, 0, sentinel);
 
+        // A read inside the batch sees the in-progress tree.
+        var inBatch = loader.LoadBlockDetails(path, 0);
+        Assert.NotEqual(beforeValue, inBatch.Fields[0].Value);
+        var versionInBatch = loader.GetMutationVersion();
+        Assert.True(versionInBatch > versionBefore);
+
         loader.AbortDeferredRedecode();
         Assert.False(loader.IsDeferredRedecodeOpen());
 
-        // mutation_version + block 0 field 0 must be back to pre-begin.
-        Assert.Equal(versionBefore, loader.GetMutationVersion());
+        // The tree is back to pre-begin, and the version moved forward, so
+        // neither the pre-batch nor the in-batch read can be served from
+        // the details cache.
+        Assert.True(loader.GetMutationVersion() > versionInBatch);
         var after = loader.LoadBlockDetails(path, 0);
         Assert.Equal(beforeValue, after.Fields[0].Value);
     }
 
     [Fact]
-    public void DeferredRedecode_EndBumpsVersionExactlyOnce()
+    public void DeferredRedecode_VersionMovesForwardOnEveryMutationAndCommit()
     {
         var path = FindLiveSave();
         if (path is null) return;
         using var loader = new NativeSaveLoader();
         loader.Load(path);
-        var versionBefore = loader.GetMutationVersion();
+        var version = loader.GetMutationVersion();
 
         loader.BeginDeferredRedecode();
-        // Three separate scalar mutations — in normal mode each
-        // bumps the version (so versionAfter == versionBefore + 3).
-        // Inside a deferred batch, end_* bumps once.
         ReadOnlySpan<byte> a = [0xAB, 0xCD, 0xEF, 0x01];
         ReadOnlySpan<byte> b = [0x12, 0x34, 0x56, 0x78];
         ReadOnlySpan<byte> c = [0xDE, 0xAD, 0xBE, 0xEF];
         loader.SetScalarField(0, 0, a);
+        Assert.True(loader.GetMutationVersion() > version);
+        version = loader.GetMutationVersion();
         loader.SetScalarField(0, 0, b);
+        Assert.True(loader.GetMutationVersion() > version);
+        version = loader.GetMutationVersion();
         loader.SetScalarField(0, 0, c);
+        Assert.True(loader.GetMutationVersion() > version);
+        version = loader.GetMutationVersion();
         loader.EndDeferredRedecode();
 
-        var versionAfter = loader.GetMutationVersion();
-        Assert.Equal(versionBefore + 1, versionAfter);
+        Assert.True(loader.GetMutationVersion() > version);
 
         // Last write wins — the committed body should reflect c, not a/b.
         var after = loader.LoadBlockDetails(path, 0);
@@ -2240,7 +2252,7 @@ public sealed class NativeSaveLoaderTests
         });
 
         Assert.False(loader.IsDeferredRedecodeOpen());
-        Assert.Equal(versionBefore + 1, loader.GetMutationVersion());
+        Assert.True(loader.GetMutationVersion() > versionBefore);
     }
 
     [Fact]
@@ -2265,9 +2277,9 @@ public sealed class NativeSaveLoaderTests
         });
         Assert.Equal("synthetic mid-batch failure", thrown.Message);
 
-        // Abort rolled the mutation back: version + field 0 unchanged.
+        // Abort rolled the mutation back: field 0 unchanged, version moved on.
         Assert.False(loader.IsDeferredRedecodeOpen());
-        Assert.Equal(versionBefore, loader.GetMutationVersion());
+        Assert.True(loader.GetMutationVersion() > versionBefore);
         var after = loader.LoadBlockDetails(path, 0);
         Assert.Equal(beforeValue, after.Fields[0].Value);
     }

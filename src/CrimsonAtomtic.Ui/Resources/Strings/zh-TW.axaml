@@ -633,6 +633,13 @@
   <!-- 結構性（會改變長度）的儲存警告 -->
   <sys:String x:Key="StructuralEditWarningTitle">結構性變更 — 可能無法載入</sys:String>
   <sys:String x:Key="StructuralEditWarningBody" xml:space="preserve">此存檔包含會改變長度的（結構性）變更，例如完成封印阿比斯神器挑戰或新增／移除清單項目。&#10;&#10;資料本身寫入正確，但《赤色沙漠》自家的存檔讀取器有一個臭蟲，可能讓某些高進度存檔在這類變更後載入時崩潰。就地變更（道具數量、狀態、開關旗標）則不受影響。&#10;&#10;原始檔案已保留備份。仍要儲存嗎？</sys:String>
+  <sys:String x:Key="HmacRewrapWarningTitle">存檔完整性檢查失敗</sys:String>
+  <sys:String x:Key="HmacRewrapWarningBody" xml:space="preserve">此存檔開啟時 HMAC 驗證失敗：檔案可能已損毀，或被其他工具修改過。&#10;&#10;儲存會重新簽章，遊戲將接受它目前的內容。原始檔案已保留備份。仍要儲存嗎？</sys:String>
+  <sys:String x:Key="DyeSlotAdded">已新增 {0}。請選擇顏色後再套用。</sys:String>
+  <sys:String x:Key="DyeSlotAddFailed">無法新增 {0}：{1}（代碼 {2}）</sys:String>
+  <sys:String x:Key="DyeSlotRemoved">已移除 {0}。</sys:String>
+  <sys:String x:Key="JournalDyeSlotAdded">為 {1} 新增染色 {0}</sys:String>
+  <sys:String x:Key="JournalDyeSlotRemoved">從 {1} 移除染色 {0}</sys:String>
 
   <!-- 封印神器「將挑戰標記為完成」確認對話框。Detail 為格式字串：
        {0}=挑戰鍵值、{1}=內部名稱、{2}=孿生鍵值、{3}=FAR 索引、{4}=FAR 鍵值、

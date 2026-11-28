@@ -496,20 +496,6 @@ public sealed partial class MainWindowViewModel(
     public string? SecondaryLanguage => localization.SecondaryLanguage;
 
     /// <summary>
-    /// Pick a secondary language by code, or pass null to revert to
-    /// English-only. Persists the choice via <see cref="AppSettingsStore"/>
-    /// so the next launch reloads it. After the swap, refreshes the
-    /// currently-displayed fields so their resolved names update in place.
-    /// </summary>
-    /// <summary>
-    /// Re-seed the icon provider against the fixed
-    /// <c>%LOCALAPPDATA%\CrimsonAtomtic\IconCache\</c> directory and
-    /// invalidate the Bitmap cache so newly-extracted .webp files
-    /// surface in already-rendered DataGrids without a restart.
-    /// Open Item Picker windows aren't refreshed here — they hold
-    /// their own VMs and need close + reopen for the new icons.
-    /// </summary>
-    /// <summary>
     /// Persist a user-picked Crimson Desert install folder + re-bootstrap
     /// the localization provider against it. Validates the witness file
     /// (<c>0020\0.pamt</c>) before writing settings so a misclick can't
@@ -560,6 +546,14 @@ public sealed partial class MainWindowViewModel(
         return true;
     }
 
+    /// <summary>
+    /// Re-seed the icon provider against the fixed
+    /// <c>%LOCALAPPDATA%\CrimsonAtomtic\IconCache\</c> directory and
+    /// invalidate the Bitmap cache so newly-extracted .webp files
+    /// surface in already-rendered DataGrids without a restart.
+    /// Open Item Picker windows aren't refreshed here — they hold
+    /// their own VMs and need close + reopen for the new icons.
+    /// </summary>
     public void RefreshIconCache()
     {
         var displaced = localization.ConfigureIconProvider(
@@ -589,6 +583,12 @@ public sealed partial class MainWindowViewModel(
         }
     }
 
+    /// <summary>
+    /// Pick a secondary language by code, or pass null to revert to
+    /// English-only. Persists the choice via <see cref="AppSettingsStore"/>
+    /// so the next launch reloads it. After the swap, refreshes the
+    /// currently-displayed fields so their resolved names update in place.
+    /// </summary>
     public void SetSecondaryLanguage(string? langCode)
     {
         localization.SecondaryLanguage = langCode;
@@ -1097,18 +1097,16 @@ public sealed partial class MainWindowViewModel(
     public bool HasSave => Summary is not null;
 
     /// <summary>
-    /// Whether the Dye editor may be opened. Off from 2.01 until 2026-11-27.
+    /// Whether the Dye editor may be opened.
     ///
     /// <para>
-    /// 2.01 widened <c>partprefabdyeslotinfo</c>'s per-slot mask from 3 bytes
-    /// to 12, and the legacy 3-byte getter then read a third of all slots as
-    /// blank (2,304 of 6,955 on 2.06). crimson-rs PR #122 decoded it: each
-    /// material channel's <c>mat_indices</c> entry is a dye slot number, and
-    /// mask byte <c>n</c> flags dye slot <c>n</c>; the save's
-    /// <c>_dyeSlotNo</c> is that number. The editor now offers the prefab's
-    /// dye slot numbers (<see cref="LocalizationProvider.LookupDyeSlotNumbers"/>)
-    /// instead of a sub-mesh count and no longer reads the legacy mask, so it
-    /// is back on. The save side is confirmed only on a 1.10 save upstream.
+    /// In <c>partprefabdyeslotinfo</c> each material channel's
+    /// <c>mat_indices</c> entry is a dye slot number, mask byte <c>n</c>
+    /// flags dye slot <c>n</c>, and the save's <c>_dyeSlotNo</c> is that
+    /// number. The editor offers the prefab's dye slot numbers
+    /// (<see cref="LocalizationProvider.LookupDyeSlotNumbers"/>), never a
+    /// sub-mesh count or the 3-byte legacy mask, which cannot describe the
+    /// 12-byte mask the game data has.
     /// </para>
     /// </summary>
 #pragma warning disable CA1822 // must stay an instance member: the menu
@@ -2264,31 +2262,6 @@ public sealed partial class MainWindowViewModel(
         }
     }
 
-    /// <summary>
-    /// Tools menu: walk every Sealed Abyss Artifact item currently in
-    /// the user's inventory, look up the catalog mission each one
-    /// gates via <c>iteminfo.look_detail_mission_info</c>, and apply
-    /// Pattern B v1 to every challenge that's eligible (FAR tracker
-    /// present + not yet at state=5 + X_2 follow-up sub-mission key
-    /// known).
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Bulk variant of the per-row "Mark Challenge Complete" button.
-    /// Per-challenge writes are the exact same Pattern B v1 mutation
-    /// set (5–6 length-changing FFI calls per challenge, sequential
-    /// — no batch ABI for the clone op yet). Failures on individual
-    /// challenges are reported but don't abort the sweep; partial
-    /// progress is captured in the journal.
-    /// </para>
-    /// <para>
-    /// <b>Why iterate by held artifact</b> (not by every catalog
-    /// SA row): we can only safely complete challenges whose matching
-    /// artifact the user actually holds (the engine's gating signal
-    /// at reward claim time). Iterating from the artifact side keeps
-    /// the "I hold X, complete the matching Y" invariant tight.
-    /// </para>
-    /// </remarks>
     /// <summary>
     /// Pre-flight scan exposed for the Sealed Abyss preview dialog (and
     /// any future caller): enumerate every eligible SA-artifact challenge
@@ -5410,7 +5383,7 @@ public sealed partial class MainWindowViewModel(
         {
             return;
         }
-        if (!await ConfirmStructuralEditOrAbortAsync())
+        if (!await ConfirmStructuralEditOrAbortAsync() || !await ConfirmHmacRewrapOrAbortAsync())
         {
             return;
         }
@@ -5481,6 +5454,37 @@ public sealed partial class MainWindowViewModel(
     }
 
     /// <summary>
+    /// Gate a write of a save whose HMAC did not verify on load. crimson-rs
+    /// refuses such a write until it is allowed explicitly, because it
+    /// replaces a signature the game would reject with a valid one: the
+    /// file may be damaged or edited by another tool. Returns <c>true</c>
+    /// when the save verified or the user agreed; headless hosts (no
+    /// <see cref="ConfirmRequested"/>) are not allowed to re-sign.
+    /// </summary>
+    private async Task<bool> ConfirmHmacRewrapOrAbortAsync()
+    {
+        if (Summary is not { HmacOk: false })
+        {
+            return true;
+        }
+        if (ConfirmRequested is not { } ask)
+        {
+            return false;
+        }
+        var proceed = await ask(
+            UiText.Get("HmacRewrapWarningTitle", "Save failed its integrity check"),
+            UiText.Get("HmacRewrapWarningBody",
+                "This save's HMAC did not verify when it was opened: the file may be damaged "
+                + "or edited by another tool.\n\nSaving re-signs it, so the game will accept "
+                + "whatever it now contains. A backup of the original is kept. Save anyway?"));
+        if (proceed)
+        {
+            loader.SetAllowHmacRewrap(true);
+        }
+        return proceed;
+    }
+
+    /// <summary>
     /// Save to a user-chosen path. The View invokes this after running
     /// the SaveFilePicker. Re-anchors the working document to the new
     /// path (subsequent Saves go there), matching standard "Save As"
@@ -5493,7 +5497,7 @@ public sealed partial class MainWindowViewModel(
         {
             return;
         }
-        if (!await ConfirmStructuralEditOrAbortAsync())
+        if (!await ConfirmStructuralEditOrAbortAsync() || !await ConfirmHmacRewrapOrAbortAsync())
         {
             return;
         }

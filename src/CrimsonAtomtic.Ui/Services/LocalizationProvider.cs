@@ -729,12 +729,6 @@ public sealed class LocalizationProvider : IDisposable
     }
 
     /// <summary>
-    /// Load each DLC's copy of the key tables. A DLC table holds only that
-    /// DLC's rows, so <see cref="ResolveKeyTableOne"/> asks it after the base
-    /// bridge misses. Each table degrades on its own, and a table a DLC ships
-    /// no body for simply registers nothing.
-    /// </summary>
-    /// <summary>
     /// Merge each DLC's copy of the faction-node, knowledge, faction and
     /// character tables into the base handles, so DLC rows resolve like base
     /// ones: place names of DLC nodes (most name a DLC knowledge row), DLC
@@ -772,6 +766,12 @@ public sealed class LocalizationProvider : IDisposable
         _factionMembers = null; // member lists now include DLC characters
     }
 
+    /// <summary>
+    /// Load each DLC's copy of the key tables. A DLC table holds only that
+    /// DLC's rows, so <see cref="ResolveKeyTableOne"/> asks it after the base
+    /// bridge misses. Each table degrades on its own, and a table a DLC ships
+    /// no body for simply registers nothing.
+    /// </summary>
     private void TryBootstrapDlcKeyTables(string gameRoot)
     {
         _dlcBridges.ForEach(b => b.Dispose());
@@ -1432,7 +1432,7 @@ public sealed class LocalizationProvider : IDisposable
 
     /// <summary>
     /// The item → dye-row join through each item's <c>.prefab</c> files
-    /// (crimson-rs PR #123), built on first use because it reads group 0009
+    ///, built on first use because it reads group 0009
     /// and takes about 2 s. It reaches body-type armour, which the name join
     /// behind <see cref="ItemPartPrefab"/> misses (909 of 917 dyeable items
     /// on 2.06, against 70). Null when the install can't provide it.
@@ -1476,7 +1476,7 @@ public sealed class LocalizationProvider : IDisposable
     }
 
     /// <summary>
-    /// Merge each installed DLC's items into the dye join (crimson-rs PR #124):
+    /// Merge each installed DLC's items into the dye join:
     /// on 2.06 dlc_01 adds 89 items, 82 of its 85 DLC-only dyeable ones; the
     /// DLC meshes' dye rows are already in the base table. Skipped without the
     /// DLC's prefab group; a failed merge leaves the join as it was.
@@ -1514,7 +1514,7 @@ public sealed class LocalizationProvider : IDisposable
     /// its save dye elements — ascending and often sparse (0, 1, 7, …): the
     /// union over every mesh of the item's prefabs and every body type. Each
     /// slot's material channels name a dye slot number and the 12-byte mask
-    /// flags the dyeable ones (crimson-rs PR #122). Null when the item has no
+    /// flags the dyeable ones. Null when the item has no
     /// dye rows or the join is unavailable. The first call builds the join.
     /// </summary>
     public IReadOnlyList<int>? LookupDyeSlotNumbers(uint itemKey)
@@ -2020,11 +2020,6 @@ public sealed class LocalizationProvider : IDisposable
     }
 
     /// <summary>
-    /// The place name of a faction node as the game shows it ("Hernand
-    /// Castle" / "埃爾南德城"), primary and secondary language. A node has no
-    /// name of its own; it names a knowledge row whose title is the place.
-    /// </summary>
-    /// <summary>
     /// A dye theme's name as the game shows it, English and secondary
     /// language: ("Hernandian Dye", "埃爾南德染劑"). (null, null) when the
     /// table or the PALOC lacks it.
@@ -2045,6 +2040,11 @@ public sealed class LocalizationProvider : IDisposable
         return (english, secondary);
     }
 
+    /// <summary>
+    /// The place name of a faction node as the game shows it ("Hernand
+    /// Castle" / "埃爾南德城"), primary and secondary language. A node has no
+    /// name of its own; it names a knowledge row whose title is the place.
+    /// </summary>
     public (string? English, string? Secondary) ResolveFactionNodeName(uint nodeKey)
     {
         if (_factionNodeInfo is not { } nodes || _knowledgeInfo is not { } knowledge)
@@ -2088,7 +2088,7 @@ public sealed class LocalizationProvider : IDisposable
     /// <summary>
     /// What two relation groups are to each other by default — the stance a
     /// faction takes toward another when the save has no relation row between
-    /// them: War or BloodAlly (game data, crimson-rs PR #121). Null for an
+    /// them: War or BloodAlly (game data). Null for an
     /// unknown group or a group with itself.
     /// </summary>
     public FactionRelation? GroupRelation(uint groupA, uint groupB) =>
