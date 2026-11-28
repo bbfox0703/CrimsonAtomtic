@@ -81,23 +81,23 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 
 | ID | 標題 | 嚴重度 | 確認 | 批次 | 狀態 | 修正 | 備註 |
 |---|---|---|---|---|---|---|---|
-| B2-01 | File → Exit 呼叫 `desktop.Shutdown()`，繞過未存檔提示 | bug | 確認 | P1 | 待修 |  | desktop.Shutdown() 會忽略 e.Cancel；改走 Close()。需實機確認一次。 |
-| B2-02 | 開啟存檔、還原備份、Review→Discard 都經由 `LoadSave`，而 `LoadSave` 不檢查未存檔變更 | bug | 確認 | P1 | 待修 |  | Open / Restore 前沒有未存檔確認；Review→Discard 是使用者自己選的，不算缺陷。 |
+| B2-01 | File → Exit 呼叫 `desktop.Shutdown()`，繞過未存檔提示 | bug | 確認 | P1 | 已修 | `09394d6` | desktop.Shutdown() 會忽略 e.Cancel；改走 Close()。需實機確認一次。 需實機確認一次。 |
+| B2-02 | 開啟存檔、還原備份、Review→Discard 都經由 `LoadSave`，而 `LoadSave` 不檢查未存檔變更 | bug | 確認 | P1 | 已修 | `09394d6` | Open / Restore 前沒有未存檔確認；Review→Discard 是使用者自己選的，不算缺陷。 |
 | B2-03 | 非 modal 工具視窗在 Open / Save As / Restore 之後仍持有舊路徑與舊索引：讀舊檔、寫新文件 | bug | 確認 | P2 | 待修 |  | 工具視窗用 Show(this)，Load / SaveAs 不關閉；與 B5-01、B4-01、B4-10、B5-02 一起用文件世代 token 修。 |
-| B2-04 | File → Save 直接綁定 `SaveCommand`：寫檔失敗會讓 process 崩潰並遺失所有編輯 | bug | 確認 | P1 | 待修 |  | Save 失敗直接讓 process 崩潰；HMAC_UNVERIFIED（−28）讓這條更容易觸發。 |
-| B2-05 | 備份目標固定是 `save.save` / `lobby.save`，不是實際要被覆寫的檔案 | bug | 確認 | P1 | 待修 |  | 備份永遠複製 save.save / lobby.save，*.edited.save 從未被備份。 |
-| B2-06 | Add Dye 流程修改了存檔卻沒有寫 Journal，關閉時不會出現未存檔提示 | bug | 確認 | P1 | 待修 |  | Add Dye 不記 Journal；根因是 B2-14 兩個 dirty 來源。 |
+| B2-04 | File → Save 直接綁定 `SaveCommand`：寫檔失敗會讓 process 崩潰並遺失所有編輯 | bug | 確認 | P1 | 已修 | `09394d6` | Save 失敗直接讓 process 崩潰；HMAC_UNVERIFIED（−28）讓這條更容易觸發。 |
+| B2-05 | 備份目標固定是 `save.save` / `lobby.save`，不是實際要被覆寫的檔案 | bug | 確認 | P1 | 已修 | `09394d6` | 備份永遠複製 save.save / lobby.save，*.edited.save 從未被備份。 |
+| B2-06 | Add Dye 流程修改了存檔卻沒有寫 Journal，關閉時不會出現未存檔提示 | bug | 確認 | P1 | 已修 | `09394d6` | Add Dye 不記 Journal；根因是 B2-14 兩個 dirty 來源。 |
 | B2-07 | `CommitFieldEditAsync` / `MakeFieldAbsent`：mutation 成功後的重新讀取不在 try 內 | bug | 確認 | P4 | 待修 |  | mutation 後的重新讀取在 try 外，且早於 IsDirty / Journal。 |
-| B2-08 | 寫檔不是原子操作；備份失敗時仍照樣覆寫 | risk | 部分 | P1 | 待修 |  | 上游已改為 temp + fsync + rename（半修）；C# 的「備份失敗仍照寫」與缺 OS 錯誤細節仍在。 |
-| B2-09 | 存檔前沒有偵測「載入後檔案已被外部修改」，也沒有偵測遊戲是否在執行；mtime 回填會掩蓋這件事 | risk | 確認 | P1 | 待修 |  | 存檔前不檢查外部修改；mtime 回填會掩蓋。 |
-| B2-10 | mtime 保留使用本地時間 API；備份時間戳記也用本地時間 | risk | 部分 | P1 | 待修 |  | 只有備份資料夾用本地時間命名、可能被錯刪是真的；mtime 來回轉換在同 process 內無損，未重現。 |
-| B2-11 | 還原 `Unknown` 平台的備份時，會寫進「最近使用的 launcher」的正式存檔樹 | risk | 確認 | P1 | 待修 |  | Unknown 平台還原到 discovered[0]；註解也錯。 |
-| B2-12 | 還原不是原子操作，可能讓 `save.save` 與 `lobby.save` 不同步；目前狀態不會先備份 | risk | 確認 | P1 | 待修 |  | 還原不是原子操作，殘留舊 lobby.save；不先備份是有寫明的設計，但仍改為先移到 PreRestore。 |
-| B2-13 | 還原對話框看不出平台；`ListBackups` 的 I/O 例外會讓 app 崩潰 | risk | 確認 | P4 | 待修 |  | 還原清單看不出平台；ListBackups 的 I/O 例外會讓 app 崩潰。另：還原視窗可重複開啟。 |
-| B2-14 | 「是否有未存檔變更」有兩個來源（`IsDirty` 與 `Journal`），而工具視窗只在關閉時才同步 | risk | 確認 | P1 | 待修 |  | IsDirty 與 Journal 兩個來源；改為由 mutation version 推導。 |
+| B2-08 | 寫檔不是原子操作；備份失敗時仍照樣覆寫 | risk | 部分 | P1 | 已修 | `09394d6` | 上游已改為 temp + fsync + rename（半修）；C# 的「備份失敗仍照寫」與缺 OS 錯誤細節仍在。 |
+| B2-09 | 存檔前沒有偵測「載入後檔案已被外部修改」，也沒有偵測遊戲是否在執行；mtime 回填會掩蓋這件事 | risk | 確認 | P1 | 已修 | `09394d6` | 存檔前不檢查外部修改；mtime 回填會掩蓋。 需實機確認一次。 |
+| B2-10 | mtime 保留使用本地時間 API；備份時間戳記也用本地時間 | risk | 部分 | P1 | 已修 | `09394d6` | 只有備份資料夾用本地時間命名、可能被錯刪是真的；mtime 來回轉換在同 process 內無損，未重現。 |
+| B2-11 | 還原 `Unknown` 平台的備份時，會寫進「最近使用的 launcher」的正式存檔樹 | risk | 確認 | P1 | 已修 | `09394d6` | Unknown 平台還原到 discovered[0]；註解也錯。 |
+| B2-12 | 還原不是原子操作，可能讓 `save.save` 與 `lobby.save` 不同步；目前狀態不會先備份 | risk | 確認 | P1 | 已修 | `09394d6` | 還原不是原子操作，殘留舊 lobby.save；不先備份是有寫明的設計，但仍改為先移到 PreRestore。 |
+| B2-13 | 還原對話框看不出平台；`ListBackups` 的 I/O 例外會讓 app 崩潰 | risk | 確認 | P4 | 已修 | `09394d6` | 還原清單看不出平台；ListBackups 的 I/O 例外會讓 app 崩潰。另：還原視窗可重複開啟。 |
+| B2-14 | 「是否有未存檔變更」有兩個來源（`IsDirty` 與 `Journal`），而工具視窗只在關閉時才同步 | risk | 確認 | P1 | 已修 | `09394d6` | IsDirty 與 Journal 兩個來源；改為由 mutation version 推導。 |
 | B2-15 | 通用欄位編輯器的「absent ≠ 0」語意沒有任何防護 | risk | 確認 | P5 | 待修 |  | absent 欄位輸入 0 沒有警告；Make absent 沒有確認。 |
 | B2-16 | `ScalarFieldEditing.TryEncode` 接受 NaN、Infinity，以及溢位後變成 ∞ 的浮點數 | risk | 確認 | P5 | 待修 |  | TryEncode 接受 NaN / ∞ / 溢位成 ∞ 的值。 |
-| B2-17 | `AppSettingsStore`：非原子寫入、檔案損毀後靜默重置、`TrySave` 的回傳值全被忽略 | risk | 部分 | P1 | 待修 |  | 非原子寫入與損毀時靜默重置是真的；「全部忽略 TrySave」太廣（CustomGemSets 有檢查，WorldMap 也忽略）。 |
+| B2-17 | `AppSettingsStore`：非原子寫入、檔案損毀後靜默重置、`TrySave` 的回傳值全被忽略 | risk | 部分 | P1 | 已修 | `09394d6` | 非原子寫入與損毀時靜默重置是真的；「全部忽略 TrySave」太廣（CustomGemSets 有檢查，WorldMap 也忽略）。 |
 | B2-18 | 單一執行個體保護（Rule 2）的邊界情況 | risk | 確認 | P10 | 待修 |  | Global\ mutex 沒有 try；WinExe 用 Console.Error。多使用者情境需實機。 |
 | B2-19 | async void handler 與 fire-and-forget 的失敗不會被使用者看到 | risk | 確認 | P4 | 待修 |  | 六個 async void 工具 handler 沒有 try；SafeFireAndForget 只 Trace。 |
 | B2-20 | Rule 3：檔案 I/O 與重 FFI 在 UI 執行緒同步執行 | rule violation | 確認 | P7 | 待修 |  | LoadSave 同步、備份清單在 ctor、DiscoverSaveRoots 每次全樹掃描。 |
@@ -256,7 +256,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | X-04 | ResolveDyeSlotCount 的意義改為 dye-slot bit 數；LookupSlotCount 是 sub-mesh 數 | cleanup | 確認 | P12 | 待修 |  | 目前沒有 UI 呼叫 ResolveDyeSlotCount；更新 C# 文件。 |
 | X-05 | Transplant 在同一個 handle 內已允許，C# 端的禁止可放寬 | cleanup | 確認 | P3 | 待修 |  | 上游 G-15。 |
 | X-06 | FindItemsWindow 使用 ThemeAccentBrush2 / ThemeBorderLowBrush / ThemeForegroundBrush，Fluent 主題沒有定義 | bug | 確認 | P8 | 待修 |  | 字串鍵比對時發現；需確認畫面上是否失色。 |
-| X-07 | 還原備份視窗是非 modal、fire-and-forget，可重複開啟並同時還原 | bug | 確認 | P1 | 待修 |  | Block 2 確認時發現。 |
+| X-07 | 還原備份視窗是非 modal、fire-and-forget，可重複開啟並同時還原 | bug | 確認 | P1 | 已修 | `09394d6` | Block 2 確認時發現。 |
 | X-08 | 註解規則（docs/code-comments.md）與 CommentRulesTests：行號、稽核/PR/commit id、重複 summary 歸零；歷史語句 ratchet | rule | 確認 | P0/P12 | 部分 | `ff24f9a` | 使用者要求，參考 UE5CEDumper。 P0：行號/ID/重複 summary 歸零，歷史語句 ratchet 基準 43 行（22 檔）。 |
 
 ## 統計（確認後）
