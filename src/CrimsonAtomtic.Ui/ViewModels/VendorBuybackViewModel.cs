@@ -35,22 +35,22 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 public sealed partial class VendorBuybackViewModel : ObservableObject
 {
     /// <summary>Top-level class carrying the per-store buyback lists.</summary>
-    private const string StoreSaveDataClass = "StoreSaveData";
+    private const string StoreSaveDataClass = SaveSchemaNames.StoreSaveData;
 
     /// <summary>Field name of the object-list of stores on the singleton.</summary>
-    private const string StoreListFieldName = "_storeDataList";
+    private const string StoreListFieldName = SaveSchemaNames.StoreDataList;
 
     /// <summary>Field name of the per-store buyback object-list.</summary>
-    private const string BuybackListFieldName = "_storeSoldItemDataList";
+    private const string BuybackListFieldName = SaveSchemaNames.StoreSoldItemDataList;
 
     /// <summary>Per-store scalar identifying which store this is.</summary>
-    private const string StoreKeyFieldName = "_storeKey";
+    private const string StoreKeyFieldName = SaveSchemaNames.StoreKey;
 
     /// <summary>Per-item scalars on each <c>ItemSaveData</c> element.</summary>
     private const string ItemKeyFieldName    = "_itemKey";
-    private const string StackCountFieldName = "_stackCount";
+    private const string StackCountFieldName = SaveSchemaNames.StackCount;
     private const string EnduranceFieldName  = "_endurance";
-    private const string TimePushedFieldName = "_timeWhenPushItem";
+    private const string TimePushedFieldName = SaveSchemaNames.TimeWhenPushItem;
 
     private readonly ISaveLoader _loader;
     private readonly LocalizationProvider _localization;

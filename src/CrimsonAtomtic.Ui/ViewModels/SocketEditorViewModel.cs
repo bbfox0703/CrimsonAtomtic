@@ -53,8 +53,8 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 /// </remarks>
 public sealed partial class SocketEditorViewModel : ObservableObject
 {
-    private const string SocketListFieldName = "_socketSaveDataList";
-    private const string ItemKeyFieldName = "_itemKey";
+    private const string SocketListFieldName = SaveSchemaNames.SocketSaveDataList;
+    private const string ItemKeyFieldName = SaveSchemaNames.ItemKey;
 
     /// <summary>
     /// Field name carrying the durability for greater (durability-
@@ -62,7 +62,7 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     /// <c>iteminfo.max_endurance</c> on every Fill / Change so a fresh
     /// gem doesn't inherit the previous slot's worn value.
     /// </summary>
-    private const string EnduranceFieldName = "_currentEndurance";
+    private const string EnduranceFieldName = SaveSchemaNames.CurrentEndurance;
 
     /// <summary>
     /// u8 field on the parent <c>ItemSaveData</c> capturing how many of
@@ -72,7 +72,7 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     /// Filling a slot whose index is &gt;= this value raises it; see
     /// <see cref="TryEnsureSocketOpened"/>.
     /// </summary>
-    private const string ValidSocketCountFieldName = "_validSocketCount";
+    private const string ValidSocketCountFieldName = SaveSchemaNames.ValidSocketCount;
 
     /// <summary>
     /// Fallback "fresh gem" endurance, used only when the gem key is

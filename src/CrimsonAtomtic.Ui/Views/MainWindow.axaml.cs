@@ -1319,7 +1319,7 @@ public sealed partial class MainWindow : Window
         }
         if (cursor is null) return null;
         var slotNo = cursor.Fields.FirstOrDefault(
-            f => string.Equals(f.Name, "_dyeSlotNo", StringComparison.Ordinal));
+            f => string.Equals(f.Name, SaveSchemaNames.DyeSlotNo, StringComparison.Ordinal));
         return slotNo?.FieldIndex;
     }
 

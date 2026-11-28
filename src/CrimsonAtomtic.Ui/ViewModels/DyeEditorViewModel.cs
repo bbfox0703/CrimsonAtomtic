@@ -28,9 +28,9 @@ public sealed partial class DyeEditorViewModel : ObservableObject
     /// this is field index 14 in 1.07 — but we look up by name so a
     /// patch that reorders fields doesn't break us.
     /// </summary>
-    public const string DyeListFieldName = "_itemDyeDataList";
+    public const string DyeListFieldName = SaveSchemaNames.ItemDyeDataList;
 
-    private const string ItemKeyFieldName = "_itemKey";
+    private const string ItemKeyFieldName = SaveSchemaNames.ItemKey;
 
     private readonly ISaveLoader _loader;
     private readonly LocalizationProvider _localization;

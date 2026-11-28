@@ -84,15 +84,15 @@ public sealed record FactionRelationApplyResult(int Applied, string? Error, int 
 /// </remarks>
 public sealed class FactionRelationService(ISaveLoader loader)
 {
-    private const string FactionClass = "FactionSaveData";
-    private const string ElementList = "_factionElementSaveDataList";
-    private const string RelationList = "_factionRelationDataList";
-    private const string OwnerField = "_ownerFactionKey";
-    private const string LeaderField = "_leaderCharacterKey";
-    private const string GroupField = "_relationGroupKey";
-    private const string TargetField = "_targetFactionKey";
-    private const string TypeField = "_relationTypeRaw";
-    private const string DueDateField = "_dueDate";
+    private const string FactionClass = SaveSchemaNames.FactionSaveData;
+    private const string ElementList = SaveSchemaNames.FactionElementSaveDataList;
+    private const string RelationList = SaveSchemaNames.FactionRelationDataList;
+    private const string OwnerField = SaveSchemaNames.OwnerFactionKey;
+    private const string LeaderField = SaveSchemaNames.LeaderCharacterKey;
+    private const string GroupField = SaveSchemaNames.RelationGroupKey;
+    private const string TargetField = SaveSchemaNames.TargetFactionKey;
+    private const string TypeField = SaveSchemaNames.RelationTypeRaw;
+    private const string DueDateField = SaveSchemaNames.DueDate;
 
     /// <summary><c>CharacterKey</c> of Kliff, the player character.</summary>
     private const uint PlayerCharacterKey = 1;

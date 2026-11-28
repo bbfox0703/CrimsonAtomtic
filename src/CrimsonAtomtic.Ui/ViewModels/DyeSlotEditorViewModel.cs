@@ -29,7 +29,7 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 public sealed partial class DyeSlotEditorViewModel : ObservableObject
 {
     /// <summary>Class name of each element of <c>_itemDyeDataList</c>.</summary>
-    public const string DyeElementClass = "ItemDyeSaveData";
+    public const string DyeElementClass = SaveSchemaNames.ItemDyeSaveData;
 
     private readonly ISaveLoader _loader;
     private readonly LocalizationProvider _localization;
@@ -198,7 +198,7 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
                 var slotSet = false;
                 foreach (var f in element.Fields)
                 {
-                    if (f.Name == "_dyeSlotNo")
+                    if (f.Name == SaveSchemaNames.DyeSlotNo)
                     {
                         // The game stores dye slot 0 as an absent _dyeSlotNo.
                         if (pick.SlotIndex == 0)
@@ -359,14 +359,14 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
         {
             switch (f.Name)
             {
-                case "_dyeSlotNo":            ix.SlotNo = f.FieldIndex; break;
-                case "_dyeColorR":            ix.R = f.FieldIndex; break;
-                case "_dyeColorG":            ix.G = f.FieldIndex; break;
-                case "_dyeColorB":            ix.B = f.FieldIndex; break;
-                case "_dyeColorA":            ix.A = f.FieldIndex; break;
-                case "_grimeOpacity":         ix.Grime = f.FieldIndex; break;
-                case "_dyeColorGroupInfoKey": ix.ColorGroup = f.FieldIndex; break;
-                case "_texturePalleteKey":    ix.Material = f.FieldIndex; break;
+                case SaveSchemaNames.DyeSlotNo:            ix.SlotNo = f.FieldIndex; break;
+                case SaveSchemaNames.DyeColorR:            ix.R = f.FieldIndex; break;
+                case SaveSchemaNames.DyeColorG:            ix.G = f.FieldIndex; break;
+                case SaveSchemaNames.DyeColorB:            ix.B = f.FieldIndex; break;
+                case SaveSchemaNames.DyeColorA:            ix.A = f.FieldIndex; break;
+                case SaveSchemaNames.GrimeOpacity:         ix.Grime = f.FieldIndex; break;
+                case SaveSchemaNames.DyeColorGroupInfoKey: ix.ColorGroup = f.FieldIndex; break;
+                case SaveSchemaNames.TexturePalleteKey:    ix.Material = f.FieldIndex; break;
                 case "_disableSymbol":        ix.DisableSymbol = f.FieldIndex; break;
             }
         }
@@ -688,28 +688,28 @@ public sealed partial class DyeSlotRow : ObservableObject
         {
             switch (f.Name)
             {
-                case "_dyeSlotNo":
+                case SaveSchemaNames.DyeSlotNo:
                     if (f.Present && TryParseI8(f.Value, out var sn)) slotNo = sn;
                     break;
-                case "_dyeColorR":
+                case SaveSchemaNames.DyeColorR:
                     if (f.Present && TryParseU8(f.Value, out var rv)) { r = rv; rPres = true; }
                     break;
-                case "_dyeColorG":
+                case SaveSchemaNames.DyeColorG:
                     if (f.Present && TryParseU8(f.Value, out var gv)) { g = gv; gPres = true; }
                     break;
-                case "_dyeColorB":
+                case SaveSchemaNames.DyeColorB:
                     if (f.Present && TryParseU8(f.Value, out var bv)) { b = bv; bPres = true; }
                     break;
-                case "_dyeColorA":
+                case SaveSchemaNames.DyeColorA:
                     if (f.Present && TryParseU8(f.Value, out var av)) { a = av; aPres = true; }
                     break;
-                case "_grimeOpacity":
+                case SaveSchemaNames.GrimeOpacity:
                     if (f.Present && TryParseI8(f.Value, out var grv)) { grime = grv; grimePres = true; }
                     break;
-                case "_dyeColorGroupInfoKey":
+                case SaveSchemaNames.DyeColorGroupInfoKey:
                     if (f.Present && TryParseU32(f.Value, out var cgv)) { colorGroupKey = cgv; cgPres = true; }
                     break;
-                case "_texturePalleteKey":
+                case SaveSchemaNames.TexturePalleteKey:
                     if (f.Present && TryParseU16(f.Value, out var mkv)) { materialKey = mkv; matPres = true; }
                     break;
             }

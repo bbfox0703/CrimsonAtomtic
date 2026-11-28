@@ -55,19 +55,19 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
     public const uint IdleDecoration   = 0x150b14d0;
 
     /// <summary>Class name of the per-field container block.</summary>
-    private const string FieldSaveDataClass = "FieldSaveData";
+    private const string FieldSaveDataClass = SaveSchemaNames.FieldSaveData;
 
     /// <summary>
     /// Object-list field on <c>FieldSaveData</c> that holds every
     /// per-gimmick save record (gates + scenery + miscellaneous).
     /// </summary>
-    private const string FieldGimmickListFieldName = "_fieldGimmickSaveDataList";
+    private const string FieldGimmickListFieldName = SaveSchemaNames.FieldGimmickSaveDataList;
 
     /// <summary>Field names read off each nested gimmick element.</summary>
     private const string GimmickInfoKeyField     = "_gimmickInfoKey";
     private const string InitStateNameHashField  = "_initStateNameHash";
     private const string OwnerLevelNameField     = "_ownerLevelName";
-    private const string FieldGimmickSaveKeyField = "_fieldGimmickSaveDataKey";
+    private const string FieldGimmickSaveKeyField = SaveSchemaNames.FieldGimmickSaveDataKey;
 
     /// <summary>
     /// Gimmick-name substrings that mark a row as abyss-related.

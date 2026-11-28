@@ -120,7 +120,7 @@
        the project build before the dll has ever been produced; runtime
        calls would fail then, but that surfaces in tests, not the build. -->
   <ItemGroup>
-    <Content Include="..\..\vendor\crimson-rs\target\release\crimson_rs.dll" Condition="Exists('..\..\vendor\crimson-rs\target\release\crimson_rs.dll')">
+    <Content Include="$(CrimsonRsTargetDir)crimson_rs.dll" Condition="Exists('$(CrimsonRsTargetDir)crimson_rs.dll')">
       <Link>crimson_rs.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>Never</CopyToPublishDirectory>
@@ -151,7 +151,7 @@
        staticlib wants. -->
   <ItemGroup>
     <DirectPInvoke Include="crimson_rs" />
-    <NativeLibrary Include="..\..\vendor\crimson-rs\target\release\crimson_rs.lib" Condition="Exists('..\..\vendor\crimson-rs\target\release\crimson_rs.lib')" />
+    <NativeLibrary Include="$(CrimsonRsTargetDir)crimson_rs.lib" Condition="Exists('$(CrimsonRsTargetDir)crimson_rs.lib')" />
     <NativeLibrary Include="Userenv.lib" />
     <NativeLibrary Include="Synchronization.lib" />
   </ItemGroup>

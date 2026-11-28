@@ -79,7 +79,7 @@
        (produced by .\scripts\build_rust.ps1). Copy the dll into the
        test runner's output so [LibraryImport] can resolve it. -->
   <ItemGroup>
-    <Content Include="..\..\vendor\crimson-rs\target\release\crimson_rs.dll" Condition="Exists('..\..\vendor\crimson-rs\target\release\crimson_rs.dll')">
+    <Content Include="$(CrimsonRsTargetDir)crimson_rs.dll" Condition="Exists('$(CrimsonRsTargetDir)crimson_rs.dll')">
       <Link>crimson_rs.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

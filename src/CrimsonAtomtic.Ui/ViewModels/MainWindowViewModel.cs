@@ -169,7 +169,7 @@ public sealed partial class MainWindowViewModel(
         ClearNavigation();
         PushFrame(new BlockFrame(topDetails.ClassName, topDetails, Array.Empty<PathStep>()));
 
-        var invListField = FindFieldByName(topDetails, "_inventorylist");
+        var invListField = FindFieldByName(topDetails, SaveSchemaNames.InventoryList);
         if (invListField?.Elements is not { Count: > 0 } containers
             || rec.InventoryElementIndex >= (uint)containers.Count)
         {
@@ -186,7 +186,7 @@ public sealed partial class MainWindowViewModel(
         PushFrame(new BlockFrame(
             $"{container.ClassName}[{rec.InventoryElementIndex}]", container, path1));
 
-        var itemListField = FindFieldByName(container, "_itemList");
+        var itemListField = FindFieldByName(container, SaveSchemaNames.ItemList);
         if (itemListField?.Elements is not { Count: > 0 } items
             || rec.ItemElementIndex >= (uint)items.Count)
         {
@@ -314,7 +314,7 @@ public sealed partial class MainWindowViewModel(
         PushFrame(new BlockFrame(topDetails.ClassName, topDetails, Array.Empty<PathStep>()));
 
         // _storeDataList: object_list of StoreDataSaveData under StoreSaveData.
-        var storeListField = FindFieldByName(topDetails, "_storeDataList");
+        var storeListField = FindFieldByName(topDetails, SaveSchemaNames.StoreDataList);
         if (storeListField?.Elements is not { Count: > 0 } stores
             || storeElementIdx >= (uint)stores.Count)
         {
@@ -332,7 +332,7 @@ public sealed partial class MainWindowViewModel(
             $"{storeBlock.ClassName}[{storeElementIdx}]", storeBlock, path1));
 
         // _storeSoldItemDataList: object_list of ItemSaveData under StoreDataSaveData.
-        var buybackListField = FindFieldByName(storeBlock, "_storeSoldItemDataList");
+        var buybackListField = FindFieldByName(storeBlock, SaveSchemaNames.StoreSoldItemDataList);
         if (buybackListField?.Elements is not { Count: > 0 } items
             || buybackElementIdx >= (uint)items.Count)
         {
@@ -1061,7 +1061,7 @@ public sealed partial class MainWindowViewModel(
         if (_navStack.Count > 0
             && _navStack.Peek() is ElementsFrame parent
             && parent.Elements.Count > 0
-            && string.Equals(parent.Elements[0].ClassName, "ItemSaveData", StringComparison.Ordinal))
+            && string.Equals(parent.Elements[0].ClassName, SaveSchemaNames.ItemSaveData, StringComparison.Ordinal))
         {
             CanAddItemToCurrentList = true;
             // Prefer the selected row (the clone donor); null = first-row
@@ -1429,7 +1429,7 @@ public sealed partial class MainWindowViewModel(
         // Only the stack count has a max stack; offering it on another
         // integer of the item (its endurance, its slot) would pre-fill a
         // meaningless value.
-        if (SelectedField is not { IsEditable: true, Name: "_stackCount" } sel)
+        if (SelectedField is not { IsEditable: true, Name: SaveSchemaNames.StackCount } sel)
         {
             return false;
         }
@@ -2108,7 +2108,7 @@ public sealed partial class MainWindowViewModel(
         {
             if (_navStack.Count == 0
                 || _navStack.Peek() is not BlockFrame frame
-                || !string.Equals(frame.Block.ClassName, "MissionStateData", StringComparison.Ordinal)
+                || !string.Equals(frame.Block.ClassName, SaveSchemaNames.MissionStateData, StringComparison.Ordinal)
                 || SelectedBlock is null
                 || frame.Path is not { Count: 1 })
             {
@@ -2381,7 +2381,7 @@ public sealed partial class MainWindowViewModel(
             var far = listField.Elements![ctx.FarElementIdx];
             foreach (var f in far.Fields)
             {
-                if (f.Name == "_key") return (f.FieldIndex, null);
+                if (f.Name == SaveSchemaNames.Key) return (f.FieldIndex, null);
             }
             return (-1, null);
         }
@@ -2787,7 +2787,7 @@ public sealed partial class MainWindowViewModel(
         var skipDetails = new List<(uint Key, string? Name, string Reason)>();
         foreach (var b in blocks)
         {
-            if (!string.Equals(b.ClassName, "QuestSaveData", StringComparison.Ordinal))
+            if (!string.Equals(b.ClassName, SaveSchemaNames.QuestSaveData, StringComparison.Ordinal))
             {
                 continue;
             }
@@ -2797,7 +2797,7 @@ public sealed partial class MainWindowViewModel(
             for (var fi = 0; fi < top.Fields.Count; fi++)
             {
                 var listField = top.Fields[fi];
-                if (!string.Equals(listField.Name, "_missionStateList", StringComparison.Ordinal)
+                if (!string.Equals(listField.Name, SaveSchemaNames.MissionStateList, StringComparison.Ordinal)
                     || listField.Elements is not { Count: > 0 } siblings)
                 {
                     continue;
@@ -2805,7 +2805,7 @@ public sealed partial class MainWindowViewModel(
                 for (var ei = 0; ei < siblings.Count; ei++)
                 {
                     var row = siblings[ei];
-                    if (!string.Equals(row.ClassName, "MissionStateData", StringComparison.Ordinal))
+                    if (!string.Equals(row.ClassName, SaveSchemaNames.MissionStateData, StringComparison.Ordinal))
                     {
                         continue;
                     }
@@ -2815,8 +2815,8 @@ public sealed partial class MainWindowViewModel(
                     DecodedFieldRow? stateFld = null;
                     foreach (var f in row.Fields)
                     {
-                        if (keyFld is null && f.Name == "_key") keyFld = f;
-                        else if (stateFld is null && f.Name == "_state") stateFld = f;
+                        if (keyFld is null && f.Name == SaveSchemaNames.Key) keyFld = f;
+                        else if (stateFld is null && f.Name == SaveSchemaNames.State) stateFld = f;
                     }
                     if (keyFld is null
                         || !SaveFieldValues.TryParseUInt(keyFld.Value, out var kU64)
@@ -2923,7 +2923,7 @@ public sealed partial class MainWindowViewModel(
         }
         foreach (var b in blocks)
         {
-            if (!string.Equals(b.ClassName, "FactionSaveData", StringComparison.Ordinal))
+            if (!string.Equals(b.ClassName, SaveSchemaNames.FactionSaveData, StringComparison.Ordinal))
             {
                 continue;
             }
@@ -2957,7 +2957,7 @@ public sealed partial class MainWindowViewModel(
                                 stateFieldIdx = f.FieldIndex;
                                 if (SaveFieldValues.TryParseUInt(f.Value, out var sv)) currentState = (byte)sv;
                                 break;
-                            case "_ownerFactionKey":
+                            case SaveSchemaNames.OwnerFactionKey:
                                 if (SaveFieldValues.TryParseUInt(f.Value, out var ov)) ownerKey = (uint)ov;
                                 break;
                             case "_conquerorFactionKey":
@@ -3071,7 +3071,7 @@ public sealed partial class MainWindowViewModel(
         ulong max = 0;
         foreach (var b in blocks)
         {
-            if (!string.Equals(b.ClassName, "QuestSaveData", StringComparison.Ordinal))
+            if (!string.Equals(b.ClassName, SaveSchemaNames.QuestSaveData, StringComparison.Ordinal))
             {
                 continue;
             }
@@ -3082,7 +3082,7 @@ public sealed partial class MainWindowViewModel(
             catch (CrimsonSaveException) { return null; }
             foreach (var listField in top.Fields)
             {
-                if (!string.Equals(listField.Name, "_missionStateList", StringComparison.Ordinal)
+                if (!string.Equals(listField.Name, SaveSchemaNames.MissionStateList, StringComparison.Ordinal)
                     || listField.Elements is not { Count: > 0 } missions)
                 {
                     continue;
@@ -3091,7 +3091,7 @@ public sealed partial class MainWindowViewModel(
                 {
                     foreach (var f in m.Fields)
                     {
-                        if (f.Name != "_completedTime") continue;
+                        if (f.Name != SaveSchemaNames.CompletedTime) continue;
                         if (f.Present
                             && SaveFieldValues.TryParseUInt(f.Value, out var v)
                             && v > max)
@@ -3122,7 +3122,7 @@ public sealed partial class MainWindowViewModel(
         skipReason = null;
         if (_navStack.Count == 0
             || _navStack.Peek() is not BlockFrame frame
-            || !string.Equals(frame.Block.ClassName, "MissionStateData", StringComparison.Ordinal)
+            || !string.Equals(frame.Block.ClassName, SaveSchemaNames.MissionStateData, StringComparison.Ordinal)
             || SelectedBlock is not { } topBlock
             // Path must be exactly one step (the missionStateList element).
             || frame.Path is not { Count: 1 } path1)
@@ -3195,13 +3195,13 @@ public sealed partial class MainWindowViewModel(
         if (siblings is null || catalogElementIdx < 0 || catalogElementIdx >= siblings.Count)
         { skipReason = "catalogElementIdx out of range"; return false; }
         var catalogRow = siblings[catalogElementIdx];
-        if (!string.Equals(catalogRow.ClassName, "MissionStateData", StringComparison.Ordinal))
+        if (!string.Equals(catalogRow.ClassName, SaveSchemaNames.MissionStateData, StringComparison.Ordinal))
         { skipReason = $"unexpected class '{catalogRow.ClassName}'"; return false; }
         DecodedFieldRow? keyFld = null, stateFld = null;
         foreach (var f in catalogRow.Fields)
         {
-            if (keyFld is null && f.Name == "_key") keyFld = f;
-            else if (stateFld is null && f.Name == "_state") stateFld = f;
+            if (keyFld is null && f.Name == SaveSchemaNames.Key) keyFld = f;
+            else if (stateFld is null && f.Name == SaveSchemaNames.State) stateFld = f;
         }
         if (keyFld is null || stateFld is null)
         { skipReason = "catalog row missing _key or _state field"; return false; }
@@ -3227,15 +3227,15 @@ public sealed partial class MainWindowViewModel(
         if (twinElementIdx >= siblings.Count)
         { skipReason = "no adjacent row (catalog is the last element)"; return false; }
         var twin = siblings[twinElementIdx];
-        if (!string.Equals(twin.ClassName, "MissionStateData", StringComparison.Ordinal))
+        if (!string.Equals(twin.ClassName, SaveSchemaNames.MissionStateData, StringComparison.Ordinal))
         { skipReason = $"adjacent row class is '{twin.ClassName}', expected MissionStateData"; return false; }
         DecodedFieldRow? twinKeyFld = null, twinStateFld = null, twinCtFld = null, twinTagsFld = null;
         foreach (var f in twin.Fields)
         {
-            if (twinKeyFld is null && f.Name == "_key") twinKeyFld = f;
-            else if (twinStateFld is null && f.Name == "_state") twinStateFld = f;
-            else if (twinCtFld is null && f.Name == "_completedTime") twinCtFld = f;
-            else if (twinTagsFld is null && f.Name == "_usedTagList") twinTagsFld = f;
+            if (twinKeyFld is null && f.Name == SaveSchemaNames.Key) twinKeyFld = f;
+            else if (twinStateFld is null && f.Name == SaveSchemaNames.State) twinStateFld = f;
+            else if (twinCtFld is null && f.Name == SaveSchemaNames.CompletedTime) twinCtFld = f;
+            else if (twinTagsFld is null && f.Name == SaveSchemaNames.UsedTagList) twinTagsFld = f;
         }
         if (twinKeyFld is null || twinStateFld is null || twinCtFld is null || twinTagsFld is null)
         { skipReason = "adjacent twin missing one of (_key, _state, _completedTime, _usedTagList)"; return false; }
@@ -3288,13 +3288,13 @@ public sealed partial class MainWindowViewModel(
         for (var i = 0; i < siblings.Count; i++)
         {
             var sib = siblings[i];
-            if (!string.Equals(sib.ClassName, "MissionStateData", StringComparison.Ordinal))
+            if (!string.Equals(sib.ClassName, SaveSchemaNames.MissionStateData, StringComparison.Ordinal))
             {
                 continue;
             }
             foreach (var f in sib.Fields)
             {
-                if (f.Name != "_key") continue;
+                if (f.Name != SaveSchemaNames.Key) continue;
                 if (!f.Present
                     || !SaveFieldValues.TryParseUInt(f.Value, out var k)
                     || k > uint.MaxValue)
@@ -3320,9 +3320,9 @@ public sealed partial class MainWindowViewModel(
         DecodedFieldRow? farStateFld = null, farCtFld = null, farTagsFld = null, farBranchedFld = null;
         foreach (var f in far.Fields)
         {
-            if (farStateFld is null && f.Name == "_state") farStateFld = f;
-            else if (farCtFld is null && f.Name == "_completedTime") farCtFld = f;
-            else if (farTagsFld is null && f.Name == "_usedTagList") farTagsFld = f;
+            if (farStateFld is null && f.Name == SaveSchemaNames.State) farStateFld = f;
+            else if (farCtFld is null && f.Name == SaveSchemaNames.CompletedTime) farCtFld = f;
+            else if (farTagsFld is null && f.Name == SaveSchemaNames.UsedTagList) farTagsFld = f;
             else if (farBranchedFld is null && f.Name == "_branchedTime") farBranchedFld = f;
         }
         if (farStateFld is null || farCtFld is null || farTagsFld is null || farBranchedFld is null)
@@ -3856,7 +3856,7 @@ public sealed partial class MainWindowViewModel(
         // keeps us from inserting an ItemSaveData-shaped row into a
         // non-item list and corrupting the save.
         var sourceClass = parent.Elements[0].ClassName;
-        if (!string.Equals(sourceClass, "ItemSaveData", StringComparison.Ordinal))
+        if (!string.Equals(sourceClass, SaveSchemaNames.ItemSaveData, StringComparison.Ordinal))
         {
             BulkOpStatus = string.Format(
                 System.Globalization.CultureInfo.CurrentCulture,
@@ -3925,7 +3925,7 @@ public sealed partial class MainWindowViewModel(
         for (var i = 0; i < sourceElement.Fields.Count; i++)
         {
             var f = sourceElement.Fields[i];
-            if (f.Name == "_transferredItemKey" && f.Present && SaveFieldValues.TryParseUInt(f.Value, out _))
+            if (f.Name == SaveSchemaNames.TransferredItemKey && f.Present && SaveFieldValues.TryParseUInt(f.Value, out _))
             {
                 idxTransferred = i;
             }
@@ -3938,7 +3938,7 @@ public sealed partial class MainWindowViewModel(
         var idxIsNewMark = -1;
         for (var i = 0; i < sourceElement.Fields.Count; i++)
         {
-            if (sourceElement.Fields[i].Name == "_isNewMark")
+            if (sourceElement.Fields[i].Name == SaveSchemaNames.IsNewMark)
             {
                 idxIsNewMark = i;
                 break;
@@ -4083,7 +4083,7 @@ public sealed partial class MainWindowViewModel(
         {
             return (false, "No save loaded.");
         }
-        var invBlock = FindFirstBlockByClassName(blocks, "InventorySaveData");
+        var invBlock = FindFirstBlockByClassName(blocks, SaveSchemaNames.InventorySaveData);
         if (invBlock is null)
         {
             return (false, "No InventorySaveData block in this save.");
@@ -4098,7 +4098,7 @@ public sealed partial class MainWindowViewModel(
             return (false, $"Could not read inventory: {ex.Message}");
         }
 
-        var invListField = FindFieldByName(invDetails, "_inventorylist");
+        var invListField = FindFieldByName(invDetails, SaveSchemaNames.InventoryList);
         if (invListField?.Elements is not { Count: > 0 } containers)
         {
             return (false, "Inventory has no _inventorylist containers.");
@@ -4109,7 +4109,7 @@ public sealed partial class MainWindowViewModel(
         {
             foreach (var f in containers[i].Fields)
             {
-                if (string.Equals(f.Name, "_inventoryKey", StringComparison.Ordinal)
+                if (string.Equals(f.Name, SaveSchemaNames.InventoryKey, StringComparison.Ordinal)
                     && SaveFieldValues.TryParseUInt(f.Value, out var ik) && ik == inventoryKey)
                 {
                     containerIdx = i;
@@ -4124,7 +4124,7 @@ public sealed partial class MainWindowViewModel(
                 + "(it may be virtual / not yet materialised).");
         }
         var container = containers[containerIdx];
-        var itemListField = FindFieldByName(container, "_itemList");
+        var itemListField = FindFieldByName(container, SaveSchemaNames.ItemList);
         if (itemListField is null
             || !string.Equals(itemListField.Kind, "object_list", StringComparison.Ordinal)
             || itemListField.Elements is not { Count: > 0 } items)
@@ -4148,8 +4148,8 @@ public sealed partial class MainWindowViewModel(
         for (var i = 0; i < template.Fields.Count; i++)
         {
             var n = template.Fields[i].Name;
-            if (n == "_transferredItemKey") idxTransferred = i;
-            else if (n == "_isNewMark") idxIsNewMark = i;
+            if (n == SaveSchemaNames.TransferredItemKey) idxTransferred = i;
+            else if (n == SaveSchemaNames.IsNewMark) idxIsNewMark = i;
         }
         var sourceIsNewMarkPresent = idxIsNewMark >= 0 && template.Fields[idxIsNewMark].Present;
 
@@ -4317,7 +4317,7 @@ public sealed partial class MainWindowViewModel(
         {
             foreach (var f in el.Fields)
             {
-                if (string.Equals(f.Name, "_characterKey", StringComparison.Ordinal)
+                if (string.Equals(f.Name, SaveSchemaNames.CharacterKey, StringComparison.Ordinal)
                     && SaveFieldValues.TryParseUInt(f.Value, out var ck)
                     && ck == MountCatalog.DragonCharacterKey)
                 {
@@ -4432,7 +4432,7 @@ public sealed partial class MainWindowViewModel(
         for (var i = 0; i < merc.Value.Elements.Count && dragonIdx < 0; i++)
         {
             var el = merc.Value.Elements[i];
-            if (FindFieldByName(el, "_characterKey") is { } ckField
+            if (FindFieldByName(el, SaveSchemaNames.CharacterKey) is { } ckField
                 && SaveFieldValues.TryParseUInt(ckField.Value, out var ck)
                 && ck == MountCatalog.DragonCharacterKey)
             {
@@ -4492,7 +4492,7 @@ public sealed partial class MainWindowViewModel(
         {
             foreach (var f in el.Fields)
             {
-                if (string.Equals(f.Name, "_mercenaryNo", StringComparison.Ordinal)
+                if (string.Equals(f.Name, SaveSchemaNames.MercenaryNo, StringComparison.Ordinal)
                     && f.Present && SaveFieldValues.TryParseUInt(f.Value, out var mn) && mn > maxMercNo)
                 {
                     maxMercNo = mn;
@@ -4518,10 +4518,10 @@ public sealed partial class MainWindowViewModel(
                         blockIdx, ReadOnlySpan<PathStep>.Empty, listFieldIdx, insertAt, template);
                     // Field indices come from the element just built, i.e. from
                     // this save's schema — they move between patches.
-                    var list = FindFieldByName(loader.LoadBlockDetails(savePath, blockIdx), "_mercenaryDataList");
+                    var list = FindFieldByName(loader.LoadBlockDetails(savePath, blockIdx), SaveSchemaNames.MercenaryDataList);
                     var dragon = list?.Elements is { } els && insertAt < els.Count ? els[insertAt] : null;
                     var dragonPath = new[] { new PathStep((uint)listFieldIdx, (uint)insertAt) };
-                    if (dragon is null || FindFieldByName(dragon, "_mercenaryNo") is not { Present: true } mercNo)
+                    if (dragon is null || FindFieldByName(dragon, SaveSchemaNames.MercenaryNo) is not { Present: true } mercNo)
                     {
                         throw new InvalidOperationException("the inserted dragon has no _mercenaryNo to make unique");
                     }
@@ -4555,7 +4555,7 @@ public sealed partial class MainWindowViewModel(
     private static (int BlockIndex, int ListFieldIndex, IReadOnlyList<BlockDetails> Elements)? LoadMercList(
         ISaveLoader ld, string savePath, IReadOnlyList<BlockSummary> blocks)
     {
-        var b = FindFirstBlockByClassName(blocks, "MercenaryClanSaveData");
+        var b = FindFirstBlockByClassName(blocks, SaveSchemaNames.MercenaryClanSaveData);
         if (b is null)
         {
             return null;
@@ -4563,7 +4563,7 @@ public sealed partial class MainWindowViewModel(
         BlockDetails d;
         try { d = ld.LoadBlockDetails(savePath, b.Index); }
         catch (CrimsonSaveException) { return null; }
-        var listField = FindFieldByName(d, "_mercenaryDataList");
+        var listField = FindFieldByName(d, SaveSchemaNames.MercenaryDataList);
         if (listField?.Elements is not { } elements)
         {
             return null;
@@ -4594,10 +4594,10 @@ public sealed partial class MainWindowViewModel(
             var f = source.Fields[i];
             switch (f.Name)
             {
-                case "_itemKey":    itemKey    = i; break;
-                case "_stackCount": stackCount = i; break;
-                case "_slotNo":     slotNo     = i; break;
-                case "_itemNo":     itemNo     = i; break;
+                case SaveSchemaNames.ItemKey:    itemKey    = i; break;
+                case SaveSchemaNames.StackCount: stackCount = i; break;
+                case SaveSchemaNames.SlotNo:     slotNo     = i; break;
+                case SaveSchemaNames.ItemNo:     itemNo     = i; break;
             }
         }
         return itemKey >= 0 && stackCount >= 0 && slotNo >= 0 && itemNo >= 0;
@@ -4663,7 +4663,7 @@ public sealed partial class MainWindowViewModel(
             var node = stack.Pop();
             foreach (var f in node.Fields)
             {
-                if (f.Name == "_itemNo" && f.Present && SaveFieldValues.TryParseUInt(f.Value, out var n))
+                if (f.Name == SaveSchemaNames.ItemNo && f.Present && SaveFieldValues.TryParseUInt(f.Value, out var n))
                 {
                     max = Math.Max(max, n);
                 }
@@ -4700,11 +4700,11 @@ public sealed partial class MainWindowViewModel(
                 {
                     continue;
                 }
-                if (f.Name == "_slotNo" && SaveFieldValues.TryParseUInt(f.Value, out var slot) && slot > maxSlot)
+                if (f.Name == SaveSchemaNames.SlotNo && SaveFieldValues.TryParseUInt(f.Value, out var slot) && slot > maxSlot)
                 {
                     maxSlot = slot;
                 }
-                else if (f.Name == "_itemNo" && SaveFieldValues.TryParseUInt(f.Value, out var itemNo) && itemNo > maxItemNo)
+                else if (f.Name == SaveSchemaNames.ItemNo && SaveFieldValues.TryParseUInt(f.Value, out var itemNo) && itemNo > maxItemNo)
                 {
                     maxItemNo = itemNo;
                 }
@@ -4784,7 +4784,7 @@ public sealed partial class MainWindowViewModel(
                 itemKeyField = inner;
             }
             else if (stackField is null
-                     && inner.Name == "_stackCount"
+                     && inner.Name == SaveSchemaNames.StackCount
                      && (inner.Kind == "fixed_prefix" || inner.Kind == "fixed_suffix"))
             {
                 stackField = inner;
@@ -5004,7 +5004,7 @@ public sealed partial class MainWindowViewModel(
             var seenContainers = 0;
             foreach (var b in blocks)
             {
-                if (!string.Equals(b.ClassName, "InventorySaveData", StringComparison.Ordinal))
+                if (!string.Equals(b.ClassName, SaveSchemaNames.InventorySaveData, StringComparison.Ordinal))
                 {
                     continue;
                 }
@@ -5021,7 +5021,7 @@ public sealed partial class MainWindowViewModel(
                 for (var f = 0; f < top.Fields.Count; f++)
                 {
                     var listField = top.Fields[f];
-                    if (!string.Equals(listField.Name, "_inventorylist", StringComparison.Ordinal)
+                    if (!string.Equals(listField.Name, SaveSchemaNames.InventoryList, StringComparison.Ordinal)
                         || listField.Elements is not { Count: > 0 } bags)
                     {
                         continue;
@@ -5033,7 +5033,7 @@ public sealed partial class MainWindowViewModel(
                         for (var g = 0; g < bag.Fields.Count; g++)
                         {
                             var itemListField = bag.Fields[g];
-                            if (!string.Equals(itemListField.Name, "_itemList", StringComparison.Ordinal)
+                            if (!string.Equals(itemListField.Name, SaveSchemaNames.ItemList, StringComparison.Ordinal)
                                 || itemListField.Elements is not { Count: > 0 } items)
                             {
                                 continue;
@@ -5149,7 +5149,7 @@ public sealed partial class MainWindowViewModel(
     /// Class name of the top-level block carrying the player's
     /// knowledge / discovery list. One per save.
     /// </summary>
-    private const string KnowledgeSaveDataClass = "KnowledgeSaveData";
+    private const string KnowledgeSaveDataClass = SaveSchemaNames.KnowledgeSaveData;
 
     /// <summary>
     /// Object-list field on <see cref="KnowledgeSaveDataClass"/> that
@@ -5158,12 +5158,12 @@ public sealed partial class MainWindowViewModel(
     /// <c>_key</c> (u32), <c>_level</c> (u8),
     /// <c>_learnedFieldTime</c> (u64) and <c>_isNewMark</c> (bool).
     /// </summary>
-    private const string KnowledgeListFieldName = "_list";
+    private const string KnowledgeListFieldName = SaveSchemaNames.List;
 
     /// <summary>Scalar field names on a <c>KnowledgeElementSaveData</c> element.</summary>
-    private const string KnowledgeElemKeyField = "_key";
-    private const string KnowledgeElemLearnedTimeField = "_learnedFieldTime";
-    private const string KnowledgeElemIsNewMarkField = "_isNewMark";
+    private const string KnowledgeElemKeyField = SaveSchemaNames.Key;
+    private const string KnowledgeElemLearnedTimeField = SaveSchemaNames.LearnedFieldTime;
+    private const string KnowledgeElemIsNewMarkField = SaveSchemaNames.IsNewMark;
 
     /// <summary>
     /// Tools menu: bulk-append every missing abyss-gate knowledge key

@@ -1,6 +1,10 @@
 <Project>
 
   <PropertyGroup>
+    <!-- Where scripts/build_rust.ps1 leaves crimson_rs.dll (dev and tests)
+         and crimson_rs.lib (linked into the AOT exe). One definition for
+         every project that consumes them. -->
+    <CrimsonRsTargetDir>$(MSBuildThisFileDirectory)vendor\crimson-rs\target\release\</CrimsonRsTargetDir>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

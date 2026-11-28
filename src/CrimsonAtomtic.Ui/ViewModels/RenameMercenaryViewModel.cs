@@ -38,21 +38,21 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
     /// Class name of the top-level block holding the mercenary list.
     /// One per save.
     /// </summary>
-    private const string MercenaryClanClass = "MercenaryClanSaveData";
+    private const string MercenaryClanClass = SaveSchemaNames.MercenaryClanSaveData;
 
     /// <summary>Name of the list field inside <see cref="MercenaryClanClass"/>.</summary>
-    private const string MercenaryListField = "_mercenaryDataList";
+    private const string MercenaryListField = SaveSchemaNames.MercenaryDataList;
 
     /// <summary>
     /// Element class name we expect under the list. Used as a sanity
     /// guard when the schema drifts between game patches.
     /// </summary>
-    private const string MercenaryElementClass = "MercenarySaveData";
+    private const string MercenaryElementClass = SaveSchemaNames.MercenarySaveData;
 
     /// <summary>Per-element fields we read / write.</summary>
-    private const string MercenaryNumberField = "_mercenaryNo";
-    private const string MercenaryCharacterKeyField = "_characterKey";
-    private const string MercenaryNameField = "_mercenaryName";
+    private const string MercenaryNumberField = SaveSchemaNames.MercenaryNo;
+    private const string MercenaryCharacterKeyField = SaveSchemaNames.CharacterKey;
+    private const string MercenaryNameField = SaveSchemaNames.MercenaryName;
 
     private readonly ISaveLoader _loader;
     private readonly LocalizationProvider _localization;

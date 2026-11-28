@@ -707,7 +707,7 @@ public sealed class LocalizationProvider : IDisposable
 
     private void TryBootstrapItemInfo(string gameRoot)
     {
-        var pamt = Path.Combine(gameRoot, "0008", "0.pamt");
+        var pamt = Path.Combine(gameRoot, GameDataLayout.GameDataGroup, "0.pamt");
         if (!File.Exists(pamt))
         {
             return;
@@ -733,7 +733,7 @@ public sealed class LocalizationProvider : IDisposable
 
     private void TryBootstrapStringInfo(string gameRoot)
     {
-        var pamt = Path.Combine(gameRoot, "0008", "0.pamt");
+        var pamt = Path.Combine(gameRoot, GameDataLayout.GameDataGroup, "0.pamt");
         if (!File.Exists(pamt))
         {
             return;
@@ -974,7 +974,7 @@ public sealed class LocalizationProvider : IDisposable
     /// </summary>
     private void TryBootstrapSkillInfo(string gameRoot)
     {
-        var pamt = Path.Combine(gameRoot, "0008", "0.pamt");
+        var pamt = Path.Combine(gameRoot, GameDataLayout.GameDataGroup, "0.pamt");
         if (!File.Exists(pamt))
         {
             return;
@@ -1005,7 +1005,7 @@ public sealed class LocalizationProvider : IDisposable
     /// </summary>
     private void TryBootstrapDyeGamedata(string gameRoot)
     {
-        var pamt = Path.Combine(gameRoot, "0008", "0.pamt");
+        var pamt = Path.Combine(gameRoot, GameDataLayout.GameDataGroup, "0.pamt");
         if (!File.Exists(pamt))
         {
             return;
@@ -1077,7 +1077,7 @@ public sealed class LocalizationProvider : IDisposable
     /// </summary>
     private void TryBootstrapStoreInfo(string gameRoot)
     {
-        var pamt = Path.Combine(gameRoot, "0008", "0.pamt");
+        var pamt = Path.Combine(gameRoot, GameDataLayout.GameDataGroup, "0.pamt");
         if (!File.Exists(pamt))
         {
             return;
@@ -1103,7 +1103,7 @@ public sealed class LocalizationProvider : IDisposable
     /// </summary>
     private void TryBootstrapNicheBridges(string gameRoot)
     {
-        var pamt = Path.Combine(gameRoot, "0008", "0.pamt");
+        var pamt = Path.Combine(gameRoot, GameDataLayout.GameDataGroup, "0.pamt");
         if (!File.Exists(pamt))
         {
             return;

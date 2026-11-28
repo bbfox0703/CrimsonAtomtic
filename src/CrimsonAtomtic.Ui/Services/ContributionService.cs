@@ -59,7 +59,7 @@ public sealed class ContributionService(ISaveLoader loader, LocalizationProvider
     /// <summary><c>_inventoryKey</c> of the "Camp &amp; Contributions" container.</summary>
     private const uint ContributionContainerKey = 1;
 
-    private const string InventoryClass = "InventorySaveData";
+    private const string InventoryClass = SaveSchemaNames.InventorySaveData;
 
     /// <summary>Contribution item keys from iteminfo (base, then DLC-only).</summary>
     public IReadOnlyList<uint> CatalogKeys() =>
@@ -292,7 +292,7 @@ public sealed class ContributionService(ISaveLoader loader, LocalizationProvider
     private static void ForEachItem(
         BlockDetails inv, Action<uint?, PathStep[], BlockDetails, ItemFields> visit)
     {
-        var list = inv.Fields.FirstOrDefault(f => f.Name == "_inventorylist");
+        var list = inv.Fields.FirstOrDefault(f => f.Name == SaveSchemaNames.InventoryList);
         if (list?.Elements is not { } containers)
         {
             return;
@@ -304,8 +304,8 @@ public sealed class ContributionService(ISaveLoader loader, LocalizationProvider
             DecodedFieldRow? itemList = null;
             foreach (var f in container.Fields)
             {
-                if (f.Name == "_inventoryKey" && SaveFieldValues.TryU64(f) is { } k) containerKey = (uint)k;
-                else if (f.Name == "_itemList") itemList = f;
+                if (f.Name == SaveSchemaNames.InventoryKey && SaveFieldValues.TryU64(f) is { } k) containerKey = (uint)k;
+                else if (f.Name == SaveSchemaNames.ItemList) itemList = f;
             }
             if (itemList?.Elements is not { } items)
             {
@@ -314,7 +314,7 @@ public sealed class ContributionService(ISaveLoader loader, LocalizationProvider
             for (var ii = 0; ii < items.Count; ii++)
             {
                 var item = items[ii];
-                if (item.ClassName != "ItemSaveData")
+                if (item.ClassName != SaveSchemaNames.ItemSaveData)
                 {
                     continue;
                 }
@@ -333,11 +333,11 @@ public sealed class ContributionService(ISaveLoader loader, LocalizationProvider
         {
             switch (f.Name)
             {
-                case "_itemKey": iKey = f.FieldIndex; key = SaveFieldValues.TryU64(f) is { } k ? (uint)k : null; break;
-                case "_stackCount": iStack = f.FieldIndex; stack = SaveFieldValues.TryU64(f); break;
-                case "_slotNo": iSlot = f.FieldIndex; slot = SaveFieldValues.TryU64(f); break;
-                case "_itemNo": iNo = f.FieldIndex; itemNo = SaveFieldValues.TryU64(f); break;
-                case "_transferredItemKey": if (f.Present) iTransferred = f.FieldIndex; break;
+                case SaveSchemaNames.ItemKey: iKey = f.FieldIndex; key = SaveFieldValues.TryU64(f) is { } k ? (uint)k : null; break;
+                case SaveSchemaNames.StackCount: iStack = f.FieldIndex; stack = SaveFieldValues.TryU64(f); break;
+                case SaveSchemaNames.SlotNo: iSlot = f.FieldIndex; slot = SaveFieldValues.TryU64(f); break;
+                case SaveSchemaNames.ItemNo: iNo = f.FieldIndex; itemNo = SaveFieldValues.TryU64(f); break;
+                case SaveSchemaNames.TransferredItemKey: if (f.Present) iTransferred = f.FieldIndex; break;
             }
         }
         return new ItemFields(key, stack, slot, itemNo, iKey, iStack, iSlot, iNo, iTransferred);

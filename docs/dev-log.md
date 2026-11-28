@@ -28,6 +28,23 @@ read from the top.
 
 -----
 
+## 2026-11-28 (no release) — Code audit P9: one place for the names the editor looks up (Rule 7)
+
+- **What changes:**
+  - `SaveSchemaNames` holds every save class and field name the UI project looks up (about 60),
+    and `GameDataGroups` the archive groups it reads assets from. 93 literal uses and the local
+    constants of nine files point at it, so a name the game renames is one edit (B2-22, B4-26,
+    B5-18). The gamedata group goes through `GameDataLayout.GameDataGroup` (B3-16).
+  - Error codes are compared through `CrimsonErrorCode` everywhere; the last local `-16` is gone
+    (B3-16, B4-26).
+  - `$(CrimsonRsTargetDir)` in Directory.Build.props is the one MSBuild definition of where
+    `crimson_rs.dll` / `.lib` come from; both projects use it (B6-24, MSBuild part).
+- **Left for P10 / P11:** the Windows save path the main view model builds itself (with the
+  platform layer), the PowerShell scripts' and Python tools' own copies of the library path.
+- **Tests:** 481 green.
+
+-----
+
 ## 2026-11-28 (no release) — Code audit P8: UI strings
 
 - **What changes:**

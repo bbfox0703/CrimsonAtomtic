@@ -185,7 +185,7 @@ public static class IconExtractionService
         {
             ddsBytes = ExtractIcon(paz, gameRoot, pamtPath, localization.ItemDlcName(itemKey), ddsName);
         }
-        catch (CrimsonSaveException ex) when (ex.ErrorCode == NotFoundErrorCode)
+        catch (CrimsonSaveException ex) when (ex.ErrorCode == CrimsonErrorCode.NotFound)
         {
             // DDS not in the icon directory — typically a stale prefab
             // reference for a dev / cut item.
@@ -266,7 +266,7 @@ public static class IconExtractionService
                 {
                     return paz.ExtractFile(dlcPamt, IconDirectoryInPaz, ddsName);
                 }
-                catch (CrimsonSaveException ex) when (ex.ErrorCode == NotFoundErrorCode)
+                catch (CrimsonSaveException ex) when (ex.ErrorCode == CrimsonErrorCode.NotFound)
                 {
                 }
             }
@@ -274,9 +274,6 @@ public static class IconExtractionService
         return paz.ExtractFile(basePamt, IconDirectoryInPaz, ddsName);
     }
 
-    // Mirror of NativeMethods.NOT_FOUND; kept local so the service
-    // doesn't reach into the RustInterop namespace for a single code.
-    private const int NotFoundErrorCode = -16;
 
     private static void RecordFailure(
         ExtractionStats stats, List<string> samples, string message)

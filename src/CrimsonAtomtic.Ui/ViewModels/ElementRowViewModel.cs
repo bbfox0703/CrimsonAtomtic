@@ -211,7 +211,7 @@ public sealed class ElementRowViewModel
             {
                 hasItemKey = true;
             }
-            else if (field.Name == "_stackCount"
+            else if (field.Name == SaveSchemaNames.StackCount
                      && (field.Kind == "fixed_prefix" || field.Kind == "fixed_suffix"))
             {
                 hasStackCount = true;
