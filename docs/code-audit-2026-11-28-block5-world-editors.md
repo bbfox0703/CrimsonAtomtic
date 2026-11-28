@@ -193,7 +193,7 @@
 - **嚴重度**：risk（資料正確性）
 - **位置**：`MainWindowViewModel.cs:5219-5249`；欄位說明 `:4876-4882`（`_key`、`_level` u8、`_learnedFieldTime`、`_isNewMark`）。
 - **證據**：注入只 patch `_key` / `_learnedFieldTime` / `_isNewMark`，`_level` 和其他欄位都複製自 `_list[0]`。
-  如果 element 0 是 level > 0 的知識，所有新注入的知識都會帶著同樣的等級，包括 Abyss 解鎖的 398 類 key、龍的 187 個 key，
+  如果 element 0 是 level > 0 的知識，所有新注入的知識都會帶著同樣的等級，包括 Unlock All Abyss Gates 從 knowledgeinfo 收集到的 key、龍的 187 個 key，
   以及 Knowledge editor 的「Learn all in category」。
 - **建議修法**：明確設定 `_level`（目標值需先從存檔觀察「剛學到」的知識是哪個值）；或改用 crimson-rs 的
   `make_empty_element_bytes` / element template 建立乾淨的元素，不要複製既有資料。

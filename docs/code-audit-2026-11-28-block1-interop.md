@@ -345,5 +345,5 @@
 | 2 | architecture.md 漂移 | 否（Block 6） | 未查。 |
 | 3 | `UiLanguageService` 的 Rule 4 | 否（Block 3） | 未查。 |
 | 4 | Rule 7 沒有集中的 magic-string class | **是** | **確認屬實（就 RustInterop 而言）**：沒有集中的常數檔；錯誤碼名稱表重複 8 份且內容不一致；`"0.pamt"` 是字面值；PALOC lo32 常數散在各 catalog 類別（有命名，但沒有集中）。見 B1-18。 |
-| 5 | 檔案大小熱點 | **是**（兩個檔案） | **確認**：`NativeSaveLoader.cs` 實際 3,683 行（計畫書寫 3,682，差 1 行應是行尾計算方式不同），內含 298 個 `EntryPoint`（計畫書寫「~300」）；`NativeKeyInfoCatalogs.cs` 3,247 行，內含 27 個 catalog 加 27 個 SafeHandle 類別。拆分建議見 B1-22。 |
+| 5 | 檔案大小熱點 | **是**（兩個檔案） | **確認**：`NativeSaveLoader.cs` 實際 3,682 行（與計畫書一致），內含 298 個 `EntryPoint`（計畫書寫「~300」）；`NativeKeyInfoCatalogs.cs` 3,247 行，內含 27 個 catalog 加 27 個 SafeHandle 類別。拆分建議見 B1-22。 |
 | 6 | CI 只跑 release | 否（Block 6） | 未查。 |

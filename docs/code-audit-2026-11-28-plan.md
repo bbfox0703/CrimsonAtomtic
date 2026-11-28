@@ -184,8 +184,10 @@ search / picker windows.
 - Cache directories under `%LOCALAPPDATA%\CrimsonAtomtic\`: invalidation on a
   game patch, corrupt / partial files, concurrent extraction.
 - DDS decoder bounds checks on untrusted game files.
-- The three string dictionaries stay key-for-key identical (en / ja / zh-TW
-  differ by a few lines today).
+- The three string dictionaries stay key-for-key identical. Their line
+  counts differ (997 / 1,000 / 999), which says nothing about the keys; the
+  check is the key sets. (Checked 2026-11-28: 852 keys each, identical, no
+  duplicates.)
 
 ---
 
