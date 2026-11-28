@@ -167,4 +167,22 @@ public sealed class IconImageEncoderTests
         dst[offset + 2] = (byte)((value >> 16) & 0xFF);
         dst[offset + 3] = (byte)((value >> 24) & 0xFF);
     }
+
+    [Theory]
+    [InlineData(0xFFFFFFFFu, 4u)]
+    [InlineData(4u, 0x80000000u)]
+    [InlineData(16385u, 16u)]
+    public void DecodeDdsToRgba_RefusesAnOversizedHeaderBeforeAllocating(uint width, uint height)
+    {
+        // A 128-byte header with DXT5 and no pixel data: only the header's
+        // dimensions can make this fail, and they must fail as bad data.
+        var dds = new byte[128];
+        "DDS "u8.CopyTo(dds);
+        BitConverter.GetBytes(124u).CopyTo(dds, 4);
+        BitConverter.GetBytes(height).CopyTo(dds, 12);
+        BitConverter.GetBytes(width).CopyTo(dds, 16);
+        BitConverter.GetBytes(0x4u).CopyTo(dds, 80);
+        "DXT5"u8.CopyTo(dds.AsSpan(84));
+        Assert.Throws<InvalidDataException>(() => IconImageEncoder.DecodeDdsToRgba(dds));
+    }
 }

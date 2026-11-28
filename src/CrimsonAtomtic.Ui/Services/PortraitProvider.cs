@@ -173,13 +173,19 @@ public sealed class PortraitProvider : IDisposable
             }
         }
 
-        Bitmap? bmp = ResolveAndDecode(characterKey);
+        Bitmap? bmp = ResolveAndDecode(characterKey, out var definite);
 
         lock (_gate)
         {
             if (_disposed)
             {
                 bmp?.Dispose();
+                return null;
+            }
+            // A failed extraction or decode may succeed next time; only a
+            // definite "this character has no portrait" is remembered.
+            if (bmp is null && !definite)
+            {
                 return null;
             }
             // Race-safe cache insertion — keep the first winner so a
@@ -194,15 +200,28 @@ public sealed class PortraitProvider : IDisposable
         return bmp;
     }
 
-    private Bitmap? ResolveAndDecode(uint characterKey)
+    /// <summary>
+    /// The portrait for <paramref name="characterKey"/>, from the disk cache
+    /// or extracted from the game. <paramref name="definite"/> is true when a
+    /// null means the character has no portrait, false when the attempt
+    /// failed and may be retried.
+    /// </summary>
+    private Bitmap? ResolveAndDecode(uint characterKey, out bool definite)
     {
+        definite = false;
         // Disk-cache hit: read existing WebP, skip the FFI / DDS path
         // entirely. Survives across sessions even if the game install
-        // is unmounted.
+        // is unmounted. A cached file that does not decode is a broken
+        // write; it is deleted so the cold path below makes it again.
         var cachedFile = Path.Combine(_root, $"{characterKey}.webp");
         if (File.Exists(cachedFile))
         {
-            return TryDecodeBitmap(cachedFile);
+            if (TryDecodeBitmap(cachedFile) is { } hit)
+            {
+                return hit;
+            }
+            try { File.Delete(cachedFile); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
         }
 
         // Cold path requires the live game install (we extract the DDS
@@ -221,6 +240,7 @@ public sealed class PortraitProvider : IDisposable
         var match = _localization.ResolvePortraitForCharacter(characterKey, portraitList);
         if (match is not { } m || m.Score < MinAcceptableScore)
         {
+            definite = true;
             return null;
         }
 
@@ -250,42 +270,56 @@ public sealed class PortraitProvider : IDisposable
         catch (InvalidDataException) { return null; }
         catch (InvalidOperationException) { return null; }
 
+        // Written under a temporary name and renamed, so a cut-short write
+        // never sits in the cache looking like a portrait.
+        var temp = cachedFile + ".tmp";
         try
         {
-            File.WriteAllBytes(cachedFile, webp);
+            File.WriteAllBytes(temp, webp);
+            File.Move(temp, cachedFile, overwrite: true);
         }
-        catch (IOException) { /* cache write failed; we can still decode in-memory */ }
-        catch (UnauthorizedAccessException) { /* same */ }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The cache write failed; the portrait still decodes from memory.
+            try { File.Delete(temp); }
+            catch (Exception cleanup) when (cleanup is IOException or UnauthorizedAccessException) { }
+        }
 
         return TryDecodeBitmapFromBytes(webp);
     }
 
+    /// <summary>
+    /// The game's portrait list, read once. Concurrent callers wait for the
+    /// one read instead of seeing "attempted" before the buffer exists.
+    /// </summary>
     private byte[]? EnsurePortraitList()
     {
-        lock (_gate)
+        lock (_listGate)
         {
             if (_portraitListLoadAttempted)
             {
                 return _portraitListBuffer;
             }
             _portraitListLoadAttempted = true;
-        }
-        if (_pamtPath is null)
-        {
-            return null;
-        }
-        try
-        {
-            var (buf, _) = _paz.ListNpcPortraits(_pamtPath);
-            lock (_gate)
+            if (_pamtPath is null)
             {
-                _portraitListBuffer = buf;
-                return _portraitListBuffer;
+                return null;
             }
+            try
+            {
+                (_portraitListBuffer, _) = _paz.ListNpcPortraits(_pamtPath);
+            }
+            catch (Exception ex) when (ex is CrimsonSaveException or IOException)
+            {
+                _portraitListBuffer = null;
+            }
+            return _portraitListBuffer;
         }
-        catch (CrimsonSaveException) { return null; }
-        catch (IOException) { return null; }
     }
+
+    // Serialises the one portrait-list read; separate from _gate so cache
+    // lookups are not held up behind it.
+    private readonly object _listGate = new();
 
     private static Bitmap? TryDecodeBitmap(string path)
     {

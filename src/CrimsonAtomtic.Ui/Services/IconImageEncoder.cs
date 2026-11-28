@@ -123,13 +123,18 @@ public static class IconImageEncoder
             throw new InvalidDataException(
                 $"Unexpected DDS header size: {headerSize} (expected 124).");
         }
-        var height = (int)MemoryMarshal.Read<uint>(dds[12..]);
-        var width = (int)MemoryMarshal.Read<uint>(dds[16..]);
-        if (width <= 0 || height <= 0)
+        var rawHeight = MemoryMarshal.Read<uint>(dds[12..]);
+        var rawWidth = MemoryMarshal.Read<uint>(dds[16..]);
+        // The header comes from a game file, so it is checked before any size
+        // derived from it is allocated: a corrupt header would otherwise
+        // overflow width * height * 4 or ask for gigabytes.
+        if (rawWidth == 0 || rawHeight == 0 || rawWidth > MaxDimension || rawHeight > MaxDimension)
         {
             throw new InvalidDataException(
-                $"Invalid DDS dimensions: {width}×{height}.");
+                $"Invalid DDS dimensions: {rawWidth}×{rawHeight} (1..{MaxDimension}).");
         }
+        var height = (int)rawHeight;
+        var width = (int)rawWidth;
         // FourCC at offset 84; pixel-format flags at 80. Branch on
         // DDPF_FOURCC (0x4) = BC compressed vs DDPF_LUMINANCE (0x20000)
         // = uncompressed 8-bit grayscale. The latter is how the
@@ -163,6 +168,10 @@ public static class IconImageEncoder
             "nor grayscale (DDPF_LUMINANCE=0x20000) — unsupported.");
     }
 
+    // Largest texture side accepted. Game textures stay far below it, and
+    // 16384² RGBA is the most the decode buffer is allowed to need.
+    private const uint MaxDimension = 16384;
+
     // ── BC block decode ────────────────────────────────────────────────────
 
     private static byte[] DecodeBlocks(
@@ -172,7 +181,6 @@ public static class IconImageEncoder
         {
             return DecodeL8(pixels, width, height);
         }
-        var rgba = new byte[width * height * 4];
         var blocksX = (width + 3) / 4;
         var blocksY = (height + 3) / 4;
         var blockSize = format switch
@@ -181,13 +189,14 @@ public static class IconImageEncoder
             BcFormat.Bc3 => 16,
             _ => throw new InvalidDataException($"unreachable: format={format}"),
         };
-        var expected = blocksX * blocksY * blockSize;
+        var expected = (long)blocksX * blocksY * blockSize;
         if (pixels.Length < expected)
         {
             throw new InvalidDataException(
                 $"DDS pixel data is {pixels.Length} bytes but the layout " +
                 $"({width}×{height}, {format}) needs {expected}.");
         }
+        var rgba = new byte[checked(width * height * 4)];
 
         Span<byte> blockRgba = stackalloc byte[64]; // 4×4 RGBA
         var blockOffset = 0;

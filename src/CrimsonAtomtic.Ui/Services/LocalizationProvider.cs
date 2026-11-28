@@ -130,11 +130,11 @@ public sealed class LocalizationProvider : IDisposable
     /// 2.01 split each language into one file per namespace inside a
     /// per-language directory. The base install comes first, then one source
     /// per DLC that ships the language (2.04). Populated by Bootstrap.</summary>
-    private readonly Dictionary<string, List<(string Pamt, string Directory, IReadOnlyList<string> Files)>> _languageSources =
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, List<(string Pamt, string Directory, IReadOnlyList<string> Files)>> _languageSources =
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Loaded catalogs, keyed by language code. Owns them.</summary>
-    private readonly Dictionary<string, IPalocCatalog> _catalogs =
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, IPalocCatalog> _catalogs =
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -145,7 +145,7 @@ public sealed class LocalizationProvider : IDisposable
     /// 2.01 on — has to be offered to them one part at a time. See
     /// <see cref="FirstDisplayName"/>.
     /// </summary>
-    private readonly Dictionary<string, NativePalocCatalog[]> _palocParts =
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, NativePalocCatalog[]> _palocParts =
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -159,7 +159,7 @@ public sealed class LocalizationProvider : IDisposable
     /// reliable lookup path is to scan once and key the resulting dict
     /// by (typeByte, upper32).
     /// </summary>
-    private readonly Dictionary<string, Dictionary<(byte TypeByte, uint Key), string>> _namesByLang =
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Dictionary<(byte TypeByte, uint Key), string>> _namesByLang =
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Type byte for the item-name flavour of a PALOC entry.</summary>
@@ -459,6 +459,8 @@ public sealed class LocalizationProvider : IDisposable
     {
         var previous = Portraits;
         Portraits = new PortraitProvider(cacheRootDirectory, _paz, this, _gameRoot);
+        // Portraits refill on demand, so images from another game build are dropped.
+        CacheStamp.ClearIfStale(Portraits.Root, CacheStamp.For(GameDataVersion?.DisplayString));
         return ReferenceEquals(previous, Portraits) ? null : previous;
     }
 
@@ -482,6 +484,9 @@ public sealed class LocalizationProvider : IDisposable
     /// whether to warn the user before save / iteminfo operations.
     /// </summary>
     public GameDataVersion? GameDataVersion { get; private set; }
+
+    /// <summary>The <see cref="CacheStamp"/> of the installed game, or null when unknown.</summary>
+    public string? AssetCacheStamp => CacheStamp.For(GameDataVersion?.DisplayString);
 
     /// <summary>
     /// PAZ extractor the provider was constructed with. Exposed so
@@ -508,7 +513,7 @@ public sealed class LocalizationProvider : IDisposable
     /// <c>"zho-tw"</c>, …). Always includes <see cref="DefaultLanguage"/>
     /// when bootstrap succeeded.
     /// </summary>
-    public IReadOnlyCollection<string> AvailableLanguages => _languageSources.Keys;
+    public IReadOnlyCollection<string> AvailableLanguages => _languageSources.Keys.ToArray();
 
     /// <summary>
     /// User-selected secondary language code. <c>null</c> when only
@@ -532,10 +537,15 @@ public sealed class LocalizationProvider : IDisposable
                 // Reject unknown codes silently — keep the previous value.
                 return;
             }
+            var previous = _secondaryLanguage;
             _secondaryLanguage = normalised;
             if (normalised is not null)
             {
                 TryLoadCatalog(normalised);
+            }
+            if (previous is not null && previous != normalised)
+            {
+                ReleaseLanguage(previous);
             }
         }
     }
@@ -584,6 +594,7 @@ public sealed class LocalizationProvider : IDisposable
         {
             _loadFailures.Clear();
         }
+        ReleaseTables();
         _gameRoot = gameRoot;
         _factionMembers = null; // rebuilt from the characterinfo loaded below
         lock (_itemDyeJoinLock)
@@ -676,6 +687,20 @@ public sealed class LocalizationProvider : IDisposable
         // ── Eagerly load English (the primary). Other languages load
         // lazily on demand via SecondaryLanguage = "...".
         TryLoadCatalog(DefaultLanguage);
+
+        // A secondary language chosen before a re-bootstrap is reloaded from
+        // the new install, or dropped when that install does not ship it.
+        if (_secondaryLanguage is { } secondary)
+        {
+            if (_languageSources.ContainsKey(secondary))
+            {
+                TryLoadCatalog(secondary);
+            }
+            else
+            {
+                _secondaryLanguage = null;
+            }
+        }
 
         return IsLoaded;
     }
@@ -2370,9 +2395,10 @@ public sealed class LocalizationProvider : IDisposable
     private (string? English, string? Secondary) ResolveViaKeyTable(string typeName, uint key)
     {
         var english = ResolveKeyTableOne(typeName, key, DefaultLanguage);
-        var secondary = _secondaryLanguage is null
+        var secondaryLanguage = _secondaryLanguage;
+        var secondary = secondaryLanguage is null
             ? null
-            : ResolveKeyTableOne(typeName, key, _secondaryLanguage);
+            : ResolveKeyTableOne(typeName, key, secondaryLanguage);
         return (english, secondary);
     }
 
@@ -2544,9 +2570,10 @@ public sealed class LocalizationProvider : IDisposable
         {
             english = ItemInfoStringKey(key);
         }
-        var secondary = _secondaryLanguage is null
+        var secondaryLanguage = _secondaryLanguage;
+        var secondary = secondaryLanguage is null
             ? null
-            : LookupName(typeByte, key, _secondaryLanguage);
+            : LookupName(typeByte, key, secondaryLanguage);
         return (english, secondary);
     }
 
@@ -2589,10 +2616,56 @@ public sealed class LocalizationProvider : IDisposable
         return $"{pair.English} / {pair.Secondary}";
     }
 
+    /// <summary>
+    /// Drop one secondary language's tables. Removed from the maps at once,
+    /// so no new lookup starts on them; disposed a little later, so a lookup
+    /// already running on another thread finishes first.
+    /// </summary>
+    private void ReleaseLanguage(string lang)
+    {
+        if (lang == DefaultLanguage)
+        {
+            return;
+        }
+        _namesByLang.TryRemove(lang, out _);
+        _palocParts.TryRemove(lang, out var parts);
+        if (_catalogs.TryRemove(lang, out var cat))
+        {
+            _ = Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith(_ =>
+            {
+                cat.Dispose();
+                foreach (var part in parts ?? [])
+                {
+                    part.Dispose();
+                }
+            }, TaskScheduler.Default);
+        }
+    }
+
     public void Dispose()
+    {
+        ReleaseTables();
+        // Release the decoded icon / portrait Bitmap caches (native Skia
+        // memory). Safe to dispose eagerly here: Dispose runs at app exit
+        // when the UI is already torn down, so no Image is still bound to
+        // a cached Bitmap.
+        Icons.Dispose();
+        Portraits.Dispose();
+    }
+
+    /// <summary>
+    /// Dispose and forget every loaded table, so a bootstrap against another
+    /// install starts from nothing: no PALOC, mission map or merged DLC rows
+    /// from the previous one survive.
+    /// </summary>
+    private void ReleaseTables()
     {
         _itemInfo?.Dispose();
         _itemInfo = null;
+        _canonicalGems = null;
+        _missionNameToKey = null;
+        _namesByLang.Clear();
+        _languageSources.Clear();
         _stringInfo?.Dispose();
         _stringInfo = null;
         _dlcItemInfo.ForEach(c => c.Dispose());
@@ -2661,11 +2734,5 @@ public sealed class LocalizationProvider : IDisposable
             cat.Dispose();
         }
         _catalogs.Clear();
-        // Release the decoded icon / portrait Bitmap caches (native Skia
-        // memory). Safe to dispose eagerly here: Dispose runs at app exit
-        // when the UI is already torn down, so no Image is still bound to
-        // a cached Bitmap.
-        Icons.Dispose();
-        Portraits.Dispose();
     }
 }

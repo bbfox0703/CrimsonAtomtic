@@ -1874,6 +1874,9 @@ public sealed partial class MainWindow : Window
         // IconProvider creates the directory on construction, so the
         // path is guaranteed to exist at this point.
         var cacheDir = loc.Icons.Root;
+        // Icons are named by item key only; after a game update every one
+        // is extracted again rather than kept from the old build.
+        var stale = !CacheStamp.IsCurrent(cacheDir, loc.AssetCacheStamp);
 
         var result = await IconExtractionProgressDialog.RunAsync(
             owner: this,
@@ -1881,7 +1884,11 @@ public sealed partial class MainWindow : Window
             paz: loc.Paz,
             gameRoot: loc.GameRoot!,
             cacheDirectory: cacheDir,
-            overwriteExisting: false);
+            overwriteExisting: stale);
+        if (result is not null && result.Failed == 0)
+        {
+            CacheStamp.Write(cacheDir, loc.AssetCacheStamp);
+        }
 
         // Re-seed the icon provider so newly-written .webp files
         // appear immediately in already-rendered DataGrids — drops

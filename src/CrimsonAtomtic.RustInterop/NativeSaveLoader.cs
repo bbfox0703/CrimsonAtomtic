@@ -128,21 +128,37 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         // (one u64 read) and compare. Match → return cached. Mismatch
         // → re-fetch + replace. This catches every mutation path
         // automatically without per-entry-point manual invalidation.
+        CrimsonSaveHandle? live = null;
+        ulong versionBeforeRead = 0;
         lock (_cacheLock)
         {
             if (PathsMatch(_cachedPath, savePath)
                 && _cachedHandle is { IsInvalid: false } cached)
             {
-                var currentVersion = ReadMutationVersionOrThrow(cached);
+                versionBeforeRead = ReadMutationVersionOrThrow(cached);
                 if (_detailsCache.TryGetValue(blockIndex, out var hit)
-                    && hit.Version == currentVersion)
+                    && hit.Version == versionBeforeRead)
                 {
                     return hit.Details;
                 }
-                var details = ReadBlockDetails(cached, (uint)blockIndex);
-                _detailsCache[blockIndex] = (currentVersion, details);
-                return details;
+                live = cached;
             }
+        }
+        if (live is not null)
+        {
+            // The decode takes up to a couple of seconds on a big block, so
+            // it runs outside the lock. It is cached under the version read
+            // before it: if an edit lands meanwhile, the version has moved
+            // and the entry is never served.
+            var details = ReadBlockDetails(live, (uint)blockIndex);
+            lock (_cacheLock)
+            {
+                if (ReferenceEquals(_cachedHandle, live))
+                {
+                    _detailsCache[blockIndex] = (versionBeforeRead, details);
+                }
+            }
+            return details;
         }
 
         // Slow path: the cache hasn't been primed for this save (e.g.

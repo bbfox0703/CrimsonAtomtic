@@ -32,6 +32,13 @@ public sealed class ChangeJournal
     private readonly object _gate = new();
     private readonly ObservableCollection<ChangeEntry> _entries = new();
 
+    // The context the journal was created on (the UI thread in the app).
+    // The entries are bound to the UI, whose collection events must come
+    // from that thread, so a write from another thread is posted to it.
+    private readonly SynchronizationContext? _context = SynchronizationContext.Current;
+
+    private bool OffContext => _context is not null && SynchronizationContext.Current != _context;
+
     /// <summary>Live, observable view of the journal. UI binds to this.</summary>
     public ReadOnlyObservableCollection<ChangeEntry> Entries { get; }
 
@@ -74,6 +81,16 @@ public sealed class ChangeJournal
         ArgumentException.ThrowIfNullOrEmpty(category);
         ArgumentException.ThrowIfNullOrEmpty(summary);
         var entry = new ChangeEntry(DateTime.Now, category, summary, details);
+        if (OffContext)
+        {
+            _context!.Post(_ => Append(entry), null);
+            return;
+        }
+        Append(entry);
+    }
+
+    private void Append(ChangeEntry entry)
+    {
         lock (_gate) { _entries.Add(entry); }
         Changed?.Invoke(this, EventArgs.Empty);
     }
@@ -85,6 +102,11 @@ public sealed class ChangeJournal
     /// </summary>
     public void Clear()
     {
+        if (OffContext)
+        {
+            _context!.Post(_ => Clear(), null);
+            return;
+        }
         bool anything;
         lock (_gate)
         {

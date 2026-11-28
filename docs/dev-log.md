@@ -28,6 +28,38 @@ read from the top.
 
 -----
 
+## 2026-11-28 (no release) — Code audit P6: game-data caches and the threads that read them
+
+- **What changes:**
+  - **Portraits:** concurrent loads wait for the one read of the game's portrait list instead of
+    seeing "attempted" before it exists and caching "no portrait" for good; only a definite "this
+    character has none" is remembered, so a failed extraction is retried (B3-02).
+  - **Cache files** (icons and portraits) are written under a temporary name and renamed, so a
+    write cut short is never taken for a cached image; a cached portrait that does not decode is
+    deleted and extracted again (B3-03).
+  - **Cache versions:** each cache folder records the game build it was filled from
+    (`cache-stamp.txt`). After a game update the portrait cache is emptied (it refills on demand)
+    and the next icon extraction extracts every icon again; the stamp is written only after a
+    clean run (B3-07).
+  - **DDS headers** from game files are checked before any size derived from them is allocated
+    (sides 1..16384, sizes in checked arithmetic) (B3-06).
+  - **Re-bootstrap** releases every table first, so a new install no longer keeps the previous
+    one's PALOC, mission map or merged DLC rows; a secondary language is reloaded from the new
+    install or dropped when it does not ship it (B3-01). Switching the secondary language releases
+    the old one after half a minute, once lookups already running on it are done (B3-10).
+  - **Concurrent readers:** the per-language maps background readers use (portraits, Known Dyes)
+    are concurrent dictionaries, and a lookup reads the secondary language once (B3-05).
+  - **Block reads** decode outside the cache lock; the result is cached under the version taken
+    before the read, so an edit landing meanwhile is never served stale (B1-15).
+  - **The change journal** posts a write from another thread to the thread it was created on,
+    where its UI binding lives (B2-28).
+- **Left open:** B1-14 (a PAMT parse per extracted file) needs a crimson-rs API; B1-06 (DLC
+  merges are not safe against concurrent lookups) holds while merges run only during a
+  bootstrap, which moves off the UI thread in P7.
+- **Tests:** 479 green (+3 DDS header cases).
+
+-----
+
 ## 2026-11-28 (no release) — Code audit P5: values the game writes, and only those
 
 - **Save scan first.** Twelve live saves (2.06) settle what several fixes depend on: every dye

@@ -224,18 +224,24 @@ public static class IconExtractionService
             return;
         }
 
+        // Written under a temporary name and renamed: a write cut short (a
+        // cancel, a full disk) must not leave a file the next run skips as
+        // already cached.
+        var temp = targetPath + ".tmp";
         try
         {
-            await File.WriteAllBytesAsync(targetPath, webp, cancellationToken).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(temp, webp, cancellationToken).ConfigureAwait(false);
+            File.Move(temp, targetPath, overwrite: true);
             stats.Written++;
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException)
         {
-            RecordFailure(stats, failureSamples,
-                $"itemKey={itemKey} ({prefabName}): write failed — {ex.Message}");
-        }
-        catch (UnauthorizedAccessException ex)
-        {
+            try { File.Delete(temp); }
+            catch (Exception cleanup) when (cleanup is IOException or UnauthorizedAccessException) { }
+            if (ex is OperationCanceledException)
+            {
+                throw;
+            }
             RecordFailure(stats, failureSamples,
                 $"itemKey={itemKey} ({prefabName}): write failed — {ex.Message}");
         }
