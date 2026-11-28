@@ -30,7 +30,8 @@ public sealed partial class KnowledgeEditorViewModel : ObservableObject
         "Legendary", "Minigame", "Unique", "WantedPaper",
     ];
 
-    private const string AllCategory = "All";
+    // The "every category" entry; localized, and compared by value.
+    private readonly string AllCategory = UiText.Get("KnowledgeCategoryAll", "All");
     private const string OtherCategory = "Other";
 
     private readonly MainWindowViewModel _main;
@@ -44,7 +45,7 @@ public sealed partial class KnowledgeEditorViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(LearnCategoryCommand))]
-    private string _selectedCategory = AllCategory;
+    private string _selectedCategory = string.Empty;
 
     [ObservableProperty]
     private string? _searchText;
@@ -72,6 +73,7 @@ public sealed partial class KnowledgeEditorViewModel : ObservableObject
     private KnowledgeEditorViewModel(MainWindowViewModel main)
     {
         _main = main;
+        _selectedCategory = AllCategory;
         Categories.Add(AllCategory);
         foreach (var c in CuratedCategories)
         {
@@ -343,5 +345,7 @@ public sealed partial class KnowledgeRow : ObservableObject
     private bool _isLearned;
 
     public string KeyText => Key.ToString(System.Globalization.CultureInfo.InvariantCulture);
-    public string StatusText => IsLearned ? "Learned" : "Not learned";
+    public string StatusText => IsLearned
+        ? UiText.Get("KnowledgeLearned", "Learned")
+        : UiText.Get("KnowledgeNotLearned", "Not learned");
 }

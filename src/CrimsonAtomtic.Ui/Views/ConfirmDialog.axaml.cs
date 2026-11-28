@@ -50,7 +50,7 @@ public sealed partial class ConfirmDialog : Window
         var dlg = new ConfirmDialog { Title = title };
         dlg.MessageText.Text = message;
         dlg.NoButton.IsVisible = false;
-        dlg.YesButton.Content = "OK";
+        dlg.YesButton.Content = Services.UiText.Get("DialogOk", "OK");
         await dlg.ShowDialog<bool>(owner);
     }
 

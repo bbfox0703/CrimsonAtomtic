@@ -106,7 +106,7 @@ public sealed partial class WorldMapViewModel : ObservableObject, IDisposable
     public bool HasMap => Basemap is not null;
 
     public string BasemapPathLabel => string.IsNullOrEmpty(BasemapPath)
-        ? "(no map selected)"
+        ? UiText.Get("WorldMapNoMap", "(no map selected)")
         : BasemapPath!;
 
     /// <summary>

@@ -165,7 +165,7 @@
           <MenuItem Header="10" Click="OnSetFontSizeClick" Tag="10" />
           <MenuItem Header="12" Click="OnSetFontSizeClick" Tag="12" />
           <MenuItem Header="13" Click="OnSetFontSizeClick" Tag="13" />
-          <MenuItem Header="14 (default)" Click="OnSetFontSizeClick" Tag="14" />
+          <MenuItem Header="{DynamicResource FontSizeDefault14}" Click="OnSetFontSizeClick" Tag="14" />
           <MenuItem Header="16" Click="OnSetFontSizeClick" Tag="16" />
           <MenuItem Header="18" Click="OnSetFontSizeClick" Tag="18" />
           <MenuItem Header="20" Click="OnSetFontSizeClick" Tag="20" />

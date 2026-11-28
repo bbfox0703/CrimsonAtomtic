@@ -149,7 +149,7 @@
          width is constant 320 px so the grid can claim the remaining
          space cleanly. -->
     <Border Grid.Column="1" Width="1" Margin="8,0"
-            Background="{DynamicResource ThemeBorderLowBrush}" />
+            Background="{DynamicResource SystemControlForegroundBaseLowBrush}" />
 
     <!-- Right: iteminfo static-metadata detail pane. Populated when a
          row is selected. The pane is the answer to "why isn't
@@ -223,10 +223,10 @@
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:ItemFlagChipModel">
                   <Border CornerRadius="3" Padding="6,2" Margin="0,0,4,4"
-                          Background="{DynamicResource ThemeAccentBrush2}"
+                          Background="{DynamicResource SystemControlHighlightListAccentLowBrush}"
                           ToolTip.Tip="{Binding Tooltip}">
                     <TextBlock Text="{Binding Label}"
-                               Foreground="{DynamicResource ThemeForegroundBrush}"
+                               Foreground="{DynamicResource SystemControlForegroundBaseHighBrush}"
                                FontSize="12" />
                   </Border>
                 </DataTemplate>

@@ -638,10 +638,10 @@ public sealed partial class AbyssGateRow : ObservableObject
 
     public static string LabelForHash(uint hash) => hash switch
     {
-        AbyssGatesViewModel.DefaultUntouched => "Locked (untouched)",
-        AbyssGatesViewModel.ActivatedCrossed => "Unlocked (activated)",
-        AbyssGatesViewModel.IdleDecoration   => "Idle (scenery)",
-        _                                    => $"Unknown (0x{hash:X8})",
+        AbyssGatesViewModel.DefaultUntouched => UiText.Get("AbyssGateStateLocked", "Locked (untouched)"),
+        AbyssGatesViewModel.ActivatedCrossed => UiText.Get("AbyssGateStateUnlocked", "Unlocked (activated)"),
+        AbyssGatesViewModel.IdleDecoration   => UiText.Get("AbyssGateStateIdle", "Idle (scenery)"),
+        _                                    => UiText.Format("AbyssGateStateUnknown", "Unknown (0x{0:X8})", hash),
     };
 
     [RelayCommand(CanExecute = nameof(CanUnlock))]

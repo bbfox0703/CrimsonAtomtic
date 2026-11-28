@@ -127,14 +127,14 @@ public sealed partial class CharacterRefsBrowserViewModel : ObservableObject
                 break;
             }
             var className = rec.BlockIndex < (uint)blockClassNames.Length
-                ? blockClassNames[(int)rec.BlockIndex] ?? "<unknown>"
-                : "<unknown>";
+                ? blockClassNames[(int)rec.BlockIndex] ?? UiText.Get("ValueUnknown", "<unknown>")
+                : UiText.Get("ValueUnknown", "<unknown>");
 
             var key = rec.CharacterKey;
             var nameEn = localization.LookupCharacterDisplayName(
                              key, LocalizationProvider.DefaultLanguage)
                          ?? localization.LookupCharacterInternalName(key)
-                         ?? "<unresolved>";
+                         ?? UiText.Get("ValueUnresolved", "<unresolved>");
             var nameSec = SecondaryLanguage is null
                 ? null
                 : localization.LookupCharacterDisplayName(key, SecondaryLanguage);

@@ -653,7 +653,7 @@
   <sys:String x:Key="MarkChallengeFollowUpExists" xml:space="preserve">  • X_2 サブミッション項目は既に存在します。挿入をスキップしました。&#10;</sys:String>
   <sys:String x:Key="MarkChallengeFollowUpNew" xml:space="preserve">  • 新しい MissionStateData 項目を追加しました（FAR トラッカーから複製し、_key と _branchedTime を X_2 サブミッションの形に修正）。&#10;</sys:String>
   <sys:String x:Key="MarkChallengeConfirmDetail" xml:space="preserve">Pattern B v1 のレシピでこのチャレンジを完了としてマークしますか？&#10;&#10;  チャレンジキー: {0}&#10;  内部名: {1}&#10;  隣接する可視性ツインキー: {2}&#10;  FAR トラッカー: idx {3}, key {4}&#10;  {5}する X_2 サブミッション: key {6} ({7})&#10;&#10;書き込まれる内容:&#10;  • FAR トラッカー _state ← 5 + _completedTime を記録。&#10;  • FAR トラッカー _usedTagList: {8} → {9} 件（可視性 magic tag を追加）。&#10;{10}  • カタログ行と隣接ツイン: 変更なし。報酬受領時にエンジンが処理します。&#10;&#10;</sys:String>
-  <sys:String x:Key="MarkChallengeConfirmWarnings" xml:space="preserve">[!! 対応する遺物を所持していること] 「この」特定のチャレンジに対応する封印アビス遺物が現在インベントリにあることを確認してください。このボタンは SA 遺物（任意の種類）を1つ以上所持しているときのみ有効になりますが、次回読み込み時のゲーム内報酬受領フローは、このチャレンジに対応する遺物がバッグにある場合のみ完了します。Pattern B v1 単体では不十分です — 遺物の取得こそがエンジンのゲート判定シグナルです。&#10;&#10;[!! SLOT102 の Shield II / Spear I / Hooves II / Slash III で検証済み] Pattern B v1 は、エンジンによる Hooves II の自然な完了（slot102 → 実機 slot103 への遷移）からリバースエンジニアリングしたものです。このレシピは受領前の状態を書き込み、次回読み込み時にエンジンが残りの記帳を補完します。受領後の状態を直接書き込もうとした以前のパターンはいずれもゲーム内 UI を壊しました。操作前にセーブをバックアップしてあることを確認してください（自動バックアップは %LOCALAPPDATA%\CrimsonAtomtic\Backups\ — ファイル → バックアップから復元… で元に戻せます）。&#10;&#10;[!! ゲーム進行に影響します] FAR トラッカーを強制的に state=5 にすると、エンジンにこのチャレンジが完了したと伝えることになります。このチャレンジの完了に依存する後続コンテンツ／NPC 会話がトリガーされます。&#10;&#10;[!! 実績は解除されません] Steam／プラットフォーム実績は実際のゲーム内完了でのみ発火します。ファイル編集によるマークでは実績はトリガーされず、いったんこの状態になるとエンジンはその後の正規完了でも再発火しません。後で正規に完了する予定のチャレンジにはこの機能を使わないでください。&#10;&#10;続行しますか？</sys:String>
+  <sys:String x:Key="MarkChallengeConfirmWarnings" xml:space="preserve">[!! 対応する遺物を所持していること] 「この」特定のチャレンジに対応する封印アビス遺物が現在インベントリにあることを確認してください。エディタはインベントリを確認しません。次回読み込み時のゲーム内報酬受領フローは、このチャレンジに対応する遺物がバッグにある場合のみ完了します。Pattern B v1 単体では不十分です — 遺物の取得こそがエンジンのゲート判定シグナルです。&#10;&#10;[!! SLOT102 の Shield II / Spear I / Hooves II / Slash III で検証済み] Pattern B v1 は、エンジンによる Hooves II の自然な完了（slot102 → 実機 slot103 への遷移）からリバースエンジニアリングしたものです。このレシピは受領前の状態を書き込み、次回読み込み時にエンジンが残りの記帳を補完します。受領後の状態を直接書き込もうとした以前のパターンはいずれもゲーム内 UI を壊しました。操作前にセーブをバックアップしてあることを確認してください（自動バックアップは %LOCALAPPDATA%\CrimsonAtomtic\Backups\ — ファイル → バックアップから復元… で元に戻せます）。&#10;&#10;[!! ゲーム進行に影響します] FAR トラッカーを強制的に state=5 にすると、エンジンにこのチャレンジが完了したと伝えることになります。このチャレンジの完了に依存する後続コンテンツ／NPC 会話がトリガーされます。&#10;&#10;[!! 実績は解除されません] Steam／プラットフォーム実績は実際のゲーム内完了でのみ発火します。ファイル編集によるマークでは実績はトリガーされず、いったんこの状態になるとエンジンはその後の正規完了でも再発火しません。後で正規に完了する予定のチャレンジにはこの機能を使わないでください。&#10;&#10;続行しますか？</sys:String>
   <sys:String x:Key="MarkChallengeCancelled">マークをキャンセルしました。</sys:String>
 
   <sys:String x:Key="ConfirmDialogYes">はい</sys:String>
@@ -1014,4 +1014,77 @@
   <sys:String x:Key="SocketHeaderStatus">{1} 個のアイテムで {0} スロット（{2} 個充填済み）。</sys:String>
   <sys:String x:Key="SocketGemSetsRefreshed">カスタム宝石セットを更新 — 「セット適用」ドロップダウンで {0} セット利用可能。</sys:String>
 
+  <!-- Write safety, stale-list and validation messages -->
+  <sys:String x:Key="AbsentZeroTitle">0 を書き込みますか？</sys:String>
+  <sys:String x:Key="AbsentZeroBody" xml:space="preserve">{0} は absent です。ゲームはこのフィールドの既定値を absent のままにして保存しており、present の 0 とは別の状態です。&#10;&#10;それでも present の 0 を書き込みますか？</sys:String>
+  <sys:String x:Key="MakeAbsentTitle">このフィールドを absent にしますか？</sys:String>
+  <sys:String x:Key="MakeAbsentBody" xml:space="preserve">セーブから {0} を取り除き、ゲームは既定値を読み込みます。フィールドによっては present でないとセーブを読み込めません（アイテムのキーなど）。&#10;&#10;absent にしますか？</sys:String>
+  <sys:String x:Key="AddItemNewMarkFailed">（アイテムは追加されましたが、「新着」マークを設定できませんでした：{0}）</sys:String>
+  <sys:String x:Key="AddItemNoKnowledgeList">セーブに知識リストがないため、アイテムの知識を習得できませんでした。</sys:String>
+  <sys:String x:Key="BulkMarkFailedWhole">一括マークはチャレンジ {0} で停止しました：{3}。それより前の {2} 件中 {1} 件は完了済みで、チャレンジ {0} には何も書き込まれていません。</sys:String>
+  <sys:String x:Key="BuybackSnapshotStale">この一覧の作成後に別のウィンドウでセーブが変更されたため、行が別の項目を指している可能性があります。削除する前に「買い戻し」を開き直してください。</sys:String>
+  <sys:String x:Key="BuybackSnapshotStaleRow">セーブが他で変更されました — 開き直してください</sys:String>
+  <sys:String x:Key="ContribStale">一覧の作成後にセーブが変更されたため、作り直しました。数量をもう一度入力してください。</sys:String>
+  <sys:String x:Key="DyeApplyCommitFailed">コミットに失敗しました：{0}（コード {1}）— 何も適用されていません。</sys:String>
+  <sys:String x:Key="DyeApplyRolledBack">{0} — 何も適用されていません。</sys:String>
+  <sys:String x:Key="DyeListRefreshedTitle">一覧を更新しました</sys:String>
+  <sys:String x:Key="DyeListRefreshedBody">一覧の作成後にセーブが変更されたため、作り直しました。アイテムをもう一度選んでください。</sys:String>
+  <sys:String x:Key="DyePickNeedsTheme">先にこのスロットの染料テーマを選んでください。パレットはテーマから決まります。</sys:String>
+  <sys:String x:Key="DyeSlotFieldMissing">新しい染色要素に _dyeSlotNo フィールドがないため、スロットを設定できません。</sys:String>
+  <sys:String x:Key="DyeSnapshotStale">このエディタを開いた後に別のウィンドウでセーブが変更されたため、行が別のアイテムを指している可能性があります。編集する前に開き直してください。</sys:String>
+  <sys:String x:Key="DyeSnapshotStaleRow">別のウィンドウでセーブが変更されました。このエディタを開き直してください。</sys:String>
+  <sys:String x:Key="FillStale">確認中にセーブが変更されたため、何も補充していません。もう一度実行してください。</sys:String>
+  <sys:String x:Key="GemSetsHeaderPositions">最大 3 つのカスタムセット、各最大 5 個の宝石。n 番目のセルがソケット n に入ります。空のセルはそのソケットをそのままにします。</sys:String>
+  <sys:String x:Key="GemSetsNotAGem">セット {0}：{1} は宝石ではありません。ソケットには宝石しか入りません。保存を中止しました。</sys:String>
+  <sys:String x:Key="JournalSocketOpened">{0} のソケット {1} を開放</sys:String>
+  <sys:String x:Key="SocketOpenedDone">{0} のソケット {1} を開放しました。</sys:String>
+  <sys:String x:Key="LocalizationLoadFailures">{0} 個のテーブルの読み込みに失敗</sys:String>
+  <sys:String x:Key="MarkFailedWatermark">マークに失敗しました：クエストのブロックを読み込めなかったため、完了時刻を既存のものより後に設定できません。</sys:String>
+  <sys:String x:Key="RefreshAfterEditFailed">変更は適用されましたが、ブロックの再読み込みに失敗しました：{0}</sys:String>
+  <sys:String x:Key="RenameMercClearUnsupported">カスタム名の消去には対応していません。ゲームは「カスタム名なし」を absent のフィールドとして保存しますが、このエディタはそれを書き込めません。</sys:String>
+  <sys:String x:Key="RenameMercTooLong">名前は UTF-8 で {0} バイトです。書き込めるのは最大 {1} バイトです。</sys:String>
+  <sys:String x:Key="RenameMercUnchanged">名前は変わっていないため、何も書き込んでいません。</sys:String>
+  <sys:String x:Key="SaStale">一覧の作成後にセーブが変更されたため、作り直しました。チェックを確認してもう一度実行してください。</sys:String>
+  <sys:String x:Key="ScanSkippedBlocks">（{0} 個のブロックを読み込めず、除外しました）</sys:String>
+  <sys:String x:Key="SocketApplySetRolledBack">セット適用：{0} — 何も書き込んでいません：{1}（コード {2}）</sys:String>
+  <sys:String x:Key="SocketNotAGem">{0} は宝石ではありません。</sys:String>
+  <sys:String x:Key="UnhandledErrorTitle">問題が発生しました</sys:String>
+  <sys:String x:Key="UnhandledErrorBody" xml:space="preserve">操作に失敗しました：{0}&#10;&#10;エディタは動作を続けており、変更はメモリに残っています。もう一度試す前に、保存するかセーブを読み込み直してください。</sys:String>
+  <sys:String x:Key="WriteGateBusy">別の編集を実行中です。終わってからもう一度試してください。</sys:String>
+
+  <!-- Faction node and Abyss gate state labels -->
+  <sys:String x:Key="FactionStateUndiscovered">未発見</sys:String>
+  <sys:String x:Key="FactionStateDiscovered">発見済み</sys:String>
+  <sys:String x:Key="FactionStateActive">有効</sys:String>
+  <sys:String x:Key="FactionStateConquered">制圧済み</sys:String>
+  <sys:String x:Key="FactionStateLost">喪失</sys:String>
+  <sys:String x:Key="AbyssGateStateLocked">ロック（未操作）</sys:String>
+  <sys:String x:Key="AbyssGateStateUnlocked">解放（起動済み）</sys:String>
+  <sys:String x:Key="AbyssGateStateIdle">待機（背景）</sys:String>
+  <sys:String x:Key="AbyssGateStateUnknown">不明（0x{0:X8}）</sys:String>
+
+  <!-- Labels the view models build -->
+  <sys:String x:Key="SourceEquipped">装備中</sys:String>
+  <sys:String x:Key="SourceQuickUseReserve">クイック使用予備</sys:String>
+  <sys:String x:Key="SourceInventory">インベントリ</sys:String>
+  <sys:String x:Key="ValueUnknown">&lt;不明&gt;</sys:String>
+  <sys:String x:Key="ValueUnresolved">&lt;未解決&gt;</sys:String>
+  <sys:String x:Key="FillStackButton">スタック補充</sys:String>
+  <sys:String x:Key="FillStacksButton">スタック一括補充</sys:String>
+  <sys:String x:Key="KnowledgeLearned">習得済み</sys:String>
+  <sys:String x:Key="KnowledgeNotLearned">未習得</sys:String>
+  <sys:String x:Key="KnowledgeCategoryAll">すべて</sys:String>
+  <sys:String x:Key="WorldMapNoMap">（地図未選択）</sys:String>
+  <sys:String x:Key="HmacVerified">検証済み</sys:String>
+  <sys:String x:Key="HmacFailed">失敗</sys:String>
+  <sys:String x:Key="DialogOk">OK</sys:String>
+  <sys:String x:Key="FontSizeDefault14">14（既定）</sys:String>
+
+  <!-- File dialogs and field hints -->
+  <sys:String x:Key="PickerOpenSaveTitle">Crimson Desert のセーブを開く</sys:String>
+  <sys:String x:Key="PickerSaveAsTitle">Crimson Desert のセーブに名前を付けて保存…</sys:String>
+  <sys:String x:Key="PickerInstallFolderTitle">Crimson Desert のインストールフォルダーを選択</sys:String>
+  <sys:String x:Key="PickerSaveFiles">セーブファイル</sys:String>
+  <sys:String x:Key="PickerImageFiles">画像ファイル</sys:String>
+  <sys:String x:Key="FieldAbsentHint">{0}（absent — 適用すると present になります。absent は 0 ではありません）</sys:String>
 </ResourceDictionary>

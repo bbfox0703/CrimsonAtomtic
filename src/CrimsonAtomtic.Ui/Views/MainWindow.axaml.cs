@@ -792,12 +792,12 @@ public sealed partial class MainWindow : Window
 
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Open Crimson Desert save",
+            Title = UiText.Get("PickerOpenSaveTitle", "Open Crimson Desert save"),
             AllowMultiple = false,
             SuggestedStartLocation = startLocation,
             FileTypeFilter =
             [
-                new FilePickerFileType("Save files") { Patterns = ["*.save"] },
+                new FilePickerFileType(UiText.Get("PickerSaveFiles", "Save files")) { Patterns = ["*.save"] },
                 FilePickerFileTypes.All,
             ],
         });
@@ -854,13 +854,13 @@ public sealed partial class MainWindow : Window
 
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = "Save Crimson Desert save as…",
+            Title = UiText.Get("PickerSaveAsTitle", "Save Crimson Desert save as…"),
             SuggestedStartLocation = startLocation,
             SuggestedFileName = suggestedName,
             DefaultExtension = "save",
             FileTypeChoices =
             [
-                new FilePickerFileType("Save files") { Patterns = ["*.save"] },
+                new FilePickerFileType(UiText.Get("PickerSaveFiles", "Save files")) { Patterns = ["*.save"] },
                 FilePickerFileTypes.All,
             ],
         });
@@ -1961,7 +1961,7 @@ public sealed partial class MainWindow : Window
         }
         var picked = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = "Select Crimson Desert install folder",
+            Title = UiText.Get("PickerInstallFolderTitle", "Select Crimson Desert install folder"),
             AllowMultiple = false,
             SuggestedStartLocation = startLocation,
         });

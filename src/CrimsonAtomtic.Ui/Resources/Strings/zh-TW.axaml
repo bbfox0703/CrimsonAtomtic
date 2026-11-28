@@ -652,7 +652,7 @@
   <sys:String x:Key="MarkChallengeFollowUpExists" xml:space="preserve">  • X_2 子任務項目已存在；略過插入。&#10;</sys:String>
   <sys:String x:Key="MarkChallengeFollowUpNew" xml:space="preserve">  • 已附加新的 MissionStateData 項目（從 FAR 追蹤器複製，並把 _key 與 _branchedTime 修補為 X_2 子任務的形狀）。&#10;</sys:String>
   <sys:String x:Key="MarkChallengeConfirmDetail" xml:space="preserve">以 Pattern B v1 流程將此挑戰標記為完成？&#10;&#10;  挑戰鍵值：{0}&#10;  內部名稱：{1}&#10;  相鄰可見性孿生鍵值：{2}&#10;  FAR 追蹤器：索引 {3}，鍵值 {4}&#10;  要{5}的 X_2 子任務：鍵值 {6}（{7}）&#10;&#10;本操作會寫入：&#10;  • FAR 追蹤器 _state ← 5，並標記 _completedTime。&#10;  • FAR 追蹤器 _usedTagList：{8} → {9} 筆（加入可見性 magic tag）。&#10;{10}  • 目錄列與相鄰孿生資料：維持不動。引擎會在領取獎勵時處理。&#10;&#10;</sys:String>
-  <sys:String x:Key="MarkChallengeConfirmWarnings" xml:space="preserve">[!! 請持有對應的神器] 請確認「這個」特定挑戰所對應的封印阿比斯神器目前就在你的背包中。此按鈕只在你至少持有一個封印的阿比斯神器（任何種類）時才會啟用，但下次重新載入時的遊戲內領獎流程，只有在對應此挑戰的神器確實在背包中時才會完成。光靠 Pattern B v1 並不足夠 — 撿取神器才是引擎的關卡判定訊號。&#10;&#10;[!! 已在 Shield II / Spear I / Hooves II / Slash III 驗證過] Pattern B v1 是從引擎自然完成的 Hooves II 挑戰逆向工程而來。此流程寫入領獎前的狀態，並讓引擎在下次載入時補完後續程序。先前直接寫入領獎後狀態的做法都會破壞遊戲內 UI。動作前請先確認你的存檔已備份（自動備份位於 %LOCALAPPDATA%\CrimsonAtomtic\Backups\ — 檔案 → 從備份還原… 可以回復）。&#10;&#10;[!! 會影響遊戲進度] 將 FAR 追蹤器強制設為 state=5 等於告訴引擎此挑戰已完成；依賴此挑戰完成的後續內容／NPC 對話都會被觸發。&#10;&#10;[!! 不會解鎖成就] Steam／平台成就只會在真正的遊戲內完成時觸發。透過修改檔案標記不會觸發成就，而且一旦挑戰進入此狀態，引擎也不會在你之後用正常流程完成時再次觸發。請勿對你打算之後用正常管道完成的挑戰使用此功能。&#10;&#10;要繼續嗎？</sys:String>
+  <sys:String x:Key="MarkChallengeConfirmWarnings" xml:space="preserve">[!! 請持有對應的神器] 請確認「這個」特定挑戰所對應的封印阿比斯神器目前就在你的背包中。編輯器不會檢查你的背包；下次重新載入時的遊戲內領獎流程，只有在對應此挑戰的神器確實在背包中時才會完成。光靠 Pattern B v1 並不足夠 — 撿取神器才是引擎的關卡判定訊號。&#10;&#10;[!! 已在 Shield II / Spear I / Hooves II / Slash III 驗證過] Pattern B v1 是從引擎自然完成的 Hooves II 挑戰逆向工程而來。此流程寫入領獎前的狀態，並讓引擎在下次載入時補完後續程序。先前直接寫入領獎後狀態的做法都會破壞遊戲內 UI。動作前請先確認你的存檔已備份（自動備份位於 %LOCALAPPDATA%\CrimsonAtomtic\Backups\ — 檔案 → 從備份還原… 可以回復）。&#10;&#10;[!! 會影響遊戲進度] 將 FAR 追蹤器強制設為 state=5 等於告訴引擎此挑戰已完成；依賴此挑戰完成的後續內容／NPC 對話都會被觸發。&#10;&#10;[!! 不會解鎖成就] Steam／平台成就只會在真正的遊戲內完成時觸發。透過修改檔案標記不會觸發成就，而且一旦挑戰進入此狀態，引擎也不會在你之後用正常流程完成時再次觸發。請勿對你打算之後用正常管道完成的挑戰使用此功能。&#10;&#10;要繼續嗎？</sys:String>
   <sys:String x:Key="MarkChallengeCancelled">已取消標記。</sys:String>
 
   <sys:String x:Key="ConfirmDialogYes">是</sys:String>
@@ -772,12 +772,12 @@
   <sys:String x:Key="RemoveDone">已移除元素 [{0}]。</sys:String>
   <sys:String x:Key="RemoveFailed">移除失敗：{0}</sys:String>
 
-  <!-- 解鎖所有深淵之門 (地圖探索) + 知識注入 -->
+  <!-- 解鎖所有阿比斯之門 (地圖探索) + 知識注入 -->
   <sys:String x:Key="AbyssNoKnowledgeInfo">無事可做 — knowledgeinfo.pabgb 未載入（未設定遊戲安裝路徑）。</sys:String>
   <sys:String x:Key="AbyssNoEntries">無事可做 — 在 knowledgeinfo.pabgb 中找不到阿比斯之門知識項目。</sys:String>
   <sys:String x:Key="AbyssAllDiscovered">無事可做 — 全部 {0} 個阿比斯之門知識項目皆已探索。</sys:String>
   <sys:String x:Key="AbyssConfirmTitle">解鎖所有阿比斯之門（地圖探索）？</sys:String>
-  <sys:String x:Key="AbyssConfirmBody" xml:space="preserve">要將 {0} 個阿比斯之門知識鍵值注入 {1}._list 嗎？&#10;&#10;從 knowledgeinfo.pabgb 收集到 {2} 個相符鍵值（{3} 個名稱前綴）。&#10;{4} 個已存在於你的存檔 — 維持不動。&#10;將附加 {0} 個。&#10;&#10;這只是 **探索旗標** 那一層 — 之後深淵之門會顯示在地圖上。要真正解鎖可穿越的門，請用 工具 → 編輯深淵之門… 做個別狀態變更。&#10;&#10;不寫入直接重新載入即可回復。</sys:String>
+  <sys:String x:Key="AbyssConfirmBody" xml:space="preserve">要將 {0} 個阿比斯之門知識鍵值注入 {1}._list 嗎？&#10;&#10;從 knowledgeinfo.pabgb 收集到 {2} 個相符鍵值（{3} 個名稱前綴）。&#10;{4} 個已存在於你的存檔 — 維持不動。&#10;將附加 {0} 個。&#10;&#10;這只是 **探索旗標** 那一層 — 之後阿比斯之門會顯示在地圖上。要真正解鎖可穿越的門，請用 工具 → 編輯阿比斯之門… 做個別狀態變更。&#10;&#10;不寫入直接重新載入即可回復。</sys:String>
   <sys:String x:Key="KnowledgeInjecting">正在注入 {0} 個知識鍵值…</sys:String>
   <sys:String x:Key="JournalAbyssAdded">已批次新增 {0} 個阿比斯之門知識鍵值到 {1}._list（地圖探索）</sys:String>
   <sys:String x:Key="AbyssDone">完成：已新增 {0} 個阿比斯之門知識鍵值（{2}._list 中共 {1} 個）。</sys:String>
@@ -852,7 +852,7 @@
   <sys:String x:Key="MountMethodSigil">授予印記 → 在遊戲中使用</sys:String>
   <sys:String x:Key="MountMethodTransplant">移植元素 + 知識</sys:String>
 
-  <!-- 編輯深淵之門對話框 -->
+  <!-- 編輯阿比斯之門對話框 -->
   <sys:String x:Key="AbyssGateNoEntries">gimmickinfo.pabgb 中沒有阿比斯／超空間項目（未設定遊戲安裝？）。對話框為空。</sys:String>
   <sys:String x:Key="AbyssGateNoneMatched">已掃描 {1} 個 {2} 根節點下的 {0} 個巢狀 gimmick 元素 — 沒有阿比斯之門 gimmick 符合允許清單。</sys:String>
   <sys:String x:Key="AbyssGateLoaded">已從 {2} 個 {3} 根節點下的 {1} 個巢狀 gimmick 元素載入 {0} 個阿比斯之門列。切換 Lock 狀態以翻轉 _initStateNameHash;重新載入存檔即可回復。</sys:String>
@@ -1013,4 +1013,77 @@
   <sys:String x:Key="SocketHeaderStatus">{1} 個道具共 {0} 個插槽（{2} 個已填入）。</sys:String>
   <sys:String x:Key="SocketGemSetsRefreshed">自訂寶石組合已重新整理 — 「套用組合」下拉選單有 {0} 組可用。</sys:String>
 
+  <!-- Write safety, stale-list and validation messages -->
+  <sys:String x:Key="AbsentZeroTitle">要寫入 present 的 0 嗎？</sys:String>
+  <sys:String x:Key="AbsentZeroBody" xml:space="preserve">{0} 目前是 absent。遊戲以「保持 absent」來表示這個欄位的預設值，這和 present 的 0 不同。&#10;&#10;仍要寫入 present 的 0 嗎？</sys:String>
+  <sys:String x:Key="MakeAbsentTitle">要把這個欄位改成 absent 嗎？</sys:String>
+  <sys:String x:Key="MakeAbsentBody" xml:space="preserve">這會從存檔移除 {0}，遊戲改讀預設值。有些欄位必須是 present，遊戲才能載入存檔（例如物品的鍵值）。&#10;&#10;要改成 absent 嗎？</sys:String>
+  <sys:String x:Key="AddItemNewMarkFailed">（物品已加入，但無法設定「新」標記：{0}）</sys:String>
+  <sys:String x:Key="AddItemNoKnowledgeList">存檔沒有知識清單，無法學習該物品的知識。</sys:String>
+  <sys:String x:Key="BulkMarkFailedWhole">批次標記在挑戰 {0} 停止：{3}。在它之前的 {2} 項中已完成 {1} 項；挑戰 {0} 沒有寫入任何內容。</sys:String>
+  <sys:String x:Key="BuybackSnapshotStale">這份清單建立後，存檔已在其他視窗被修改，某一列可能已指向別的項目。移除前請關閉並重新開啟「商人買回」。</sys:String>
+  <sys:String x:Key="BuybackSnapshotStaleRow">存檔已在別處修改 — 請重新開啟此視窗</sys:String>
+  <sys:String x:Key="ContribStale">清單建立後存檔已變更，已重新建立清單。請重新輸入數量。</sys:String>
+  <sys:String x:Key="DyeApplyCommitFailed">提交失敗：{0}（代碼 {1}）— 沒有套用任何變更。</sys:String>
+  <sys:String x:Key="DyeApplyRolledBack">{0} — 沒有套用任何變更。</sys:String>
+  <sys:String x:Key="DyeListRefreshedTitle">清單已更新</sys:String>
+  <sys:String x:Key="DyeListRefreshedBody">清單建立後存檔已變更，已重新建立清單。請重新選擇物品。</sys:String>
+  <sys:String x:Key="DyePickNeedsTheme">請先為此槽位選擇染劑主題，色盤來自主題。</sys:String>
+  <sys:String x:Key="DyeSlotFieldMissing">新的染色元素沒有 _dyeSlotNo 欄位，無法設定其槽位。</sys:String>
+  <sys:String x:Key="DyeSnapshotStale">此編輯器開啟後，存檔已在其他視窗被修改，各列可能已指向別的物品。編輯前請關閉並重新開啟。</sys:String>
+  <sys:String x:Key="DyeSnapshotStaleRow">存檔已在其他視窗變更，請重新開啟此編輯器。</sys:String>
+  <sys:String x:Key="FillStale">確認視窗開著時存檔已變更，因此沒有補滿任何項目。請再執行一次。</sys:String>
+  <sys:String x:Key="GemSetsHeaderPositions">最多 3 組自訂組合，每組最多 5 顆寶石；第 n 格放入第 n 個鑲孔。空白格表示該鑲孔保持不變。</sys:String>
+  <sys:String x:Key="GemSetsNotAGem">組合 {0}：{1} 不是寶石；鑲孔只能放寶石。已取消儲存。</sys:String>
+  <sys:String x:Key="JournalSocketOpened">開啟 {0} 的鑲孔 {1}</sys:String>
+  <sys:String x:Key="SocketOpenedDone">已開啟 {0} 的鑲孔 {1}。</sys:String>
+  <sys:String x:Key="LocalizationLoadFailures">{0} 個資料表載入失敗</sys:String>
+  <sys:String x:Key="MarkFailedWatermark">標記失敗：無法讀取某個任務區塊，因此無法把完成時間排在既有項目之後。</sys:String>
+  <sys:String x:Key="RefreshAfterEditFailed">變更已套用，但重新讀取區塊失敗：{0}</sys:String>
+  <sys:String x:Key="RenameMercClearUnsupported">不支援清除自訂名稱：遊戲以 absent 欄位表示「沒有自訂名稱」，此編輯器無法寫入這種狀態。</sys:String>
+  <sys:String x:Key="RenameMercTooLong">名稱的 UTF-8 長度為 {0} 位元組，最多只寫入 {1} 位元組。</sys:String>
+  <sys:String x:Key="RenameMercUnchanged">名稱沒有變更，未寫入任何內容。</sys:String>
+  <sys:String x:Key="SaStale">清單建立後存檔已變更，已重新建立清單。請確認勾選後再執行一次。</sys:String>
+  <sys:String x:Key="ScanSkippedBlocks">（有 {0} 個區塊無法讀取，已略過）</sys:String>
+  <sys:String x:Key="SocketApplySetRolledBack">套用組合：{0} — 未寫入任何內容：{1}（代碼 {2}）</sys:String>
+  <sys:String x:Key="SocketNotAGem">{0} 不是寶石。</sys:String>
+  <sys:String x:Key="UnhandledErrorTitle">發生錯誤</sys:String>
+  <sys:String x:Key="UnhandledErrorBody" xml:space="preserve">操作失敗：{0}&#10;&#10;編輯器仍在執行，你的變更仍在記憶體中。再試一次前，請先儲存或重新載入存檔。</sys:String>
+  <sys:String x:Key="WriteGateBusy">另一項編輯仍在執行，請等它完成後再試。</sys:String>
+
+  <!-- Faction node and Abyss gate state labels -->
+  <sys:String x:Key="FactionStateUndiscovered">未發現</sys:String>
+  <sys:String x:Key="FactionStateDiscovered">已發現</sys:String>
+  <sys:String x:Key="FactionStateActive">啟用</sys:String>
+  <sys:String x:Key="FactionStateConquered">已攻佔</sys:String>
+  <sys:String x:Key="FactionStateLost">已失去</sys:String>
+  <sys:String x:Key="AbyssGateStateLocked">鎖定（未觸發）</sys:String>
+  <sys:String x:Key="AbyssGateStateUnlocked">解鎖（已啟動）</sys:String>
+  <sys:String x:Key="AbyssGateStateIdle">閒置（場景）</sys:String>
+  <sys:String x:Key="AbyssGateStateUnknown">未知（0x{0:X8}）</sys:String>
+
+  <!-- Labels the view models build -->
+  <sys:String x:Key="SourceEquipped">已裝備</sys:String>
+  <sys:String x:Key="SourceQuickUseReserve">快捷使用備用</sys:String>
+  <sys:String x:Key="SourceInventory">背包</sys:String>
+  <sys:String x:Key="ValueUnknown">&lt;未知&gt;</sys:String>
+  <sys:String x:Key="ValueUnresolved">&lt;未解析&gt;</sys:String>
+  <sys:String x:Key="FillStackButton">補滿堆疊</sys:String>
+  <sys:String x:Key="FillStacksButton">全部補滿</sys:String>
+  <sys:String x:Key="KnowledgeLearned">已學會</sys:String>
+  <sys:String x:Key="KnowledgeNotLearned">未學會</sys:String>
+  <sys:String x:Key="KnowledgeCategoryAll">全部</sys:String>
+  <sys:String x:Key="WorldMapNoMap">（未選擇地圖）</sys:String>
+  <sys:String x:Key="HmacVerified">已驗證</sys:String>
+  <sys:String x:Key="HmacFailed">失敗</sys:String>
+  <sys:String x:Key="DialogOk">確定</sys:String>
+  <sys:String x:Key="FontSizeDefault14">14（預設）</sys:String>
+
+  <!-- File dialogs and field hints -->
+  <sys:String x:Key="PickerOpenSaveTitle">開啟《赤色沙漠》存檔</sys:String>
+  <sys:String x:Key="PickerSaveAsTitle">另存《赤色沙漠》存檔…</sys:String>
+  <sys:String x:Key="PickerInstallFolderTitle">選擇《赤色沙漠》安裝資料夾</sys:String>
+  <sys:String x:Key="PickerSaveFiles">存檔檔案</sys:String>
+  <sys:String x:Key="PickerImageFiles">圖片檔案</sys:String>
+  <sys:String x:Key="FieldAbsentHint">{0}（absent — 套用後變為 present；absent 不等於 0）</sys:String>
 </ResourceDictionary>

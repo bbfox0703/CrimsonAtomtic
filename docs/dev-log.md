@@ -28,6 +28,30 @@ read from the top.
 
 -----
 
+## 2026-11-28 (no release) — Code audit P8: UI strings
+
+- **What changes:**
+  - **A test for missing strings.** `UiStringKeysTests` fails when a key the code asks for (UiText,
+    LookupUiResourceString, FindResource, DynamicResource) is missing from any of the three
+    dictionaries, or when the dictionaries' keys differ. It found 36 keys this audit's fixes had
+    used without adding them; all are in en / ja / zh-TW now.
+  - **Labels the view models built in English** go through the dictionaries: faction-node states,
+    Abyss gate states, item sources (Equipped, Quick-Use Reserve, a mercenary's inventory), the
+    Fill stack(s) button, knowledge Learned / All, "no map selected", the HMAC status, the confirm
+    dialog's OK, the default font size, the file dialogs' titles and filters, and the absent-field
+    hint, which now says that absent is not 0 (B2-25, B3-17, B5-19).
+  - **The Sealed Abyss warning** no longer promises a held-artifact check that does not exist, in
+    any language (B5-11). Skips are counted by an explicit "not picked up yet" flag instead of
+    matching English substrings of the reason (B5-22). zh-TW uses one name for the gates,
+    阿比斯之門 (B5-19).
+  - **Find Items** used three Simple-theme brush names the Fluent theme does not define; it uses
+    Fluent's now (X-06).
+- **Left open:** the Sealed Abyss skip reasons and many status lines inside the tool windows are
+  still English, and native error messages reach the UI as they are (B1-21, B4-25).
+- **Tests:** 481 green (+2 `UiStringKeysTests`).
+
+-----
+
 ## 2026-11-28 (no release) — Code audit P7: slow work off the UI thread
 
 - **What changes:**

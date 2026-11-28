@@ -648,7 +648,7 @@
   <sys:String x:Key="MarkChallengeFollowUpExists" xml:space="preserve">  • X_2 sub-mission entry already exists; skipped insert.&#10;</sys:String>
   <sys:String x:Key="MarkChallengeFollowUpNew" xml:space="preserve">  • NEW MissionStateData entry appended (cloned from FAR tracker, _key + _branchedTime patched to the X_2 sub-mission shape).&#10;</sys:String>
   <sys:String x:Key="MarkChallengeConfirmDetail" xml:space="preserve">Mark this challenge as completed using the Pattern B v1 recipe?&#10;&#10;  Challenge key: {0}&#10;  Internal name: {1}&#10;  Adjacent visibility twin key: {2}&#10;  FAR tracker: idx {3}, key {4}&#10;  X_2 sub-mission to {5}: key {6} ({7})&#10;&#10;What this writes:&#10;  • FAR tracker _state ← 5 + _completedTime stamped.&#10;  • FAR tracker _usedTagList: {8} → {9} entries (adds visible magic tag).&#10;{10}  • Catalog row + adjacent twin: UNTOUCHED. Engine handles those at reward pickup.&#10;&#10;</sys:String>
-  <sys:String x:Key="MarkChallengeConfirmWarnings" xml:space="preserve">[!! HOLD THE MATCHING ARTIFACT] Confirm that the Sealed Abyss Artifact for THIS specific challenge is currently in your inventory. The button only enables when you hold at least one SA artifact (any variant), but the in-game reward-claim flow on next reload only completes if the matching artifact for this challenge is in your bag. Pattern B v1 on its own is not enough — the artifact pickup is the engine's gating signal.&#10;&#10;[!! VERIFIED ON Shield II / Spear I / Hooves II / Slash III IN SLOT102] Pattern B v1 is reverse-engineered from the engine's natural Hooves II completion (slot102 → live slot103 transition). The recipe writes the pre-claim state and lets the engine finish bookkeeping on next load. Earlier patterns that tried to write the post-claim state directly all corrupted the in-game UI. CONFIRM YOUR SAVE IS BACKED UP before proceeding (auto-backup at %LOCALAPPDATA%\CrimsonAtomtic\Backups\ — File → Restore from Backup… can roll back).&#10;&#10;[!! WILL AFFECT GAME PROGRESSION] Forcing the FAR tracker to state=5 tells the engine the challenge is complete; downstream content / NPC dialogues that depend on this challenge being done will trigger.&#10;&#10;[!! ACHIEVEMENTS WILL NOT UNLOCK] Steam / platform achievements only fire on a real in-game completion. Marking via file edit will not trigger the achievement, and once the challenge is in this state the engine won't re-fire it on subsequent legitimate completion. Do not use this for challenges you intend to complete legitimately later.&#10;&#10;Proceed?</sys:String>
+  <sys:String x:Key="MarkChallengeConfirmWarnings" xml:space="preserve">[!! HOLD THE MATCHING ARTIFACT] Confirm that the Sealed Abyss Artifact for THIS specific challenge is currently in your inventory. The editor does not check your inventory, and the in-game reward-claim flow on next reload only completes if the matching artifact for this challenge is in your bag. Pattern B v1 on its own is not enough — the artifact pickup is the engine's gating signal.&#10;&#10;[!! VERIFIED ON Shield II / Spear I / Hooves II / Slash III IN SLOT102] Pattern B v1 is reverse-engineered from the engine's natural Hooves II completion (slot102 → live slot103 transition). The recipe writes the pre-claim state and lets the engine finish bookkeeping on next load. Earlier patterns that tried to write the post-claim state directly all corrupted the in-game UI. CONFIRM YOUR SAVE IS BACKED UP before proceeding (auto-backup at %LOCALAPPDATA%\CrimsonAtomtic\Backups\ — File → Restore from Backup… can roll back).&#10;&#10;[!! WILL AFFECT GAME PROGRESSION] Forcing the FAR tracker to state=5 tells the engine the challenge is complete; downstream content / NPC dialogues that depend on this challenge being done will trigger.&#10;&#10;[!! ACHIEVEMENTS WILL NOT UNLOCK] Steam / platform achievements only fire on a real in-game completion. Marking via file edit will not trigger the achievement, and once the challenge is in this state the engine won't re-fire it on subsequent legitimate completion. Do not use this for challenges you intend to complete legitimately later.&#10;&#10;Proceed?</sys:String>
   <sys:String x:Key="MarkChallengeCancelled">Mark cancelled.</sys:String>
 
   <sys:String x:Key="ConfirmDialogYes">Yes</sys:String>
@@ -1011,4 +1011,77 @@
   <sys:String x:Key="SocketHeaderStatus">{0} slot(s) across {1} item(s) ({2} filled).</sys:String>
   <sys:String x:Key="SocketGemSetsRefreshed">Custom gem sets refreshed — {0} set(s) available in the Apply-Set dropdown.</sys:String>
 
+  <!-- Write safety, stale-list and validation messages -->
+  <sys:String x:Key="AbsentZeroTitle">Write a present zero?</sys:String>
+  <sys:String x:Key="AbsentZeroBody" xml:space="preserve">{0} is absent. The game stores this field's default by leaving it absent, which is not the same as a present 0.&#10;&#10;Write a present 0 anyway?</sys:String>
+  <sys:String x:Key="MakeAbsentTitle">Make this field absent?</sys:String>
+  <sys:String x:Key="MakeAbsentBody" xml:space="preserve">Removes {0} from the save; the game then reads its default. Some fields must be present for the game to load the save (an item's key, for example).&#10;&#10;Make it absent?</sys:String>
+  <sys:String x:Key="AddItemNewMarkFailed">(The item is added, but its "new" mark could not be set: {0}.)</sys:String>
+  <sys:String x:Key="AddItemNoKnowledgeList">The save has no knowledge list, so the item's knowledge could not be learned.</sys:String>
+  <sys:String x:Key="BulkMarkFailedWhole">Bulk Mark stopped at challenge {0}: {3}. The {1} of {2} challenge(s) before it are complete; nothing of challenge {0} was written.</sys:String>
+  <sys:String x:Key="BuybackSnapshotStale">The save was changed in another window since this list was built, so a row may point at a different entry now. Close and reopen Vendor Buyback before removing.</sys:String>
+  <sys:String x:Key="BuybackSnapshotStaleRow">save changed elsewhere — reopen this dialog</sys:String>
+  <sys:String x:Key="ContribStale">The save changed since this list was built, so it has been rebuilt. Enter the amounts again.</sys:String>
+  <sys:String x:Key="DyeApplyCommitFailed">Commit failed: {0} (code {1}) — nothing applied.</sys:String>
+  <sys:String x:Key="DyeApplyRolledBack">{0} — nothing applied.</sys:String>
+  <sys:String x:Key="DyeListRefreshedTitle">List refreshed</sys:String>
+  <sys:String x:Key="DyeListRefreshedBody">The save changed since this list was built, so it has been rebuilt. Pick the item again.</sys:String>
+  <sys:String x:Key="DyePickNeedsTheme">Pick a dye theme for this slot first; the palette comes from it.</sys:String>
+  <sys:String x:Key="DyeSlotFieldMissing">The new dye element has no _dyeSlotNo field, so its slot cannot be set.</sys:String>
+  <sys:String x:Key="DyeSnapshotStale">The save was changed in another window since this editor opened, so its rows may point at a different item now. Close and reopen it before editing.</sys:String>
+  <sys:String x:Key="DyeSnapshotStaleRow">The save changed in another window; reopen this editor.</sys:String>
+  <sys:String x:Key="FillStale">The save changed while the confirmation was open, so nothing was filled. Run Fill again.</sys:String>
+  <sys:String x:Key="GemSetsHeaderPositions">Up to 3 custom sets, each with up to 5 gems; the n-th cell goes into socket n. An empty cell leaves that socket as it is.</sys:String>
+  <sys:String x:Key="GemSetsNotAGem">Set {0}: {1} is not a gem; a socket only holds gems. Save aborted.</sys:String>
+  <sys:String x:Key="JournalSocketOpened">Opened socket {1} on {0}</sys:String>
+  <sys:String x:Key="SocketOpenedDone">Opened socket {1} on {0}.</sys:String>
+  <sys:String x:Key="LocalizationLoadFailures">{0} table(s) failed to load</sys:String>
+  <sys:String x:Key="MarkFailedWatermark">Mark failed: a quest block could not be read, so the completion time cannot be placed after the existing ones.</sys:String>
+  <sys:String x:Key="RefreshAfterEditFailed">The edit was applied, but re-reading the block failed: {0}</sys:String>
+  <sys:String x:Key="RenameMercClearUnsupported">Clearing a custom name is not supported: the game stores "no custom name" as an absent field, which this editor cannot write.</sys:String>
+  <sys:String x:Key="RenameMercTooLong">The name is {0} bytes in UTF-8; at most {1} are written.</sys:String>
+  <sys:String x:Key="RenameMercUnchanged">The name is unchanged; nothing written.</sys:String>
+  <sys:String x:Key="SaStale">The save changed since this list was built, so it has been rebuilt. Check the ticks and run again.</sys:String>
+  <sys:String x:Key="ScanSkippedBlocks"> ({0} block(s) could not be read and were left out.)</sys:String>
+  <sys:String x:Key="SocketApplySetRolledBack">Apply Set: {0} — nothing written: {1} (code {2}).</sys:String>
+  <sys:String x:Key="SocketNotAGem">{0} is not a gem.</sys:String>
+  <sys:String x:Key="UnhandledErrorTitle">Something went wrong</sys:String>
+  <sys:String x:Key="UnhandledErrorBody" xml:space="preserve">An operation failed: {0}&#10;&#10;The editor kept running; your edits are still in memory. Save them, or reload the save, before trying again.</sys:String>
+  <sys:String x:Key="WriteGateBusy">Another edit is still running; try again when it finishes.</sys:String>
+
+  <!-- Faction node and Abyss gate state labels -->
+  <sys:String x:Key="FactionStateUndiscovered">Undiscovered</sys:String>
+  <sys:String x:Key="FactionStateDiscovered">Discovered</sys:String>
+  <sys:String x:Key="FactionStateActive">Active</sys:String>
+  <sys:String x:Key="FactionStateConquered">Conquered</sys:String>
+  <sys:String x:Key="FactionStateLost">Lost</sys:String>
+  <sys:String x:Key="AbyssGateStateLocked">Locked (untouched)</sys:String>
+  <sys:String x:Key="AbyssGateStateUnlocked">Unlocked (activated)</sys:String>
+  <sys:String x:Key="AbyssGateStateIdle">Idle (scenery)</sys:String>
+  <sys:String x:Key="AbyssGateStateUnknown">Unknown (0x{0:X8})</sys:String>
+
+  <!-- Labels the view models build -->
+  <sys:String x:Key="SourceEquipped">Equipped</sys:String>
+  <sys:String x:Key="SourceQuickUseReserve">Quick-Use Reserve</sys:String>
+  <sys:String x:Key="SourceInventory">Inventory</sys:String>
+  <sys:String x:Key="ValueUnknown">&lt;unknown&gt;</sys:String>
+  <sys:String x:Key="ValueUnresolved">&lt;unresolved&gt;</sys:String>
+  <sys:String x:Key="FillStackButton">Fill stack</sys:String>
+  <sys:String x:Key="FillStacksButton">Fill stacks</sys:String>
+  <sys:String x:Key="KnowledgeLearned">Learned</sys:String>
+  <sys:String x:Key="KnowledgeNotLearned">Not learned</sys:String>
+  <sys:String x:Key="KnowledgeCategoryAll">All</sys:String>
+  <sys:String x:Key="WorldMapNoMap">(no map selected)</sys:String>
+  <sys:String x:Key="HmacVerified">verified</sys:String>
+  <sys:String x:Key="HmacFailed">FAILED</sys:String>
+  <sys:String x:Key="DialogOk">OK</sys:String>
+  <sys:String x:Key="FontSizeDefault14">14 (default)</sys:String>
+
+  <!-- File dialogs and field hints -->
+  <sys:String x:Key="PickerOpenSaveTitle">Open Crimson Desert save</sys:String>
+  <sys:String x:Key="PickerSaveAsTitle">Save Crimson Desert save as…</sys:String>
+  <sys:String x:Key="PickerInstallFolderTitle">Select Crimson Desert install folder</sys:String>
+  <sys:String x:Key="PickerSaveFiles">Save files</sys:String>
+  <sys:String x:Key="PickerImageFiles">Image files</sys:String>
+  <sys:String x:Key="FieldAbsentHint">{0} (absent — Apply makes it present; absent is not 0)</sys:String>
 </ResourceDictionary>

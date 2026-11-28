@@ -109,7 +109,7 @@ public sealed partial class WorldMapWindow : Window
             SuggestedStartLocation = startLocation,
             FileTypeFilter =
             [
-                new FilePickerFileType("Image files")
+                new FilePickerFileType(Services.UiText.Get("PickerImageFiles", "Image files"))
                 {
                     Patterns = ["*.png", "*.jpg", "*.jpeg", "*.webp", "*.bmp"],
                     MimeTypes = ["image/png", "image/jpeg", "image/webp", "image/bmp"],

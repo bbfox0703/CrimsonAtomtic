@@ -1850,16 +1850,16 @@ public sealed class LocalizationProvider : IDisposable
                     ? $"InventoryKey {record.InventoryKey}"
                     : bagLabel;
             case ContainerKind.ActiveEquip:
-                return "Equipped";
+                return UiText.Get("SourceEquipped", "Equipped");
             case ContainerKind.ActiveUseReserve:
-                return "Quick-Use Reserve";
+                return UiText.Get("SourceQuickUseReserve", "Quick-Use Reserve");
             case ContainerKind.MercenaryEquip:
             case ContainerKind.MercenaryInventory:
                 var ownerName = LookupCharacterInternalName(record.OwnerCharacterKey)
                                 ?? $"CharacterKey {record.OwnerCharacterKey}";
                 var suffix = record.Container == ContainerKind.MercenaryEquip
-                    ? "Equipped"
-                    : "Inventory";
+                    ? UiText.Get("SourceEquipped", "Equipped")
+                    : UiText.Get("SourceInventory", "Inventory");
                 return record.OwnerIsMainMercenary
                     ? $"{ownerName} (Main, {suffix})"
                     : $"{ownerName} ({suffix})";

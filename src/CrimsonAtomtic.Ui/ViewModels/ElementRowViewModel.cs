@@ -267,7 +267,9 @@ public sealed class ElementRowViewModel
     public bool IsBulkFillCandidate => IsSingleFillCandidate || IsContainerFillCandidate;
 
     /// <summary>Label for the fill button — switches between "Fill stack" (1) and "Fill stacks" (N).</summary>
-    public string FillButtonLabel => IsSingleFillCandidate ? "Fill stack" : "Fill stacks";
+    public string FillButtonLabel => IsSingleFillCandidate
+        ? UiText.Get("FillStackButton", "Fill stack")
+        : UiText.Get("FillStacksButton", "Fill stacks");
 
     /// <summary>
     /// Find the first scalar field on <paramref name="block"/> whose

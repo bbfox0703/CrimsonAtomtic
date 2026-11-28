@@ -1258,7 +1258,8 @@ public sealed partial class MainWindowViewModel(
 
     public string SchemaTypeCountText => Summary is null ? "" : Summary.SchemaTypeCount.ToString("N0");
     public string TocEntryCountText => Summary is null ? "" : Summary.TocEntryCount.ToString("N0");
-    public string HmacStatusText => Summary is null ? "" : Summary.HmacOk ? "verified" : "FAILED";
+    public string HmacStatusText => Summary is null ? ""
+        : Summary.HmacOk ? UiText.Get("HmacVerified", "verified") : UiText.Get("HmacFailed", "FAILED");
     public string PayloadSizeText => Summary is null ? "" : $"{Summary.PayloadSize:N0} bytes";
     public string UncompressedSizeText => Summary is null ? "" : $"{Summary.UncompressedSize:N0} bytes";
 
@@ -1391,7 +1392,7 @@ public sealed partial class MainWindowViewModel(
     public string SelectedFieldTypeHint =>
         SelectedField is not { } f ? string.Empty :
         f.Present       ? f.TypeTag :
-        $"{f.TypeTag} (absent — Apply makes present)";
+        UiText.Format("FieldAbsentHint", "{0} (absent — Apply makes it present; absent is not 0)", f.TypeTag);
 
     /// <summary>
     /// True when the currently-selected scalar field can be filled
@@ -2251,8 +2252,8 @@ public sealed partial class MainWindowViewModel(
                 + "  • Catalog row + adjacent twin: UNTOUCHED. Engine handles those at reward pickup.\n\n");
         var warnings = LookupUiResourceString("MarkChallengeConfirmWarnings")
             ?? ("[!! HOLD THE MATCHING ARTIFACT] Confirm that the Sealed Abyss Artifact for THIS "
-                + "specific challenge is currently in your inventory. The button only enables when "
-                + "you hold at least one SA artifact (any variant), but the in-game reward-claim "
+                + "specific challenge is currently in your inventory. The editor does not check "
+                + "your inventory, and the in-game reward-claim "
                 + "flow on next reload only completes if the matching artifact for this challenge "
                 + "is in your bag. Pattern B v1 on its own is not enough — the artifact pickup is "
                 + "the engine's gating signal.\n\n"
@@ -2835,20 +2836,11 @@ public sealed partial class MainWindowViewModel(
                         continue;
                     }
                     if (!TryBuildChallengeContextFromCatalogRow(
-                        b.Index, fi, ei, out var ctx, out var skipReason))
+                        b.Index, fi, ei, out var ctx, out var skipReason, out var notPickedUp))
                     {
-                        // Bucket the skip into NoFar / Other based on the
-                        // shape of skipReason. Twin-already-state=5 means
-                        // FAR tracker exists somewhere but downstream
-                        // gate failed; otherwise the artifact hasn't been
-                        // picked up yet.
-                        var noFarShape =
-                            skipReason is not null
-                            && (skipReason.Contains("artifact never picked up")
-                                || skipReason.Contains("artifact pickup")
-                                || skipReason.Contains("FAR tracker")
-                                    && skipReason.Contains("not found"));
-                        if (noFarShape) skippedNoFar++;
+                        // Not picked up yet (no FAR tracker, or an unfinished
+                        // pickup) is counted apart from every other reason.
+                        if (notPickedUp) skippedNoFar++;
                         else skippedOther++;
                         // Capture a per-key entry so the dialog can show
                         // exactly which challenges were skipped + why.
@@ -2901,22 +2893,16 @@ public sealed partial class MainWindowViewModel(
     /// </summary>
     internal static class FactionNodeStates
     {
-        public static readonly IReadOnlyList<(byte Value, string Label)> All =
-        [
-            (0, "Undiscovered"),
-            (1, "Discovered"),
-            (2, "Active"),
-            (3, "Conquered"),
-            (4, "Lost"),
-        ];
+        public static IReadOnlyList<(byte Value, string Label)> All =>
+            [.. Enumerable.Range(0, 5).Select(v => ((byte)v, Label((byte)v)))];
 
         public static string Label(byte state) => state switch
         {
-            0 => "Undiscovered",
-            1 => "Discovered",
-            2 => "Active",
-            3 => "Conquered",
-            4 => "Lost",
+            0 => UiText.Get("FactionStateUndiscovered", "Undiscovered"),
+            1 => UiText.Get("FactionStateDiscovered", "Discovered"),
+            2 => UiText.Get("FactionStateActive", "Active"),
+            3 => UiText.Get("FactionStateConquered", "Conquered"),
+            4 => UiText.Get("FactionStateLost", "Lost"),
             _ => state.ToString(System.Globalization.CultureInfo.InvariantCulture),
         };
     }
@@ -3170,9 +3156,26 @@ public sealed partial class MainWindowViewModel(
         int catalogElementIdx,
         out CurrentChallengeContext ctx,
         out string? skipReason)
+        => TryBuildChallengeContextFromCatalogRow(topBlockIdx, listFieldIdx, catalogElementIdx,
+            out ctx, out skipReason, out _);
+
+    /// <summary>
+    /// <see cref="TryBuildChallengeContextFromCatalogRow(int, int, int, out CurrentChallengeContext, out string?)"/>,
+    /// and <paramref name="notPickedUp"/> is true when the challenge is
+    /// skipped because the artifact has not been picked up in-game yet (no
+    /// FAR tracker, or a twin row the pickup has not finished).
+    /// </summary>
+    private bool TryBuildChallengeContextFromCatalogRow(
+        int topBlockIdx,
+        int listFieldIdx,
+        int catalogElementIdx,
+        out CurrentChallengeContext ctx,
+        out string? skipReason,
+        out bool notPickedUp)
     {
         ctx = default;
         skipReason = null;
+        notPickedUp = false;
         if (_loadedPath is null) { skipReason = "no save loaded"; return false; }
 
         BlockDetails parentTop;
@@ -3244,9 +3247,9 @@ public sealed partial class MainWindowViewModel(
         // That's the engine's "user has picked up the artifact" marker —
         // without it the recipe is unsafe (likely to leave the card hidden).
         if (!SaveFieldValues.TryParseUInt(twinStateFld.Value, out var twinStateU64) || twinStateU64 != 5UL)
-        { skipReason = "adjacent twin _state != 5 (artifact never picked up)"; return false; }
+        { skipReason = "adjacent twin _state != 5 (artifact never picked up)"; notPickedUp = true; return false; }
         if (!twinCtFld.Present)
-        { skipReason = "adjacent twin _completedTime absent (artifact pickup incomplete)"; return false; }
+        { skipReason = "adjacent twin _completedTime absent (artifact pickup incomplete)"; notPickedUp = true; return false; }
         var twinKey = (uint)twinKeyU64;
         uint[] twinTags;
         var twinPath = new[] { new PathStep((uint)listFieldIdx, (uint)twinElementIdx) };
@@ -3310,7 +3313,7 @@ public sealed partial class MainWindowViewModel(
             }
         }
         if (farElementIdx is not { } farIdx)
-        { skipReason = $"FAR tracker (key 0x{(twinKey - 1u):X8}) not found in _missionStateList"; return false; }
+        { skipReason = $"FAR tracker (key 0x{(twinKey - 1u):X8}) not found in _missionStateList"; notPickedUp = true; return false; }
 
         // Locate FAR tracker's field indices for the writes we'll do.
         var far = siblings[farIdx];
