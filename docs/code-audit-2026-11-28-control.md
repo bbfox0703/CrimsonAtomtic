@@ -57,7 +57,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B1-03 | batch 的 `FailedOpIndex` 在 PANIC 或提早返回時誤報為 op 0 | bug | 確認 | P3 | 已修 | `951ac21` | NULL_ARG 提早返回與 PANIC 仍不寫 out_failed_op_index；成功時改為 usize::MAX。 |
 | B1-04 | two-call pattern 丟棄第二次呼叫回報的長度或筆數 | risk | 確認 | P5 | 已修 | `559a80b` | two-call 語意不變（第二次回報實際長度/筆數）；列舉改為加鎖，不再有 data race，但兩次呼叫之間仍可能被插入。 catalog 讀取（itemInfo/paloc/stringinfo/mainquest）載入後不變，未改。 |
 | B1-05 | handle 層級的 batch 狀態沒有 C# 端的單一寫入者保證（跨執行緒 mutation 會混入別人的 batch） | risk | 確認 | P3 | 已修 | `951ac21` | batch 狀態仍屬於 handle，C# 端沒有單一寫入者；與 B4-21、B5-13 同一個 mutation gate。 |
-| B1-06 | catalog 的 `MergeDlcFromBytes` 與並行 lookup 不安全，C# 端沒有防護也沒有文件 | risk | 確認 | P6 | 部分 | `8577638` | Rust 文件仍寫「不能與並行 lookup 同時進行」；merge 現在可能回傳 BODY_PARSE。 merge 只在 bootstrap 時執行；P7 將 bootstrap 移出 UI 執行緒時一併處理。 |
+| B1-06 | catalog 的 `MergeDlcFromBytes` 與並行 lookup 不安全，C# 端沒有防護也沒有文件 | risk | 確認 | P6 | 已修 | `8577638` `f3f25a8` | Rust 文件仍寫「不能與並行 lookup 同時進行」；merge 現在可能回傳 BODY_PARSE。 merge 只在 bootstrap 時執行；P7 將 bootstrap 移出 UI 執行緒時一併處理。 以 bootstrap 期間停用視窗並關閉工具視窗達成互斥。 |
 | B1-07 | 部分 catalog lookup 把所有錯誤碼默默轉成「找不到」或 0 | risk | 確認 | P4 | 已修 | `5127921` | faction get_entry / lookup_count 改為先清零 out 參數，錯誤一律讀成「找不到」。 |
 | B1-08 | `GameDataLayout.TryListDir` 吞掉所有 `CrimsonSaveException` | risk | 確認 | P4 | 已修 | `5127921` | 新增更多 BODY_PARSE 來源（未知 PAMT flag），TryListDir 仍全吞。 |
 | B1-09 | `NativePaverReader.TryReadFromInstall` 宣稱「Never throws」，實際會丟例外 | risk | 確認 | P4 | 已修 | `5127921` | 可改用新的 crimson_parser_supports；仍需捕捉 DllNotFound / EntryPointNotFound。 |
@@ -100,7 +100,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B2-17 | `AppSettingsStore`：非原子寫入、檔案損毀後靜默重置、`TrySave` 的回傳值全被忽略 | risk | 部分 | P1 | 已修 | `09394d6` | 非原子寫入與損毀時靜默重置是真的；「全部忽略 TrySave」太廣（CustomGemSets 有檢查，WorldMap 也忽略）。 |
 | B2-18 | 單一執行個體保護（Rule 2）的邊界情況 | risk | 確認 | P10 | 待修 |  | Global\ mutex 沒有 try；WinExe 用 Console.Error。多使用者情境需實機。 |
 | B2-19 | async void handler 與 fire-and-forget 的失敗不會被使用者看到 | risk | 確認 | P4 | 已修 | `5127921` | 六個 async void 工具 handler 沒有 try；SafeFireAndForget 只 Trace。 以全域處理器涵蓋。 |
-| B2-20 | Rule 3：檔案 I/O 與重 FFI 在 UI 執行緒同步執行 | rule violation | 確認 | P7 | 待修 |  | LoadSave 同步、備份清單在 ctor、DiscoverSaveRoots 每次全樹掃描。 |
+| B2-20 | Rule 3：檔案 I/O 與重 FFI 在 UI 執行緒同步執行 | rule violation | 確認 | P7 | 已修 | `f3f25a8` | LoadSave 同步、備份清單在 ctor、DiscoverSaveRoots 每次全樹掃描。 備份檔複製仍在 UI 執行緒（小檔）。 |
 | B2-21 | Rule 6：沒有任何日誌實作（Pre-scan #1 確認） | rule violation | 確認 | P10 | 待修 |  | 沒有任何日誌實作。 |
 | B2-22 | Rule 7：沒有集中的 magic-string 檔（Pre-scan #4，Block 2 範圍確認） | rule violation | 確認 | P9 | 待修 |  | 與 B1-18、B3-16、B4-26、B5-18、B6-24 合併。 |
 | B2-23 | Rule 4：平台相關的路徑知識與具體實作洩漏到 ViewModel / composition root 之外 | rule violation | 確認 | P10 | 待修 |  | VM 自己組 Windows 存檔路徑、直接呼叫 SteamLibraryProbe。 |
@@ -130,7 +130,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B3-12 | `LevelGimmickSceneObjectInfoKey` 先查 gimmickinfo 表，兩個 namespace 的數值範圍重疊（Rule 12） | risk | 待資料 | P5 | 待資料 |  | 兩個 TypeName 已共用 PALOC byte 0x00，可能本來就是同一個 namespace；需資料比對。 |
 | B3-13 | 沒有任何測試斷言「最新存檔的每個 key TypeName 都能解析」 | risk | 確認 | P13 | 待修 |  | 沒有「最新存檔每個 TypeName 都能解析」的測試。 |
 | B3-14 | Rule 4：`UiLanguageService` 直接 P/Invoke `kernel32!GetUserDefaultUILanguage` | rule violation | 確認 | P10 | 待修 |  | kernel32 P/Invoke 在 Ui；fallback 被 InvariantGlobalization 弄壞。 |
-| B3-15 | Rule 3：同步 I/O 與長時間工作跑在 UI 執行緒 | rule violation | 確認 | P7 | 待修 |  | bootstrap、語言載入、180k 掃描、圖示解碼都在 UI 執行緒。 |
+| B3-15 | Rule 3：同步 I/O 與長時間工作跑在 UI 執行緒 | rule violation | 確認 | P7 | 已修 | `f3f25a8` | bootstrap、語言載入、180k 掃描、圖示解碼都在 UI 執行緒。 圖示在 converter 解碼一次後快取，未改。 |
 | B3-16 | Rule 7：magic string 散落各處，沒有集中檔案 | rule violation | 確認 | P9 | 待修 |  | 合併至 magic-strings 批次。 |
 | B3-17 | UI 字串寫死在 C#，沒有進三語系 `Strings/*.axaml` | rule violation | 確認 | P8 | 待修 |  | 合併至 UI 字串批次。 |
 | B3-18 | `FormatPair` 對只有 internal name 的 key 顯示「X / X」 | cleanup | 確認 | P5 | 已修 | `559a80b` | 只有 internal name 的 key 顯示「X / X」。 |
@@ -169,7 +169,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B4-24 | Rule：五個 UI 字串鍵在三個語系字典中都不存在 | rule violation | 確認 | P8 | 已修 | `ff24f9a` | 五個字串鍵三語系都缺；P0 補上並加鍵值測試。 |
 | B4-25 | Rule：UI 字串寫死在 C#（含原生例外訊息直接顯示） | rule violation | 確認 | P8 | 待修 |  | 寫死英文與原生例外訊息直接顯示。 |
 | B4-26 | Rule 7：magic string 沒有集中；錯誤碼寫成 `-16` 字面值 | rule violation | 確認 | P9 | 待修 |  | 合併至 magic-strings 批次。 |
-| B4-27 | Rule 3：同步檔案 I/O 與耗時的 FFI 跑在 UI 執行緒 | rule violation | 確認 | P7 | 待修 |  | 設定檔 I/O 與 FFI 在 UI 執行緒。 |
+| B4-27 | Rule 3：同步檔案 I/O 與耗時的 FFI 跑在 UI 執行緒 | rule violation | 確認 | P7 | 部分 | `f3f25a8` | 設定檔 I/O 與 FFI 在 UI 執行緒。 Socket/Buyback 掃描已移到背景；設定檔 I/O 與 dye slot editor（含 brush）未改。 |
 | B4-28 | 文件漂移與錯置的 XML doc | cleanup | 確認 | P12 | 部分 | `ff24f9a` | 孤立 summary 在 P0 已修（SocketEditor）；其餘過時說明。 |
 | B4-29 | 重複的 helper 與死碼 | cleanup | 確認 | P14 | 待修 |  | 重複 helper 與死碼。 |
 | B4-30 | Add Item / Grant 寫死 scalar 的 byte 寬度，沒有依 type tag 編碼 | cleanup | 確認 | P3 | 已修 | `951ac21` | scalar byte 寬度寫死。 |
@@ -196,7 +196,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B5-14 | 尚未實機驗證的寫入與啟發式判斷 | risk | 待資料 | P5 | 待實機 | `559a80b` | _relationGroupKey 寬度目前正確（146 筆 u16）；群組態度、Abyss 欄位、bulk Pattern B 仍待實機。 |
 | B5-15 | 掃描時吞掉讀取錯誤，可能讓 `_completedTime` watermark 偏低，也讓清單少項目 | risk | 確認 | P4 | 已修 | `5127921` | 掃描吞讀取錯誤，_completedTime watermark 可能偏低。 SA 預覽清單未顯示略過數量。 |
 | B5-16 | 測試缺口 | risk | 確認 | P13 | 待修 |  | 多個 world 工具沒有測試。 |
-| B5-17 | Rule 3：UI 執行緒上的同步 FFI 與檔案 I/O | rule violation | 部分 | P7 | 待修 |  | LoadBlockDetails 有快取；同步工作在 Rename、WorldMap 點陣圖、KnowledgeEditor。 |
+| B5-17 | Rule 3：UI 執行緒上的同步 FFI 與檔案 I/O | rule violation | 部分 | P7 | 已修 | `f3f25a8` | LoadBlockDetails 有快取；同步工作在 Rename、WorldMap 點陣圖、KnowledgeEditor。 |
 | B5-18 | Rule 7：magic strings 分散且重複（Pre-scan #4 在 Block 5 範圍確認） | rule violation | 確認 | P9 | 待修 |  | 合併至 magic-strings 批次。 |
 | B5-19 | UI 字串寫死英文；三語系字典的鍵一致，但用詞不一致 | rule violation | 確認 | P8 | 待修 |  | 另 zh-TW 混用阿比斯之門 / 深淵之門。 |
 | B5-20 | Rule 12：消費端的 workaround | rule violation | 確認 | P5 | 已修 | `559a80b` | WorldMap 以 " / " 切名稱；TryParseScalarUInt 複製三份。 |
