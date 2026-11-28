@@ -48,7 +48,7 @@ public readonly struct CharacterRefRecord
     /// <summary>
     /// The <c>CharacterKey</c> value read out of the schema field —
     /// the u32 the consumer joins with
-    /// <see cref="CrimsonAtomtic.Ui.Services.LocalizationProvider.LookupCharacterInternalName"/>
+    /// the UI's <c>LocalizationProvider.LookupCharacterInternalName</c>
     /// and friends.
     /// </summary>
     public readonly uint CharacterKey;

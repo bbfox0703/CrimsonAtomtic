@@ -8,11 +8,12 @@ a time) and `diff/` (exactly two inputs).
 | `dump_save_fields.py`           | Flatten a `.save` into one-row-per-field JSONL — feeds duckdb/pandas RE on unknown Key types  |
 | `dump_catalogs.py`              | Dump iteminfo + PALOC (per language) out of an install as JSONL — the JOIN tables for the above |
 | `extract_keycases.py`           | Real-case pack per Key TypeName — denormalized rows with siblings + catalog resolves baked in. Hand-off to the crimson_rs RE session |
-| `analyze_item_distribution.py`  | Tier / type / price distribution across the iteminfo table (TODO)                             |
-| `analyze_save_corpus.py`        | Roll up stats across all saves under a save root (TODO)                                       |
+| `dump_challenges.py`            | Every `Challenge_*` row from missioninfo (body + `.staticinfoheader`), with the completion state from `--save` if given. Loads the C ABI DLL through ctypes, since PyO3 has no missioninfo parser |
 
-Output is always written as a report file (`.md` / `.json` / `.jsonl`) —
-not just printed to stdout. Reports go to `out/analyze/<date>_<topic>/`.
+`dump_catalogs.py` writes into its `--out` folder and `extract_keycases.py`
+to its `--out` file; `dump_save_fields.py` and `dump_challenges.py` write
+JSONL to stdout unless `--out` is given. Keep reports under
+`out/analyze/<date>_<topic>/` (gitignored).
 
 ## `dump_save_fields.py`
 
@@ -50,7 +51,8 @@ GROUP  BY type ORDER BY rows DESC;
 ## `dump_catalogs.py`
 
 The lookup tables `dump_save_fields.py` needs to JOIN against. Pulls
-`iteminfo.pabgb` and the localization PALOC for the requested language(s)
+the iteminfo table (body + header, so `string_key` is filled in on 2.06)
+and the localization PALOC for the requested language(s)
 out of the game install, runs them through `crimson_rs.extract_file` +
 `parse_*_from_bytes`, and writes:
 
@@ -100,9 +102,8 @@ ORDER  BY s.type, s.value;
   Adding `parse_string_info_from_bytes` to `vendor/crimson-rs/src/python.rs`
   is a small upstream PR (mirror of `parse_iteminfo_from_bytes` shape).
   Without it, icon-filename hashes can't be labelled in the JSONL.
-- **`skill.pabgb` + `skill.pabgh`** has Python bindings but the dict
-  shape is more involved than iteminfo; add when the `skill_info`
-  bridge follow-up in `docs/status.md#2-n` lands.
+- **skillinfo** has a Python binding (`parse_skillinfo_from_bytes`) but
+  isn't dumped: `--catalog` takes only `iteminfo` and `paloc`.
 
 ## `extract_keycases.py`
 

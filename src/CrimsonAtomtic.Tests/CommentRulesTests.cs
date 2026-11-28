@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using Xunit;
 
@@ -11,14 +10,10 @@ namespace CrimsonAtomtic.Tests;
 
 /// <summary>
 /// The comment rules in docs/code-comments.md, checked over the repo's own code. Line
-/// references, audit / PR / commit ids and stacked doc blocks must be absent; history phrases
-/// are a per-file ratchet against <c>comment_history_baseline.json</c>, which a cut lowers
-/// (set <c>UPDATE_COMMENT_BASELINE=1</c> and re-run).
+/// references, audit / PR / commit ids, history phrases and stacked doc blocks must be absent.
 /// </summary>
 public sealed partial class CommentRulesTests
 {
-    private const string BaselineFile = "comment_history_baseline.json";
-
     private static readonly string[] SkippedDirs =
         ["bin", "obj", ".git", ".venv", "vendor", "out", "dist", "data", "node_modules", "__pycache__", "target"];
 
@@ -98,39 +93,10 @@ public sealed partial class CommentRulesTests
     }
 
     [Fact]
-    public void HistoryPhrases_DoNotGrow()
+    public void Comments_HaveNoHistory()
     {
-        var counts = new SortedDictionary<string, int>(StringComparer.Ordinal);
-        var detail = new Dictionary<string, List<string>>();
-        foreach (var f in Scan())
-        {
-            var hit = f.Lines.Where(l => History.Any(r => r.IsMatch(l.Text))).ToList();
-            if (hit.Count == 0) continue;
-            counts[f.Rel] = hit.Count;
-            detail[f.Rel] = hit.Select(l => Fmt(f, l)).ToList();
-        }
-
-        var baselinePath = Path.Combine(RepoRoot(), "src", "CrimsonAtomtic.Tests", BaselineFile);
-        if (Environment.GetEnvironmentVariable("UPDATE_COMMENT_BASELINE") == "1")
-        {
-            var json = JsonSerializer.Serialize(counts, BaselineJson.Default.SortedDictionaryStringInt32);
-            File.WriteAllText(baselinePath, json + "\n", new UTF8Encoding(false));
-            return;
-        }
-
-        var baseline = File.Exists(baselinePath)
-            ? JsonSerializer.Deserialize(File.ReadAllText(baselinePath), BaselineJson.Default.SortedDictionaryStringInt32)!
-            : new SortedDictionary<string, int>();
-
-        var grown = counts.Where(kv => kv.Value > baseline.GetValueOrDefault(kv.Key))
-            .SelectMany(kv => detail[kv.Key].Prepend($"{kv.Key}: {baseline.GetValueOrDefault(kv.Key)} -> {kv.Value}"))
-            .ToList();
-        Assert.True(grown.Count == 0, Report("new history in comments (move it to docs/dev-log.md)", grown));
-
-        var shrunk = baseline.Where(kv => counts.GetValueOrDefault(kv.Key) < kv.Value)
-            .Select(kv => $"{kv.Key}: {kv.Value} -> {counts.GetValueOrDefault(kv.Key)}").ToList();
-        Assert.True(shrunk.Count == 0, Report(
-            "history cut; lower the baseline ($env:UPDATE_COMMENT_BASELINE='1', re-run this test)", shrunk));
+        var hits = Scan().SelectMany(f => f.Lines.Where(l => History.Any(r => r.IsMatch(l.Text))).Select(l => Fmt(f, l))).ToList();
+        Assert.True(hits.Count == 0, Report("history in comments (move it to docs/dev-log.md)", hits));
     }
 
     private static string Fmt(ScannedFile f, CommentLine l) => $"{f.Rel}:{l.No}: {l.Text.Trim()}";
@@ -455,7 +421,3 @@ public sealed partial class CommentRulesTests
         throw new DirectoryNotFoundException("CrimsonAtomtic.slnx not found above the test binary.");
     }
 }
-
-[System.Text.Json.Serialization.JsonSourceGenerationOptions(WriteIndented = true)]
-[System.Text.Json.Serialization.JsonSerializable(typeof(SortedDictionary<string, int>))]
-internal sealed partial class BaselineJson : System.Text.Json.Serialization.JsonSerializerContext;

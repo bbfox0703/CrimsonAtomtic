@@ -7,8 +7,8 @@ what you're looking for and need to poke around a save body or a PABGB.
 
 | Path                                       | Purpose                                                                  |
 | ------------------------------------------ | ------------------------------------------------------------------------ |
-| [`inspect_save_body.py`](inspect_save_body.py)       | Decode a `.save` body and dump per-block summaries + per-field details |
-| [`inspect_save_section.py`](inspect_save_section.py) | Filter the decoded save to one class / one block — pretty-print or JSON |
+| [`inspect_save_body.py`](inspect_save_body.py)       | Show the schema (record types) + TOC of a decoded save body; `--json` dumps the full structure |
+| [`inspect_save_section.py`](inspect_save_section.py) | Run the full per-object decoder and show one class (`--class`) or one TOC entry (`--toc-index`): summary, `--pretty` fields, or `--json` |
 | `_proto_<format>.py`                       | **Scratch only.** Prototype a new parser; delete once the format is promoted into `crimson-rs`. Contract: not maintained, not tested, not allowed as an import. |
 
 ## The `_proto_` contract

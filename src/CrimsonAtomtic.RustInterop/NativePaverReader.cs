@@ -3,139 +3,73 @@ using System.Runtime.InteropServices;
 namespace CrimsonAtomtic.RustInterop;
 
 /// <summary>
-/// Parsed contents of <c>meta/0.paver</c> — the version stamp (10 bytes through 2.03, longer once an install ships DLC)
-/// every Crimson Desert install carries. Mirrors the
-/// <c>Paver</c> struct in <c>vendor/crimson-rs/src/binary/paver.rs</c>;
-/// see <see cref="NativePaverReader.TryReadFromInstall"/> for the
-/// load surface and <see cref="IsCompatibleWithParser"/> for the
-/// canonical "should I attempt to load iteminfo / save data?" check.
+/// Parsed contents of <c>meta/0.paver</c>, the version stamp every Crimson
+/// Desert install carries (10 bytes through 2.03, longer once an install
+/// ships DLC). Mirrors the <c>Paver</c> struct in
+/// <c>vendor/crimson-rs/src/binary/paver.rs</c>; see
+/// <see cref="NativePaverReader.TryReadFromInstall"/> for the load surface and
+/// <see cref="IsCompatibleWithParser"/> for the "should I attempt to load
+/// iteminfo / save data?" check. Per-patch layout changes are recorded in
+/// docs/game-versions.md.
 /// </summary>
-/// <param name="Major">Major version — <c>1</c> from 1.03 through 1.18;
-/// Crimson Desert <b>2.00</b> is the first bump to <c>2</c>. It is a real
-/// component of the schema key, not decoration: see <see cref="Minor"/>.</param>
-/// <param name="Minor">Minor — the **schema-compatibility key**, but only
-/// *together with* <see cref="Major"/>, because it <b>resets</b> across a
-/// major bump (1.18 → 2.00 is minor <c>18</c> → <c>0</c>). Iteminfo /
-/// save-body parsers target one specific <c>(major, minor)</c>; running them
-/// against a mismatched pair either crashes or silently corrupts. Currently
-/// <see cref="ParserTargetMajor"/>.<see cref="ParserTargetMinor"/> = 2.0.</param>
-/// <param name="Patch">Sub-version (e.g. <c>2.00</c> → 0, <c>2.00.01</c> → 1).
-/// Compatible within the same major+minor.</param>
-/// <param name="Build">Opaque build identifier. Bumps every PA hotfix
-/// — informational only.</param>
+/// <param name="Major">Major version. Part of the schema key: see
+/// <see cref="Minor"/>.</param>
+/// <param name="Minor">Minor: the schema-compatibility key, but only together
+/// with <see cref="Major"/>, because it resets across a major bump (1.18 →
+/// 2.00 is minor <c>18</c> → <c>0</c>). The iteminfo / save-body parsers
+/// target one <c>(major, minor)</c>; a mismatched pair crashes or silently
+/// mis-decodes.</param>
+/// <param name="Patch">Sub-version (<c>2.06</c> → 0, <c>2.06.02</c> → 2).
+/// Compatible within the same major + minor, from
+/// <see cref="ParserMinPatch"/> up.</param>
+/// <param name="Build">Opaque build identifier that moves with every hotfix;
+/// informational only.</param>
 public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort Patch, uint Build)
 {
     /// <summary>
-    /// The game-data <b>major</b> this crimson-rs build targets (currently
-    /// <c>2</c>). Read together with <see cref="ParserTargetMinor"/>: the
-    /// minor resets across a major bump (1.18 → 2.00 is <c>18</c> → <c>0</c>),
-    /// so on its own it can no longer tell 2.00 apart from a hypothetical
-    /// 1.00. This is what makes <see cref="IsCompatibleWithParser"/> a sound
-    /// gate rather than a minor-only coincidence check.
+    /// The game-data <b>major</b> this crimson-rs build targets. Read it
+    /// together with <see cref="ParserTargetMinor"/>: since the minor resets
+    /// across a major bump, a minor on its own cannot tell 2.00 from a
+    /// hypothetical 1.00, and <see cref="IsCompatibleWithParser"/> gates on
+    /// both.
     /// </summary>
     /// <remarks>
-    /// Read from the crimson-rs C ABI
-    /// (<c>crimson_parser_target_gamedata_major</c>, added in commit
-    /// <c>0f2363b</c> for the 2.00 alignment) — like
-    /// <see cref="ParserTargetMinor"/>, never a hand-coded C# constant.
-    /// Before 2.00 the major was <c>1</c> on every shipped patch and the
-    /// editor simply assumed it; that assumption is now wrong, and the two
-    /// places that hard-coded a literal <c>1</c> (this compatibility check
-    /// and the mismatch dialog's "parser targets …" readout) were fixed at
-    /// the same time.
+    /// Read from the C ABI (<c>crimson_parser_target_gamedata_major</c>), so
+    /// the Rust parser decides it, never a C# constant.
     /// </remarks>
     public static ushort ParserTargetMajor => ParserTargetInfo.Value.Major;
 
     /// <summary>
-    /// The latest game-data minor this crimson-rs build targets — the
-    /// canonical schema reference and the version shown as "parser
-    /// targets …" in the mismatch dialog. The Rust-side iteminfo /
-    /// save-body parsers assume this schema. Always a member of
-    /// <see cref="CompatibleMinors"/>.
+    /// The game-data minor this crimson-rs build targets: the schema the
+    /// Rust iteminfo / save-body parsers assume, and the version the
+    /// mismatch dialog shows as "parser targets …". Always a member of
+    /// <see cref="CompatibleMinors"/>. Never read it without
+    /// <see cref="ParserTargetMajor"/>.
     /// </summary>
     /// <remarks>
-    /// Read from the crimson-rs C ABI
-    /// (<c>crimson_parser_target_gamedata_minor</c>) so Rust is the single
-    /// source of truth — this is no longer a hand-bumped C# constant. The
-    /// 8→9→10→11→12→13→14→15→16→17→18 manual-bump chain ended at the 1.13
-    /// alignment (which wired this value to the ABI); the value now follows
-    /// whatever parser the vendored lib ships (currently 2.00, i.e. minor
-    /// <c>0</c>, vendored crimson-rs commit <c>0f2363b</c>).
-    /// <b>Never read this without <see cref="ParserTargetMajor"/></b> — 2.00
-    /// reset the minor to 0, so the bare number no longer identifies a schema.
-    /// <para>
-    /// 2.00 ships TWO iteminfo layout drifts, on top of the first-ever major
-    /// bump: (1) <c>SubItem</c> gained a payload-free <c>type_id == 18</c> —
-    /// the same renumbering 1.12 (16) and 1.13 (17) did, and every site that
-    /// read 17 in 1.18 reads 18 here, with no item still reading 14..=17; and
-    /// (2) a new always-zero <c>u32</c> (<c>unk_pre_max_endurance_a</c>) sits
-    /// directly ahead of the 1.12-era <c>unk_pre_max_endurance</c>, so the
-    /// block before <c>respawn_time_seconds</c> now carries two <c>u32</c>s.
-    /// Iteminfo went 6,573 → 6,810 items (+237, none removed) and
-    /// 6,190,316 → 6,446,719 B. Everything else is content-only: skill grew to
-    /// 2,046 entries with ZERO drift (probe 2046/2046 ok, format still
-    /// <c>WithField58</c>) — even a major bump left it alone — and the save
-    /// body did not drift (still v2 / flags 0x0080; the live 2.00 save decodes
-    /// 1,103 blocks / 3,315 fields with undecoded_bytes=0).
-    /// </para>
-    /// <para>
-    /// Drift (2)'s <i>position</i> is not decidable from the byte diff — it
-    /// lands inside an all-zero run, so three different placements all
-    /// round-trip byte-perfectly. What settles it is the value-sanity argument
-    /// the 1.16 swap already rests on: only with the new <c>u32</c> first do
-    /// both neighbours keep their known distributions
-    /// (<c>unk_pre_max_endurance</c> = <c>0x01000000</c> on exactly the 59
-    /// <c>Trade_*_PackedInVehicle</c> items; <c>respawn_time_seconds</c> =
-    /// 0 / −1 / 604800). The wrong placements produce the same
-    /// <c>-4294967296</c> nonsense signature 1.16 documented. Check value
-    /// distributions, not just the round-trip.
-    /// </para>
-    /// <para>
-    /// Recent history: 1.18 added a <c>u32</c> to every
-    /// <c>MergedPrefabVisualData</c> element; 1.16 was the largest structural
-    /// patch since 1.13 and the first ever to break the skill parser (four
-    /// iteminfo layout changes plus
-    /// <c>PostBuff::unk_pre_damage_type: u8</c>); 1.17 in between was
-    /// content-only. The C ABI surface came through all of those unchanged,
-    /// and 2.00 only <i>adds</i> to it
-    /// (<c>crimson_parser_target_gamedata_major</c>) — nothing existing moved.
-    /// </para>
-    /// The editor's own <c>VerMinor</c> in the .csproj still tracks this as
-    /// a manual lock-step build-identity bump — intentionally separate from
-    /// this ABI-sourced value.
+    /// Read from the C ABI (<c>crimson_parser_target_gamedata_minor</c>). The
+    /// editor's own <c>VerMinor</c> in the Ui csproj is a separate, manual
+    /// build-identity number kept in step with it.
     /// </remarks>
     public static ushort ParserTargetMinor => ParserTargetInfo.Value.Target;
 
     /// <summary>
-    /// Every game-data minor whose iteminfo / save-body schema this
-    /// build can load without mis-decoding — not just the single latest
-    /// target. Read from the crimson-rs C ABI
-    /// (<c>crimson_parser_compatible_gamedata_minors</c>, first-call
-    /// sizing then refill). The allow-list is kept a single element
-    /// (<c>{0}</c>, i.e. 2.00) by convention — it tracks just the target even
-    /// when a content-only patch (like 1.17 over 1.16) leaves an older minor's
-    /// layout readable — so a user still on 1.18 or earlier is warned to
-    /// update. Because 2.00 carries two real iteminfo layout drifts, that
-    /// warning is SUBSTANTIVE — 1.18 data genuinely mis-decodes, same as 1.17
-    /// data did at 1.18 and 1.15 data did at 1.16 — rather than the
-    /// conventional one it was at the content-only 1.14/1.15/1.17 patches.
-    /// <para>
-    /// <b>Entries are minors WITHIN <see cref="ParserTargetMajor"/>.</b> A
-    /// minor from a different major says nothing about compatibility, which
-    /// is why <see cref="IsCompatibleWithParser"/> gates on the major first:
-    /// since 2.00 reset the minor to 0, a bare <c>Minor == 0</c> match would
-    /// otherwise accept a hypothetical 1.00 install.
-    /// </para>
+    /// Every game-data minor, within <see cref="ParserTargetMajor"/>, whose
+    /// iteminfo / save-body schema this build can load without mis-decoding
+    /// (<c>crimson_parser_compatible_gamedata_minors</c>, first call sizes,
+    /// second fills). Upstream keeps it to the target alone even when an
+    /// older minor would still read, so a user on an older patch is told to
+    /// update. A minor from another major says nothing, which is why
+    /// <see cref="IsCompatibleWithParser"/> checks the major first.
     /// <see cref="ParserTargetMinor"/> is always present here.
     /// </summary>
     public static IReadOnlyList<ushort> CompatibleMinors => Array.AsReadOnly(ParserTargetInfo.Value.Compatible);
 
     /// <summary>
     /// The lowest <see cref="Patch"/> of the target minor this build parses
-    /// (<c>0</c> = any). Game 2.04.08 was the first patch to change a layout
-    /// without moving the minor: two strings joined every iteminfo row, so a
-    /// 2.04.03 install shares minor 4 and still no longer parses. Read from
-    /// <c>crimson_parser_min_gamedata_patch</c>.
+    /// (<c>0</c> = any). A patch can change a layout without moving the minor
+    /// (2.04.08 did), and then an earlier patch of the same minor does not
+    /// parse. Read from <c>crimson_parser_min_gamedata_patch</c>.
     /// </summary>
     public static ushort ParserMinPatch => ParserTargetInfo.Value.MinPatch;
 
@@ -156,11 +90,11 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     {
         try
         {
-            // crimson_parser_min_gamedata_patch arrived with the 2.04.08
-            // alignment, so a DLL older than that throws EntryPointNotFound
-            // here and takes the whole tuple down with it. That is intended: a
-            // lib that old cannot parse 2.04.08 iteminfo, so nothing it
-            // reports should read as compatible.
+            // A DLL without crimson_parser_min_gamedata_patch throws
+            // EntryPointNotFound here and takes the whole tuple down with it.
+            // That is intended: such a lib predates the patch-level gate and
+            // cannot parse current iteminfo, so nothing it reports should read
+            // as compatible.
             ushort minPatch = NativeMethods.ParserMinGamedataPatch();
             ushort major = NativeMethods.ParserTargetGamedataMajor();
             ushort target = NativeMethods.ParserTargetGamedataMinor();
@@ -247,8 +181,8 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
 /// <c>meta/0.paver</c> version stamp from a Crimson Desert install
 /// root. Used by the App startup path to detect game-data version
 /// mismatches BEFORE iteminfo / save-body parsing, so the user can
-/// be warned rather than hitting a parse crash deep in
-/// <see cref="LocalizationProvider"/>'s bootstrap.
+/// be warned rather than hitting a parse crash deep in the game-data
+/// bootstrap.
 /// </summary>
 public static class NativePaverReader
 {

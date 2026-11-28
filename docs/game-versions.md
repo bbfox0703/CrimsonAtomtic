@@ -111,20 +111,18 @@ Per-user, not per-version:
 - Magic header on both files: ASCII `SAVE`.
 - Body is ChaCha20 + HMAC + LZ4 — see [save-format.md](save-format.md).
 
-## Version detection (planned approach)
+## Version detection
 
-1. Read `meta/0.paver` if present in the chosen install root — authoritative when format is decoded.
-2. Fall back to comparing iteminfo item count and pamt directory hashes against known fingerprints (1.03/1.04/1.05/1.06/1.07 each have distinct sets).
-3. Save files do not embed a game version directly. We infer compatibility from the TOC layout and field hashes, similar to how `crimson-rs` auto-detects skill format flags.
+1. The install's version is `meta/0.paver`, read through the C ABI (`NativePaverReader.TryReadFromInstall`) and checked by `IsCompatibleWithParser` against the target the crimson-rs build reports (see [Current install](#current-install)).
+2. Saves need no game-version detection: each save embeds its own schema, which the body decoder reads (see [save-body-format.md](save-body-format.md)).
 
 ## Diffing playbook
 
 When a new patch lands and a parser fails:
 
 1. Snapshot the new install (manual: rename the live folder to `<root>\<ver>\`, restage from Steam).
-2. Run `tools/diff/diff_iteminfo.py --from <old_root> --to <new_root>` to enumerate added/removed/changed items.
-3. Run `tools/diff/diff_pamt.py` to find which pack groups changed (most patches only touch a few).
-4. If a binary format's bytes shifted, narrow the field range with `crimson-rs`'s `BinaryReadTracked` trait, then patch the parser. Add a fixture + regression test.
+2. Round-trip the new install's gamedata tables through `crimson-rs` (its tests, or the Python module after `scripts/setup_python_env.ps1`) to find which ones no longer parse byte-identical. `tools/diff/` has no diff scripts yet; `tools/analyze/dump_catalogs.py` output from both installs can be compared for item adds / removes.
+3. If a binary format's bytes shifted, narrow the field range with `crimson-rs`'s `BinaryReadTracked` trait, then patch the parser. Add a fixture + regression test.
 
 The 1.05 → 1.06 jump turned out to be **zero schema changes** (only +17 items), so the parser stayed the same. The 1.06 → 1.07, 1.07 → 1.08, and 1.08 → 1.09 jumps similarly stayed data-only — the editor loads them all through one schema path. 1.08 → 1.09 in particular was content-only with **no schema drift** (`crimson-rs` commit `0619789`): iteminfo byte-identical to 1.08, all 30 gamedata tables parse, save read/decode/mutate/write-reseal roundtrip clean; per-table key deltas vs 1.08 were character +6, skill +5, knowledge +5, factionspawn +1, gimmick −8, the other 25 tables unchanged. We expect most patches to be data-only; structural changes are the exception (e.g. the slot104 / 1.05-era 23-field `ItemSaveData` vs 1.06+'s 25-field shape — see [status.md](status.md)), and our pipeline is built to make those exceptions detectable.
 

@@ -461,14 +461,14 @@ internal sealed class CrimsonPartPrefabDyeTexturePalleteHandle : SafeHandle
 /// <summary>
 /// <c>PartPrefabKey (u32)</c> → prefab internal name + per-slot detail
 /// (slot count, 3 default-material names, 3 mat indices, 3 mask
-/// bytes, next-prefab/tail-name). 1,105 rows in 1.07. Replaces
-/// CRIMSON-DESERT-SAVE-EDITOR's hand-maintained <c>dye_slot_counts.json</c>.
+/// bytes, next-prefab/tail-name), in place of CRIMSON-DESERT-SAVE-EDITOR's
+/// hand-maintained <c>dye_slot_counts.json</c>.
 ///
 /// <para>
-/// The Dye editor v1 doesn't consume this bridge yet — it walks
-/// existing <c>_itemDyeDataList</c> slots directly. Consumption
-/// requires the <c>_itemKey → _partPrefabKey</c> cross-reference,
-/// which is still open RE upstream.
+/// No editor surface uses it: the dye editors walk the existing
+/// <c>_itemDyeDataList</c> slots, and reaching a prefab from an item needs
+/// the <c>_itemKey → _partPrefabKey</c> cross-reference, which upstream has
+/// not decoded.
 /// </para>
 /// </summary>
 public sealed class NativePartPrefabDyeSlotInfoCatalog : IDisposable
@@ -530,7 +530,10 @@ public sealed class NativePartPrefabDyeSlotInfoCatalog : IDisposable
     }
 
     /// <summary>
-    /// Dye-slot count for the prefab keyed by <paramref name="prefabKey"/>.
+    /// Slot count of the mesh row keyed by <paramref name="prefabKey"/>: one
+    /// per sub-mesh, <b>not</b> the number of dye slots (that is the bit
+    /// count of the row's dye-slot bits, and the two often differ; see
+    /// <see cref="NativeItemPartPrefabCatalog.ResolveDyeSlotCount"/>).
     /// Returns <c>null</c> when the prefab isn't in the table.
     /// </summary>
     public int? LookupSlotCount(uint prefabKey)
@@ -1035,9 +1038,13 @@ public sealed class NativeItemPartPrefabCatalog : IDisposable
     }
 
     /// <summary>
-    /// One-shot "how many dye slots does this item have?". Returns the
-    /// resolved count (or 0) plus the source enum that tells the caller
-    /// whether to trust the result.
+    /// One-shot "how many dye slots does this item have?": the number of
+    /// <c>_dyeSlotNo</c> values the item offers, i.e. the bits set across
+    /// the dye-slot bits of every mesh row the join gives it. The numbers
+    /// themselves need not be contiguous. Not a mesh row's slot count
+    /// (<see cref="NativePartPrefabDyeSlotInfoCatalog.LookupSlotCount"/>),
+    /// which counts sub-meshes. Returns the count (or 0) plus the source
+    /// enum that tells the caller whether to trust it.
     /// </summary>
     public (int SlotCount, DyeSlotCountSource Source) ResolveDyeSlotCount(
         uint itemKey, NativePartPrefabDyeSlotInfoCatalog slotInfo)

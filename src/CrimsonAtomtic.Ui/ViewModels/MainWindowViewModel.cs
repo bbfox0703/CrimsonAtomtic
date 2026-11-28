@@ -1318,11 +1318,9 @@ public sealed partial class MainWindowViewModel(
     // The Breadcrumb collection mirrors the stack, root → leaf. Clicking a
     // breadcrumb entry pops back to that depth.
     //
-    // Scalar editing is permitted only at depth == 1 (the root frame of a
-    // top-level block): the C ABI's SetScalarField addresses blocks by TOC
-    // index, and nested children inlined under locators / lists aren't part
-    // of the TOC. FieldRowViewModel.IsEditable is forced false on deeper
-    // frames.
+    // Scalars are editable at every depth: each frame carries the path from
+    // its top-level block, and the C ABI's path-addressed setters patch the
+    // nested body region it names.
 
     private readonly Stack<NavFrame> _navStack = new();
 
@@ -2055,32 +2053,25 @@ public sealed partial class MainWindowViewModel(
     /// <c>MissionStateData</c> catalog row (positive <c>_key</c>,
     /// <c>_state != 5</c>) with an engine-shaped completion infrastructure
     /// in place — adjacent visibility twin at <c>catalog_idx + 1</c> in
-    /// "visible" state AND a matching FAR tracker further down the list —
-    /// AND the player currently holds at least one Sealed Abyss Artifact
-    /// item in inventory. Drives the visibility / CanExecute of the
-    /// "Mark Challenge Complete" block-action button.
+    /// "visible" state AND a matching FAR tracker further down the list.
+    /// Drives the visibility / CanExecute of the "Mark Challenge Complete"
+    /// block-action button.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The held-artifact gate is the recipe's safety net. Pure placeholder
-    /// challenges (the user has never encountered them in-game, no
-    /// artifact was ever picked up) become visible / unlock only when the
-    /// engine processes the artifact pickup sequence. Flipping their
-    /// catalog state without that pickup leaves the engine in an
-    /// inconsistent state and the card stays hidden in the UI. By
-    /// requiring at least one SA artifact in the user's inventory we
-    /// short-circuit the button on saves where the engine has done none
-    /// of the discovery bookkeeping yet. <b>We do not match this specific
-    /// challenge → its specific artifact</b> — the user is responsible
+    /// The FAR tracker is the safety net. Placeholder challenges (never
+    /// met in-game, no artifact ever picked up) unlock only when the
+    /// engine processes the artifact pickup, which is what creates the
+    /// tracker; flipping their catalog state without it leaves the card
+    /// hidden. Whether the player still holds an artifact is not checked:
+    /// the tracker stays after the item is consumed. <b>This challenge is
+    /// not matched to its specific artifact</b> — the user is responsible
     /// for selecting the right catalog row.
     /// </para>
     /// <para>
-    /// The original category restriction (only <c>Challenge_*</c> /
-    /// <c>Mission_MiniGame_*</c> string-keys) has been removed. Non-SA
-    /// challenges that happen to share the FAR-tracker shape now show
-    /// the button too — the user takes responsibility for the FAR-shape
-    /// match and the warning dialog reinforces the artifact-in-bag
-    /// requirement.
+    /// No string-key category is required: any challenge with the
+    /// FAR-tracker shape shows the button, and the user takes
+    /// responsibility for the match (the warning dialog says so).
     /// </para>
     /// <para>
     /// Re-evaluated lazily on every property read. Cached cheaply via
@@ -2183,14 +2174,10 @@ public sealed partial class MainWindowViewModel(
     /// <para>
     /// <b>Gate</b>: the button only enables when (a) the adjacent twin
     /// is in "visible" state (state=5 + _completedTime present +
-    /// tags ≥ 2), (b) the FAR tracker exists and isn't already at
-    /// state=5, and (c) the player currently holds at least one Sealed
-    /// Abyss Artifact item in inventory. (a)+(b) require the user to
-    /// have already picked up the reward artifact for this challenge
-    /// in-game — which is what creates the FAR tracker. (c) is a
-    /// global safety net: if the user has zero SA artifacts at all,
-    /// the recipe's engine-side reconciliation has nothing to attach
-    /// to. The category restriction has been removed — any
+    /// tags ≥ 2), and (b) the FAR tracker exists and isn't already at
+    /// state=5. Both require the user to have picked up the reward
+    /// artifact for this challenge in-game, which is what creates the
+    /// FAR tracker; holding it now is not required. Any
     /// MissionStateData row with the right shape is eligible.
     /// </para>
     /// <para>
@@ -2452,7 +2439,8 @@ public sealed partial class MainWindowViewModel(
     /// <summary>
     /// Apply the Pattern B v1 mutation set for one challenge. Shared
     /// by the per-row "Mark Challenge Complete" button and the bulk
-    /// "Complete All Held Sealed Abyss Artifact Challenges" sweep.
+    /// sweep (Tools → Complete Eligible … Sealed Abyss Artifact
+    /// Challenges).
     /// Synchronous — wrap in <c>Task.Run</c> at the call site so the
     /// 5–6 length-changing FFI calls don't freeze the UI.
     /// </summary>
@@ -2516,10 +2504,10 @@ public sealed partial class MainWindowViewModel(
                 ctx.FarUsedTagListFieldIdx, farTarget);
 
             // Phase 2b + 3: every remaining scalar mutation in one
-            // batch. Saves up to 3 FFI roundtrips per challenge
-            // versus the old per-field SetScalarField pattern. The
-            // batch is all-or-nothing — if any op validates wrong,
-            // none are applied. Validation only fails on schema
+            // call, up to 3 FFI round trips fewer per challenge. The call
+            // validates every op before patching any, so a bad op
+            // applies none of them, and the caller's RunDeferred rolls
+            // back the writes above. Validation fails only on schema
             // drift, which would have errored earlier in this method.
             var batch = new List<ScalarBatchOp>(4)
             {
@@ -2696,7 +2684,8 @@ public sealed partial class MainWindowViewModel(
 
     /// <summary>
     /// Pre-flight scan for the bulk SA challenge sweep: enumerate
-    /// held SA artifacts, map each to its catalog mission key via
+    /// every SA artifact iteminfo carries, map each to its catalog
+    /// mission key via
     /// <see cref="LocalizationProvider.LookupItemLookDetailMissionInfo"/>,
     /// then walk every <c>QuestSaveData._missionStateList</c> looking
     /// for catalog rows that match. For each match, try to build a
@@ -2712,17 +2701,13 @@ public sealed partial class MainWindowViewModel(
             return default;
         }
         // 1. Enumerate every Sealed Abyss Artifact item key from
-        //    iteminfo (no "held in inventory" gate) and map each to its
-        //    challenge mission key via the forward
-        //    look_detail_mission_info lookup. The held-inventory check
-        //    was the wrong layer — the per-challenge eligibility gate
-        //    is "FAR tracker present in this save", which is created
-        //    once on first artifact pickup and stays around even after
-        //    the artifact item has been consumed / dropped. Filtering
-        //    by held inventory dropped legitimate candidates where the
-        //    user had picked up the artifact but no longer carried it.
-        //    Now we let TryBuildChallengeContextFromCatalogRow gate
-        //    purely on the save-side data shape.
+        //    iteminfo and map each to its challenge mission key via the
+        //    forward look_detail_mission_info lookup. Whether the player
+        //    holds the artifact is deliberately not checked: the
+        //    eligibility signal is the FAR tracker in the save, created on
+        //    first pickup and kept after the item is consumed or dropped,
+        //    so TryBuildChallengeContextFromCatalogRow gates on the
+        //    save-side data shape alone.
         var allArtifacts = new HashSet<uint>(
             localization.EnumerateItemsByStringKeyPrefix("Sealed_Abyss_Artifact")
                         .Select(p => p.ItemKey));
@@ -2748,7 +2733,7 @@ public sealed partial class MainWindowViewModel(
                 // at abyss-gate / node / knowledge-discovery / generic missions,
                 // which Pattern B v1 must not touch (e.g. Challenge_Discover_*
                 // needs KnowledgeSaveData the recipe never writes). The broad
-                // scan opts back into the old behaviour, behind a dialog warning.
+                // scan includes them, behind a dialog warning.
                 var name = localization.MissionInfoStringKey(mk.Value);
                 if (name is null
                     || !name.StartsWith("Challenge_SealedArtifact_", StringComparison.Ordinal))
@@ -2770,7 +2755,7 @@ public sealed partial class MainWindowViewModel(
         }
 
         // 2. Walk QuestSaveData blocks to find catalog rows whose
-        //    _key is in the held-mission-key set. For each match,
+        //    _key is in the artifact-mission-key set. For each match,
         //    try to build a Pattern B v1 context.
         var candidates = new List<CurrentChallengeContext>();
         var skippedNoFar = 0;
@@ -2855,13 +2840,6 @@ public sealed partial class MainWindowViewModel(
             skipDetails);
     }
 
-    // Note: the former `ScanHeldSealedArtifactItemKeys` helper was
-    // removed 2026-05-17 along with the held-inventory eligibility
-    // gate. If a future feature wants the "held SA artifacts" set
-    // separately, the recipe is:
-    //   localization.EnumerateItemsByStringKeyPrefix("Sealed_Abyss_Artifact")
-    //     intersected with the _inventorylist[*]._itemList[*]._itemKey
-    //     scan via loader.ListInventoryItems (one FFI call now).
 
     /// <summary>
     /// One faction-stronghold node addressable for a state edit. Captured
@@ -3034,9 +3012,8 @@ public sealed partial class MainWindowViewModel(
     /// <summary>
     /// Pre-flight result for the bulk SA challenge sweep.
     /// <see cref="KnownArtifactCount"/> is the total number of
-    /// <c>Sealed_Abyss_Artifact_*</c> rows iteminfo carries (typically
-    /// 141 in 1.07) — NOT the inventory-held subset (that gate was
-    /// removed 2026-05-17). Eligibility is the save-side data shape
+    /// <c>Sealed_Abyss_Artifact_*</c> rows iteminfo carries, not the
+    /// subset the player holds: eligibility is the save-side data shape
     /// only.
     /// <see cref="SkipDetails"/> carries per-key (catalog _key,
     /// internal name, reason) tuples for every challenge that was
@@ -3343,12 +3320,11 @@ public sealed partial class MainWindowViewModel(
         catch (CrimsonSaveException ex)
         { skipReason = $"FAR _usedTagList read failed: {ex.Message}"; return false; }
 
-        // Held-artifact gate removed 2026-05-17 (per user directive):
-        // the engine's eligibility signal is the FAR tracker's presence
-        // in the save (created once on first artifact pickup, stays
-        // around even after the item is consumed). Checking current
-        // inventory dropped legitimate candidates. The data-shape gates
-        // above are the only correctness-relevant ones.
+        // No held-artifact check: the engine's eligibility signal is the
+        // FAR tracker's presence in the save (created on first artifact
+        // pickup, kept after the item is consumed), so current inventory
+        // would drop legitimate candidates. The data-shape gates above are
+        // the ones that matter.
 
         ctx = new CurrentChallengeContext(
             CatalogKey: (uint)keyU64,
@@ -3370,13 +3346,6 @@ public sealed partial class MainWindowViewModel(
             MissionStateListCount: siblings.Count);
         return true;
     }
-
-    // HoldsAnySealedAbyssArtifact() removed 2026-05-17 along with the
-    // inner held-artifact gate in TryBuildChallengeContextFromCatalogRow.
-    // The data-shape gates (twin state=5 + completedTime + 2 tags, FAR
-    // tracker present + branchedTime + state≠5) are the only correctness-
-    // relevant checks; inventory presence was just noise that dropped
-    // legitimate "picked up + consumed" candidates.
 
     /// <summary>
     /// Addressing info for the in-focus catalog challenge plus its
@@ -3647,9 +3616,9 @@ public sealed partial class MainWindowViewModel(
 
         // One batch FFI call: the Rust side validates every op first
         // (all-or-nothing), patches them all in input order, then
-        // re-decodes once at the end. Replaces what used to be N
-        // single-op SetScalarField calls (one full re-decode per
-        // mutation, ~5 s for the 168-op container path); the batch
+        // re-decodes once at the end, instead of N single-op
+        // SetScalarField calls (one full re-decode per mutation, ~5 s for
+        // the 168-op container path); the batch
         // amortises to O(N + block_count). Still on Task.Run to
         // keep the UI thread free during the FFI call.
         var ops = new List<ScalarBatchOp>(candidates.Count);
@@ -5187,16 +5156,14 @@ public sealed partial class MainWindowViewModel(
     /// elements per save), <b>not</b> a <c>dynamic_array&lt;u32&gt;</c>.
     /// Each new entry is therefore created by cloning element 0 and
     /// patching <c>_key</c>, <c>_learnedFieldTime</c> and
-    /// <c>_isNewMark</c> on the clone. The shipped v1 used a u32-array
-    /// setter that silently read 0 elements and would have corrupted
-    /// the save on apply; this v2 replaces it entirely.
+    /// <c>_isNewMark</c> on the clone; a u32-array setter would read 0
+    /// elements and corrupt the save.
     /// </para>
     /// <para>
-    /// Implementation cost: ~3 length-changing FFI calls per missing
-    /// key (clone + 2 scalar patches; the bool defaults to 0). A
-    /// 98-key sweep takes a few seconds end-to-end on a 1.07-era
-    /// save — every length-changer triggers a body re-decode in
-    /// crimson-rs.
+    /// Cost: a clone and two scalar patches per missing key (the bool
+    /// defaults to 0), all inside one deferred batch, so crimson-rs
+    /// re-decodes the body once at commit instead of after every
+    /// clone.
     /// </para>
     /// </remarks>
     [RelayCommand(CanExecute = nameof(HasSave))]

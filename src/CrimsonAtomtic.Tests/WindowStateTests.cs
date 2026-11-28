@@ -102,7 +102,7 @@ public sealed class WindowStateTests
     [Fact]
     public void Visible_CompletelyOffToTheRight_False()
     {
-        // Saved on a second monitor at x=3000 that no longer exists.
+        // Saved on a second monitor at x=3000 that is not connected now.
         Assert.False(WindowPlacement.IsVisibleEnough(3000, 100, 1400, 900, SinglePrimary));
     }
 

@@ -2,20 +2,18 @@
 
 Pull data out of game files into structured form.
 
-| Script                  | Input                  | Output                                       |
-| ----------------------- | ---------------------- | -------------------------------------------- |
-| `extract_iteminfo.py`   | `--game-dir <root>`    | `<out>/items.jsonl`                          |
-| `extract_skillinfo.py`  | `--game-dir <root>`    | `<out>/skill.json`                           |
-| `extract_paloc.py`      | `--game-dir <root>`    | `<out>/paloc/<lang>.json` (×14 languages)    |
-| `extract_save.py`       | `--save <path>`        | `<out>/save.json`                            |
-| `build_iconcache.py`    | `--game-dir <root>`    | `<out>/icons/{32,64,128}/<key>.png`          |
+| Script | Input | Output |
+| --- | --- | --- |
+| `extract_save.py` | `--save <path>` (default: the first `slot0\save.save` under the Steam save root) | `<out>/<slot>.json` (header fields, sizes, HMAC status, body SHA-256, source path) and `<out>/<slot>.bin` (the decompressed body) |
 
-All scripts:
+`<slot>` is the save file's parent folder name (e.g. `slot0`), so runs against
+different slots can share one output folder. The `.bin` is what
+`tools/inspect/` reads.
+
+Conventions for scripts here:
 
 - Take `--out <dir>` (created if missing).
 - Default to no overwrite; pass `--force` to replace existing output.
-- Tag output with the source-file SHA so consumers can detect staleness.
 - Print full `--help` on no-args invocation.
 
-No scripts live here yet — this folder is a planning placeholder. See
-[../CLAUDE.md](../CLAUDE.md) for the conventions a new script must follow.
+See [../CLAUDE.md](../CLAUDE.md) for the conventions a new script must follow.

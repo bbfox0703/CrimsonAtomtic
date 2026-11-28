@@ -5,27 +5,17 @@ using System.Text;
 namespace CrimsonAtomtic.RustInterop;
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Six small bridges to the new c_abi key-resolver surfaces:
+//  Bridges to the c_abi key-resolver tables (mission, quest, stage,
+//  knowledge, skill, gauge and the other static-info tables). Each loads one
+//  table and resolves a key to its string key and, for the tables PALOC
+//  names, its display name (lookup_display_name chains through PALOC via
+//  hashlittle2).
 //
-//      Mission / Quest / Stage / Knowledge
-//          load_from_bytes, free, entry_count, lookup_string_key,
-//          lookup_display_name (chains through PALOC via hashlittle2),
-//          get_entry  *
-//
-//      QuestGauge
-//          same minus lookup_display_name (gauges aren't in PALOC)
-//
-//      Skill
-//          two-file load (pabgh + pabgb), no lookup_display_name
-//
-//  All six share the same two-call buffer dance for string output. The
-//  helper [NameBuffer.ReadString] holds that dance once; each catalog
-//  composes it with the appropriate [LibraryImport] entry point.
-//
-//  * get_entry is exposed at the NativeMethods layer but no managed
-//    wrapper here — no editor surface needs Mission/Quest/etc.
-//    enumeration yet (the keys come from the save, not from a "Browse"
-//    dialog). Add a thin wrapper when an enumerator UX appears.
+//  They share the two-call buffer dance for string output, which
+//  [NameBuffer.ReadString] holds once; each catalog composes it with its own
+//  [LibraryImport] entry points. get_entry has a NativeMethods binding but no
+//  managed wrapper: the editor gets these keys from the save and never
+//  enumerates a table.
 // ─────────────────────────────────────────────────────────────────────────────
 
 internal static class NameBuffer

@@ -54,9 +54,9 @@ As of 2026-11-28. What shipped, release by release, is in
   needs the new vendor. The fork still has **no pushed version tags**
   (`git ls-remote --tags origin` returned 0 refs on 2026-11-28); the
   `v1.0.x` tags exist only in the local clone.
-- **Stack:** Avalonia 12.2.0 (with `Avalonia.Controls.ColorPicker`), .NET 10
-  (this PC's SDK 10.0.404; `global.json` 10.0.203 with `latestFeature`),
-  ILCompiler pin 10.0.15. SkiaSharp 3.119.4, HarfBuzzSharp 8.3.1.5 and
+- **Stack:** Avalonia 12.2.0 (with `Avalonia.Controls.ColorPicker`;
+  DataGrid 12.1.2), .NET 10 (`global.json` pins SDK 10.0.404 exactly,
+  `rollForward: disable`), ILCompiler pin 10.0.15. SkiaSharp 3.119.4, HarfBuzzSharp 8.3.1.5 and
   Tmds.DBus.Protocol 0.94.2 stay at the versions Avalonia 12.2 is built
   against; `Directory.Packages.props` says why.
 - **Health:** 452 C# tests green at PR #60, against the live 2.06 install; the
@@ -494,22 +494,23 @@ window-restore quirks, etc.) is in
   matches Git-for-Windows' GNU coreutils `link` on the CI runner, which makes
   ILC choke on `/DEF: @link.rsp` (this exact trap failed the first v1.11.01
   build). On a clean CI runner, let ILC auto-discover MSVC via vcvars.
-- **crimson-rs is read-only here** and CI **clones it fresh from GitHub
-  `main`** (the local `vendor/` is gitignored, not used by CI). Land any
-  crimson-rs fix on `bbfox0703/crimson-rs` `main` *before* tagging a release.
+- **crimson-rs is read-only here** and CI **checks out the commit in
+  `vendor/crimson-rs.ref`** (`scripts/checkout_crimson_rs.ps1`; the local
+  `vendor/` clone is gitignored, not used by CI). Land any crimson-rs fix on
+  `bbfox0703/crimson-rs` `main`, refresh the vendor and commit the new ref
+  *before* tagging a release.
   `main` is branch-protected (clippy `-D warnings` + `cargo test`); always go
   via PR; never push to upstream `potter420/crimson-rs`.
 - **Run tests with `dotnet run --project src/CrimsonAtomtic.Tests`** — the
   .NET 10 SDK removed the `dotnet test` → VSTest bridge that MTP (xunit.v3)
-  used to ride on. `build.ps1 -Target Test` and `build_ui.ps1 -Test` were both
-  still on the old invocation and had been silently dead since; both now call
-  the test project's own runner (fixed at the 1.18 alignment).
+  used to ride on. `build.ps1 -Target Test` and `build_ui.ps1 -Test` call the
+  test project's own runner too.
 - **`Microsoft.NET.Test.Sdk` and `Microsoft.CodeCoverage` ship as a matched
   set.** They are versioned and released together (Test.Sdk depends on the
   same-version CodeCoverage), so bumping one alone leaves a silent mismatch —
   restore still succeeds and the tests still pass, so nothing tells you. The
   2026-08-18 bump moved CodeCoverage 18.6.0 → 18.9.0 and left Test.Sdk behind
-  at 18.6.0; both are now 18.9.0. When bumping either, bump both.
+  at 18.6.0; both are now 18.12.0. When bumping either, bump both.
 - **The ILCompiler central pin tracks the installed SDK's runtime.** A newer
   SDK auto-injects a newer `Microsoft.DotNet.ILCompiler`, which then demands
   `runtime.win-x64.Microsoft.DotNet.ILCompiler >=` that version → **NU1109 at
@@ -520,10 +521,13 @@ window-restore quirks, etc.) is in
   SDK moves; it is not related to the game patch. At 2.05 the .NET 10 SDK had
   vanished entirely (only 11.0.100 was left), so `global.json` matched nothing
   and every `dotnet` command failed; reinstalling the .NET 10 SDK, not
-  retargeting, is the fix, because CI builds with `10.0.x`.
-- **CI's Rust is newer than yours the day a stable lands.** The release
-  workflow takes `dtolnay/rust-toolchain@stable`, so a new Rust reaches the
-  release build before it reaches this machine. Rust 1.100's std needed
+  retargeting, is the fix. `global.json` now pins the SDK exactly
+  (`rollForward: disable`) and CI installs that version from it, so moving
+  the SDK means editing `global.json` and this pin together.
+- **CI's Rust and yours can differ.** Both workflows pin the toolchain
+  (`RUST_TOOLCHAIN`, 1.100.1, in `ci.yml` and `release.yml`), while this
+  machine runs whatever `rustup` has. A new Rust can change what the
+  staticlib needs at link time: Rust 1.100's std needed
   `Synchronization.lib` in the AOT link and broke the first v2.05.01 cut
   while every local build passed. When a link fails only in CI, compare the
   `rustc` line in the run log with `rustc --version` here first, and get the
@@ -545,9 +549,8 @@ window-restore quirks, etc.) is in
   **✅ Cleared 2026-08-26** (it was LIVE from 2026-08-18: a 1.17-era `.pyd`
   dated 2026-08-09 parsing 1.18 data). `setup_python_env.ps1` was re-run at
   the 2.00 alignment; the in-tree `crimson_rs.pyd` is now **1,272,832 B dated
-  2026-08-26 15:48**, and `vendor/crimson-rs/target-py/` now exists — so the
-  1.18 `CARGO_TARGET_DIR` fix below has finally been exercised on this
-  machine. Verified by round-tripping the live 2.00 `iteminfo.pabgb` through
+  2026-08-26 15:48**, built into its own target dir, so the `CARGO_TARGET_DIR`
+  split below has been exercised on this machine. Verified by round-tripping the live 2.00 `iteminfo.pabgb` through
   the module: 6,446,719 B / 6,810 items, byte-identical. Expect the trap to
   come back at the next vendor refresh; it recurs because documenting it does
   not run the script. **It did, at 2.02**: after the vendor refresh the
@@ -566,9 +569,10 @@ window-restore quirks, etc.) is in
   with `build_rust.ps1` (`--features c_abi`) and whichever ran last won. The
   C# projects copy that dll via `<Content Include=…>`, so a Python refresh
   left every c_abi P/Invoke throwing `EntryPointNotFoundException` — a failure
-  that reads like a broken ABI but is really a build-artifact collision. Fixed
-  at 1.18 by scoping `CARGO_TARGET_DIR` to `vendor/crimson-rs/target-py` for
-  the maturin call only. If you see `EntryPointNotFoundException : Unable to
+  that reads like a broken ABI but is really a build-artifact collision.
+  `setup_python_env.ps1` now sets `CARGO_TARGET_DIR` to
+  `vendor/crimson-rs/target/py` for the maturin call only (inside the crate's
+  ignored `target/`, so `update_vendors.ps1` does not see a dirty clone). If you see `EntryPointNotFoundException : Unable to
   find an entry point named 'crimson_…'`, check the dll's **size** before
   suspecting the ABI. The two builds differ by roughly 150 KB, and that gap —
   not any absolute number — is the tell: **don't memorise the byte counts,
@@ -578,10 +582,9 @@ window-restore quirks, etc.) is in
   Windows Explorer and `Get-Item .Length/1KB` divide by 1024, so they show the
   2.03 pair as **1,103.5 KB** and **1,256.5 KB** — don't be thrown when those
   disagree with decimal-KB (÷1000) figures.
-- **Avalonia 12 quirks**: DataGrid is at **12.1.2 and now *leads* core
-  (12.1.1)** — it ships on its own cadence, so a version mismatch between the
-  two is expected and is **not** something to "fix" by pinning them together
-  (this note used to say the opposite, back when DataGrid lagged at 12.0.0);
+- **Avalonia 12 quirks**: DataGrid is at **12.1.2 while core is 12.2.0** —
+  it ships on its own cadence, so a version mismatch between the two is
+  expected and is **not** something to "fix" by pinning them together;
   `Avalonia.Diagnostics` 12.x still not released (latest is 11.3.20), so it
   stays out; MVVM uses field-based `[ObservableProperty]` (partial-property
   syntax didn't generate on CommunityToolkit 8.4 / .NET 10).

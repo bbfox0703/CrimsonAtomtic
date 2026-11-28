@@ -125,7 +125,7 @@ public enum ItemInfoFlags : uint
 /// <para>
 /// Layout is pinned in the Rust source via a <c>const _: () = { assert!(size_of == 80) }</c>
 /// check; the C# side asserts the same in
-/// <c>NativeItemInfoSummaryTests.Layout_MatchesRustAbi</c>. Field order
+/// <c>ItemInfoCatalogTests.ItemInfoSummary_Layout_MatchesRustAbi</c>. Field order
 /// is: <c>u64</c> × 3 → <c>u32</c> × 9 → <c>u16</c> × 4 → <c>u8</c> × 8,
 /// with the trailing <c>_Reserved</c> byte at offset 75 and four bytes
 /// of struct-alignment padding to round the total to 80 bytes.

@@ -48,7 +48,7 @@ public static class EpicManifestProbe
     /// Find a Crimson Desert install via Epic's launcher manifests.
     /// Returns the validated <c>InstallLocation</c>, or <c>null</c> when
     /// Epic isn't installed / no matching manifest exists / the
-    /// referenced folder no longer contains the witness file.
+    /// referenced folder lacks the witness file.
     /// </summary>
     public static string? FindCrimsonDesertInstall()
     {

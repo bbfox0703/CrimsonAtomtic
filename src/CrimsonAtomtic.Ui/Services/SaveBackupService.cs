@@ -45,8 +45,9 @@ namespace CrimsonAtomtic.Ui.Services;
 /// <see cref="BackupRoot"/>. <see cref="ListBackups"/> still surfaces
 /// those entries tagged as <see cref="SavePlatform.Steam"/> (the only
 /// launcher supported before this change). New backups always use the
-/// platform-scoped layout; legacy entries are pruned on their natural
-/// retention cycle but never recreated.
+/// platform-scoped layout. Legacy entries are never written again, so
+/// retention, which counts per platform-scoped slot, never prunes them: they
+/// stay until deleted by hand.
 /// </para>
 /// <para>
 /// Retention: at most <see cref="MaxVersionsPerSlot"/> timestamp

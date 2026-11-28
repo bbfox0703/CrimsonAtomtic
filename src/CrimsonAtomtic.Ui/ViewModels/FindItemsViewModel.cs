@@ -157,8 +157,9 @@ public sealed partial class FindItemsViewModel : ObservableObject
 
     /// <summary>
     /// True iff the loaded save has bumped its mutation version since
-    /// this dialog last listed. Calls one cheap FFI (u64 read). Used
-    /// by the Refresh button's CanExecute and the footer indicator.
+    /// this dialog last listed. Calls one cheap FFI (u64 read). Checked
+    /// before a Go-to (see <see cref="RequestGoto"/>) and shown by the
+    /// footer indicator.
     /// </summary>
     public bool IsStale
     {

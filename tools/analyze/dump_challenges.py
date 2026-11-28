@@ -24,7 +24,7 @@ Workflow:
    `MissionStateData` block: for each challenge key found, record its
    `_state` value (and whether `_completedTime` is present — important
    for the "one-click complete" feature design, since promoting that
-   absent field needs PR B / length-changing edits).
+   absent field needs a length-changing edit).
 6. Emit JSONL — one challenge per line — with category derived from
    the internal-name structure.
 

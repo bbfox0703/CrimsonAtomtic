@@ -192,6 +192,35 @@ public sealed class NativeSaveLoaderTests
     private static BlockDetails[] DecodeAll(NativeSaveLoader loader, string path, int count) =>
         Enumerable.Range(0, count).Select(i => loader.LoadBlockDetails(path, i)).ToArray();
 
+    [Fact]
+    public void BlockDetails_Fields_AreDenseInFieldIndexOrder()
+    {
+        // The path walkers index Fields by FieldIndex; that holds only while
+        // every block (nested ones too) lists each class field once, in order.
+        var path = FindLiveSave();
+        if (path is null) return;
+        using var loader = new NativeSaveLoader();
+        var summary = loader.Load(path);
+
+        var checkedBlocks = 0;
+        void Check(BlockDetails block, string where)
+        {
+            checkedBlocks++;
+            for (var i = 0; i < block.Fields.Count; i++)
+            {
+                var f = block.Fields[i];
+                Assert.True(f.FieldIndex == i, $"{where}: Fields[{i}] has FieldIndex {f.FieldIndex}");
+                if (f.Child is { } child) Check(child, $"{where}.{f.Name}");
+                foreach (var e in f.Elements ?? []) Check(e, $"{where}.{f.Name}[]");
+            }
+        }
+        foreach (var (block, i) in DecodeAll(loader, path, summary.Blocks.Count).Select((b, i) => (b, i)))
+        {
+            Check(block, $"block {i} ({block.ClassName})");
+        }
+        Assert.True(checkedBlocks > summary.Blocks.Count, "no nested block was checked");
+    }
+
     /// <summary>Total length of every undecoded range in
     /// <paramref name="block"/> and everything nested under it. Ranges are
     /// half-open <c>[start, end)</c>.</summary>
@@ -1048,7 +1077,7 @@ public sealed class NativeSaveLoaderTests
         }
     }
 
-    // ── Length-changing edits (PR B) ───────────────────────────────────────
+    // ── Length-changing edits ──────────────────────────────────────────────
     //
     // Each test loads a live save, mutates via the new entry points, and
     // either asserts the byte-perfect round-trip (clone+remove cycle),
@@ -1897,13 +1926,11 @@ public sealed class NativeSaveLoaderTests
 
     // ── Schema-shape regressions for the Abyss Gates tools ────────────────
     //
-    // Both flows shipped 2026-05-15 assumed shapes the live save doesn't
-    // actually have; the 2026-05-16 part 13 rewrites switched to the
-    // correct shapes (nested-under-FieldSaveData for the per-gate
-    // dialog; object_list elements for the bulk knowledge inject).
-    // These tests pin those shapes so a future schema drift surfaces
-    // here rather than as a silent UX failure ("no abyss gates in this
-    // save" / "0 already present").
+    // The shapes the two tools rely on: gates nested under FieldSaveData
+    // (the per-gate dialog) and knowledge as object_list elements (the bulk
+    // inject). Pinned here so a schema drift fails a test instead of the
+    // tools quietly finding nothing ("no abyss gates in this save" /
+    // "0 already present").
 
     [Fact]
     public void KnowledgeSaveData_List_IsObjectListWithKeyedElements()
@@ -2060,7 +2087,7 @@ public sealed class NativeSaveLoaderTests
         // Regression for the mutation_version-based cache: a mutation
         // through ANY entry point (here SetScalarField) must invalidate
         // the next LoadBlockDetails read for the affected block, even
-        // though the mutation path no longer manually clears the cache.
+        // though the mutation path does not clear the cache itself.
         var path = FindLiveSave();
         if (path is null) return;
         var loader = new NativeSaveLoader();

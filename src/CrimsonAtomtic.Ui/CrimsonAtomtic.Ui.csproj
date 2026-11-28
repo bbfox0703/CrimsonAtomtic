@@ -28,9 +28,8 @@
     <!--   VerMinor = game minor == NativePaverReader.ParserTargetMinor -->
     <!-- so a game patch to 1.18 means VerMinor 17 → 18 AT THE SAME     -->
     <!-- TIME ParserTargetMinor tracks it (keep them in lock-step).     -->
-    <!-- VerMajor was 1 on every patch through 1.18 and used to be      -->
-    <!-- described as "always 1"; game 2.00 is the first major bump, and -->
-    <!-- it RESETS the minor (18 → 0), so both components move together. -->
+    <!-- A major bump RESETS the minor (1.18 → 2.00 is 18 → 0), so the  -->
+    <!-- two components always move together.                          -->
     <!-- NOTE: ParserTargetMajor/Minor are READ from the crimson-rs C ABI -->
     <!-- (Rust is the single source of truth); VerMajor/VerMinor stay    -->
     <!-- MANUAL build-identity bumps, NOT auto-derived from that ABI.    -->
@@ -61,14 +60,11 @@
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <UsesCrimsonRsDll>true</UsesCrimsonRsDll>
 
-    <!-- Avalonia.Controls.DataGrid 12.0.0 ships internal reflection that
-         the ilc analyzer (microsoft.dotnet.ilcompiler 10.0.7+) flags via
-         IL2104 / IL3053 rolled-up assembly warnings. TreatWarningsAsErrors
-         in Directory.Build.props would otherwise turn the AOT publish red.
-         The DataGrid is a third-party dependency we can't easily fork, and
-         the warnings are functionally identical to what we already accept
-         in Release builds — so suppress just these two codes here. Track
-         removal when Avalonia ships a trim-safe DataGrid. -->
+    <!-- Avalonia.Controls.DataGrid (12.1.2) carries internal reflection
+         that ILC reports as the rolled-up IL2104 / IL3053 warnings, and
+         TreatWarningsAsErrors would fail the AOT publish on them. Both
+         codes name DataGrid alone: drop them from NoWarn and publish to
+         see whether a new DataGrid still needs this. -->
     <NoWarn>$(NoWarn);IL2104;IL3053</NoWarn>
   </PropertyGroup>
 

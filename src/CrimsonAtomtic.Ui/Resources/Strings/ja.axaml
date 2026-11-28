@@ -929,7 +929,7 @@
   <sys:String x:Key="GemSetsHeader">最大 3 つのカスタムセット、各最大 5 個の宝石。空のキーセルは保存時にスキップされます。</sys:String>
   <sys:String x:Key="GemSetsInvalidKey">セット {0}：「{1}」は有効な ItemKey（10進 u32）ではありません。保存を中止しました。</sys:String>
   <sys:String x:Key="GemSetsSaveFailed">保存に失敗（settings.json を書き込めません）。カスタムセットは保存されていません。</sys:String>
-  <sys:String x:Key="GemSetsSaved">{0} 個のカスタムセット定義を保存しました。ソケットエディタを閉じて再度開くと「セット適用」ツールバーで使用できます。</sys:String>
+  <sys:String x:Key="GemSetsSaved">{0} 個のカスタムセット定義を保存しました。「セット適用」の一覧に追加されています。</sys:String>
 
   <!-- 傭兵の名前変更ダイアログ -->
   <sys:String x:Key="JournalCatRenameMercenary">傭兵の名前変更</sys:String>

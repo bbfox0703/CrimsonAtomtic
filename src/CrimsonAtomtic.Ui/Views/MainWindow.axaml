@@ -691,7 +691,7 @@
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
-              <!-- "Remove" button — length-changing edit (PR B). Drops
+              <!-- "Remove" button — a length-changing edit. Drops
                    this element from the parent list via
                    ISaveLoader.ListRemoveElement, re-emits the body, and
                    refreshes the nav stack so the row disappears in

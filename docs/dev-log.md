@@ -28,6 +28,45 @@ read from the top.
 
 -----
 
+## 2026-11-28 (no release) — Code audit P12: docs match the code, and no history in comments
+
+- **What changes:**
+  - **No history in comments, enforced:** every history phrase the gate counted (about 40 lines in
+    21 files) is reworded to say what is true now, or cut where the dev-log or
+    `docs/game-versions.md` already holds it. The per-file ratchet and its baseline file are gone;
+    `CommentRulesTests` now fails on any history phrase (X-08).
+  - **Stale and misplaced comments fixed** (B1-20, B2-27, B3-20, B4-28, B5-21, X-04):
+    - The paver docs now describe the version gate, not the 2.00 alignment.
+    - The mutation-version comment states the forward-only contract.
+    - The key-info header no longer counts its catalogs, and no Rust-interop doc links to a UI type.
+    - Scalar editing is documented as working at every depth, as it does.
+    - Legacy backups are documented as kept until deleted by hand (retention never reaches them).
+    - The UI-language setting names the OS signal it uses.
+    - Avalonia's merged-dictionary reasoning is checked against the 12.2.0 source.
+    - The Sealed Abyss Artifact docs drop the held-artifact gate, which is no longer in the code.
+    - `ResolveDyeSlotCount` (dye slots) and `LookupSlotCount` (sub-meshes) say which count each is.
+    - After saving custom gem sets, the message says they are already in the Apply Set list, which
+      the Sockets window refreshes (en / ja / zh-TW).
+  - `BlockDetails.Fields` is documented as dense and in field-index order, and a live-save test now
+    pins it: the path walkers index it by position.
+  - **Docs** (B6-26…B6-29):
+    - `architecture.md` rewritten to the code as it is: projects, layers, the C ABI and the
+      staticlib, the platform layer, build outputs, and the vendored-ref sync model.
+    - `README.md` and `scripts/README.md` give the real build steps.
+    - Every `tools/` README lists the files that exist.
+    - Stale facts are corrected in `status.md`, `game-versions.md`, `ui-design.md`,
+      `data-policy.md` and the `gamedata_layout.py` docstring.
+    - Root `CLAUDE.md` Rule 8 says what `update_vendors.ps1` does now.
+  - The `IL2104;IL3053` suppression stays, because a publish without it still fails, on
+    `Avalonia.Controls.DataGrid` 12.1.2 alone. Its comment now says that and how to recheck (B6-31).
+- **Found on the way:** the first CI run of the tools tests caught two bugs local runs could not:
+  `_read_pamt` imported `crimson_rs` before checking the manifest existed, and `--help` crashed on
+  a cp1252 console. Both were fixed in their own commit before this one; `require_args` now makes
+  the tools escape characters the console cannot encode.
+- **Tests:** 493 C# + 60 Python green; CI green on both jobs.
+
+-----
+
 ## 2026-11-28 (no release) — Code audit P11: pinned CI, a PR workflow, build and tools fixes
 
 - **What changes:**

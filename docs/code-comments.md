@@ -38,12 +38,8 @@ and never rewritten; a comment describes the code as it stands.
 
 `CommentRulesTests` (in the C# suite, so it runs with every test pass) scans the scope above:
 
-- **Line references** (rule 5), **audit / review ids, PR numbers and commit hashes** (rule 7) and
-  **stacked `<summary>` blocks** (rule 8) must be zero.
-- **History phrases** (rule 7) are a per-file ratchet against
-  `src/CrimsonAtomtic.Tests/comment_history_baseline.json`: a file's count may not grow, and a cut
-  must lower the baseline (`$env:UPDATE_COMMENT_BASELINE = '1'` and re-run the test), so a new
-  history line cannot hide in the slack an old one left. The target is an empty baseline.
+- **Line references** (rule 5), **audit / review ids, PR numbers, commit hashes and history
+  phrases** (rule 7) and **stacked `<summary>` blocks** (rule 8) must be zero.
 - A failure lists every offending `file:line` with the text.
 
 The patterns are heuristics chosen for few false hits on a new line. If one fires on a

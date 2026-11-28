@@ -35,7 +35,10 @@ public sealed record BlockSummary(
 /// Full per-field decode of one block, populated lazily by
 /// <c>NativeSaveLoader.LoadBlockDetails</c> when the user selects a row.
 /// Mirrors the JSON document returned by
-/// <c>crimson_save_get_block_json</c>.
+/// <c>crimson_save_get_block_json</c>. <see cref="Fields"/> lists every
+/// field of the class, present or not, in schema order, so
+/// <c>Fields[i].FieldIndex == i</c> and a path step's field index is also a
+/// list position (pinned by a live-save test).
 /// </summary>
 public sealed record BlockDetails(
     int ClassIndex,

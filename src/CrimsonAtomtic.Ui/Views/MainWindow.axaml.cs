@@ -1382,7 +1382,7 @@ public sealed partial class MainWindow : Window
     /// Tools → World Map handler. Opens the dialog with whatever
     /// basemap path the user last picked (from
     /// <see cref="Services.AppSettings.WorldMapPath"/>); if that file
-    /// no longer exists / never set, the dialog opens empty and the
+    /// is missing or was never set, the dialog opens empty and the
     /// user picks via the toolbar's "Pick Map…" button. Markers come
     /// from <c>crimson_save_list_field_positions</c> on the current
     /// save — gated on <see cref="MainWindowViewModel.LoadedPath"/>

@@ -5,9 +5,9 @@ namespace CrimsonAtomtic.Ui;
 
 internal static class Program
 {
-    // App-wide identity used by the single-instance guard. A versioned
-    // GUID prefix keeps us safe if a future major release wants to allow
-    // side-by-side runs.
+    // App-wide identity used by the single-instance guard. The ".v1" suffix
+    // lets a future release that must run side by side with this one pick a
+    // new name.
     // Local\: one instance per user session. Global\ would also need
     // rights a standard account may not have, and would lock out a second
     // user on the same machine.

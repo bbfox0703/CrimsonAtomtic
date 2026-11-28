@@ -10,9 +10,11 @@ file per namespace:
                                                  /<table>.staticinfoheader
                   gamedata/stringtable/binary__/<lang>/<namespace>.paloc
 
-The file *contents* did not change, so every parser is untouched and only
-the lookup path moved. Resolution is newest-layout-first with a fallback,
-so a kept pre-2.01 install still works.
+The rename alone left the file contents as they were. 2.06 then moved each
+static-info row's name into the header file, so a table parser needs both
+halves: `BinLayout.body()` and `BinLayout.header()` name them. Resolution
+is newest-layout-first with a fallback, so a kept pre-2.01 install still
+works.
 
 2.03 then wrapped every paloc file in an LZ4 container around the
 unchanged entry list. `crimson_rs.parse_paloc_bytes` unwraps it, so the

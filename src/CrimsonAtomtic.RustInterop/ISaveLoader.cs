@@ -132,8 +132,8 @@ public interface ISaveLoader
 
     /// <summary>
     /// Flat-list every item slot across every <c>InventorySaveData</c>
-    /// block in the currently-loaded save. One FFI call replaces the
-    /// 18-container × N-item nesting walk callers used to do manually
+    /// block in the currently-loaded save, in one FFI call instead of an
+    /// 18-container × N-item walk
     /// (<c>InventorySaveData → _inventorylist[N] → _itemList[M]</c>).
     /// </summary>
     /// <param name="version">
@@ -379,7 +379,7 @@ public interface ISaveLoader
     /// </summary>
     void SetAllowHmacRewrap(bool allow);
 
-    // ── Length-changing edits (PR B) ───────────────────────────────────────
+    // ── Length-changing edits ──────────────────────────────────────────────
     //
     // The first three (Remove / Clone / SetScalarFieldPresent) cover the
     // user-facing UX gestures the editor needs today:
@@ -737,7 +737,7 @@ public interface ISaveLoader
     /// Build a list element from a template under THIS save's schema and
     /// insert it at <paramref name="insertAt"/>
     /// (<c>crimson_save_list_insert_element_template</c>). Fields match by
-    /// name; ones the target class no longer has are dropped, new ones
+    /// name; ones missing from the target class are dropped, new ones
     /// stay absent (inline objects get an empty child of the class this
     /// save uses for them), and a changed kind or size throws
     /// <c>TEMPLATE_MISMATCH (-25)</c> instead of being reinterpreted.

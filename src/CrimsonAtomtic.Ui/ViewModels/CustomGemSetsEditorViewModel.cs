@@ -114,7 +114,7 @@ public sealed partial class CustomGemSetsEditorViewModel : ObservableObject
         }
         Saved = true;
         StatusMessage = UiText.Format("GemSetsSaved",
-            "Saved {0} custom set definition(s). Close and reopen the Sockets editor to use them in the Apply Set toolbar.",
+            "Saved {0} custom set definition(s). They are in the Apply Set list now.",
             built.Count);
     }
 

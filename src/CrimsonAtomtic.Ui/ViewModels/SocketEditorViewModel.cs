@@ -228,7 +228,7 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     /// using <see cref="SearchText"/>. Two-pass:
     /// <list type="number">
     ///   <item>Pass 1 finds every <i>item</i> (identified by
-    ///     <c>(BlockIndex, BagIndex, ItemIndex)</c>) whose identity
+    ///     <see cref="SocketRow.ItemIdentity"/>) whose identity
     ///     fields match (bag / item name / item key). Every slot
     ///     of those items is included — so empty Fill-able slots
     ///     surface alongside the filled ones when the user is
@@ -372,9 +372,9 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Build the view-model against a loaded save. Returns null when no
-    /// filled sockets exist — caller surfaces an alert rather than
-    /// opening an empty window.
+    /// Build the view-model against a loaded save. Returns null when the
+    /// save has no socket rows at all, filled or empty — the caller
+    /// surfaces an alert rather than opening an empty window.
     /// </summary>
     public static SocketEditorViewModel? TryCreate(
         ISaveLoader loader,
@@ -1256,7 +1256,7 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     /// loaded (<c>LocalizationProvider.TryBootstrapItemInfo</c> swallows
     /// a parse failure), and the dialog opens either way. Collapsing the
     /// two into <see cref="DefaultGemEndurance"/> would silently
-    /// reinstate the blanket 65535 this fix removed — on every gem at
+    /// apply a blanket 65535 — on every gem at
     /// once. So the catalog is checked separately, and only a genuinely
     /// unknown key inside a loaded catalog (a CE-invented gem, where
     /// there is no cap to respect) takes the fallback.

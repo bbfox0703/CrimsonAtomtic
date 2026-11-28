@@ -64,10 +64,9 @@ public sealed class UiLanguageService
     /// construction time, keyed by language code. Once populated,
     /// <see cref="Apply"/> doesn't need to re-parse URIs — it works
     /// purely by indexing this map and rebuilding the MergedDictionaries
-    /// collection with a <c>Clear() + Add()</c> pattern (the only
-    /// reordering shape Avalonia 11.3.12 propagates as a
-    /// <c>ResourcesChanged</c> event the visual tree picks up — verified
-    /// against the working AOBMaker pattern).
+    /// collection with <c>Clear() + Add()</c>, the reordering that makes
+    /// Avalonia raise a <c>ResourcesChanged</c> the visual tree picks up
+    /// (see <see cref="Apply"/>).
     /// </summary>
     private readonly Dictionary<string, IResourceProvider> _dictByCode =
         new(System.StringComparer.OrdinalIgnoreCase);
@@ -81,8 +80,8 @@ public sealed class UiLanguageService
 
     /// <summary>
     /// Marker key each shipped language dictionary carries with the
-    /// language's own code as its value. The XAML compiler in Avalonia
-    /// 11.3 inlines <c>&lt;ResourceInclude&gt;</c> targets directly as
+    /// language's own code as its value. Avalonia's XAML compiler
+    /// inlines <c>&lt;ResourceInclude&gt;</c> targets directly as
     /// <c>Avalonia.Controls.ResourceDictionary</c> instances, which
     /// don't expose the original Source URI — so we can't identify
     /// each merged dictionary by its file path. Probing this marker
@@ -150,7 +149,7 @@ public sealed class UiLanguageService
     {
         // Explicit user pick takes precedence — only honored when it
         // names one of the shipped resource dictionaries. Anything else
-        // (typo, dictionary we no longer ship, legacy code) falls
+        // (typo, a dictionary not shipped, a legacy code) falls
         // through to auto-detect so the app stays usable.
         if (!string.IsNullOrEmpty(settingsUiLanguage))
         {
@@ -305,20 +304,14 @@ public sealed class UiLanguageService
 
         var merged = _app.Resources.MergedDictionaries;
 
-        // Rebuild via Clear() + Add() — the AOBMaker-proven pattern.
+        // Rebuild via Clear() + Add(), not an in-place RemoveAt + Add.
         //
-        // Why not RemoveAt + Add (the previous broken approach): in
-        // Avalonia 11.3.12, ResourceDictionary's MergedDictionaries is
-        // an AvaloniaList whose ForEachItem callbacks only manage
-        // AddOwner / RemoveOwner on per-item add / remove. An in-place
-        // RemoveAt + Add of the SAME item instance does NOT propagate
-        // a ResourcesChanged event the visual tree picks up, so
-        // DynamicResource bindings never re-evaluate and the UI keeps
-        // rendering the pre-swap language. Verified against
-        // https://github.com/AvaloniaUI/Avalonia/blob/release/11.3.12/src/Avalonia.Base/Controls/ResourceDictionary.cs
-        // and cross-checked against the working AOBMaker pattern at
-        // D:\Github\AOBMaker\src\AOBMaker.UI\I18n\Lang.cs
-        // (Lang.ApplyLanguageOrder).
+        // ResourceDictionary.MergedDictionaries is an AvaloniaList whose
+        // ForEachItem callbacks only AddOwner / RemoveOwner on per-item add
+        // and remove (src/Avalonia.Base/Controls/ResourceDictionary.cs,
+        // the same in 11.3.12 and 12.2.0). Moving the SAME instance in place
+        // raises no ResourcesChanged the visual tree picks up, so
+        // DynamicResource bindings keep the old language.
         //
         // Clear() + sequential Add() fires the right cascade: every Add
         // re-AddOwner's the dictionary on the host, which re-emits the

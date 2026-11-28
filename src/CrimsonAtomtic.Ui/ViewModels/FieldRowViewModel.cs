@@ -170,7 +170,7 @@ public sealed partial class FieldRowViewModel : ObservableObject
     /// <summary>
     /// Commit a fresh decoded view of this row (from a re-fetch after
     /// mutation). Updates DisplayValue and resets the edit baseline so the
-    /// edit textbox no longer reads as "dirty".
+    /// edit textbox reads as clean.
     /// </summary>
     public void ApplyCommittedValue(DecodedFieldRow fresh)
     {

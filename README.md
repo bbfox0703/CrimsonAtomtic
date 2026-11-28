@@ -39,16 +39,18 @@ CrimsonAtomtic/
 ├── CrimsonAtomtic.slnx       # .NET solution
 ├── Directory.Build.props     # shared MSBuild settings
 ├── Directory.Packages.props  # central package versions
-├── global.json               # .NET SDK pin (10.0.x)
+├── build.ps1 / build.cmd     # build entry point (Rust core + C# build / test / AOT publish)
+├── build_number.txt          # the version's fourth part, bumped by build.ps1
+├── global.json               # .NET SDK pin (exact version)
 ├── docs/                     # architecture, format specs, data hygiene policy
 ├── src/                      # C# / Avalonia 12 / .NET 10 / Native AOT
-│   ├── CrimsonAtomtic.Core         # platform abstractions
-│   ├── CrimsonAtomtic.SaveModel    # domain types (records + AOT JSON ctx)
-│   ├── CrimsonAtomtic.RustInterop  # crimson-rs P/Invoke layer
+│   ├── CrimsonAtomtic.Core         # platform interfaces
+│   ├── CrimsonAtomtic.SaveModel    # save records (+ AOT JSON ctx), scalar-edit helpers
+│   ├── CrimsonAtomtic.RustInterop  # crimson-rs C ABI layer ([LibraryImport])
 │   ├── CrimsonAtomtic.Ui           # Avalonia app
 │   └── CrimsonAtomtic.Tests        # xUnit 3
 ├── tools/                    # Python 3.12+ toolchain: extract / diff / inspect / analyze
-├── vendor/                   # cloned external deps (only crimson-rs for now)
+├── vendor/                   # crimson-rs clone (gitignored) + the committed crimson-rs.ref
 └── scripts/                  # build / setup / package scripts (PowerShell 7+)
 ```
 
@@ -158,7 +160,7 @@ See [docs/status.md](docs/status.md) for the full feature ledger and roadmap.
 | Layer | Tech |
 |---|---|
 | App / UI | Avalonia UI 12 on .NET 10, Native AOT trimmed |
-| Native core | Rust ([`vendor/crimson-rs`](vendor/crimson-rs/), C ABI + PyO3 from one cdylib) |
+| Native core | Rust ([`vendor/crimson-rs`](vendor/crimson-rs/)): a C ABI build for the app (DLL in dev, statically linked into the AOT exe) and a separate PyO3 build for the tools |
 | Tooling | Python 3.12+ under [`tools/`](tools/) |
 | Tests | xUnit 3 (C#), pytest (Python), `cargo test` (Rust) |
 
@@ -173,28 +175,63 @@ element + knowledge set behind our Mount Unlock feature).
 
 ## First-time setup
 
+Needs PowerShell 7.2+ (`pwsh`), the .NET SDK pinned in `global.json`
+(10.0.404 exactly, no roll-forward), the Rust toolchain with the MSVC build
+tools, and Python 3.12+ for the tools. Windows x64 is the only build target.
+
 ```powershell
-# 1. Fetch vendored deps (clones crimson-rs from D:\Github\crimson-rs)
+# 1. Clone crimson-rs into vendor\ (github.com/bbfox0703/crimson-rs, main);
+#    the commit is written to vendor\crimson-rs.ref
 .\vendor\update_vendors.ps1
 
-# 2. Build Rust core (produces crimson_rs.dll with both C ABI + PyO3)
-.\scripts\build_rust.ps1
+# 2. Build the Rust core and the C# solution (Release by default)
+.\build.ps1                        # or: build.cmd
 
-# 3. Set up Python venv + install crimson_rs via maturin develop
+# 3. For tools\ only: create .venv\ and build the PyO3 module
 .\scripts\setup_python_env.ps1
-
-# 4. Build the Avalonia UI
-.\scripts\build_ui.ps1
 ```
+
+`build.ps1` (with `build.cmd` as a cmd.exe wrapper: `build debug`,
+`build publish`, `build dll`, `build test`, `build clean`, …) is the single
+entry point:
+
+| Command | Does |
+|---|---|
+| `.\build.ps1` | Rust core + `dotnet build -c Release` |
+| `.\build.ps1 -Mode Debug` | Rust core + `dotnet build -c Debug` |
+| `.\build.ps1 -Mode Publish` | Rust core + Native AOT publish to `dist\win-x64\` |
+| `.\build.ps1 -Target DLL` | Rust core only |
+| `.\build.ps1 -Target UI` | Rust core + C# build (with `-Mode Publish`: a Release build, then the AOT publish) |
+| `.\build.ps1 -Target Test` | Rust core + build and run the C# tests |
+| `-Clean` | Delete `dist\` and every project's `bin\` / `obj\` first |
+
+The Rust core is always built with the release profile, whatever the mode.
+The version's fourth part comes from `build_number.txt`, which `build.ps1`
+bumps only after a successful build (never for `-Target DLL`). What each
+script under `scripts\` does is in [scripts/README.md](scripts/README.md).
+
+Run the C# tests directly with:
+
+```powershell
+dotnet run --project src/CrimsonAtomtic.Tests/CrimsonAtomtic.Tests.csproj -c Debug
+```
+
+`dotnet test` does not work: the .NET 10 SDK dropped the VSTest bridge. The
+Python tools' tests run with `python -m pytest tools/tests`.
+
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) builds the Rust
+core at the commit in `vendor/crimson-rs.ref` and runs both test suites on
+every pull request and every push to `dev` / `main`.
 
 ## Running a tool
 
 ```powershell
 # After setup, with the venv active:
-python tools\extract\extract_iteminfo.py --help
+python tools\extract\extract_save.py --help
 ```
 
 Every script in `tools/` prints full usage when run with no arguments. See
+[tools/README.md](tools/README.md) for the inventory and
 [tools/CLAUDE.md](tools/CLAUDE.md) for conventions.
 
 ## License

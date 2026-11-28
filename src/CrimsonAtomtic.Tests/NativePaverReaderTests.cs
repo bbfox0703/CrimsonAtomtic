@@ -37,7 +37,7 @@ public sealed class NativePaverReaderTests
 
     /// <summary>The previous patch's paver (2.05.01) — kept to pin that it
     /// is flagged INCOMPATIBLE. 2.06 moved every static-info row's name into
-    /// the table header, so 2.05.01 data no longer reads against this
+    /// the table header, so 2.05.01 data does not read against this
     /// parser.</summary>
     private static readonly byte[] Paver_2_05_01_Prev =
     [
@@ -159,7 +159,7 @@ public sealed class NativePaverReaderTests
             return;
         }
         // 2.06 moved every static-info row's name into the table header, so
-        // 2.05.01 data no longer reads against this parser — a substantive
+        // 2.05.01 data does not read against this parser — a substantive
         // incompatibility (as with 1.16, 1.18, 2.00, 2.03, 2.04 and 2.05),
         // not the target-only convention 2.01 and 2.02 were.
         var v = NativePaverReader.TryReadFromBytes(Paver_2_05_01_Prev);
@@ -291,12 +291,10 @@ public sealed class NativePaverReaderTests
         }
         var v = NativePaverReader.TryReadFromInstall(installRoot);
         Assert.NotNull(v);
-        // Deliberately pins nothing that moves. This used to assert
-        // Major == 1 "always 1 in shipped versions" — and game 2.00 broke
-        // exactly that assumption, which is the reason the whole
-        // major-aware gate exists. So assert only what a real paver can
-        // never violate: majors start at 1, so a successful read that
-        // yields 0 means we parsed something that isn't a version stamp.
+        // Pins nothing that moves (the major itself changes across patches).
+        // Only what a real paver can never violate: majors start at 1, so a
+        // successful read that yields 0 means we parsed something that isn't
+        // a version stamp.
         Assert.True(v!.Value.Major >= 1,
             $"a real install's paver major is >= 1, got {v.Value.Major}");
         // The "is the dev box on the patch this build supports" canary

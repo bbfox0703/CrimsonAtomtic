@@ -60,10 +60,8 @@ try {
     if ($Test) {
         Write-Host "Running tests..." -ForegroundColor Cyan
         # The test project runs on Microsoft.Testing.Platform (xunit.v3), and
-        # the .NET 10 SDK removed the legacy `dotnet test` → VSTest bridge MTP
-        # used to ride on ("Testing with VSTest target is no longer supported
-        # …"). Invoke the MTP runner directly instead — it is the entry point
-        # the test exe exposes.
+        # the .NET 10 SDK has no `dotnet test` → VSTest bridge for it, so run
+        # the test exe's own MTP entry point.
         & dotnet run --project "$ProjectRoot\src\CrimsonAtomtic.Tests\CrimsonAtomtic.Tests.csproj" -c $Configuration --no-build
         if ($LASTEXITCODE -ne 0) { throw "tests failed" }
     }

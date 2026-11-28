@@ -926,7 +926,7 @@
   <sys:String x:Key="GemSetsHeader">Up to 3 custom sets, each with up to 5 gems. Empty key cells are skipped at Save.</sys:String>
   <sys:String x:Key="GemSetsInvalidKey">Set {0}: "{1}" isn't a valid ItemKey (decimal u32). Save aborted.</sys:String>
   <sys:String x:Key="GemSetsSaveFailed">Save failed (couldn't write settings.json). Custom sets not persisted.</sys:String>
-  <sys:String x:Key="GemSetsSaved">Saved {0} custom set definition(s). Close and reopen the Sockets editor to use them in the Apply Set toolbar.</sys:String>
+  <sys:String x:Key="GemSetsSaved">Saved {0} custom set definition(s). They are in the Apply Set list now.</sys:String>
 
   <!-- Rename-mercenary dialog. -->
   <sys:String x:Key="JournalCatRenameMercenary">Rename Mercenary</sys:String>

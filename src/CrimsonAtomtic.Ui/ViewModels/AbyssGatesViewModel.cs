@@ -40,12 +40,10 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 /// </para>
 ///
 /// <para>
-/// <b>History note:</b> the v1 of this dialog (shipped 2026-05-15)
-/// looked for top-level <c>FieldGimmickSaveData</c> blocks, of
-/// which real saves have zero — every gate sits nested under
-/// <c>FieldSaveData._fieldGimmickSaveDataList</c>. This v2 walks
-/// the correct shape and surfaces gates across both
-/// <c>FieldSaveData</c> roots (typically 2 per save) at once.
+/// Real saves have no top-level <c>FieldGimmickSaveData</c> blocks:
+/// every gate sits nested under
+/// <c>FieldSaveData._fieldGimmickSaveDataList</c>, and the scan covers
+/// every <c>FieldSaveData</c> root (typically 2 per save) at once.
 /// </para>
 /// </summary>
 public sealed partial class AbyssGatesViewModel : ObservableObject

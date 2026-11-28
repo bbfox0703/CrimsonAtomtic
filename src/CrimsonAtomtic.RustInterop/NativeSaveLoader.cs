@@ -1043,7 +1043,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         }
     }
 
-    // ── Length-changing edits (PR B) ───────────────────────────────────────
+    // ── Length-changing edits ──────────────────────────────────────────────
 
     public void ListRemoveElement(
         int blockIndex,
@@ -2008,7 +2008,7 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "crimson_save_set_allow_hmac_rewrap")]
     public static partial int SetAllowHmacRewrap(CrimsonSaveHandle handle, byte allow);
 
-    // ── Length-changing edits (PR B) ────────────────────────────────────────
+    // ── Length-changing edits ──────────────────────────────────────────────
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_save_list_remove_element")]
     public static unsafe partial int ListRemoveElement(
@@ -2145,9 +2145,9 @@ internal static partial class NativeMethods
 
     // Infallible, direct u16 returns — no error code, no out-pointer.
 
-    // Added for game 2.00, the first MAJOR bump: the minor RESETS across one
-    // (1.18 → 2.00 is 18 → 0), so a minor-only gate can no longer tell 2.00
-    // apart from a hypothetical 1.00. Compare the install's (major, minor).
+    // The minor resets across a major bump (1.18 → 2.00 is 18 → 0), so a
+    // minor alone cannot tell 2.00 from a hypothetical 1.00; compare the
+    // install's (major, minor).
     [LibraryImport(LibraryName, EntryPoint = "crimson_parser_target_gamedata_major")]
     public static partial ushort ParserTargetGamedataMajor();
 
@@ -2198,10 +2198,12 @@ internal static partial class NativeMethods
 
     // ── Mutation-version counter ────────────────────────────────────────────
     //
-    // Monotonic u64 bumped by exactly 1 on every successful mutation
-    // through the C ABI surface. Pure reads (LoadBlockDetails, snapshot
-    // listings, etc.) DO NOT bump it. Pair with snapshot-style reads
-    // for cheap O(1) staleness detection.
+    // A u64 that only moves forward: every mutation through the C ABI
+    // advances it (each op inside a deferred batch too), a commit advances
+    // it again, and so does an abort that had changed anything. Pure reads
+    // (LoadBlockDetails, snapshot listings) leave it alone. Compare two
+    // readings for an O(1) "has anything changed" check; never assume a
+    // step size.
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_save_get_mutation_version")]
     public static partial int GetMutationVersion(CrimsonSaveHandle handle, out ulong outVersion);
@@ -3573,10 +3575,9 @@ internal static partial class NativeMethods
     // ── PartPrefabDyeSlotInfo bridge ────────────────────────────────────────
     //
     // PartPrefabKey (u32) → per-prefab slot count + per-slot default
-    // material / mask / tail-name detail. 1,105 rows in 1.07.
-    // Replaces CRIMSON-DESERT-SAVE-EDITOR's dye_slot_counts.json — once the
-    // _itemKey → _partPrefabKey cross-reference lands. Bound here for
-    // future use; v1 Dye editor doesn't consume this bridge yet.
+    // material / mask / tail-name detail. Unused by the editor: reaching a
+    // prefab from an item needs the _itemKey → _partPrefabKey
+    // cross-reference (see NativePartPrefabDyeSlotInfoCatalog).
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_part_prefab_dye_slot_info_load_from_bytes")]
     public static unsafe partial int PartPrefabDyeSlotInfoLoadFromBytes(

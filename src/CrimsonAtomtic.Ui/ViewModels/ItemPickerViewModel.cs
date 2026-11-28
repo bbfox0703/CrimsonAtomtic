@@ -249,7 +249,7 @@ public sealed partial class ItemPickerViewModel : ObservableObject
     /// <summary>
     /// Raised when the user clicks the "+ Bag" button on a row,
     /// asking the main window to add that item to the currently-
-    /// displayed inventory list (clone + patch _itemKey, PR B.4.2).
+    /// displayed inventory list (clone an element, patch its _itemKey).
     ///
     /// MainWindow's <c>OnBrowseItemsClick</c> subscribes a handler
     /// that delegates to

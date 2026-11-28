@@ -119,8 +119,8 @@ public sealed class LocalizationProviderTests
     }
 
     /// <summary>
-    /// <c>FactionKey</c> resolves through the <c>faction</c> table. It used to
-    /// go through PALOC type byte 0x30, which is <c>character.paloc</c>'s:
+    /// <c>FactionKey</c> resolves through the <c>faction</c> table, not PALOC
+    /// type byte 0x30, which is <c>character.paloc</c>'s:
     /// factions and characters share the 1,000,000+ key range, so the
     /// player's own faction 1000000 read as <c>CharacterKey 1000000</c>
     /// "Hernandian Guard", and 1000035 / 1000058 / 1000063 all read as

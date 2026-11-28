@@ -88,10 +88,9 @@ public sealed class LocalizationProvider : IDisposable
     private GameDataLayout _layout = GameDataLayout.Modern;
 
     /// <summary>
-    /// Known PALOC language codes the game ships. Sourced authoritatively
-    /// from <c>list_all_paloc.py</c> against the 1.06 install — every
-    /// entry below was verified to extract from the corresponding
-    /// <c>localizationstring_&lt;code&gt;.paloc</c>. Order is by group
+    /// Known PALOC language codes the game ships, each one checked to
+    /// extract from its <c>localizationstring_&lt;code&gt;.paloc</c>.
+    /// Order is by group
     /// number so the probe's first-pass discovery hits in the order the
     /// game stores them. Discovery probes each of these against every
     /// group in <see cref="PalocGroupRange"/>; codes that resolve are
@@ -116,10 +115,9 @@ public sealed class LocalizationProvider : IDisposable
     ];
 
     /// <summary>
-    /// Inclusive group range to probe for PALOC files. As of 1.06 the
-    /// highest-numbered language is at group 0032 (zho-cn); we probe up
-    /// to 0050 to leave headroom for future patches without missing a
-    /// newly-added language.
+    /// Inclusive group range to probe for PALOC files. The highest
+    /// language group the game has used is 0032 (zho-cn); probing up to
+    /// 0050 leaves room for a language a patch adds.
     /// </summary>
     private static readonly (int Lo, int Hi) PalocGroupRange = (19, 50);
 
@@ -201,8 +199,8 @@ public sealed class LocalizationProvider : IDisposable
     /// matches for FieldNPC spawn rows.
     /// </para>
     /// <para>
-    /// <c>FactionKey</c> must never come back here. It used to map to
-    /// byte 0x30, but that byte is <c>character.paloc</c>'s: factions and
+    /// <c>FactionKey</c> must never map here. Byte 0x30 is
+    /// <c>character.paloc</c>'s: factions and
     /// characters share the 1,000,000+ key range, so <c>FactionKey
     /// 1000000</c> (Faction_Graymane, the player's faction) read as
     /// <c>CharacterKey 1000000</c> "Hernandian Guard" and six factions read
@@ -1095,7 +1093,7 @@ public sealed class LocalizationProvider : IDisposable
     }
 
     /// <summary>
-    /// Load all 13 name-only niche bridges in one pass. Each one is the
+    /// Load every name-only niche bridge in one pass. Each one is the
     /// same two-file shape (<c>.pabgb</c> body + <c>.pabgh</c> index, both
     /// in group <c>0008</c>'s <c>gamedata/binary__/client/bin/</c>) and
     /// each is independent — failure of one only blanks the corresponding
@@ -2474,7 +2472,7 @@ public sealed class LocalizationProvider : IDisposable
             // already-loaded stringinfo bridge. Internal name only —
             // stringinfo doesn't ship localized titles.
             "StringInfoKey" => LookupStringInfo(key),
-            // 13 niche bridges — internal name only (no PALOC chain).
+            // Niche bridges — internal name only (no PALOC chain).
             // Same convention as Store / QuestGauge / Skill: secondary
             // language intentionally echoes the English column.
             "FactionNodeKey"          => _factionNodeInfo?.LookupStringKey(key),
@@ -2711,7 +2709,7 @@ public sealed class LocalizationProvider : IDisposable
         }
         _storeInfo?.Dispose();
         _storeInfo = null;
-        // 13 niche bridges.
+        // Niche bridges.
         _factionNodeInfo?.Dispose(); _factionNodeInfo = null;
         _factionInfo?.Dispose(); _factionInfo = null;
         _factionMembers = null;

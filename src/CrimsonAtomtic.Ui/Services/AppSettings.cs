@@ -101,9 +101,9 @@ public sealed record AppSettings
 
     /// <summary>
     /// User-picked UI language code. <c>null</c> / missing means
-    /// "auto-detect from <see cref="System.Globalization.CultureInfo.CurrentUICulture"/>"
-    /// (the default — picks zh-TW for Traditional Chinese OS, ja for
-    /// Japanese OS, en otherwise). Set explicitly via Tools → UI Language
+    /// "auto-detect from the OS UI language" (the default, through
+    /// <c>UiLanguageService.OsLanguage</c> — picks zh-TW for Traditional
+    /// Chinese, ja for Japanese, en otherwise). Set explicitly via Tools → UI Language
     /// to override the detection. Supported values mirror the resource
     /// dictionaries shipped under <c>Resources/Strings/</c>: <c>"en"</c>,
     /// <c>"ja"</c>, <c>"zh-TW"</c>. Unknown values fall back to auto-detect

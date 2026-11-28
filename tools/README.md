@@ -11,62 +11,74 @@ tools/
 ├── CLAUDE.md           # conventions (read this first)
 ├── README.md           # you are here
 ├── pyproject.toml      # project metadata, requires Python 3.12+
-├── common/             # shared helpers (CLI boilerplate, game-path discovery)
+├── common/             # shared library modules (no CLI)
 ├── extract/            # pull data out of game files into structured form
-├── diff/               # compare two installs / two versions
+├── diff/               # compare two installs / two versions (empty)
 ├── inspect/            # interactive exploration, byte-range diagnostics
-└── analyze/            # higher-level analyses across many files
+├── analyze/            # higher-level analyses across many files
+└── tests/              # pytest suite for the scripts and common/
 ```
 
 ## Tool inventory
 
-Tools are added over time, one per concrete need. The table below lists what we
-plan to have; entries are checked off as they land. Every entry's script must
-print full usage when run with no args.
+What is in the tree today. Every runnable script prints full usage and exits
+2 when run with no args. Add a row when you add a script; delete the row
+when you delete the script.
 
 ### `extract/`
 
-| Tool                          | Status | Purpose                                                    |
-| ----------------------------- | ------ | ---------------------------------------------------------- |
-| `extract_iteminfo.py`         | TODO   | Pull `iteminfo.pabgb`, emit JSONL (one item per line)      |
-| `extract_skillinfo.py`        | TODO   | Pull `skill.pabgb` + `.pabgh`, emit JSON skill tree         |
-| `extract_paloc.py`            | TODO   | Pull all PALOC tables, emit per-language JSON              |
-| `extract_save.py`             | TODO   | Decrypt one `save.save`, emit JSON snapshot                |
-| `build_iconcache.py`          | TODO   | Generate thumbnail tiers (32 / 64 / 128) from source icons |
+| Tool | Purpose |
+| --- | --- |
+| `extract_save.py` | Decrypt + decompress one `.save`; writes `<slot>.json` (header, sizes, HMAC status, body SHA-256) and `<slot>.bin` (the body) |
 
 ### `diff/`
 
-| Tool                  | Status | Purpose                                                        |
-| --------------------- | ------ | -------------------------------------------------------------- |
-| `diff_iteminfo.py`    | TODO   | Cross-version item add / remove / change report                |
-| `diff_paloc.py`       | TODO   | Cross-version localization string diff                          |
-| `diff_pamt.py`        | TODO   | Pack-group / file-path diff between two installs                |
-| `diff_save.py`        | TODO   | Diff two save files (same character, before / after edit)       |
+No scripts yet.
 
 ### `inspect/`
 
-| Tool                   | Status | Purpose                                                          |
-| ---------------------- | ------ | ---------------------------------------------------------------- |
-| `inspect_save_body.py`    | DONE   | Hex / field viewer for a decoded save body                  |
-| `inspect_save_section.py` | DONE   | Per-block / per-class slice of a save body                  |
-| `_proto_<format>.py`      | as-needed | Scratch parser prototyping — to be deleted once promoted to `crimson-rs` |
+| Tool | Purpose |
+| --- | --- |
+| `inspect_save_body.py` | Show the schema + TOC of a decoded save body |
+| `inspect_save_section.py` | Show the decoded contents of save sections, filtered by class or TOC index |
 
 ### `analyze/`
 
-| Tool                          | Status | Purpose                                                |
-| ----------------------------- | ------ | ------------------------------------------------------ |
-| `dump_save_fields.py`         | DONE   | Flatten a `.save` into one-row-per-field JSONL (for duckdb/pandas correlation work — unknown-Key RE) |
-| `dump_catalogs.py`            | DONE   | Pull iteminfo + PALOC out of an install as JSONL (the lookup tables `dump_save_fields.py` joins against) |
-| `extract_keycases.py`         | DONE   | Real-case pack per Key TypeName — value + siblings + catalog resolves — for handing to the crimson_rs parser-writing session |
-| `analyze_item_distribution.py`| TODO   | Statistical view over the iteminfo table               |
-| `analyze_save_corpus.py`      | TODO   | Aggregate statistics across many save fixtures         |
+| Tool | Purpose |
+| --- | --- |
+| `dump_save_fields.py` | Flatten a `.save` into one-row-per-field JSONL (for duckdb / pandas correlation work) |
+| `dump_catalogs.py` | Pull the iteminfo + PALOC catalogs out of a game install as JSONL |
+| `extract_keycases.py` | Package real-world Key examples, per `(type, value)` with siblings and catalog resolves, for the crimson_rs RE session |
+| `dump_challenges.py` | Enumerate every `Challenge_*` row from missioninfo, with save-side completion state |
+
+### `common/`
+
+Library modules imported by the scripts; not run directly.
+
+| Module | Purpose |
+| --- | --- |
+| `cli.py` | CLI helpers shared by every tool (`require_args`: usage + exit 2 on no args) |
+| `paths.py` | Game install discovery and save-file location helpers |
+| `gamedata_layout.py` | Resolve where an install keeps its gamedata tables and paloc files (pre- and post-2.01 layouts) |
+| `crimson_abi.py` | Where the crimson-rs C ABI library lives, and the status codes it returns, for tools that load it through ctypes |
+
+### `tests/`
+
+| File | Covers |
+| --- | --- |
+| `conftest.py` | Shared fixtures: loads the scripts by file path |
+| `test_rule9.py` | Rule 9 for every runnable script: no-args usage, no import-time effects |
+| `test_common.py` | The shared modules under `common/` |
+| `test_analyze_helpers.py` | Pure helpers inside the `analyze/` scripts |
 
 ## How to run
 
-From the project root, after the one-time Python env setup:
+From the project root, after the one-time Python env setup
+(`.\scripts\setup_python_env.ps1`):
 
 ```powershell
-python tools\extract\extract_iteminfo.py --help
+python tools\extract\extract_save.py --help
+python -m pytest tools/tests
 ```
 
 If a tool prints its help and exits 2 when you pass no args, it's compliant

@@ -6,10 +6,9 @@ using CrimsonAtomtic.Ui.ViewModels;
 namespace CrimsonAtomtic.Ui.Views;
 
 /// <summary>
-/// Modal slot picker for the Dye editor's "+ Add" action. Opens with a
-/// list of slots <c>0..N-1</c> (N = the item's
-/// <c>partprefabdyeslotinfo</c> slot count) labelled with each slot's
-/// default material name. Returns the picked
+/// Modal slot picker for the Dye editor's "+ Add" action. Lists the dye
+/// slot numbers it is given, which are sparse (they come from the item's
+/// dye-slot bits), each labelled with its default material name. Returns the picked
 /// <see cref="DyeSlotPickerOption.SlotIndex"/>, or <c>null</c> when the
 /// user cancels.
 /// </summary>

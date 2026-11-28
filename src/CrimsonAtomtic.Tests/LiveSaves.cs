@@ -6,14 +6,10 @@ namespace CrimsonAtomtic.Tests;
 /// <b>most recently written first</b>.
 ///
 /// <para>
-/// Newest-first is the point. The live-save tests used to take the first of
-/// slot0 / slot1 / slot2, and when game 2.03 shipped those were 2.01-era
-/// saves on the dev machine, while the only saves 2.03 had written were
-/// slot107 and slot102. So the whole C# suite kept exercising a format two
-/// patches old, and a save-body drift in a new patch would have reached the
-/// editor before any C# test noticed. Ordering by last-write time makes the
-/// tests follow whatever the installed game wrote most recently, not a slot
-/// number.
+/// Newest-first is the point: a fixed slot number can hold a save several
+/// patches old, and then a save-body drift in a new patch reaches the editor
+/// before any C# test sees it. Ordering by last-write time makes the tests
+/// follow whatever the installed game wrote most recently.
 /// </para>
 ///
 /// <para>

@@ -928,7 +928,7 @@
   <sys:String x:Key="GemSetsHeader">最多 3 組自訂組合,每組最多 5 顆寶石。空的鍵值格在儲存時會略過。</sys:String>
   <sys:String x:Key="GemSetsInvalidKey">第 {0} 組：「{1}」不是有效的 ItemKey（十進位 u32）。已中止儲存。</sys:String>
   <sys:String x:Key="GemSetsSaveFailed">儲存失敗（無法寫入 settings.json）。自訂組合未保存。</sys:String>
-  <sys:String x:Key="GemSetsSaved">已儲存 {0} 個自訂組合定義。關閉並重新開啟鑲嵌槽編輯器即可在「套用組合」工具列使用。</sys:String>
+  <sys:String x:Key="GemSetsSaved">已儲存 {0} 個自訂組合定義，已加入「套用組合」清單。</sys:String>
 
   <!-- 重新命名傭兵對話框 -->
   <sys:String x:Key="JournalCatRenameMercenary">重新命名傭兵</sys:String>

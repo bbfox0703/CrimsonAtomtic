@@ -54,10 +54,8 @@ public sealed partial class GameVersionMismatchDialog : Window
         // keep the dialog free of DataContext plumbing — there's only
         // one consumer and the data is captured at construction time.
         dlg.DetectedVersionText.Text = detected.Value.DisplayString;
-        // Both halves are ABI-sourced. The major used to be a hard-coded
-        // literal "1." here — correct for every patch through 1.18, and
-        // flat-out wrong from 2.00 on, where it would have rendered the
-        // target as "1.00.xx". A lowest patch (2.04.08 on) reads "2.04.08+".
+        // Both halves come from the ABI, never a literal: the major moves
+        // too. A lowest supported patch reads "2.04.08+", none reads "xx".
         dlg.TargetVersionText.Text =
             $"{GameDataVersion.ParserTargetMajor}." +
             $"{GameDataVersion.ParserTargetMinor:D2}." +
