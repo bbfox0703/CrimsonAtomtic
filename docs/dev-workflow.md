@@ -162,5 +162,6 @@ Then call `LoadSaveCommand.Execute(copy)`, run the internal flow (for example
   weaker method. Re-deriving the dragon unlock's 187-key set (from the
   reference editor's `_unlock_dragon_mount_no_quests()`) as 2 keys by
   name-filtering broke summoning. Pin such lists with a count assertion.
-- **Record the session in the repo, not in agent memory**: findings go to
-  status.md, workflow facts here. Agent memory is per PC.
+- **Record the session in the repo, not in agent memory**: what shipped goes
+  to a [dev-log.md](dev-log.md) entry in the same PR, the resulting state and
+  gotchas to status.md, workflow facts here. Agent memory is per PC.

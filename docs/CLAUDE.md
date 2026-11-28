@@ -6,7 +6,8 @@
 ## How to read
 
 - **status.md** — current progress, next concrete task, roadmap, gotchas. **Start here on a new session.** (Lean by design.)
-- **status-archive.md** — frozen session-by-session history + long-form investigations moved out of status.md. Read only for deep history behind a decision; new sessions are recorded in status.md, not here.
+- **dev-log.md** — what shipped and why: append-only, newest-first entries per release or merged milestone. Write one in the same PR as the work; its header says how. Read it when you need to know when or why something changed.
+- **status-archive.md** — frozen history before 2026-06-12 + long-form investigations moved out of status.md. Read only for deep history behind a decision; new history goes to dev-log.md, not here.
 - **architecture.md** — the big picture: layers, language boundaries, why we chose A1
 - **data-policy.md** — hygiene rules for game data and reference data (foundation-first)
 - **game-versions.md** — paths to current and historical game installs; version detection; diffing
@@ -22,6 +23,6 @@
 ## How to extend
 
 - One topic → one file. Do not let a doc grow past ~400 lines without splitting.
-- When you add a doc, also add a one-line pointer to it in [root CLAUDE.md](../CLAUDE.md) under the **Pointers** section.
+- When you add a doc, add its row to **How to read** above. Add a pointer to [root CLAUDE.md](../CLAUDE.md) only if every session needs it: every `CLAUDE.md` stays ≤ 40 KB (40,960 bytes), checked by `ClaudeMdSizeTests`.
 - For decisions, record **what** was chosen, **why** (alternatives + tradeoffs), and **when**. Keep history short and useful, not a diary.
 - Format specs should distinguish: what we know with byte-perfect certainty, what is reverse-engineered guesswork, and what is still TODO. Mark each section.
