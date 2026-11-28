@@ -12,52 +12,17 @@
          in every call; CA1861 flags inline constant arrays passed as
          one-shot test data. All three are noise for our minimal tests. -->
     <NoWarn>$(NoWarn);CA1707;xUnit1051;CA1861</NoWarn>
+    <UsesCrimsonRsDll>true</UsesCrimsonRsDll>
   </PropertyGroup>
 
+  <!-- Only what the tests use directly. Everything else comes through the
+       project references; its versions are pinned in
+       Directory.Packages.props (CentralPackageTransitivePinningEnabled). -->
   <ItemGroup>
-    <PackageReference Include="Avalonia.Angle.Windows.Natives" />
-    <PackageReference Include="Avalonia.BuildServices">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="Avalonia.FreeDesktop" />
-    <PackageReference Include="Avalonia.HarfBuzz" />
-    <PackageReference Include="Azure.Core" />
-    <PackageReference Include="Azure.Monitor.OpenTelemetry.Exporter" />
-    <PackageReference Include="HarfBuzzSharp" />
-    <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" />
-    <PackageReference Include="HarfBuzzSharp.NativeAssets.macOS" />
-    <PackageReference Include="HarfBuzzSharp.NativeAssets.WebAssembly" />
-    <PackageReference Include="HarfBuzzSharp.NativeAssets.Win32" />
-    <PackageReference Include="MicroCom.Runtime" />
-    <PackageReference Include="Microsoft.ApplicationInsights" />
-    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" />
-    <PackageReference Include="Microsoft.CodeCoverage" />
-    <PackageReference Include="Microsoft.Extensions.Configuration" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <PackageReference Include="Microsoft.Extensions.Diagnostics.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.FileProviders.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Configuration" />
-    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
-    <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" />
-    <PackageReference Include="Microsoft.IdentityModel.Abstractions" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="Microsoft.Testing.Extensions.Telemetry" />
-    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport.Abstractions" />
-    <PackageReference Include="Microsoft.Testing.Platform" />
-    <PackageReference Include="Microsoft.Testing.Platform.MSBuild" />
-    <PackageReference Include="OpenTelemetry.PersistentStorage.Abstractions" />
-    <PackageReference Include="OpenTelemetry.PersistentStorage.FileSystem" />
-    <PackageReference Include="runtime.win-x64.Microsoft.DotNet.ILCompiler" />
-    <PackageReference Include="SkiaSharp" />
-    <PackageReference Include="System.Memory.Data" />
-    <PackageReference Include="System.Security.Cryptography.ProtectedData" />
-    <PackageReference Include="Tmds.DBus.Protocol" />
     <PackageReference Include="xunit.v3" />
+    <!-- dotnet run drives the tests through Microsoft.Testing.Platform;
+         these two are for the Visual Studio Test Explorer. -->
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit.runner.visualstudio">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -81,13 +46,6 @@
   <ItemGroup>
     <Content Include="$(CrimsonRsTargetDir)crimson_rs.dll" Condition="Exists('$(CrimsonRsTargetDir)crimson_rs.dll')">
       <Link>crimson_rs.dll</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <!-- Fixture: a real BC3-encoded DDS extracted from group 0012.
-         Used by IconImageEncoderTests to validate the decoder against
-         non-synthetic input. -->
-    <Content Include="fixtures\sample_bc3_32x32.dds">
-      <Link>fixtures\sample_bc3_32x32.dds</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

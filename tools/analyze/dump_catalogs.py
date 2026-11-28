@@ -8,6 +8,7 @@ from each entry's decimal-encoded u64 string_key).
 
 Outputs (under `--out <dir>`):
     iteminfo.jsonl              one row per item, full `parse_iteminfo_from_bytes` dict
+                                (body + header, so `string_key` is filled in)
     paloc_<lang>.jsonl          one row per PALOC entry; columns include
                                 `unk_id`, raw `string_key` string, derived
                                 `key` (upper 32 bits), `type_byte` (lower 8
@@ -19,13 +20,15 @@ substrate the user asked for: "given an unknown Key value, does any catalog
 recognise it? does it collide with a known namespace's value range?".
 
 Skipped from this v1 (still useful, but additional work):
-- `stringinfo.pabgb` — no Python binding yet; needs an upstream PR adding
-  one. Lives at `0008/gamedata/binary__/client/bin/stringinfo.pabgb`.
-- `skill.pabgb` + `skill.pabgh` — `parse_skillinfo_from_bytes` exists but
+- `stringinfo` — no Python binding yet; needs an upstream PR adding one.
+  Lives in group 0008 next to iteminfo (`common.gamedata_layout` resolves
+  the directory: `gamedata/binarystaticinfo__/bin/stringinfo.staticinfobody`
+  since 2.01).
+- `skill` body + header — `parse_skillinfo_from_bytes` exists but
   the dict shape is more involved; add when the user picks up the
   `skill_info` bridge follow-up (#4 in docs/status.md).
 
-Versions tested: 1.06.
+Versions tested: 1.06, 2.06.
 
 Example — dump English PALOC + iteminfo, then ask duckdb which Keys in the
 save resolve to a known item name:
@@ -194,7 +197,19 @@ def dump_iteminfo(crimson_rs: Any, game_dir: Path, out_path: Path, force: bool) 
     raw = crimson_rs.extract_file(
         str(game_dir), GAMEDATA_GROUP, layout.dir, layout.body(ITEMINFO_TABLE)
     )
-    items = crimson_rs.parse_iteminfo_from_bytes(raw)
+    # Since 2.06 each row's string_key lives in the header; a body parsed
+    # without it comes back with every string_key empty.
+    header = crimson_rs.extract_file(
+        str(game_dir), GAMEDATA_GROUP, layout.dir, layout.header(ITEMINFO_TABLE)
+    )
+    items = crimson_rs.parse_iteminfo_from_bytes(raw, header)
+    if items and not any(item.get("string_key") for item in items):
+        print(
+            f"iteminfo parsed {len(items):,} rows but none has a string_key; "
+            "refusing to write a catalog that resolves no names.",
+            file=sys.stderr,
+        )
+        return -1
     out_path.parent.mkdir(parents=True, exist_ok=True)
     written = 0
     with out_path.open("w", encoding="utf-8") as f:
@@ -302,7 +317,11 @@ def main() -> int:
     rc = 0
     if "iteminfo" in catalogs:
         out_path = args.out / "iteminfo.jsonl"
-        n = dump_iteminfo(crimson_rs, game_dir, out_path, args.force)
+        try:
+            n = dump_iteminfo(crimson_rs, game_dir, out_path, args.force)
+        except LookupError as e:
+            print(e, file=sys.stderr)
+            n = -1
         if n < 0:
             rc = 1
         else:
@@ -311,7 +330,11 @@ def main() -> int:
     if "paloc" in catalogs:
         for lang in languages:
             out_path = args.out / f"paloc_{lang}.jsonl"
-            n = dump_paloc(crimson_rs, game_dir, lang, out_path, args.force)
+            try:
+                n = dump_paloc(crimson_rs, game_dir, lang, out_path, args.force)
+            except LookupError as e:
+                print(e, file=sys.stderr)
+                n = -1
             if n < 0:
                 rc = 1
             else:

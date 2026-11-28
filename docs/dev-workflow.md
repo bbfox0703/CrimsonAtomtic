@@ -21,7 +21,8 @@
   does not own, even when told just "push"; if a flow seems to need another
   remote, stop and ask. (crimson-rs is a fork of `potter420/crimson-rs`; see
   its `scripts/setup-fork-guards.ps1`.)
-- `build_number.txt` changes on every `build.ps1` run. Commit it on its own
+- `build_number.txt` goes up after every successful `build.ps1` build (a failed one leaves it).
+  Commit it on its own
   (`build: bump build number to N`) when the user asks.
 
 ## Switching machines

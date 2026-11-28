@@ -16,7 +16,9 @@ The single vendored dep is `crimson-rs`, **our own fork**. It is not
 published to PyPI or crates.io and we don't intend to publish it. The
 canonical source-of-truth is `bbfox0703/crimson-rs` on GitHub (developed locally
 at `D:\Github\crimson-rs`, landed on `main` via PR); this vendor folder is a
-refreshable snapshot of that `main`, and CI clones the same branch fresh.
+refreshable snapshot of that `main`. The refresh writes the commit it landed on
+to `vendor/<name>.ref` (committed), and CI checks out exactly that commit, so a
+release builds against what was tested here, not whatever `main` holds by then.
 
 ## Only clones live here
 
@@ -41,8 +43,12 @@ What it does:
 1. For each entry in the script's `$Vendors` table:
    - If the target has no `.git` of its own → `git clone` from the source.
    - Otherwise → `git fetch origin && git checkout <branch> && git reset --hard origin/<branch>`.
-2. Refuses to discard uncommitted local changes unless `-Force` is passed.
-3. Verifies `git -C vendor/<name> rev-parse --show-toplevel` really is
+2. Refuses to discard local changes (uncommitted files, or commits not on
+   origin) unless `-Force` is passed; `-Force` also removes untracked files.
+3. Writes the commit to `vendor/<name>.ref` and, when crimson-rs moved, prints
+   the rebuild steps (`scripts\build_rust.ps1`, `scripts\setup_python_env.ps1`):
+   the DLL and the Python module do not follow the clone on their own.
+4. Verifies `git -C vendor/<name> rev-parse --show-toplevel` really is
    `vendor/<name>` before mutating anything. A folder that exists but is not a
    repo would otherwise make every `git -C` command walk up and hit the parent
    project instead.
@@ -52,10 +58,11 @@ What it does:
 If `crimson-rs` needs a change:
 
 1. Make and commit it in `D:\Github\crimson-rs`, then land it on `main`.
-2. Re-run `.\vendor\update_vendors.ps1` here.
+2. Re-run `.\vendor\update_vendors.ps1` here, rebuild, and commit
+   `vendor/crimson-rs.ref` with the change that needs it.
 
-Otherwise the next vendor refresh will silently wipe your edits. The
-update script's safety check helps but is not foolproof.
+An edit made inside the clone is refused by the next refresh, and lost if
+that refresh is forced.
 
 ## Gitignore
 

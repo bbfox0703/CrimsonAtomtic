@@ -63,7 +63,12 @@ BIN_LAYOUTS: tuple[BinLayout, ...] = (
 
 
 def _read_pamt(game_dir: str | Path, group: str) -> dict | None:
-    """Parse one group's manifest, or `None` when it isn't readable."""
+    """Parse one group's manifest, or `None` when the group has none.
+
+    A manifest that exists but does not parse raises `LookupError` chained
+    to the parser's error: hiding it would read as a missing install, while
+    the usual cause is a `crimson_rs` build older than the game's format.
+    """
     import crimson_rs  # type: ignore[import-not-found]
 
     pamt_path = Path(game_dir) / group / "0.pamt"
@@ -71,8 +76,11 @@ def _read_pamt(game_dir: str | Path, group: str) -> dict | None:
         return None
     try:
         return crimson_rs.parse_pamt_bytes(pamt_path.read_bytes())
-    except Exception:
-        return None
+    except (OSError, ValueError) as e:
+        raise LookupError(
+            f"cannot parse {pamt_path}: {e}. If vendor/crimson-rs was just "
+            "updated, rebuild the Python module with scripts\\setup_python_env.ps1."
+        ) from e
 
 
 def _directory_names(pamt: dict) -> set[str]:
@@ -84,14 +92,14 @@ def resolve_bin_layout(
 ) -> BinLayout:
     """Pick the static-info layout this install actually ships.
 
-    Raises `LookupError` when the manifest is unreadable or holds neither
-    known layout — the latter means Pearl Abyss moved the tables again and
-    `BIN_LAYOUTS` needs a new entry.
+    Raises `LookupError` when the manifest is missing or unparseable, or
+    holds neither known layout — the last means Pearl Abyss moved the
+    tables again and `BIN_LAYOUTS` needs a new entry.
     """
     pamt = _read_pamt(game_dir, group)
     if pamt is None:
         raise LookupError(
-            f"cannot read {Path(game_dir) / group / '0.pamt'} — "
+            f"no {Path(game_dir) / group / '0.pamt'} — "
             f"is the game installed at {game_dir}?"
         )
     present = _directory_names(pamt)
@@ -114,7 +122,8 @@ def paloc_files(
     Returns `(archive directory, filenames)` — one filename pre-2.01,
     many (sorted, so load order is stable) from 2.01 on. `None` when the
     group's manifest or the language is absent, which is the caller's cue
-    to keep probing other groups.
+    to keep probing other groups. A manifest that does not parse raises
+    `LookupError` instead.
     """
     pamt = _read_pamt(game_dir, group)
     if pamt is None:

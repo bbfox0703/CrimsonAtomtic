@@ -1,6 +1,9 @@
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- A version listed here also pins the package where it arrives
+         transitively, so a package can be pinned without a project
+         referencing it. Many entries below exist for that reason only. -->
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup>
@@ -20,11 +23,10 @@
     <PackageVersion Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
     <!-- Avalonia.Diagnostics is 11.x only as of 2026-05; once a 12.x is
          published we'll add it back behind a Debug condition. -->
-    <!-- MVVM source generators (AOT-safe) -->
     <PackageVersion Include="Azure.Core" Version="1.65.0" />
     <PackageVersion Include="Azure.Monitor.OpenTelemetry.Exporter" Version="1.10.0" />
+    <!-- MVVM source generators (AOT-safe) -->
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <!-- Testing -->
     <PackageVersion Include="HarfBuzzSharp" Version="8.3.1.5" />
     <PackageVersion Include="HarfBuzzSharp.NativeAssets.Linux" Version="8.3.1.5" />
     <PackageVersion Include="HarfBuzzSharp.NativeAssets.macOS" Version="8.3.1.5" />
@@ -58,14 +60,11 @@
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.21.0" />
     <PackageVersion Include="OpenTelemetry.PersistentStorage.Abstractions" Version="1.2.0" />
     <PackageVersion Include="OpenTelemetry.PersistentStorage.FileSystem" Version="1.2.0" />
-    <!-- Must match the installed .NET runtime: PublishAot auto-injects
-         Microsoft.DotNet.ILCompiler at the runtime's version, which then
-         requires runtime.win-x64.Microsoft.DotNet.ILCompiler >= that
-         version. SDK 10.0.404 ships runtime 10.0.15, so the central pin
-         tracks it (was 10.0.8 → 10.0.9 → 10.0.10 → 10.0.11 → 10.0.12 → 10.0.14); a stale pin
-         trips NU1109 (downgrade). Pin at-or-above the SDK's runtime — an
-         equal-or-higher pin still satisfies an older SDK whose meta-package
-         needs a lower floor, so it is safe across CI runners. -->
+    <!-- PublishAot injects Microsoft.DotNet.ILCompiler at the SDK's
+         runtime version, which needs this package at that version or
+         above; a lower pin fails restore with NU1109. global.json pins the
+         SDK exactly (10.0.404 ships runtime 10.0.15), so bump the two
+         together. -->
     <PackageVersion Include="runtime.win-x64.Microsoft.DotNet.ILCompiler" Version="10.0.15" />
     <!-- SkiaSharp 3.x / HarfBuzzSharp 8.x: what Avalonia 12.2.0 is built
          against (Avalonia.Skia → SkiaSharp 3.119.4, Avalonia.HarfBuzz →

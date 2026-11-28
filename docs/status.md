@@ -48,10 +48,10 @@ As of 2026-11-28. What shipped, release by release, is in
 - **Saves are version-agnostic:** each save carries its own schema, so 1.05
   to 2.06 saves load and re-save in their own format. Names and icons resolve
   against the installed game, with each DLC's tables as a fallback.
-- **crimson-rs is vendored at `0a551a6`** (PR #125, the dye palette's
-  `palette_knowledge_at` and `lookup_display_name`), which is on the fork's
-  `main`. CI clones `main` at tag time, so a release must not depend on an
-  unmerged crimson-rs change. The fork still has **no pushed version tags**
+- **crimson-rs is vendored at `ebf7304`** (its 2026-11-28 audit fixes), on the
+  fork's `main`. CI builds exactly the commit in `vendor/crimson-rs.ref`, which
+  `vendor/update_vendors.ps1` writes; commit that file with the change that
+  needs the new vendor. The fork still has **no pushed version tags**
   (`git ls-remote --tags origin` returned 0 refs on 2026-11-28); the
   `v1.0.x` tags exist only in the local clone.
 - **Stack:** Avalonia 12.2.0 (with `Avalonia.Controls.ColorPicker`), .NET 10

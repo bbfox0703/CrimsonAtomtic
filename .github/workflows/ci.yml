@@ -1,0 +1,94 @@
+# Build and test on every pull request and every push to dev / main.
+#
+# Actions are pinned to commit SHAs (a tag can be moved; a SHA cannot), with
+# the release they came from in the trailing comment. The job token is
+# read-only. The SDK comes from global.json, the Rust toolchain from
+# RUST_TOOLCHAIN, crimson-rs from vendor/crimson-rs.ref, NuGet packages from
+# the lock files (locked mode, since GitHub sets CI=true), and the crate's
+# dependencies from its Cargo.lock (--locked): the same inputs as release.yml.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_TOOLCHAIN: '1.100.1'
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: '1'
+  TESTINGPLATFORM_TELEMETRY_OPTOUT: '1'
+  AVALONIA_TELEMETRY_OPTOUT: '1'
+
+jobs:
+  test:
+    name: Build + test (Windows)
+    runs-on: windows-2025-vs2026
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET (global.json)
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          global-json-file: global.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master, 2026-11-15
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - name: Vendor crimson-rs at vendor/crimson-rs.ref
+        shell: pwsh
+        run: ./scripts/checkout_crimson_rs.ps1
+
+      - name: Toolchain versions
+        shell: pwsh
+        run: |
+          dotnet --version
+          cargo --version
+          rustc --version
+
+      - name: Build the native core
+        shell: pwsh
+        run: ./scripts/build_rust.ps1
+
+      - name: Build + run tests
+        shell: pwsh
+        run: |
+          dotnet run --project src/CrimsonAtomtic.Tests/CrimsonAtomtic.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw "tests failed (exit $LASTEXITCODE)" }
+
+  tools:
+    name: Python tools tests
+    # The tests stand in a fake crimson_rs module, so no native build or
+    # game install is needed.
+    runs-on: windows-2025-vs2026
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+
+      - name: Run tools tests
+        shell: pwsh
+        run: |
+          python -m pip install -c scripts/python-constraints.txt pytest
+          if ($LASTEXITCODE -ne 0) { throw "pip install failed (exit $LASTEXITCODE)" }
+          python -m pytest tools/tests -q
+          if ($LASTEXITCODE -ne 0) { throw "tools tests failed (exit $LASTEXITCODE)" }

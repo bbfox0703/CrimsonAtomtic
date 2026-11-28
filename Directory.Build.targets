@@ -1,0 +1,18 @@
+<Project>
+
+  <!-- Projects that copy crimson_rs.dll next to their output set
+       UsesCrimsonRsDll. Without the DLL they still build, so these warnings
+       are what stops a missing or stale native core from passing unnoticed
+       until a test or the app fails at run time. -->
+  <Target Name="CheckCrimsonRsDll" BeforeTargets="Build" Condition="'$(UsesCrimsonRsDll)' == 'true'">
+    <PropertyGroup>
+      <_CrimsonRsBuiltShaFile>$(CrimsonRsTargetDir).crimson-rs-sha</_CrimsonRsBuiltShaFile>
+      <_CrimsonRsBuiltSha Condition="Exists('$(_CrimsonRsBuiltShaFile)')">$([System.IO.File]::ReadAllText('$(_CrimsonRsBuiltShaFile)').Trim())</_CrimsonRsBuiltSha>
+    </PropertyGroup>
+    <Warning Condition="!Exists('$(CrimsonRsTargetDir)crimson_rs.dll')"
+             Text="crimson_rs.dll not found in $(CrimsonRsTargetDir). Run .\scripts\build_rust.ps1; anything that calls the native core fails until then." />
+    <Warning Condition="Exists('$(CrimsonRsTargetDir)crimson_rs.dll') and '$(CrimsonRsRef)' != '' and '$(_CrimsonRsBuiltSha)' != '$(CrimsonRsRef)'"
+             Text="crimson_rs.dll was built from crimson-rs '$(_CrimsonRsBuiltSha)' but vendor\crimson-rs.ref names $(CrimsonRsRef). Run .\scripts\build_rust.ps1 (after .\vendor\update_vendors.ps1 if the vendor clone is behind)." />
+  </Target>
+
+</Project>

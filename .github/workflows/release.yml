@@ -1,93 +1,69 @@
 # Windows release workflow for the CrimsonAtomtic save editor.
 #
-# Builds the self-contained Native-AOT single-file Avalonia UI
-# (CrimsonAtomtic.exe — crimson_rs.lib folded in, no .NET runtime needed),
-# packages dist/ into a .zip + sha256, and attaches it to a **DRAFT**
-# GitHub Release.
+# Builds the self-contained Native-AOT single-file exe (crimson_rs.lib folded
+# in, no .NET runtime needed), runs the tests, packages dist/ into a .zip +
+# sha256, and attaches it to a DRAFT GitHub Release. docs/release-process.md
+# is the runbook; this file is what CI runs.
 #
-# Trigger: a pushed `v*` tag ONLY. Normal pushes / PR merges do NOT release.
-# (workflow_dispatch = build + artifact only, for testing the pipeline.)
+# Trigger: a pushed `v*` tag (tag shape: v<major>.<minor 2 digits>.<patch 2
+# digits>, e.g. v2.06.02). workflow_dispatch builds the artifact only, even
+# when started on a tag ref: every release step also requires a push event.
 #
-# Verify-then-publish: the release is created as a DRAFT (not public). Pull
-# the .zip from the draft (or the run artifact), verify it loads, then click
-# "Publish release" in the GitHub UI — or delete the draft + tag and re-tag.
+# Inputs are pinned, as in ci.yml: actions by SHA, SDK by global.json, Rust by
+# RUST_TOOLCHAIN, crimson-rs by vendor/crimson-rs.ref, NuGet by the lock files
+# (locked mode), crate dependencies by Cargo.lock. The build job's token is
+# read-only; only the release job can write, and it runs no build code.
 #
-# NOTE on vendor/crimson-rs: per CLAUDE.md rule 8 the Rust core is a *vendored
-# clone*, gitignored (NOT a submodule, NOT committed). So unlike a submodule
-# repo, CI must fetch it explicitly — the "Vendor crimson-rs" step below clones
-# it from GitHub and checks out CRIMSON_RS_REF. Pin that to a tag/commit for a
-# fully reproducible release; the default tracks `main` (which carries the
-# bool round-trip fix).
-#
-# RELEASE NOTES (bilingual): the "Create DRAFT GitHub Release" step builds the
-# notes automatically — an English changelog grouped by conventional-commit type
-# (feat/fix/other) over the PREVIOUS-tag → THIS-tag commit range — and prepends
-# whatever you wrote in the ANNOTATED tag's message verbatim. So for bilingual
-# (English + 繁體中文) notes, create an annotated tag and put both languages in
-# its message; e.g.
-#     git tag -a v9
-#   then in the editor:
-#     ## Highlights
-#     - English point …
-#
-#     ## 重點
-#     - 繁體中文重點 …
-#   then: git push origin v9
-# The hand-written part lives in the tag object (not a committed file), so it can
-# never go stale — each tag carries its own notes. A LIGHTWEIGHT tag (git tag v9)
-# has no message → only the auto English changelog is produced (CI logs a warning).
+# Release notes: the release job prepends the ANNOTATED tag's message verbatim
+# (write it in English and 繁體中文) to an English changelog of the previous-tag
+# → this-tag commits, grouped by conventional-commit type. A lightweight tag
+# has no message, so only the changelog is produced (CI logs a warning).
 name: Release (Windows)
 
 on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:        # manual run = build + artifact only (no release)
+  workflow_dispatch:        # build + artifact only
 
 permissions:
-  contents: write
+  contents: read
 
 env:
-  # crimson-rs source the AOT build links against. Branch, tag, or commit SHA.
-  # Bump to a pinned tag/SHA for a reproducible release.
-  CRIMSON_RS_REPO: https://github.com/bbfox0703/crimson-rs.git
-  CRIMSON_RS_REF: main
+  RUST_TOOLCHAIN: '1.100.1'
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: '1'
+  TESTINGPLATFORM_TELEMETRY_OPTOUT: '1'
+  AVALONIA_TELEMETRY_OPTOUT: '1'
 
 jobs:
   build:
-    name: Build + package dist (AOT)
-    # windows-2025-vs2026 is the stable redirect target for windows-latest /
-    # windows-2025; ships MSVC (for the crimson_rs.lib staticlib + the AOT
-    # linker) and Rust (rustup stable-msvc) with no extra installs.
+    name: Build + test + package (AOT)
+    # windows-2025-vs2026 ships MSVC, which the crimson_rs.lib staticlib and
+    # the AOT linker both need.
     runs-on: windows-2025-vs2026
+    outputs:
+      zip: ${{ steps.package.outputs.zip }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
-          # Full history + all tags so the release step can compute the
-          # previous-tag → this-tag commit range and read annotated tag
-          # messages (a shallow checkout has neither).
-          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Setup .NET 10
-        uses: actions/setup-dotnet@v5   # v5 runs on Node 24 (v4 = deprecated Node 20)
+      - name: Setup .NET (global.json)
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
 
-      - name: Setup Rust (stable, MSVC)
-        # Defensive: GitHub windows images ship Rust, but pin stable-msvc so the
-        # crimson_rs.lib staticlib build (cargo build --features c_abi) is not at
-        # the mercy of the runner image's preinstalled toolchain.
-        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master, 2026-11-15
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
 
-      - name: Vendor crimson-rs (clone; gitignored, not a submodule)
+      - name: Vendor crimson-rs at vendor/crimson-rs.ref
         shell: pwsh
-        run: |
-          if (Test-Path vendor/crimson-rs) { Remove-Item -Recurse -Force vendor/crimson-rs }
-          git clone "$env:CRIMSON_RS_REPO" vendor/crimson-rs
-          git -C vendor/crimson-rs checkout "$env:CRIMSON_RS_REF"
-          $sha = (git -C vendor/crimson-rs rev-parse --short HEAD).Trim()
-          Write-Host "vendor/crimson-rs @ $env:CRIMSON_RS_REF ($sha)"
+        run: ./scripts/checkout_crimson_rs.ps1
 
       - name: Toolchain versions
         shell: pwsh
@@ -96,57 +72,96 @@ jobs:
           cargo --version
           rustc --version
 
-      - name: Pin build number to the tag
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Check the tag against the version
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         shell: pwsh
-        # For a numeric `vNNN` tag, write NNN into build_number.txt so the
-        # embedded build number (VerBuild in the Ui csproj) == the release
-        # tag. package_aot.ps1 / dotnet publish only READ this file (the +1
-        # bump lives in build.ps1, which CI does not call), so no drift.
-        # Non-numeric tags (e.g. v1.2.3) leave the committed value as-is.
+        # vX.YY.ZZ must name the csproj's VerMajor / VerMinor / VerPatch. A
+        # pure-numeric vNNN instead pins build_number.txt, and must fit the
+        # 16 bits Windows gives each version part.
         run: |
           $tag = $env:GITHUB_REF_NAME
-          if ($tag -match '^v(\d+)$') {
-            [System.IO.File]::WriteAllText("$PWD/build_number.txt", "$($Matches[1])`n")
-            Write-Host "Pinned build_number.txt = $($Matches[1]) (from tag $tag)"
-          } else {
-            Write-Host "Tag $tag is not vNNN — using committed build_number.txt as-is."
+          $csproj = Get-Content src/CrimsonAtomtic.Ui/CrimsonAtomtic.Ui.csproj -Raw
+          function Get-Ver([string]$name) {
+            if ($csproj -notmatch "<$name>(\d+)</$name>") { throw "$name not found in the Ui csproj" }
+            [int]$Matches[1]
           }
+          if ($tag -match '^v(\d+)$') {
+            $n = [long]$Matches[1]
+            if ($n -gt 65535) { throw "Tag $tag would set the build number to $n; the largest a version part can hold is 65535." }
+            [System.IO.File]::WriteAllText("$PWD/build_number.txt", "$n`n")
+            Write-Host "Pinned build_number.txt = $n (from tag $tag)"
+          } elseif ($tag -match '^v(\d+)\.(\d+)\.(\d+)') {
+            $want = "{0}.{1}.{2}" -f [int]$Matches[1], [int]$Matches[2], [int]$Matches[3]
+            $have = "{0}.{1}.{2}" -f (Get-Ver VerMajor), (Get-Ver VerMinor), (Get-Ver VerPatch)
+            if ($want -ne $have) { throw "Tag $tag names $want but the Ui csproj is $have." }
+          } else {
+            throw "Tag $tag is neither vX.YY.ZZ nor vNNN."
+          }
+
+      - name: Build the native core
+        shell: pwsh
+        run: ./scripts/build_rust.ps1
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          dotnet run --project src/CrimsonAtomtic.Tests/CrimsonAtomtic.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw "tests failed (exit $LASTEXITCODE)" }
 
       - name: Build + publish single-file AOT (win-x64)
         shell: pwsh
-        # package_aot.ps1: cargo build --features c_abi (-> crimson_rs.lib) then
-        # dotnet publish -c Release -r win-x64 -p:PublishAot=true on the Ui
-        # project, staged under dist/win-x64. It verifies the single-file shape
-        # and throws on regression.
-        run: ./scripts/package_aot.ps1 -Runtime win-x64
+        # Throws on a single-file regression (crimson_rs.dll shipped or
+        # imported, exe missing); dumpbin is found through vswhere.
+        run: ./scripts/package_aot.ps1 -Runtime win-x64 -SkipRustBuild
 
       - name: Package dist into a zip + sha256
+        id: package
         shell: pwsh
         run: |
-          $tag = if ($env:GITHUB_REF_NAME) { $env:GITHUB_REF_NAME } else { 'manual' }
+          $tag = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME } else { 'manual' }
           $zip = "CrimsonAtomtic-$tag-win-x64.zip"
           if (-not (Test-Path 'dist/win-x64')) { throw 'dist/win-x64 not found — build failed?' }
           Compress-Archive -Path dist/win-x64/* -DestinationPath $zip -Force
           $h = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
           "$h  $zip" | Set-Content "$zip.sha256" -Encoding ascii
-          "ZIP=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "zip=$zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "Packaged $zip (sha256 $h)"
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: CrimsonAtomtic-windows-x64
           path: |
-            ${{ env.ZIP }}
-            ${{ env.ZIP }}.sha256
+            ${{ steps.package.outputs.zip }}
+            ${{ steps.package.outputs.zip }}.sha256
           if-no-files-found: error
 
+  release:
+    name: Create DRAFT GitHub Release
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          # Full history + tags: the notes need the previous tag and the
+          # annotated tag's message, which a shallow checkout lacks.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download build artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: CrimsonAtomtic-windows-x64
+
       - name: Create DRAFT GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          ZIP: ${{ needs.build.outputs.zip }}
         run: |
           $tag = $env:GITHUB_REF_NAME
           $repo = $env:GITHUB_REPOSITORY
@@ -206,6 +221,9 @@ jobs:
           [void]$md.AppendLine()
           [void]$md.AppendLine('- In-place edits (item counts, states, gate/flag toggles) are safe on every save.')
           [void]$md.AppendLine('- Length-changing edits (completing challenges, adding/removing list items) are written correctly but can trip a latent bug in the game''s own save loader on some heavily-progressed saves; the editor warns before saving such an edit and always keeps a backup.')
+          [void]$md.AppendLine()
+          $crimsonRs = (Get-Content vendor/crimson-rs.ref -Raw).Trim()
+          [void]$md.AppendLine("Built against crimson-rs [$($crimsonRs.Substring(0, 7))](https://github.com/bbfox0703/crimson-rs/commit/$crimsonRs).")
           [void]$md.AppendLine()
           [void]$md.AppendLine('> The exe is unsigned — Windows SmartScreen / antivirus may warn on first run. Verify the download with the included .sha256.')
 

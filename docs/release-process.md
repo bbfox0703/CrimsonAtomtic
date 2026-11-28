@@ -22,9 +22,9 @@ git log --oneline origin/main..dev               # must be empty: everything to 
 git log --oneline --no-merges dev..origin/main   # must be empty: main has nothing dev lacks
 git show origin/main:src/CrimsonAtomtic.Ui/CrimsonAtomtic.Ui.csproj | grep -E '<Ver(Major|Minor|Patch)>'
 git show origin/main:build_number.txt
-git ls-remote https://github.com/bbfox0703/crimson-rs.git refs/heads/main   # what CI will clone …
-git -C vendor/crimson-rs rev-parse HEAD                                     # … vs what you tested
-curl -s https://dotnetcli.blob.core.windows.net/dotnet/release-metadata/releases-index.json
+git show origin/main:vendor/crimson-rs.ref   # the crimson-rs commit CI will build …
+git -C vendor/crimson-rs rev-parse HEAD       # … vs what you tested
+gh run list --workflow ci.yml --branch main --limit 1   # main's last CI run must be green
 ```
 
 - **Tag name = the build identity**: `v<VerMajor>.<VerMinor, 2 digits>.<VerPatch, 2 digits>`
@@ -33,14 +33,14 @@ curl -s https://dotnetcli.blob.core.windows.net/dotnet/release-metadata/releases
   game version needs `VerPatch` bumped in the merged code first — stop if it
   wasn't.
 - The exe will stamp `<major>.<minor>.<patch>.<build_number.txt>`; only a
-  pure-numeric `vNNN` tag overrides the build number.
-- **crimson-rs**: CI builds against GitHub `main` at tag time, never the local
-  vendor copy. If the two SHAs differ, land the crimson-rs change on its
-  `main` first.
-- **SDK**: CI installs the newest `10.0.x`. If the releases index's `10.0`
-  `latest-runtime` is newer than the `runtime.win-x64.Microsoft.DotNet.ILCompiler`
-  pin in `Directory.Packages.props`, restore will fail NU1109 on the runner —
-  bump the pin (through a PR) before tagging.
+  pure-numeric `vNNN` tag overrides the build number. CI refuses a `vX.YY.ZZ`
+  tag that does not match the csproj, and a `vNNN` over 65535.
+- **crimson-rs**: CI builds the commit in `vendor/crimson-rs.ref`, never
+  GitHub `main`. If the two SHAs differ, run `vendor/update_vendors.ps1`, test,
+  and merge the updated ref first.
+- **SDK**: CI installs exactly the SDK in `global.json`, so a new .NET patch
+  cannot break the release; bumping it is a PR that also moves the
+  `runtime.win-x64.Microsoft.DotNet.ILCompiler` pin.
 
 ### 1. Write the release notes — for players, in English and 繁體中文
 
@@ -139,7 +139,9 @@ sha256, what was checked before publishing) and the new state in
 
 - **A pushed `v*` tag** → full AOT build + packaged `.zip` + sha256 + a **DRAFT** GitHub Release.
 - **Manual `workflow_dispatch`** → build + artifact only (no release). Use it to smoke-test the pipeline.
-- A normal push / PR merge does **NOT** build or release — PRs to `main` have no CI checks at all.
+- A normal push / PR merge does **NOT** release. [`ci.yml`](../.github/workflows/ci.yml) builds
+  and runs the tests on every PR and every push to `dev` / `main`; the release job runs the
+  tests again before packaging.
 
 ### Tags and notes
 
@@ -152,21 +154,24 @@ sha256, what was checked before publishing) and the new state in
 - **Hard-wrapped tag messages** (every tag up to v2.01.01) had to be unwrapped by hand at step 4.
   Writing the notes one line per bullet from the start removes that step.
 - **Build number (4th digit):** a pure-numeric `vNNN` tag pins `build_number.txt` = NNN for that
-  build; any other shape (`v2.02.01`, `v1.10.01-fix`) uses the committed value.
+  build (refused over 65535, the largest a Windows version part holds); a `vX.YY.ZZ` tag (or
+  `v1.10.01-fix`) uses the committed value and must match the csproj's version. Locally,
+  `build.ps1` raises the number only after a successful build.
 - The auto changelog groups the previous-tag → this-tag commits by conventional-commit type
   (`feat` / `fix` / other), so commit subjects still matter even though step 4 drops the section.
-- The checkout uses `fetch-depth: 0` so CI can see the full history + tag objects (a shallow
-  checkout has neither) — don't remove it.
+- The release job's checkout uses `fetch-depth: 0` so it can see the full history + tag objects
+  (a shallow checkout has neither) — don't remove it.
 
 ### The native core (crimson-rs)
 
-- CI does **not** use your local `vendor/crimson-rs` (it is gitignored, never committed). It
-  **clones crimson-rs fresh from GitHub** at `CRIMSON_RS_REF` (default `main`, repo
-  `CRIMSON_RS_REPO`).
-- So before tagging, the crimson-rs change you want shipped must be merged to
-  `bbfox0703/crimson-rs` `main`. Updating your *local* vendor folder affects local builds only.
-- For a fully reproducible release, pin `CRIMSON_RS_REF` in the workflow to a crimson-rs tag or
-  commit SHA instead of `main`.
+- CI does **not** use your local `vendor/crimson-rs` (it is gitignored). It clones crimson-rs from
+  GitHub at the commit in the committed `vendor/crimson-rs.ref`
+  ([`scripts/checkout_crimson_rs.ps1`](../scripts/checkout_crimson_rs.ps1)) and builds it with
+  `cargo --locked` on the toolchain in `RUST_TOOLCHAIN`.
+- `vendor/update_vendors.ps1` writes that file whenever it refreshes the clone, so the ref moves
+  only in a commit you made after testing. The commit must be on GitHub (it is, when the clone
+  was refreshed from origin).
+- The release notes and the exe's product version (`…+crimson-rs.<sha>`) name the commit.
 
 ## Undoing a tag
 

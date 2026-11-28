@@ -46,13 +46,20 @@
     <VerMinor>6</VerMinor>
     <VerPatch>2</VerPatch>
     <BuildNumberFile>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\build_number.txt'))</BuildNumberFile>
-    <VerBuild Condition="Exists('$(BuildNumberFile)')">$([System.IO.File]::ReadAllText('$(BuildNumberFile)').Trim())</VerBuild>
+    <!-- build.ps1 passes -p:VerBuild for the build it is about to count;
+         otherwise the committed number is used as it is. -->
+    <VerBuild Condition="'$(VerBuild)' == '' and Exists('$(BuildNumberFile)')">$([System.IO.File]::ReadAllText('$(BuildNumberFile)').Trim())</VerBuild>
     <VerBuild Condition="'$(VerBuild)' == ''">0</VerBuild>
 
     <Version>$(VerMajor).$(VerMinor).$(VerPatch).$(VerBuild)</Version>
     <AssemblyVersion>$(VerMajor).$(VerMinor).$(VerPatch).$(VerBuild)</AssemblyVersion>
     <FileVersion>$(VerMajor).$(VerMinor).$(VerPatch).$(VerBuild)</FileVersion>
+    <!-- The exe's product version also names the crimson-rs commit, so a
+         shipped build can be traced to the native core it links. -->
     <InformationalVersion>$(VerMajor).$(VerMinor).$(VerPatch).$(VerBuild)</InformationalVersion>
+    <InformationalVersion Condition="'$(CrimsonRsRef)' != ''">$(InformationalVersion)+crimson-rs.$(CrimsonRsRef.Substring(0, 7))</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <UsesCrimsonRsDll>true</UsesCrimsonRsDll>
 
     <!-- Avalonia.Controls.DataGrid 12.0.0 ships internal reflection that
          the ilc analyzer (microsoft.dotnet.ilcompiler 10.0.7+) flags via
@@ -151,10 +158,20 @@
        staticlib wants. -->
   <ItemGroup>
     <DirectPInvoke Include="crimson_rs" />
+  </ItemGroup>
+  <!-- Windows import libraries and the Windows-named staticlib: another
+       RID would need its own (libcrimson_rs.a and that OS's libraries). -->
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
     <NativeLibrary Include="$(CrimsonRsTargetDir)crimson_rs.lib" Condition="Exists('$(CrimsonRsTargetDir)crimson_rs.lib')" />
     <NativeLibrary Include="Userenv.lib" />
     <NativeLibrary Include="Synchronization.lib" />
   </ItemGroup>
+
+  <!-- Windows stores each version part in 16 bits; a larger build number
+       would be cut silently in the file version. -->
+  <Target Name="CheckVerBuildRange" BeforeTargets="BeforeBuild">
+    <Error Condition="$(VerBuild) &gt; 65535" Text="VerBuild $(VerBuild) is over 65535, the largest version part Windows accepts. Fix build_number.txt (or the -p:VerBuild passed in)." />
+  </Target>
 
   <!-- Strip .pdb files from the publish bundle. We still produce PDBs in
        bin/Release/ for crash-dump symbolication during development, but

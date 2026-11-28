@@ -1,4 +1,4 @@
-#requires -Version 7
+#requires -Version 7.2
 
 <#
 .SYNOPSIS
@@ -14,10 +14,17 @@
 
     Re-running is idempotent.
 
+    After each refresh the commit is written to vendor\<name>.ref, which
+    is committed: CI checks out exactly that commit, so a release builds
+    against what was vendored and tested here. When the commit moved, the
+    script prints the rebuild steps (the DLL / .lib and the Python module
+    are built from the vendor and do not follow it on their own).
+
 .PARAMETER Force
-    Discard local uncommitted changes in the vendor copy. Without -Force,
-    the script refuses to refresh a dirty working tree and prints a
-    warning instead.
+    Discard local changes in the vendor copy: modified and untracked files
+    (git clean -fd; ignored files such as target\ stay) and commits not on
+    origin. Without -Force, the script refuses to refresh a clone holding
+    either and lists what it found.
 
 .PARAMETER DryRun
     Show what would happen without touching anything.
@@ -51,6 +58,8 @@ $Vendors = @(
 
 $VendorDir = $PSScriptRoot
 $failed = @()
+$moved = @()
+$headBefore = $null
 
 foreach ($v in $Vendors) {
     $name   = $v.Name
@@ -126,6 +135,7 @@ foreach ($v in $Vendors) {
                 $failed += $name
                 continue
             }
+            $headBefore = (git -C "$target" rev-parse HEAD).Trim()
 
             # Re-point the remote in case Source changed (e.g. a local-path
             # clone now tracks the GitHub URL). Idempotent — always matches the
@@ -137,6 +147,18 @@ foreach ($v in $Vendors) {
             git -C "$target" fetch origin --prune
             if ($LASTEXITCODE -ne 0) { throw "git fetch failed (exit $LASTEXITCODE)" }
 
+            # A clean tree can still hold commits made in the clone; reset
+            # --hard would drop them with no warning.
+            $ahead = @(git -C "$target" rev-list "origin/$branch..HEAD")
+            if ($LASTEXITCODE -ne 0) { throw "git rev-list failed (exit $LASTEXITCODE)" }
+            if ($ahead.Count -gt 0 -and -not $Force) {
+                Write-Warning "Vendor copy has $($ahead.Count) commit(s) not on origin/${branch}:"
+                git -C "$target" log --oneline "origin/$branch..HEAD" | ForEach-Object { Write-Host "      $_" }
+                Write-Warning "Re-run with -Force to discard, or land them in the source repo at $source first."
+                $failed += $name
+                continue
+            }
+
             Write-Host "    checking out $branch..."
             git -C "$target" checkout $branch
             if ($LASTEXITCODE -ne 0) { throw "git checkout failed (exit $LASTEXITCODE)" }
@@ -144,10 +166,19 @@ foreach ($v in $Vendors) {
             Write-Host "    resetting to origin/$branch..."
             git -C "$target" reset --hard "origin/$branch"
             if ($LASTEXITCODE -ne 0) { throw "git reset failed (exit $LASTEXITCODE)" }
+
+            if ($Force) {
+                git -C "$target" clean -fd
+                if ($LASTEXITCODE -ne 0) { throw "git clean failed (exit $LASTEXITCODE)" }
+            }
         }
 
-        $head = git -C "$target" rev-parse --short HEAD
-        Write-Host "    OK at $head" -ForegroundColor Green
+        $head = (git -C "$target" rev-parse HEAD).Trim()
+        [System.IO.File]::WriteAllText((Join-Path $VendorDir "$name.ref"), "$head`n")
+        Write-Host "    OK at $($head.Substring(0, 7)) (written to vendor\$name.ref)" -ForegroundColor Green
+        if (-not $exists -or $head -ne $headBefore) {
+            $moved += $name
+        }
     }
     catch {
         Write-Warning "Failed for $name : $_"
@@ -161,3 +192,9 @@ if ($failed.Count -gt 0) {
     exit 1
 }
 Write-Host "All vendor deps updated." -ForegroundColor Green
+if ($moved -contains "crimson-rs") {
+    Write-Host ""
+    Write-Host "crimson-rs moved. Rebuild what is built from it, then commit vendor\crimson-rs.ref:" -ForegroundColor Yellow
+    Write-Host "    .\scripts\build_rust.ps1          # crimson_rs.dll / .lib for the C# side"
+    Write-Host "    .\scripts\setup_python_env.ps1    # the Python module the tools import"
+}

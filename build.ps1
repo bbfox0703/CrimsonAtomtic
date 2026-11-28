@@ -1,4 +1,4 @@
-#requires -Version 7
+#requires -Version 7.2
 
 <#
 .SYNOPSIS
@@ -7,10 +7,15 @@
 .DESCRIPTION
     Single command for every build flavour the project ships:
 
-      - Debug    : Unoptimized cargo + dotnet build (fast iteration)
-      - Release  : Optimized cargo --release + dotnet build (default)
-      - Publish  : Release cargo + dotnet publish -p:PublishAot=true to
-                   dist\<rid>\  (matches the old scripts\package_aot.ps1)
+      - Debug    : dotnet build -c Debug (fast iteration)
+      - Release  : dotnet build -c Release (default)
+      - Publish  : dotnet publish -p:PublishAot=true to dist\<rid>\
+
+    The Rust core is always built with the release profile: the C#
+    projects link target\release whatever their own configuration.
+
+    The version's fourth part (build_number.txt) goes up by one after a
+    successful C# build or publish; a failed build leaves the file alone.
 
     Delegates to the legacy per-step scripts under scripts\ so anyone
     used to those still gets the same behaviour:
@@ -32,7 +37,8 @@
     Wipe dist\ + bin\ + obj\ before building.
 
 .PARAMETER Runtime
-    .NET runtime identifier for Publish. Default: win-x64.
+    .NET runtime identifier for Publish. Only win-x64 exists (see
+    scripts\paths.ps1).
 
 .EXAMPLE
     .\build.ps1                          # Release build, all targets
@@ -53,7 +59,7 @@ param(
 
     [switch]$Clean,
 
-    [ValidateSet("win-x64", "linux-x64", "osx-arm64")]
+    [ValidateSet("win-x64")]
     [string]$Runtime = "win-x64"
 )
 
@@ -61,7 +67,7 @@ $ErrorActionPreference = "Stop"
 
 $ProjectRoot = $PSScriptRoot
 $Scripts     = Join-Path $ProjectRoot "scripts"
-$VendorRs    = Join-Path $ProjectRoot "vendor\crimson-rs"
+. (Join-Path $Scripts "paths.ps1")
 $Sln         = Join-Path $ProjectRoot "CrimsonAtomtic.slnx"
 if (-not (Test-Path $Sln)) { $Sln = Join-Path $ProjectRoot "CrimsonAtomtic.sln" }
 if (-not (Test-Path $Sln)) {
@@ -75,25 +81,30 @@ function Write-Banner([string]$Text) {
 
 function Invoke-Step([string]$Name, [scriptblock]$Block) {
     Write-Banner $Name
+    # A block made only of cmdlets leaves $LASTEXITCODE as the previous
+    # native command set it; reset it so that value is not read as this
+    # step's result.
+    $global:LASTEXITCODE = 0
     & $Block
-    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
+    if ($LASTEXITCODE -ne 0) {
         throw "$Name failed (exit $LASTEXITCODE)"
     }
 }
 
-# ── Build-number bump ────────────────────────────────────────────────────────
-# build_number.txt is the single source of truth for the version's 4th digit.
-# This entry point INCREMENTS it once per invocation; the .csproj only READS it
-# (so a plain `dotnet build` doesn't churn the counter). Same scheme as
-# UE5CEDumper. Written with an LF newline to match the committed file and avoid
-# a git CRLF round-trip warning.
-$BuildNumberFile = Join-Path $ProjectRoot "build_number.txt"
+# ── Build number ─────────────────────────────────────────────────────────────
+# build_number.txt holds the version's fourth part. This build uses the next
+# number (passed to MSBuild as VerBuild) and writes it back only once the
+# build succeeded, so failed builds do not churn the file. A plain
+# `dotnet build` reads the file and never changes it.
 $buildNum = if (Test-Path $BuildNumberFile) {
     [int]((Get-Content $BuildNumberFile -Raw).Trim())
 } else { 0 }
-$buildNum++
-[System.IO.File]::WriteAllText($BuildNumberFile, "$buildNum`n")
-Write-Banner "Build #$buildNum"
+$nextBuild = $buildNum + 1
+if ($nextBuild -gt 65535) {
+    throw "build_number.txt would pass 65535, the largest version part Windows accepts."
+}
+$verProp = "-p:VerBuild=$nextBuild"
+Write-Banner "Build #$nextBuild"
 
 # ── Clean step ──────────────────────────────────────────────────────────────
 if ($Clean) {
@@ -111,11 +122,18 @@ if ($Clean) {
         (Join-Path $ProjectRoot "src\CrimsonAtomtic.Ui\bin"),
         (Join-Path $ProjectRoot "src\CrimsonAtomtic.Ui\obj")
     )
+    $leftover = @()
     foreach ($p in $artifacts) {
         if (Test-Path $p) {
             Write-Host "    rm $p"
             Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $p
+            if (Test-Path $p) { $leftover += $p }
         }
+    }
+    if ($leftover.Count -gt 0) {
+        # Usually a running CrimsonAtomtic or test host holding files open.
+        Write-Warning "Clean could not remove (the build is not clean):"
+        $leftover | ForEach-Object { Write-Warning "    $_" }
     }
     # Cargo target/ is intentionally left alone -- it's vendored under
     # vendor\crimson-rs\target\ and a clean cargo build is genuinely
@@ -123,13 +141,8 @@ if ($Clean) {
 }
 
 # ── Rust DLL step ───────────────────────────────────────────────────────────
-$buildDll = $Target -in @("All", "DLL", "UI", "Test")
-$rustProfile = if ($Mode -eq "Debug") { "debug" } else { "release" }
-
-if ($buildDll) {
-    Invoke-Step "Build Rust DLL ($rustProfile)" {
-        & (Join-Path $Scripts "build_rust.ps1") -Profile $rustProfile
-    }
+Invoke-Step "Build Rust DLL (release)" {
+    & (Join-Path $Scripts "build_rust.ps1")
 }
 
 # ── C# build / test step ────────────────────────────────────────────────────
@@ -138,7 +151,7 @@ switch ($Target) {
     "UI" {
         $cs = if ($Mode -eq "Debug") { "Debug" } else { "Release" }
         Invoke-Step "Build C# UI ($cs)" {
-            & dotnet build $Sln -c $cs
+            & dotnet build $Sln -c $cs $verProp
         }
     }
     "Test" {
@@ -146,18 +159,18 @@ switch ($Target) {
         Invoke-Step "Build + Test ($cs)" {
             # MTP (xunit.v3) — the .NET 10 SDK dropped the `dotnet test`
             # VSTest bridge, so run the test project's own runner.
-            & dotnet run --project (Join-Path $ProjectRoot "src\CrimsonAtomtic.Tests\CrimsonAtomtic.Tests.csproj") -c $cs
+            & dotnet run --project $TestProject -c $cs $verProp
         }
     }
     "All" {
         if ($Mode -eq "Publish") {
             Invoke-Step "AOT Publish ($Runtime)" {
-                & (Join-Path $Scripts "package_aot.ps1") -Runtime $Runtime -SkipRustBuild
+                & (Join-Path $Scripts "package_aot.ps1") -Runtime $Runtime -SkipRustBuild -BuildNumber $nextBuild
             }
         } else {
             $cs = if ($Mode -eq "Debug") { "Debug" } else { "Release" }
             Invoke-Step "Build C# ($cs)" {
-                & dotnet build $Sln -c $cs
+                & dotnet build $Sln -c $cs $verProp
             }
         }
     }
@@ -171,8 +184,14 @@ switch ($Target) {
 #                    (a publish bundle isn't useful before tests are green).
 if ($Mode -eq "Publish" -and $Target -eq "UI") {
     Invoke-Step "AOT Publish ($Runtime)" {
-        & (Join-Path $Scripts "package_aot.ps1") -Runtime $Runtime -SkipRustBuild
+        & (Join-Path $Scripts "package_aot.ps1") -Runtime $Runtime -SkipRustBuild -BuildNumber $nextBuild
     }
+}
+
+# Every step above throws on failure, so reaching here means the build that
+# used $nextBuild succeeded. A Rust-only run built no versioned output.
+if ($Target -ne "DLL") {
+    [System.IO.File]::WriteAllText($BuildNumberFile, "$nextBuild`n")
 }
 
 Write-Banner "Done"

@@ -29,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from common.cli import require_args  # noqa: E402
-from common.paths import list_save_users, save_root  # noqa: E402
+from common.paths import SAVE_ROOT_DISPLAY, list_save_users  # noqa: E402
 
 
 def autodiscover_save() -> Path | None:
@@ -58,7 +58,9 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "path to a save.save file. "
             "If omitted, the script picks the first slot0 under "
-            f"{save_root()}."
+            # argparse %-formats help text, so the literal % needs doubling.
+            + SAVE_ROOT_DISPLAY.replace("%", "%%")
+            + "."
         ),
     )
     p.add_argument(
@@ -98,7 +100,7 @@ def main() -> int:
         if save_path is None:
             print(
                 "No --save was given and no slot0/save.save could be found "
-                f"under {save_root()}.",
+                f"under {SAVE_ROOT_DISPLAY}.",
                 file=sys.stderr,
             )
             return 1

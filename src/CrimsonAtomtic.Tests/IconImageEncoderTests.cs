@@ -4,22 +4,14 @@ using Xunit;
 namespace CrimsonAtomtic.Tests;
 
 /// <summary>
-/// Tests for the DDS → WebP encoder that backs Phase 3 of the icon
-/// extraction pipeline.
-///
-/// Strategy: a real BC3-encoded DDS extracted from group 0012 of the
-/// game install ships as <c>fixtures/sample_bc3_32x32.dds</c>; the
-/// encoder runs end-to-end against it and we verify the result is a
-/// well-formed WebP at the requested size. Decoding correctness of
-/// the BC3 block layout itself is harder to assert pixel-perfect (it
-/// depends on Skia's interpolation choices on resize) so the tests
-/// stay structural — header + dimensions — plus a synthetic BC1
-/// case that checks a single solid colour round-trips.
+/// Tests for the DDS → WebP encoder behind icon extraction. Every input is
+/// built here: a game-extracted texture is Pearl Abyss content and stays
+/// out of the repo (docs/data-policy.md). The textured BC3 input checks the
+/// encoder end to end (header and size, since Skia's resize makes pixels
+/// inexact); the solid blocks check the block decoders pixel for pixel.
 /// </summary>
 public sealed class IconImageEncoderTests
 {
-    private const string Bc3Fixture = "fixtures/sample_bc3_32x32.dds";
-
     /// <summary>WebP magic: 'RIFF' .... 'WEBP' at offsets 0 and 8.</summary>
     private static void AssertIsWebp(byte[] bytes)
     {
@@ -35,41 +27,48 @@ public sealed class IconImageEncoderTests
     }
 
     [Fact]
-    public void EncodeDdsToWebp_LiveBc3Fixture_ProducesValidWebp()
+    public void EncodeDdsToWebp_TexturedBc3_ProducesValidWebp()
     {
-        if (!File.Exists(Bc3Fixture))
-        {
-            return;
-        }
-        var dds = File.ReadAllBytes(Bc3Fixture);
+        var dds = BuildTexturedBc3(32, 32);
         var webp = IconImageEncoder.EncodeDdsToWebp(dds, targetSize: 64, quality: 80);
         AssertIsWebp(webp);
-        // Sanity: 64×64 quality-80 webp from a 32×32 BC3 source should
-        // typically land in the hundreds-of-bytes to low-kB range. A
-        // ridiculously small file would mean the encode silently
-        // produced an empty image; a 100kB file would mean the resize
-        // failed.
+        // A near-empty file would mean the encode produced a blank image;
+        // a huge one that the resize did not happen.
         Assert.InRange(webp.Length, 100, 20_000);
     }
 
     [Fact]
-    public void EncodeDdsToWebp_LiveBc3Fixture_ResizeToDifferentSize()
+    public void EncodeDdsToWebp_TexturedBc3_ResizeToDifferentSize()
     {
-        if (!File.Exists(Bc3Fixture))
-        {
-            return;
-        }
-        var dds = File.ReadAllBytes(Bc3Fixture);
+        var dds = BuildTexturedBc3(32, 32);
         var small = IconImageEncoder.EncodeDdsToWebp(dds, targetSize: 32, quality: 80);
         var large = IconImageEncoder.EncodeDdsToWebp(dds, targetSize: 128, quality: 80);
         AssertIsWebp(small);
         AssertIsWebp(large);
-        // Bigger target should produce more bytes for the same source
-        // (modulo encoder noise — the relation isn't strictly
-        // monotonic on tiny images, but 32 vs 128 is far enough apart
-        // to be reliable in practice).
         Assert.True(large.Length > small.Length,
             $"expected 128×128 webp ({large.Length}B) > 32×32 webp ({small.Length}B)");
+    }
+
+    [Fact]
+    public void DecodeDdsToRgba_SolidBc3Block_DecodesColourAndAlphaExactly()
+    {
+        // alpha0 = alpha1 = 0x80 with every alpha index 0, colour0 = colour1
+        // = pure red (RGB565 0xF800) with every colour index 0.
+        var dds = BuildBc3Header(4, 4, 1);
+        var block = dds.AsSpan(128, 16);
+        block[0] = 0x80;
+        block[1] = 0x80;
+        BitConverter.GetBytes((ushort)0xF800).CopyTo(block[8..]);
+        BitConverter.GetBytes((ushort)0xF800).CopyTo(block[10..]);
+
+        var (rgba, width, height) = IconImageEncoder.DecodeDdsToRgba(dds);
+
+        Assert.Equal(4, width);
+        Assert.Equal(4, height);
+        for (var i = 0; i < 16; i++)
+        {
+            Assert.Equal(new byte[] { 0xFF, 0x00, 0x00, 0x80 }, rgba.AsSpan(i * 4, 4).ToArray());
+        }
     }
 
     [Fact]
@@ -128,6 +127,31 @@ public sealed class IconImageEncoderTests
     }
 
     // ── Synthetic-input helpers ────────────────────────────────────────────
+
+    private static byte[] BuildBc3Header(int width, int height, int blocks)
+    {
+        var dds = new byte[128 + blocks * 16]; // BC3 = 16 bytes/block
+        "DDS "u8.CopyTo(dds);
+        WriteUInt32(dds, 4, 124);
+        WriteUInt32(dds, 12, (uint)height);
+        WriteUInt32(dds, 16, (uint)width);
+        WriteUInt32(dds, 80, 0x4); // DDPF_FOURCC
+        "DXT5"u8.CopyTo(dds.AsSpan(84));
+        return dds;
+    }
+
+    /// <summary>
+    /// A BC3 texture with different endpoints and indices in every block,
+    /// from a fixed-seed generator, so the image has detail to resize and
+    /// the same bytes on every run.
+    /// </summary>
+    private static byte[] BuildTexturedBc3(int width, int height)
+    {
+        var blocks = ((width + 3) / 4) * ((height + 3) / 4);
+        var dds = BuildBc3Header(width, height, blocks);
+        new Random(20261128).NextBytes(dds.AsSpan(128));
+        return dds;
+    }
 
     private static byte[] BuildSyntheticBc1Solid(int width, int height, ushort rgb565)
     {

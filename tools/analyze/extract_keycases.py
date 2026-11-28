@@ -140,6 +140,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def load_iteminfo(path: Path) -> dict[int, str]:
+    """ItemKey -> string_key, skipping rows without a name.
+
+    An empty string_key is a row whose name was never read (a catalog
+    dumped without the table header), so it does not resolve the key.
+    """
     if not path.is_file():
         return {}
     out: dict[int, str] = {}
@@ -148,7 +153,7 @@ def load_iteminfo(path: Path) -> dict[int, str]:
             d = json.loads(line)
             k = d.get("key")
             s = d.get("string_key")
-            if isinstance(k, int) and isinstance(s, str):
+            if isinstance(k, int) and isinstance(s, str) and s:
                 out[k] = s
     return out
 

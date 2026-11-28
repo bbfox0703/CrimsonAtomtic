@@ -89,6 +89,12 @@ def main() -> int:
     )
 
     blocks: list[dict] = parsed["blocks"]
+    if args.toc_index is not None and not 0 <= args.toc_index < len(blocks):
+        print(
+            f"--toc-index {args.toc_index} out of range (0..{len(blocks) - 1})",
+            file=sys.stderr,
+        )
+        return 1
     matched = filter_blocks(blocks, args)
     if not matched:
         print("\nno blocks matched the filter.")
@@ -128,7 +134,6 @@ def main() -> int:
 def filter_blocks(blocks: list[dict], args: argparse.Namespace) -> list[dict]:
     if args.toc_index is not None:
         if not 0 <= args.toc_index < len(blocks):
-            print(f"--toc-index {args.toc_index} out of range (0..{len(blocks)})", file=sys.stderr)
             return []
         return [blocks[args.toc_index]]
     if args.class_filter:

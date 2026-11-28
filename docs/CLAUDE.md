@@ -20,7 +20,7 @@
 - **code-comments.md** — the comment rules (why, not what; no history, line numbers, ids, enumerations, "only" claims, plan wording) and the `CommentRulesTests` gate with its history ratchet
 - **dev-workflow.md** — branch/merge flow, switching machines, running single tests, preparing in-game test saves (slot102 → slot103), driving the app UI; shared across machines in place of agent memory
 - **code-audit-2026-11-28-*.md** — the 2026-11-28 code audit: `-plan` (the six blocks), one report per block, and `-control` (every finding's status, batch and fix commit). Read the control table before fixing a finding.
-- **release-process.md** — the 「啟動 release CI」 runbook (pre-flight → player-facing bilingual notes → annotated tag → CI draft → replace notes → verify → stop at the draft), plus background: annotated `v*` tags, what the CI workflow does, the crimson-rs-from-`main` gotcha
+- **release-process.md** — the 「啟動 release CI」 runbook (pre-flight → player-facing bilingual notes → annotated tag → CI draft → replace notes → verify → stop at the draft), plus background: annotated `v*` tags, what the CI workflow does, where the crimson-rs commit CI builds comes from
 
 ## How to extend
 

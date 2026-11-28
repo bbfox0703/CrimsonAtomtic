@@ -28,6 +28,59 @@ read from the top.
 
 -----
 
+## 2026-11-28 (no release) — Code audit P11: pinned CI, a PR workflow, build and tools fixes
+
+- **What changes:**
+  - **CI on every PR** and every push to `dev` / `main` (`ci.yml`): native core, C# tests, Python
+    tools tests. The release workflow runs the tests too before packaging (B6-10).
+  - **Pinned inputs**, the same in both workflows: actions by commit SHA, read-only token (only the
+    release job, which builds nothing, can write), the SDK exactly as `global.json` says (10.0.404,
+    `rollForward: disable`), Rust 1.100.1, crimson-rs at the committed `vendor/crimson-rs.ref`
+    (`cargo --locked`), NuGet through `packages.lock.json` in locked mode, telemetry opted out
+    (B6-06…B6-09, B6-17). The exe's product version and the release notes name the crimson-rs commit.
+  - **Release checks that fail instead of warn:** a shipped or imported `crimson_rs.dll`, a missing
+    exe (dumpbin found through vswhere, so CI runs the check), a tag that does not match the csproj
+    version, a `vNNN` tag over 65535, a failed vendor checkout. A manual run on a tag ref builds
+    only (B6-04, B6-05, B6-15, B6-36).
+  - **Build scripts:** Rust always builds release, the profile the C# side links; the C# build warns
+    when `crimson_rs.dll` is missing or was built from another commit than the ref.
+    `build_number.txt` goes up only after a successful build. Only `win-x64` is offered. The
+    scripts share `scripts/paths.ps1`. `build.cmd` stops when `pwsh` is missing, since PowerShell
+    5.1 cannot run `build.ps1` anyway (B6-03, B6-12, B6-14, B6-16, B6-24, B6-33).
+  - **Vendor refresh:** refuses a clone with local commits, `-Force` also cleans, writes the ref,
+    and prints the rebuild steps when crimson-rs moved (B6-11, B6-12).
+  - **Python tools:** `dump_challenges.py` and `dump_catalogs.py` pass the table headers 2.06 needs
+    (6,872 missioninfo rows / 2,260 challenges; 7,068 of 7,068 items with a string key, where it
+    was 0). A pamt parse error is reported instead of "is the game installed?". No import-time
+    side effects, `--help` works without `LOCALAPPDATA`, error paths exit non-zero, and the DLL
+    path and status codes live in `tools/common/crimson_abi.py`. New `tools/tests` (60 tests)
+    (B6-01, B6-02, B6-13, B6-20, B6-22, B6-24, B6-35).
+  - **Repo hygiene:** the game-extracted DDS fixture is replaced by synthetic input, plus a
+    pixel-exact BC3 test. The two byte-identical image copies are gone (`img/README.md` says which
+    files are sources). The test project references only what it uses. `.gitignore` has no
+    contradictions and ignores every `*.save`. Python tool versions are pinned in
+    `scripts/python-constraints.txt`, and `setup_python_env.ps1` checks the interpreter is 3.12+
+    (B6-18, B6-19, B6-23, B6-30, B6-34).
+  - `tools/inspect/sa-investigations/` is deleted (B6-21); the scripts are in the parent of this
+    entry's commit. What they found, kept here so the RE need not be redone:
+    - `Challenge_SealedArtifact_Living_VII_2`, the follow-up that Pattern B v1 would clone for
+      *Feast for the Road*, is keyed `0xFFFFFD7D`. That key is negative-encoded, a range the
+      missioninfo anchor scan dropped, so the name never reached the editor's name → key map.
+    - Multi-objective challenges (`Living_*`, cooking) chain their sub-steps under negative keys.
+      Linear ones append positive-keyed `_N` rows instead (`Vehicle_II_2` = `0x000F4F49`).
+    - So Pattern B v1 covers linear single-step challenges only (Shield II, Spear I, Hooves II,
+      Slash III), and the bulk sweep skips the rest with a reason. A v2 would need one in-game
+      natural completion of a multi-objective challenge to diff against. Those findings predate
+      crimson-rs's header-based missioninfo parse; recheck the negative-key filter before
+      relying on them.
+- **Left open:** B6-25 (the tools still reach missioninfo through ctypes, until crimson-rs exposes it
+  through PyO3). `ruff check tools/` is not in CI, because older findings would fail it.
+- **Not verified:** the workflows themselves until their first run on GitHub. The locked-mode AOT
+  publish and its new checks did pass locally.
+- **Tests:** 492 C# + 60 Python green.
+
+-----
+
 ## 2026-11-28 (no release) — Code audit P10: platform layer and the file log
 
 - **What changes:**

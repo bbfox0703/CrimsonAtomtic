@@ -1,4 +1,4 @@
-#requires -Version 7
+#requires -Version 7.2
 
 <#
 .SYNOPSIS
@@ -73,12 +73,25 @@ if (-not (Test-Path $VenvPy)) {
     $VenvPy = Join-Path $VenvDir "bin\python"  # Linux/macOS fallback
 }
 
+# The fallback launcher can be an older Python; without this check the
+# failure only comes later, from maturin's abi3-py312 build, and says
+# nothing about the interpreter.
+& $VenvPy -c "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)"
+if ($LASTEXITCODE -ne 0) {
+    $found = & $VenvPy -c "import sys; print(sys.version.split()[0])"
+    throw ".venv uses Python $found; 3.12+ is required. Re-run with -Force after installing 3.12+."
+}
+
+# Exact versions of the Python dev tools, so two machines build the
+# extension and run the tools with the same ones.
+$Constraints = Join-Path $PSScriptRoot "python-constraints.txt"
+
 Write-Host "Upgrading pip..." -ForegroundColor Cyan
 & $VenvPy -m pip install --upgrade pip
 if ($LASTEXITCODE -ne 0) { throw "pip upgrade failed" }
 
 Write-Host "Installing maturin..." -ForegroundColor Cyan
-& $VenvPy -m pip install "maturin>=1.0,<2.0"
+& $VenvPy -m pip install -c $Constraints maturin
 if ($LASTEXITCODE -ne 0) { throw "maturin install failed" }
 
 Write-Host "Building crimson_rs Python module from vendor/crimson-rs..." -ForegroundColor Cyan
@@ -111,7 +124,7 @@ finally {
 }
 
 Write-Host "Installing dev tooling (pytest, ruff)..." -ForegroundColor Cyan
-& $VenvPy -m pip install "pytest>=8.0" "ruff>=0.5"
+& $VenvPy -m pip install -c $Constraints pytest ruff
 if ($LASTEXITCODE -ne 0) { throw "dev tooling install failed" }
 # Scripts under tools/ use a sys.path bootstrap to import tools/common/,
 # so we deliberately do NOT `pip install -e tools/` — see tools/CLAUDE.md.

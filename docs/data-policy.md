@@ -30,6 +30,10 @@ A classic failure mode is committing both an extracted source AND a file generat
 - Derived files live in `.gitignore` and are produced by a documented generator.
 - The generator script names exactly what it produces, in its `--help` output and in the relevant `README.md`.
 - If you find yourself committing a generated file "for convenience", it means the generator is too slow or too undocumented. Fix the generator instead.
+- **Exception: hand-made brand art.** `img/Logo.png` and `img/MainIcon.png` are the sources; the app's
+  `Assets/Logo.jpg` and `Assets/MainIcon.ico` and the README's `img/Logo.webp` are exported from them by
+  hand, because no build step converts images. Each export is committed once, in the place that uses it,
+  never as a second copy ([img/README.md](../img/README.md)).
 
 ## 4. Source of truth lives in the game
 
@@ -51,6 +55,9 @@ If you're tempted to add `if value == "weird_legacy_thing": handle specially` in
 - Any icon WebP files mined once from CRIMSON-DESERT-SAVE-EDITOR run through a thumbnail/cache step before the UI ever sees them — full-size icons displayed at 32 px are wasteful.
 - Going forward, new icons come from extracting game assets via `crimson-rs` directly.
 - See `docs/ui-design.md` for the asset pipeline plan.
+- **Test fixtures are synthetic.** A texture, table or save extracted from the game is Pearl Abyss
+  content (or player data) and is not committed, not even a small one; tests build their input in code,
+  as `IconImageEncoderTests` does for DDS.
 
 ## 7. Game version is metadata, not a build-time constant
 

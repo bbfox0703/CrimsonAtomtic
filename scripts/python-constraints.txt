@@ -1,0 +1,5 @@
+# Exact versions for scripts/setup_python_env.ps1 (pip install -c).
+# Bump deliberately, one tool at a time, and re-run the tools' tests.
+maturin==1.13.3
+pytest==9.0.3
+ruff==0.15.12

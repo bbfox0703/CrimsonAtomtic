@@ -65,19 +65,15 @@ if "!HAS_ARGS!"=="0" (
 )
 echo.
 
-:: Prefer PowerShell 7+ (pwsh); the script #requires it (cleaner
-:: cmdlet semantics, modern parameter binding). Fall back to Windows
-:: PowerShell only if pwsh isn't on PATH, but warn loudly because the
-:: #requires line will still reject the older shell.
+:: build.ps1 requires PowerShell 7.2+, which Windows PowerShell 5.1
+:: would refuse, so a missing pwsh is an error here, not a fallback.
 where /q pwsh.exe
-if "%ERRORLEVEL%"=="0" (
-    pwsh -NoProfile -ExecutionPolicy Bypass -File "%~dp0build.ps1" -Mode %MODE% -Target %TARGET% %CLEAN%
-) else (
-    echo  WARNING: pwsh not found on PATH -- falling back to Windows PowerShell 5.1.
-    echo  Install PowerShell 7+ from https://github.com/PowerShell/PowerShell for a clean run.
-    echo.
-    powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0build.ps1" -Mode %MODE% -Target %TARGET% %CLEAN%
+if not "%ERRORLEVEL%"=="0" (
+    echo  ERROR: pwsh ^(PowerShell 7.2+^) not found on PATH.
+    echo  Install it from https://github.com/PowerShell/PowerShell and re-run.
+    exit /b 1
 )
+pwsh -NoProfile -ExecutionPolicy Bypass -File "%~dp0build.ps1" -Mode %MODE% -Target %TARGET% %CLEAN%
 set "EC=%ERRORLEVEL%"
 
 if %EC% neq 0 (

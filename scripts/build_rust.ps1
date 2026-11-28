@@ -1,4 +1,4 @@
-#requires -Version 7
+#requires -Version 7.2
 
 <#
 .SYNOPSIS
@@ -20,36 +20,42 @@
     `crate-type = ["cdylib", "staticlib"]`. See
     vendor/crimson-rs/docs/c-sharp-nativeaot-integration.md.
 
+    The build is always the release profile: the C# projects link
+    target\release, so a debug build would leave them on a stale DLL.
+    Cargo.lock is honoured (--locked), and CARGO_TARGET_DIR is set to the
+    vendor's own target\ for the call, so a value left in the environment
+    cannot send the artifacts elsewhere.
+
+    On success the vendor commit is written next to the artifacts
+    (.crimson-rs-sha); the C# build warns when it differs from
+    vendor\crimson-rs.ref.
+
     Note: the Python extension build is handled by maturin via
     setup_python_env.ps1. This script is the C# side.
 
-.PARAMETER Profile
-    cargo profile: "release" (default) or "debug".
-
 .EXAMPLE
     .\scripts\build_rust.ps1
-    .\scripts\build_rust.ps1 -Profile debug
 #>
 
 [CmdletBinding()]
-param(
-    [ValidateSet("release", "debug")]
-    [string]$Profile = "release"
-)
+param()
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "paths.ps1")
 
-$ProjectRoot = Split-Path -Parent $PSScriptRoot
-$VendorRs    = Join-Path $ProjectRoot "vendor\crimson-rs"
-
-if (-not (Test-Path $VendorRs)) {
+if (-not $IsWindows) {
+    throw "Only the Windows build exists: crimson_rs.dll / .lib and the AOT link are Windows-specific."
+}
+if (-not (Test-Path $CrimsonRsDir)) {
     throw "vendor/crimson-rs is missing. Run .\vendor\update_vendors.ps1 first."
 }
 
+$VendorRs = $CrimsonRsDir
 Push-Location $VendorRs
+$prevTargetDir = $env:CARGO_TARGET_DIR
 try {
-    $cargoArgs = @("build", "--features", "c_abi")
-    if ($Profile -eq "release") { $cargoArgs += "--release" }
+    $env:CARGO_TARGET_DIR = Join-Path $VendorRs "target"
+    $cargoArgs = @("build", "--locked", "--release", "--features", "c_abi")
 
     Write-Host "Running: cargo $($cargoArgs -join ' ') (in $VendorRs)" -ForegroundColor Cyan
 
@@ -114,12 +120,12 @@ try {
     }
 }
 finally {
+    $env:CARGO_TARGET_DIR = $prevTargetDir
     Pop-Location
 }
 
-$TargetDir = Join-Path $VendorRs "target\$Profile"
-$DllPath   = Join-Path $TargetDir "crimson_rs.dll"
-$LibPath   = Join-Path $TargetDir "crimson_rs.lib"
+$DllPath = $CrimsonRsDll
+$LibPath = $CrimsonRsLib
 
 Write-Host ""
 $missing = @()
@@ -140,6 +146,11 @@ if (Test-Path $LibPath) {
 if ($missing.Count -gt 0) {
     exit 1
 }
+
+$builtSha = (git -C $VendorRs rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0) { throw "git rev-parse failed in $VendorRs" }
+[System.IO.File]::WriteAllText($CrimsonRsBuiltSha, "$builtSha`n")
+Write-Host "Built from crimson-rs $builtSha" -ForegroundColor DarkGray
 
 Write-Host ""
 Write-Host "Dev / 'dotnet build' / 'dotnet test' pick up crimson_rs.dll via" -ForegroundColor DarkGray

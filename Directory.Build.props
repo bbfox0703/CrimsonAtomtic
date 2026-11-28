@@ -5,6 +5,10 @@
          and crimson_rs.lib (linked into the AOT exe). One definition for
          every project that consumes them. -->
     <CrimsonRsTargetDir>$(MSBuildThisFileDirectory)vendor\crimson-rs\target\release\</CrimsonRsTargetDir>
+    <!-- The crimson-rs commit this tree is meant to build against
+         (vendor\update_vendors.ps1 writes it; CI checks it out). -->
+    <CrimsonRsRefFile>$(MSBuildThisFileDirectory)vendor\crimson-rs.ref</CrimsonRsRefFile>
+    <CrimsonRsRef Condition="Exists('$(CrimsonRsRefFile)')">$([System.IO.File]::ReadAllText('$(CrimsonRsRefFile)').Trim())</CrimsonRsRef>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -25,6 +29,17 @@
          third-party packages (e.g. Tmds.DBus.Protocol pulled via
          Avalonia) shouldn't fail our build — that's outside our reach. -->
     <NuGetAuditMode>direct</NuGetAuditMode>
+
+    <!-- packages.lock.json records each package's content hash. CI (where
+         GitHub sets CI=true) restores in locked mode, so a package that
+         changed under the same version, or a lock file left stale by a
+         version bump, fails the restore instead of building. After
+         changing a version locally, `dotnet restore` rewrites the locks. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
+    <!-- `dotnet publish -r win-x64` hands the RID to every referenced
+         project, so each lock file must also cover the win-x64 graph. -->
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
 
     <!-- Project metadata. -->
     <Authors>CrimsonAtomtic</Authors>

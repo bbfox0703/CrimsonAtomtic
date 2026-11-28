@@ -6,11 +6,14 @@ completion state for each one in a given save file.
 
 Workflow:
 
-1. Extract `missioninfo.pabgb` + `localizationstring_eng.paloc` from a
-   live Crimson Desert install via PyO3 `crimson_rs.extract_file`.
-2. Load both through the c_abi bridges via ctypes (Python bindings
-   don't expose the new bridges yet — see issue #2 in
-   `out/crimson-rs-issues/`).
+1. Extract the missioninfo body + header and the English paloc file(s)
+   from a live Crimson Desert install via PyO3 `crimson_rs.extract_file`.
+   Since 2.06 the row names live in the header, so it is loaded with
+   the body.
+2. Load them through the c_abi bridges via ctypes, because the Python
+   bindings expose no missioninfo parser. The library comes from
+   `--dll`, else `$CRIMSON_RS_DLL`, else
+   `vendor/crimson-rs/target/release/` (built by scripts/build_rust.ps1).
 3. Walk every entry via `crimson_missioninfo_get_entry`. Keep rows
    whose `internal_name` starts with `Challenge_`. Filter out U+FFFD
    rows (the issue-#1 mojibake bug — none of those are real challenges
@@ -44,7 +47,7 @@ The user's screenshots confirmed both `Mission_MiniGame_*` and
 prefix filter is `Challenge_,Mission_MiniGame_` — override with
 `--prefix` if needed.
 
-Versions tested: 1.06.
+Versions tested: 1.06, 2.06.
 """
 
 from __future__ import annotations
@@ -57,11 +60,16 @@ import re
 import sys
 from collections import Counter
 from ctypes import (
-    c_char_p, c_int, c_size_t, c_uint32, c_void_p, POINTER, byref,
+    POINTER,
+    byref,
+    c_char_p,
+    c_int,
+    c_size_t,
+    c_uint32,
+    c_void_p,
 )
 from pathlib import Path
 from typing import Any, TextIO
-
 
 # ── IGN HTML parsing ─────────────────────────────────────────────────────────
 
@@ -223,12 +231,19 @@ def clean_title(title: str | None) -> str | None:
     m = _TEMPLATE_TITLE_RE.match(title)
     return m.group(1) if m else title
 
-# Force UTF-8 stdout so CJK + U+FFFD don't trip cp950 on Windows.
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8")
 
+# Make tools/ importable when run as a plain script.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from common import crimson_abi  # noqa: E402
 from common.cli import require_args  # noqa: E402
+from common.crimson_abi import (  # noqa: E402
+    BODY_PARSE,
+    BUFFER_TOO_SMALL,
+    NOT_FOUND,
+    OK,
+    OUT_OF_RANGE,
+    status_name,
+)
 from common.gamedata_layout import (  # noqa: E402
     GAMEDATA_GROUP,
     paloc_files,
@@ -236,52 +251,69 @@ from common.gamedata_layout import (  # noqa: E402
 )
 from common.paths import discover_installs  # noqa: E402
 
-DLL_PATH = r"D:\Github\CrimsonAtomtic\vendor\crimson-rs\target\release\crimson_rs.dll"
 MISSIONINFO_TABLE = "missioninfo"
 PALOC_GROUP = "0020"
 
 DEFAULT_PREFIXES = "Challenge_,Mission_MiniGame_"
 
-OK = 0
-NOT_FOUND = -16
-BUFFER_TOO_SMALL = -11
-OUT_OF_RANGE = -10
-
 
 # ── c_abi bindings (ctypes) ──────────────────────────────────────────────────
 
-_dll = ctypes.CDLL(DLL_PATH)
+
+class MissionInfoAbi:
+    """The missioninfo and paloc bridges of one loaded C ABI library."""
+
+    def __init__(self, dll: ctypes.CDLL) -> None:
+        def bind(name: str, argtypes: list[Any], restype: Any) -> Any:
+            fn = getattr(dll, name)
+            fn.argtypes = argtypes
+            fn.restype = restype
+            return fn
+
+        self.mi_load_bytes = bind(
+            "crimson_missioninfo_load_from_bytes",
+            [c_char_p, c_size_t, POINTER(c_void_p)], c_int)
+        self.mi_load_bytes_with_header = bind(
+            "crimson_missioninfo_load_from_bytes_with_header",
+            [c_char_p, c_size_t, c_char_p, c_size_t, POINTER(c_void_p)], c_int)
+        self.mi_free = bind("crimson_missioninfo_free", [c_void_p], None)
+        self.mi_count = bind(
+            "crimson_missioninfo_entry_count", [c_void_p, POINTER(c_uint32)], c_int)
+        self.mi_get_entry = bind(
+            "crimson_missioninfo_get_entry",
+            [c_void_p, c_uint32, POINTER(c_uint32), c_char_p, c_size_t,
+             POINTER(c_size_t)], c_int)
+        self.mi_lookup_dn = bind(
+            "crimson_missioninfo_lookup_display_name",
+            [c_void_p, c_void_p, c_uint32, c_uint32, c_char_p, c_size_t,
+             POINTER(c_size_t)], c_int)
+        self.pl_load_bytes = bind(
+            "crimson_paloc_load_from_bytes",
+            [c_char_p, c_size_t, POINTER(c_void_p)], c_int)
+        self.pl_free = bind("crimson_paloc_free", [c_void_p], None)
+
+    def load_missioninfo(self, body: bytes, header: bytes) -> tuple[int, c_void_p]:
+        """Load a missioninfo table, returning `(status, handle)`.
+
+        From 2.06 the row names live in the header, so the header-aware
+        loader goes first. It refuses a pre-2.06 header with `BODY_PARSE`;
+        the body-only loader is what such an install needs, and on a 2.06
+        body it refuses too, so the fallback never yields a table without
+        its names.
+        """
+        handle = c_void_p()
+        rc = self.mi_load_bytes_with_header(
+            body, len(body), header, len(header), byref(handle))
+        if rc == BODY_PARSE:
+            rc = self.mi_load_bytes(body, len(body), byref(handle))
+        return rc, handle
 
 
-def _bind(name: str, argtypes, restype):
-    fn = getattr(_dll, name)
-    fn.argtypes = argtypes
-    fn.restype = restype
-    return fn
-
-
-mi_load_bytes = _bind("crimson_missioninfo_load_from_bytes",
-                      [c_char_p, c_size_t, POINTER(c_void_p)], c_int)
-mi_free = _bind("crimson_missioninfo_free", [c_void_p], None)
-mi_count = _bind("crimson_missioninfo_entry_count",
-                 [c_void_p, POINTER(c_uint32)], c_int)
-mi_get_entry = _bind("crimson_missioninfo_get_entry",
-                     [c_void_p, c_uint32, POINTER(c_uint32),
-                      c_char_p, c_size_t, POINTER(c_size_t)], c_int)
-mi_lookup_dn = _bind("crimson_missioninfo_lookup_display_name",
-                     [c_void_p, c_void_p, c_uint32, c_uint32,
-                      c_char_p, c_size_t, POINTER(c_size_t)], c_int)
-
-pl_load_bytes = _bind("crimson_paloc_load_from_bytes",
-                      [c_char_p, c_size_t, POINTER(c_void_p)], c_int)
-pl_free = _bind("crimson_paloc_free", [c_void_p], None)
-
-
-def _two_call(call) -> tuple[int, bytes]:
+def _two_call(call: Any) -> tuple[int, bytes]:
     """Standard two-call buffer dance for any (buf, buf_len, *required) getter."""
     required = c_size_t(0)
     rc = call(None, 0, byref(required))
-    if rc == NOT_FOUND or rc == OUT_OF_RANGE:
+    if rc in (NOT_FOUND, OUT_OF_RANGE):
         return rc, b""
     if rc not in (OK, BUFFER_TOO_SMALL):
         return rc, b""
@@ -294,11 +326,11 @@ def _two_call(call) -> tuple[int, bytes]:
     return OK, bytes(buf.raw[: required.value - 1])  # strip NUL
 
 
-def get_entry(handle, idx: int) -> tuple[int, int, bytes]:
+def get_entry(abi: MissionInfoAbi, handle: c_void_p, idx: int) -> tuple[int, int, bytes]:
     """Returns (rc, key, name_bytes). key undefined when rc != OK."""
     out_key = c_uint32(0)
     required = c_size_t(0)
-    rc = mi_get_entry(handle, idx, byref(out_key), None, 0, byref(required))
+    rc = abi.mi_get_entry(handle, idx, byref(out_key), None, 0, byref(required))
     if rc == OUT_OF_RANGE:
         return rc, 0, b""
     if rc not in (OK, BUFFER_TOO_SMALL):
@@ -306,7 +338,8 @@ def get_entry(handle, idx: int) -> tuple[int, int, bytes]:
     if required.value <= 1:
         return OK, int(out_key.value), b""
     buf = ctypes.create_string_buffer(required.value)
-    rc2 = mi_get_entry(handle, idx, byref(out_key), buf, required.value, byref(required))
+    rc2 = abi.mi_get_entry(
+        handle, idx, byref(out_key), buf, required.value, byref(required))
     if rc2 != OK:
         return rc2, 0, b""
     return OK, int(out_key.value), bytes(buf.raw[: required.value - 1])
@@ -426,6 +459,10 @@ def build_parser() -> argparse.ArgumentParser:
                         "table region from the page into a .txt file). "
                         "Enriches each row with IGN category / subcategory / "
                         "goal / reward when the challenge title matches.")
+    p.add_argument("--dll", type=Path, default=None,
+                   help="crimson-rs C ABI library to load. Default: $"
+                        f"{crimson_abi.DLL_ENV_VAR}, else "
+                        "vendor/crimson-rs/target/release/ under the repo root.")
     p.add_argument("--summary", action="store_true",
                    help="print a category breakdown + save-state histogram to stderr after dumping.")
     return p
@@ -436,10 +473,29 @@ def main() -> int:
     require_args(parser)
     args = parser.parse_args()
 
+    # Titles carry CJK and U+FFFD, which a cp950 console cannot encode.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+
     try:
         import crimson_rs  # type: ignore[import-not-found, unused-ignore]  # noqa: F401
     except ImportError as e:
         print(f"crimson_rs not importable: {e}", file=sys.stderr)
+        return 1
+
+    try:
+        abi = MissionInfoAbi(crimson_abi.load_dll(args.dll))
+    except (OSError, AttributeError) as e:
+        # AttributeError: a library without the c_abi feature, e.g. a PyO3
+        # build left in target/release, lacks the bridge symbols.
+        print(f"cannot load the crimson-rs C ABI: {e}", file=sys.stderr)
+        return 1
+
+    if args.save is not None and not args.save.is_file():
+        print(f"--save not a file: {args.save}", file=sys.stderr)
+        return 1
+    if args.ign_text is not None and not args.ign_text.is_file():
+        print(f"--ign-text not a file: {args.ign_text}", file=sys.stderr)
         return 1
 
     # Resolve the install
@@ -457,44 +513,57 @@ def main() -> int:
     # 2.01 renamed the gamedata directory and every extension, and split
     # each language's paloc blob into one file per namespace — resolve both
     # rather than assuming either layout.
-    layout = resolve_bin_layout(game_dir)
+    try:
+        layout = resolve_bin_layout(game_dir)
+        located = paloc_files(game_dir, PALOC_GROUP, "eng")
+    except LookupError as e:
+        print(e, file=sys.stderr)
+        return 1
     missioninfo = crimson_rs.extract_file(
         str(game_dir), GAMEDATA_GROUP, layout.dir, layout.body(MISSIONINFO_TABLE))
-    located = paloc_files(game_dir, PALOC_GROUP, "eng")
+    missioninfo_header = crimson_rs.extract_file(
+        str(game_dir), GAMEDATA_GROUP, layout.dir, layout.header(MISSIONINFO_TABLE))
     if located is None:
         print(f"no English paloc in group {PALOC_GROUP}", file=sys.stderr)
         return 1
     paloc_dir, paloc_names = located
 
-    # Load bridges
-    h_mi = c_void_p()
-    rc = mi_load_bytes(missioninfo, len(missioninfo), byref(h_mi))
+    rc, h_mi = abi.load_missioninfo(missioninfo, missioninfo_header)
     if rc != OK:
-        print(f"missioninfo load failed rc={rc}", file=sys.stderr)
+        print(f"missioninfo load failed: {status_name(rc)}", file=sys.stderr)
         return 1
-    # crimson_paloc_load_from_bytes takes one blob, so a split language
-    # becomes one handle per namespace file; the display-name lookup below
-    # tries them in turn. Namespaces don't overlap, so at most one answers.
     h_pls: list[c_void_p] = []
-    for paloc_name in paloc_names:
-        blob = crimson_rs.extract_file(
-            str(game_dir), PALOC_GROUP, paloc_dir, paloc_name)
-        handle = c_void_p()
-        rc = pl_load_bytes(blob, len(blob), byref(handle))
-        if rc != OK:
-            print(f"paloc load failed for {paloc_name} rc={rc}", file=sys.stderr)
-            for opened in h_pls:
-                pl_free(opened)
-            mi_free(h_mi)
-            return 1
-        h_pls.append(handle)
+    try:
+        # crimson_paloc_load_from_bytes takes one blob, so a split language
+        # becomes one handle per namespace file; the display-name lookup
+        # tries them in turn. Namespaces don't overlap, so at most one answers.
+        for paloc_name in paloc_names:
+            blob = crimson_rs.extract_file(
+                str(game_dir), PALOC_GROUP, paloc_dir, paloc_name)
+            handle = c_void_p()
+            rc = abi.pl_load_bytes(blob, len(blob), byref(handle))
+            if rc != OK:
+                print(f"paloc load failed for {paloc_name}: {status_name(rc)}",
+                      file=sys.stderr)
+                return 1
+            h_pls.append(handle)
+        return _dump(args, abi, h_mi, h_pls)
+    finally:
+        abi.mi_free(h_mi)
+        for handle in h_pls:
+            abi.pl_free(handle)
 
+
+def _dump(
+    args: argparse.Namespace,
+    abi: MissionInfoAbi,
+    h_mi: c_void_p,
+    h_pls: list[c_void_p],
+) -> int:
+    """Join the loaded tables with the optional save / IGN inputs and emit."""
     # Walk save (optional)
     save_states: dict[int, dict] = {}
     if args.save is not None:
-        if not args.save.is_file():
-            print(f"--save not a file: {args.save}", file=sys.stderr)
-            return 1
         print(f"walking save: {args.save}", file=sys.stderr)
         save_states = walk_save_mission_states(args.save)
         print(f"  {len(save_states):,} MissionStateData entries found in save",
@@ -504,9 +573,6 @@ def main() -> int:
     ign_by_key: dict[str, dict] = {}
     ign_rows: list[dict] = []
     if args.ign_text is not None:
-        if not args.ign_text.is_file():
-            print(f"--ign-text not a file: {args.ign_text}", file=sys.stderr)
-            return 1
         print(f"parsing IGN text: {args.ign_text}", file=sys.stderr)
         ign_rows = parse_ign_challenges_text(args.ign_text)
         for r in ign_rows:
@@ -520,16 +586,23 @@ def main() -> int:
     print(f"enumerating missioninfo entries with prefixes: {prefixes}", file=sys.stderr)
 
     n = c_uint32(0)
-    mi_count(h_mi, byref(n))
+    rc = abi.mi_count(h_mi, byref(n))
+    if rc != OK:
+        print(f"missioninfo entry count failed: {status_name(rc)}", file=sys.stderr)
+        return 1
     total = int(n.value)
     print(f"  total missioninfo rows: {total:,}", file=sys.stderr)
+    if total == 0:
+        print("missioninfo loaded with no rows; refusing to write an empty catalog",
+              file=sys.stderr)
+        return 1
 
     rows: list[dict] = []
     seen_keys: set[int] = set()
     mojibake_skipped = 0
     not_matched_prefix = 0
     for idx in range(total):
-        rc, key, raw = get_entry(h_mi, idx)
+        rc, key, raw = get_entry(abi, h_mi, idx)
         if rc != OK or not raw:
             continue
         # Skip the issue-#1 mojibake rows so they don't pollute the catalog.
@@ -558,7 +631,7 @@ def main() -> int:
         for h_pl in h_pls:
             rc_dn, dn_bytes = _two_call(
                 lambda buf, blen, req, h=h_pl:
-                    mi_lookup_dn(h_mi, h, key, lo32, buf, blen, req))
+                    abi.mi_lookup_dn(h_mi, h, key, lo32, buf, blen, req))
             if rc_dn == OK and dn_bytes:
                 title_raw = dn_bytes.decode("utf-8", errors="replace")
                 break
@@ -662,9 +735,6 @@ def main() -> int:
             print(f"  _completedTime present: {has_completed_time:,}",
                   file=sys.stderr)
 
-    mi_free(h_mi)
-    for handle in h_pls:
-        pl_free(handle)
     return 0
 
 

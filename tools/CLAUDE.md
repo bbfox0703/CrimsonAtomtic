@@ -64,6 +64,7 @@ The docstring is what `--help` prints as the description. Keep it usable.
 
 - CLI boilerplate: `common/cli.py`
 - Game path discovery / version detection: `common/paths.py`
+- crimson-rs C ABI library path and status codes (for ctypes callers): `common/crimson_abi.py`
 - Anything reused by more than one script: add to `common/`, don't copy-paste.
 
 ### 6. `crimson_rs` is the only allowed binary-format dependency
@@ -84,7 +85,7 @@ The `_proto_` prefix marks scratch code that **will be deleted**, not maintained
 
 - File: `<verb>_<target>.py` — `extract_iteminfo.py`, `diff_paloc.py`, `inspect_save.py`.
 - Folder: by verb category — `extract/`, `diff/`, `inspect/`, `analyze/`.
-- No `_test_*.py` / `_trace*.py` / `diag_*.py` clutter at top level. Real tests go in `tests/` (when we have any); throwaway scripts go in `inspect/_proto_*.py` and get deleted.
+- No `_test_*.py` / `_trace*.py` / `diag_*.py` clutter at top level. Real tests go in `tests/` (run `pytest tools/tests` with the repo venv); throwaway scripts go in `inspect/_proto_*.py` and get deleted.
 
 ## Adding a new tool
 
