@@ -37,7 +37,15 @@ public sealed class App : Application
                 localization.Dispose();
             };
 
+            // Only the Windows platform layer exists; another OS is refused
+            // up front instead of failing deep in a Windows path.
+            if (!OperatingSystem.IsWindows())
+            {
+                throw new PlatformNotSupportedException("CrimsonAtomtic runs on Windows only for now.");
+            }
             var paths = new WindowsPlatformPaths();
+            AppLog.Current = new FileAppLog(paths.LogDirectory);
+            AppLog.Write("app", $"Started {typeof(App).Assembly.GetName().Version}");
 
             // Best-effort localization bootstrap. Failure (no game install
             // detected, PAZ extraction error, PALOC parse error) leaves

@@ -52,6 +52,13 @@ public sealed class WindowsPlatformPaths : IPlatformPaths
 
     public string LogDirectory => Path.Combine(LocalAppDataDirectory, "Logs");
 
+    public string FallbackSaveRoot => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        PearlAbyssDirName, "CD", "save");
+
+    public bool LooksLikeGameInstall(string installRoot) =>
+        SteamLibraryProbe.LooksLikeCrimsonDesertInstall(installRoot);
+
     public IReadOnlyList<DiscoveredSaveRoot> DiscoverSaveRoots()
     {
         var pearlAbyss = Path.Combine(
@@ -186,7 +193,9 @@ public sealed class WindowsPlatformPaths : IPlatformPaths
         try
         {
             DateTime? max = null;
-            foreach (var path in Directory.EnumerateFiles(root, "save.save", SearchOption.AllDirectories))
+            // An unreadable sub-folder is skipped, not the end of the walk.
+            var options = new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true };
+            foreach (var path in Directory.EnumerateFiles(root, Services.SaveBackupService.SaveFileName, options))
             {
                 DateTime mtime;
                 try

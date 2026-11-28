@@ -71,4 +71,13 @@ public interface IPlatformPaths
     /// install can be detected; consumers should degrade gracefully.
     /// </summary>
     string? GameInstallRoot { get; }
+
+    /// <summary>
+    /// The folder the Open dialog starts in when no launcher's save folder
+    /// exists yet: the launcher-default location on this platform.
+    /// </summary>
+    string FallbackSaveRoot { get; }
+
+    /// <summary>True when <paramref name="installRoot"/> holds a Crimson Desert install.</summary>
+    bool LooksLikeGameInstall(string installRoot);
 }

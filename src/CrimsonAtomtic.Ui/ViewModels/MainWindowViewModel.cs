@@ -515,7 +515,7 @@ public sealed partial class MainWindowViewModel(
     public async Task<bool> SetGameInstallRootAsync(string installRoot)
     {
         if (string.IsNullOrWhiteSpace(installRoot)
-            || !SteamLibraryProbe.LooksLikeCrimsonDesertInstall(installRoot))
+            || !paths.LooksLikeGameInstall(installRoot))
         {
             return false;
         }
@@ -746,13 +746,9 @@ public sealed partial class MainWindowViewModel(
         var discovered = paths.DiscoverSaveRoots();
         if (discovered.Count == 0)
         {
-            // No platform installed (or none with an existing save folder).
-            // Synthesize the canonical Steam path so the picker has somewhere
-            // to anchor; the user can navigate from there if their saves
-            // live somewhere unusual.
-            return Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Pearl Abyss", "CD", "save");
+            // No launcher's save folder exists yet; start where the launcher
+            // would create it.
+            return paths.FallbackSaveRoot;
         }
 
         var preferred = AppSettingsStore.Load(paths.LocalAppDataDirectory).PreferredPlatform;
@@ -5704,6 +5700,7 @@ public sealed partial class MainWindowViewModel(
         PreserveOriginalTimestamp(path);
         _loadedFileStamp = TryReadFileStamp(path);
         MarkClean();
+        AppLog.Write("save", $"Saved {path}");
         OnPropertyChanged(nameof(WindowTitle));
     }
 
@@ -5728,6 +5725,7 @@ public sealed partial class MainWindowViewModel(
                 ? $"{ex.Message} ({CrimsonErrorCode.Name(cse.ErrorCode)})"
                 : ex.Message;
             BulkOpStatus = UiText.Format("SaveFailedStatus", "Save failed: {0}", reason);
+            AppLog.Write("save", $"Write to {path} failed: {reason}");
             if (AlertRequested is { } alert)
             {
                 await alert(UiText.Get("SaveFailedTitle", "Save failed"),
@@ -5927,6 +5925,7 @@ public sealed partial class MainWindowViewModel(
         else if (outcome.Kind == BackupOutcomeKind.Failed)
         {
             BulkOpStatus = UiText.Format("BackupFailedStatus", "⚠ Backup failed: {0}", outcome.Message);
+            AppLog.Write("save", $"Backup of {targetPath} failed: {outcome.Message}");
             if (ConfirmRequested is not { } ask)
             {
                 return false;

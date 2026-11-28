@@ -482,6 +482,10 @@ public sealed class SaveBackupServiceTests : IDisposable
     /// </summary>
     private sealed class FakePaths : IPlatformPaths
     {
+        public string FallbackSaveRoot => Path.Combine(Path.GetTempPath(), "crimson-fallback-save");
+
+        public bool LooksLikeGameInstall(string installRoot) => false;
+
         private readonly List<(SavePlatform Platform, string Root)> _platformRoots = new();
 
         public FakePaths(string localAppData, string steamSaveRoot)

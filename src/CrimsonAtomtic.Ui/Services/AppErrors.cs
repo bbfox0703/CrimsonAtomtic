@@ -18,6 +18,7 @@ public static class AppErrors
     {
         ArgumentNullException.ThrowIfNull(ex);
         Trace.TraceError($"Unhandled: {ex}");
+        AppLog.Write("errors", ex.ToString());
         Sink?.Invoke(ex);
     }
 }

@@ -576,6 +576,7 @@ public sealed class LocalizationProvider : IDisposable
         {
             _loadFailures.Add($"{where}: {ex.Message}{code}");
         }
+        AppLog.Write("gamedata", $"{where}: {ex.Message}{code}");
     }
 
     /// <summary>

@@ -28,6 +28,29 @@ read from the top.
 
 -----
 
+## 2026-11-28 (no release) — Code audit P10: platform layer and the file log
+
+- **What changes:**
+  - The app writes Rule 6's log: `Logs\<category>\<process>\<category>.log`, rotated at 8 MB
+    through four files. It records start-up, saves, failed writes and backups, game-data load
+    failures and every unhandled error (B2-21). A failed log write is dropped, never an error.
+  - A second start is logged instead of printed to a console a WinExe does not have. The mutex is
+    `Local\` (per user session), and a name that exists but cannot be opened counts as "already
+    running" instead of crashing (B2-18).
+  - The OS UI language comes through `IOsUiLanguage` in Core: Win32 on Windows, the POSIX locale
+    variables elsewhere. The kernel32 P/Invoke left `UiLanguageService` (B3-14).
+  - `IPlatformPaths` gives the fallback save folder and the "is this a game install" check, so the
+    main view model no longer builds a Windows path or calls the Steam probe (B2-23, last part of
+    B2-22). The save scan skips unreadable sub-folders instead of giving up (B2-29).
+  - The RustInterop project no longer suppresses CA1416; nothing in it needed the suppression
+    (B1-19).
+- **Not verified:** a second Windows user on the same machine (the `Local\` mutex should let both
+  run); a non-Windows start (refused with PlatformNotSupportedException until a platform layer
+  exists).
+- **Tests:** 491 green (log layout and rotation, tag folding, OS-language fallback).
+
+-----
+
 ## 2026-11-28 (no release) — Code audit P9: one place for the names the editor looks up (Rule 7)
 
 - **What changes:**

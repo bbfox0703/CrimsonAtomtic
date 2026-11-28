@@ -8,7 +8,10 @@ internal static class Program
     // App-wide identity used by the single-instance guard. A versioned
     // GUID prefix keeps us safe if a future major release wants to allow
     // side-by-side runs.
-    private const string SingleInstanceMutexName = "Global\\CrimsonAtomtic.v1";
+    // Local\: one instance per user session. Global\ would also need
+    // rights a standard account may not have, and would lock out a second
+    // user on the same machine.
+    private const string SingleInstanceMutexName = "Local\\CrimsonAtomtic.v1";
 
     [STAThread]
     public static int Main(string[] args)
@@ -19,7 +22,11 @@ internal static class Program
 
         if (!guard.TryAcquire())
         {
-            Console.Error.WriteLine("CrimsonAtomtic is already running.");
+            if (OperatingSystem.IsWindows())
+            {
+                new Services.FileAppLog(new Platform.WindowsPlatformPaths().LogDirectory)
+                    .Write("app", "Another instance is already running; this start exits.");
+            }
             return 1;
         }
 
@@ -47,7 +54,15 @@ internal static class Program
             Justification = "Constructor only runs on Windows; gated in Main.")]
         public bool TryAcquire()
         {
-            _mutex = new System.Threading.Mutex(initiallyOwned: true, name, out _owned);
+            try
+            {
+                _mutex = new System.Threading.Mutex(initiallyOwned: true, name, out _owned);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or System.Threading.WaitHandleCannotBeOpenedException)
+            {
+                // The name exists but cannot be opened: another instance owns it.
+                _owned = false;
+            }
             return _owned;
         }
 

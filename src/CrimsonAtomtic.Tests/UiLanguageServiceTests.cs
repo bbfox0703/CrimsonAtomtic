@@ -176,4 +176,39 @@ public sealed class UiLanguageServiceTests
         var uri = new System.Uri("https://example.com/Resources/Strings/en.axaml");
         Assert.True(UiLanguageService.MatchesUri(uri, "/en.axaml", "/Resources/Strings/en.axaml"));
     }
+
+    [Theory]
+    [InlineData("ja-JP", "ja")]
+    [InlineData("zh-TW", "zh-TW")]
+    [InlineData("zh-Hant-HK", "zh-TW")]
+    [InlineData("zh-MO", "zh-TW")]
+    [InlineData("zh-CN", "en")]
+    [InlineData("zh-Hans", "en")]
+    [InlineData("fr-FR", "en")]
+    public void DetectFromTag_FoldsTagToSupportedCode(string tag, string expected)
+    {
+        Assert.Equal(expected, UiLanguageService.DetectFromTag(tag));
+    }
+
+    private sealed class FixedOsLanguage(string? tag) : CrimsonAtomtic.Core.IOsUiLanguage
+    {
+        public string? PreferredLanguageTag() => tag;
+    }
+
+    [Fact]
+    public void DetectFromOsUiLanguage_NoOsTag_FallsBackToCulture()
+    {
+        var saved = UiLanguageService.OsLanguage;
+        try
+        {
+            UiLanguageService.OsLanguage = new FixedOsLanguage(null);
+            Assert.Equal("ja", UiLanguageService.DetectFromOsUiLanguage(new CultureInfo("ja-JP")));
+            UiLanguageService.OsLanguage = new FixedOsLanguage("zh-TW");
+            Assert.Equal("zh-TW", UiLanguageService.DetectFromOsUiLanguage(new CultureInfo("ja-JP")));
+        }
+        finally
+        {
+            UiLanguageService.OsLanguage = saved;
+        }
+    }
 }
