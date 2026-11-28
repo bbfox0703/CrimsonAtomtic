@@ -52,7 +52,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 
 | ID | 標題 | 嚴重度 | 確認 | 批次 | 狀態 | 修正 | 備註 |
 |---|---|---|---|---|---|---|---|
-| B1-01 | `LoadBlockDetails` 的 details cache 在 deferred batch 中失效（abort 後出現 ABA 舊資料） | bug | 上游已修 | P0 | 上游已修，待驗證 |  | crimson-rs ebf7304: mutation_version 在 batch 內每次 mutation 都遞增、abort 只往前；C# 的 cache 每次讀 FFI version，升 vendor 即修。四個 rollback 測試改成新契約。 |
+| B1-01 | `LoadBlockDetails` 的 details cache 在 deferred batch 中失效（abort 後出現 ABA 舊資料） | bug | 上游已修 | P0 | 已修 | `ff24f9a` | crimson-rs ebf7304: mutation_version 在 batch 內每次 mutation 都遞增、abort 只往前；C# 的 cache 每次讀 FFI version，升 vendor 即修。四個 rollback 測試改成新契約。 |
 | B1-02 | deferred 模式下 batch 不再「all-or-nothing」，而文件推薦的 partial-success 寫法會 commit 半套操作 | bug | 確認 | P3 | 待修 |  | Rust 端已寫明 deferred 模式下前面的 op 保留；沒有 savepoint API。新增 −26/−27 與 re-decode 驗證，batch 中途失敗點更多。 |
 | B1-03 | batch 的 `FailedOpIndex` 在 PANIC 或提早返回時誤報為 op 0 | bug | 確認 | P3 | 待修 |  | NULL_ARG 提早返回與 PANIC 仍不寫 out_failed_op_index；成功時改為 usize::MAX。 |
 | B1-04 | two-call pattern 丟棄第二次呼叫回報的長度或筆數 | risk | 確認 | P5 | 待修 |  | two-call 語意不變（第二次回報實際長度/筆數）；列舉改為加鎖，不再有 data race，但兩次呼叫之間仍可能被插入。 |
@@ -69,7 +69,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B1-15 | `LoadBlockDetails` 持有 `_cacheLock` 期間做 1–2 秒的 FFI 與 JSON 反序列化 | risk | 確認 | P6 | 待修 |  | 純 C# 問題。 |
 | B1-16 | `HasStructuralEdit` 與 deferred 狀態不同步 | risk | 確認 | P3 | 待修 |  | 新增 −26/−27 部分失敗路徑。 |
 | B1-17 | `RunDeferred` 對 abort 或 commit 失敗的處理不完整 | risk | 確認 | P3 | 待修 |  | commit 失敗時 version 現在往前移；take() 之後的 PANIC 不變。 |
-| B1-18 | Rule 7：magic strings 沒有集中管理，錯誤碼名稱表重複 8 份且內容不一致 | rule violation | 確認 | P9 | 待修 |  | 變嚴重：−26 LIST_PARTIALLY_DECODED、−27 ELEMENT_CLASS_MISMATCH、−28 HMAC_UNVERIFIED 不在常數與 8 份名稱表內。P0 先補常數與單一名稱表。 |
+| B1-18 | Rule 7：magic strings 沒有集中管理，錯誤碼名稱表重複 8 份且內容不一致 | rule violation | 確認 | P9 | 已修 | `ff24f9a` | 變嚴重：−26 LIST_PARTIALLY_DECODED、−27 ELEMENT_CLASS_MISMATCH、−28 HMAC_UNVERIFIED 不在常數與 8 份名稱表內。P0 先補常數與單一名稱表。 P0 建立 CrimsonErrorCode 單一名稱表並補 −26/−27/−28；其餘 magic strings 仍在 P9。 |
 | B1-19 | 整個專案抑制 CA1416，且理由已過時（削弱 Rule 4 的防線） | rule violation | 確認 | P10 | 待修 |  | 純 C# 問題。 |
 | B1-20 | 文件與註解過時或錯置 | cleanup | 確認 | P12 | 待修 |  | ISaveLoader 的「每次成功 mutation 剛好 +1」在新版更錯；NativePaverReader「最新 export」註解過時。 |
 | B1-21 | 例外訊息未本地化就直接送到 UI | cleanup | 確認 | P8 | 待修 |  | 純 C# 問題。 |
@@ -107,7 +107,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B2-24 | Rule 12：absent 欄位的型別是由消費端用 schema TypeName 猜出來的 | rule violation | 部分 | P5 | 待修 |  | TypeName 別名表與 *Key→u32 猜測確實是 Rule 12 workaround；i32/u32 風險不成立，實際代價是未知 typedef 無法編輯。需上游為 absent scalar 提供 type_tag。 |
 | B2-25 | UI 字串寫死英文，沒有放進三語系資源 | rule violation | 確認 | P8 | 待修 |  | 多處寫死英文。 |
 | B2-26 | `MainWindow.axaml.cs`（1,997 行）中有應該放在 ViewModel / Service 的邏輯 | cleanup | 確認 | P14 | 待修 |  | 約 20 個複製貼上的工具啟動器；Add Dye 邏輯在 View。 |
-| B2-27 | 過時或錯誤的註解與文件 | cleanup | 確認 | P12 | 待修 |  | 多處過時註解；孤立 summary 已在 P0 由註解檢查修掉一部分。 |
+| B2-27 | 過時或錯誤的註解與文件 | cleanup | 確認 | P12 | 部分 | `ff24f9a` | 多處過時註解；孤立 summary 已在 P0 由註解檢查修掉一部分。 P0 修掉孤立 summary 2 處。 |
 | B2-28 | `ChangeJournal` 的執行緒安全只是表面上的 | cleanup | 確認 | P6 | 待修 |  | CollectionChanged 在呼叫端執行緒觸發；目前沒有背景呼叫端。 |
 | B2-29 | 平台探測的穩健性 | cleanup | 確認 | P10 | 待修 |  | IgnoreInaccessible=false，一個無權限子目錄就讓整個掃描回 null。 |
 | B2-30 | 測試缺口 | cleanup | 確認 | P13 | 待修 |  | 沒有 MainWindowViewModel 生命週期測試。 |
@@ -135,7 +135,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B3-17 | UI 字串寫死在 C#，沒有進三語系 `Strings/*.axaml` | rule violation | 確認 | P8 | 待修 |  | 合併至 UI 字串批次。 |
 | B3-18 | `FormatPair` 對只有 internal name 的 key 顯示「X / X」 | cleanup | 確認 | P5 | 待修 |  | 只有 internal name 的 key 顯示「X / X」。 |
 | B3-19 | 重複的 helper 與死碼 | cleanup | 確認 | P14 | 待修 |  | LookupUiResourceString 三份、死碼。 |
-| B3-20 | XML doc 錯置、孤立，以及過時的註解 | cleanup | 確認 | P12 | 待修 |  | 孤立 summary 在 P0 已修（4 處）；剩 Avalonia 版本與計數文字。 |
+| B3-20 | XML doc 錯置、孤立，以及過時的註解 | cleanup | 確認 | P12 | 部分 | `ff24f9a` | 孤立 summary 在 P0 已修（4 處）；剩 Avalonia 版本與計數文字。 |
 | B3-21 | `LocalizationProvider.cs`（2,569 行）的結構：可以按職責拆分，DLC 表也重複載入 | cleanup | 確認 | P14 | 待修 |  | DLC 表 merge 後又載入成 resolver；拆分 LocalizationProvider。 |
 | B3-22 | 所有載入失敗都靜默吞掉，沒有任何診斷資訊；`UiLanguageService` 用了裸 `catch` | cleanup | 確認 | P4 | 待修 |  | 16 個空的 catch；改收集 LoadFailures。 |
 
@@ -166,11 +166,11 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B4-21 | 背景執行緒的多步 mutation 可能與 UI 執行緒的 `RunDeferred` 交錯 | risk | 確認 | P3 | 待修 |  | Add Item / Grant 在 Task.Run 多步寫入，與 UI 執行緒 RunDeferred 可能交錯。 |
 | B4-22 | 測試缺口：deferred 模式的 dye 寫入、Socket 修復路徑、過期檢查與多個工具都沒有測試 | risk | 確認 | P13 | 待修 |  | 多個工具沒有測試。 |
 | B4-23 | 掃描時讀取失敗的 block 被靜默跳過，結果不完整也不告知使用者 | risk | 確認 | P4 | 待修 |  | 掃描讀取失敗的 block 被靜默跳過。 |
-| B4-24 | Rule：五個 UI 字串鍵在三個語系字典中都不存在 | rule violation | 確認 | P8 | 待修 |  | 五個字串鍵三語系都缺；P0 補上並加鍵值測試。 |
+| B4-24 | Rule：五個 UI 字串鍵在三個語系字典中都不存在 | rule violation | 確認 | P8 | 已修 | `ff24f9a` | 五個字串鍵三語系都缺；P0 補上並加鍵值測試。 |
 | B4-25 | Rule：UI 字串寫死在 C#（含原生例外訊息直接顯示） | rule violation | 確認 | P8 | 待修 |  | 寫死英文與原生例外訊息直接顯示。 |
 | B4-26 | Rule 7：magic string 沒有集中；錯誤碼寫成 `-16` 字面值 | rule violation | 確認 | P9 | 待修 |  | 合併至 magic-strings 批次。 |
 | B4-27 | Rule 3：同步檔案 I/O 與耗時的 FFI 跑在 UI 執行緒 | rule violation | 確認 | P7 | 待修 |  | 設定檔 I/O 與 FFI 在 UI 執行緒。 |
-| B4-28 | 文件漂移與錯置的 XML doc | cleanup | 確認 | P12 | 待修 |  | 孤立 summary 在 P0 已修（SocketEditor）；其餘過時說明。 |
+| B4-28 | 文件漂移與錯置的 XML doc | cleanup | 確認 | P12 | 部分 | `ff24f9a` | 孤立 summary 在 P0 已修（SocketEditor）；其餘過時說明。 |
 | B4-29 | 重複的 helper 與死碼 | cleanup | 確認 | P14 | 待修 |  | 重複 helper 與死碼。 |
 | B4-30 | Add Item / Grant 寫死 scalar 的 byte 寬度，沒有依 type tag 編碼 | cleanup | 確認 | P3 | 待修 |  | scalar byte 寬度寫死。 |
 | B4-31 | 結構與大小 | cleanup | 確認 | P14 | 待修 |  | 純結構。 |
@@ -200,7 +200,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B5-18 | Rule 7：magic strings 分散且重複（Pre-scan #4 在 Block 5 範圍確認） | rule violation | 確認 | P9 | 待修 |  | 合併至 magic-strings 批次。 |
 | B5-19 | UI 字串寫死英文；三語系字典的鍵一致，但用詞不一致 | rule violation | 確認 | P8 | 待修 |  | 另 zh-TW 混用阿比斯之門 / 深淵之門。 |
 | B5-20 | Rule 12：消費端的 workaround | rule violation | 確認 | P5 | 待修 |  | WorldMap 以 " / " 切名稱；TryParseScalarUInt 複製三份。 |
-| B5-21 | 過時或錯置的註解與文件 | cleanup | 確認 | P12 | 待修 |  | 孤立 summary 在 P0 已修（SA bulk）；其餘過時說明。 |
+| B5-21 | 過時或錯置的註解與文件 | cleanup | 確認 | P12 | 部分 | `ff24f9a` | 孤立 summary 在 P0 已修（SA bulk）；其餘過時說明。 |
 | B5-22 | Skip reason 用英文子字串分類 | cleanup | 確認 | P8 | 待修 |  | 以英文子字串分類 skip reason。 |
 | B5-23 | 結構：Sealed Abyss 佔 `MainWindowViewModel.cs` 約 1,300 行（Pre-scan #5 確認） | cleanup | 確認 | P14 | 待修 |  | 純結構。 |
 | B5-24 | 零碎項目 | cleanup | 部分 | P4 | 待修 |  | return default 那處不可達；FAR 重讀與 catch-all 屬實。 |
@@ -214,31 +214,31 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B6-03 | Debug 模式建出 Rust debug DLL，但 C# 專案永遠複製 `target\release` | bug | 確認 | P11 | 待修 |  | Debug 建 Rust debug，C# 永遠複製 release。 |
 | B6-04 | CI 的 vendor 步驟：`git checkout $CRIMSON_RS_REF` 失敗會被下一行的成功蓋掉 | bug | 確認 | P11 | 待修 |  | 潛在問題（目前 ref 是 main）。 |
 | B6-05 | Single-file 回歸檢查只發 warning；`release.yml` 卻說會 throw，且 dumpbin 檢查在 CI 不會執行 | bug | 確認 | P11 | 待修 |  | 回歸檢查只發 warning。 |
-| B6-06 | Release 不可重現：crimson-rs 跟 `main`、cargo 沒有 `--locked`、SHA 沒有寫進產出物 | risk | 確認 | P11 | 待決定 |  | 需決定 crimson-rs 釘版策略。 |
-| B6-07 | CI 的 Rust toolchain 沒有釘版本（`dtolnay/rust-toolchain@stable`） | risk | 確認 | P11 | 待決定 |  | 需決定 Rust 版本（可能需上游加 rust-toolchain.toml）。 |
-| B6-08 | CI 的 .NET SDK（`10.0.x`）不讀 `global.json`；ILCompiler pin 會隨 runner 更新觸發 NU1109 | risk | 確認 | P11 | 待決定 |  | 需決定 SDK 釘版。 |
-| B6-09 | 供應鏈：actions 用可變 tag/branch 引用，且擁有 `contents: write`；NuGet / pip 沒有 lock | risk | 確認 | P11 | 待決定 |  | 需決定：actions 以 SHA 釘版、權限縮小、lock file。 |
-| B6-10 | 沒有 PR CI；release workflow 也不跑測試（Pre-scan #6 確認） | risk | 確認 | P11 | 待決定 |  | 需決定：是否新增 PR CI。 |
+| B6-06 | Release 不可重現：crimson-rs 跟 `main`、cargo 沒有 `--locked`、SHA 沒有寫進產出物 | risk | 確認 | P11 | 待修 |  | 需決定 crimson-rs 釘版策略。 使用者決定：釘 vendored SHA。 |
+| B6-07 | CI 的 Rust toolchain 沒有釘版本（`dtolnay/rust-toolchain@stable`） | risk | 確認 | P11 | 待修 |  | 需決定 Rust 版本（可能需上游加 rust-toolchain.toml）。 使用者決定：釘 Rust 版本。 |
+| B6-08 | CI 的 .NET SDK（`10.0.x`）不讀 `global.json`；ILCompiler pin 會隨 runner 更新觸發 NU1109 | risk | 確認 | P11 | 待修 |  | 需決定 SDK 釘版。 使用者決定：SDK 由 global.json 決定。 |
+| B6-09 | 供應鏈：actions 用可變 tag/branch 引用，且擁有 `contents: write`；NuGet / pip 沒有 lock | risk | 確認 | P11 | 待修 |  | 需決定：actions 以 SHA 釘版、權限縮小、lock file。 使用者決定：actions 以 SHA 釘、預設唯讀權限、lock file。 |
+| B6-10 | 沒有 PR CI；release workflow 也不跑測試（Pre-scan #6 確認） | risk | 確認 | P11 | 待修 |  | 需決定：是否新增 PR CI。 使用者決定：新增 PR CI。 |
 | B6-11 | `update_vendors.ps1` 的 dirty 檢查只看 working tree；vendor clone 內的本地 commit 會被 `reset --hard` 靜默丟掉 | risk | 確認 | P11 | 待修 |  | vendor clone 內的本地 commit 會被 reset --hard 丟掉。 |
 | B6-12 | Vendor 更新後不重建也不提示：`.pyd` 與 `crimson_rs.dll`/`.lib` 會停在舊版 | risk | 確認 | P11 | 待修 |  | vendor 更新後不提示重建。 |
 | B6-13 | `gamedata_layout._read_pamt` 吞掉所有例外，錯誤訊息誤導成「遊戲沒安裝？」 | risk | 確認 | P11 | 待修 |  | 上游同一支腳本也有相同問題。 |
 | B6-14 | Build 腳本宣稱支援 `linux-x64` / `osx-arm64`，實際流程只支援 Windows | risk | 確認 | P11 | 待修 |  | 宣稱支援 linux / osx，實際只有 Windows。 |
-| B6-15 | `build_number.txt`：每次本機 build 都 +1 並污染 working tree；CI 的 tag pin 對實際 tag 格式永遠不會觸發 | risk | 部分 | P11 | 待決定 |  | 行為有寫明；但 v20260531 tag 會讓 VerBuild 超過 65535。需決定 build number 策略。 |
+| B6-15 | `build_number.txt`：每次本機 build 都 +1 並污染 working tree；CI 的 tag pin 對實際 tag 格式永遠不會觸發 | risk | 部分 | P11 | 待修 |  | 行為有寫明；但 v20260531 tag 會讓 VerBuild 超過 65535。需決定 build number 策略。 使用者決定：成功建置後才 +1，CI 擋超過 65535 的 tag。 |
 | B6-16 | `build_rust.ps1` 不控制 `CARGO_TARGET_DIR`；`#requires -Version 7` 允許 stderr 語意不同的 7.0/7.1 | risk | 確認 | P11 | 待修 |  | CARGO_TARGET_DIR 不受控；#requires 7 應為 7.2。 |
-| B6-17 | Build / test 會帶入遙測套件，CI 沒有設定 opt-out（需確認） | risk | 確認 | P11 | 待決定 |  | 需決定遙測 opt-out。 |
-| B6-18 | 從遊戲擷取的資產 `sample_bc3_32x32.dds` 被 commit 進 repo | risk | 確認 | P11 | 待決定 |  | 需決定：改合成 fixture 或在 data-policy 加例外。 |
+| B6-17 | Build / test 會帶入遙測套件，CI 沒有設定 opt-out（需確認） | risk | 確認 | P11 | 待修 |  | 需決定遙測 opt-out。 使用者決定：CI 設遙測 opt-out。 |
+| B6-18 | 從遊戲擷取的資產 `sample_bc3_32x32.dds` 被 commit 進 repo | risk | 確認 | P11 | 待修 |  | 需決定：改合成 fixture 或在 data-policy 加例外。 使用者決定：改合成 fixture。 |
 | B6-19 | `.gitignore` 的 `!tests/fixtures/**/save.save` 指向不存在的目錄，且與「存檔不進公開 repo」相衝 | risk | 確認 | P11 | 待修 |  | .gitignore 指向不存在目錄。 |
 | B6-20 | Rule 9：`dump_challenges.py` 在 import 時重設 stdout、以寫死的絕對路徑載入 DLL | rule violation | 確認 | P11 | 待修 |  | import 時重設 stdout、寫死 DLL 路徑。 |
-| B6-21 | Rule 9：`tools/inspect/sa-investigations/` 的 8 支腳本都沒有 usage，無參數就直接執行 | rule violation | 確認 | P11 | 待決定 |  | 需決定：刪除或補 usage。 |
+| B6-21 | Rule 9：`tools/inspect/sa-investigations/` 的 8 支腳本都沒有 usage，無參數就直接執行 | rule violation | 確認 | P11 | 待修 |  | 需決定：刪除或補 usage。 使用者決定：刪除。 |
 | B6-22 | Rule 9（跨平台）：`extract_save.py` 建 parser 時就呼叫 `save_root()`，非 Windows 上 `--help` 也會 crash | rule violation | 確認 | P11 | 待修 |  | 已重現：LOCALAPPDATA 未設時 --help 崩潰。 |
-| B6-23 | Rule 10：同一張圖的衍生格式與複本被 commit | rule violation | 確認 | P11 | 待決定 |  | 需決定：重複圖檔保留一份。 |
+| B6-23 | Rule 10：同一張圖的衍生格式與複本被 commit | rule violation | 確認 | P11 | 待修 |  | 需決定：重複圖檔保留一份。 使用者決定：只留一份。 |
 | B6-24 | Rule 7：路徑與常數散落各處，沒有集中定義 | rule violation | 確認 | P9 | 待修 |  | DLL 路徑重複七處；與 magic-strings 批次合併。 |
-| B6-25 | tools 規則 6：在 Python 裡做 byte 層級解析，並繞過 PyO3 直接用 ctypes 呼叫 C ABI | rule violation | 確認 | P11 | 待決定 |  | 需上游提供 missioninfo PyO3 binding。 |
+| B6-25 | tools 規則 6：在 Python 裡做 byte 層級解析，並繞過 PyO3 直接用 ctypes 呼叫 C ABI | rule violation | 確認 | P11 | 待修 |  | 需上游提供 missioninfo PyO3 binding。 需請上游提供 missioninfo PyO3 binding。 |
 | B6-26 | `docs/architecture.md` 與現況大幅脫節（Pre-scan #2 確認並補充） | cleanup | 確認 | P12 | 待修 |  | architecture.md 大幅脫節。 |
 | B6-27 | `README.md` / `scripts/README.md` / root `CLAUDE.md` 的建置說明與實際不符 | cleanup | 確認 | P12 | 待修 |  | README / scripts/README 建置說明不符。 |
 | B6-28 | `tools/` 各 README 的清單與實際檔案不一致 | cleanup | 確認 | P12 | 待修 |  | tools README 清單不符。 |
 | B6-29 | 其他文件中的過時事實（`target-py`、DataGrid、game 1.10） | cleanup | 確認 | P12 | 待修 |  | status.md 等過時事實。 |
-| B6-30 | `Directory.Packages.props` 註解錯位；測試專案把一長串 transitive 套件提升成直接引用 | cleanup | 確認 | P11 | 待決定 |  | 需決定：精簡測試專案的 transitive 引用。 |
+| B6-30 | `Directory.Packages.props` 註解錯位；測試專案把一長串 transitive 套件提升成直接引用 | cleanup | 確認 | P11 | 待修 |  | 需決定：精簡測試專案的 transitive 引用。 使用者決定：精簡。 |
 | B6-31 | `<NoWarn>IL2104;IL3053</NoWarn>` 的理由已過時，是否仍需要沒有驗證 | cleanup | 部分 | P12 | 待修 |  | NoWarn 在 2026-08-18 已重新驗證仍需要；只有註解過時。 |
 | B6-32 | `ClaudeMdSizeTests` 先走完整棵樹才過濾，且沒有跳過 `.venv` | cleanup | 確認 | P13 | 待修 |  | ClaudeMdSizeTests 先走完整棵樹。 |
 | B6-33 | Build 腳本的小問題 | cleanup | 確認 | P11 | 待修 |  | build.cmd 退回 PS 5.1 等小問題。 |
@@ -250,14 +250,14 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 
 | ID | 標題 | 嚴重度 | 確認 | 批次 | 狀態 | 修正 | 備註 |
 |---|---|---|---|---|---|---|---|
-| X-01 | crimson-rs −28 HMAC_UNVERIFIED：載入時 HMAC 失敗的存檔，Save 會被拒絕 | bug | 確認 | P0 | 待修 |  | 來自 crimson-rs ebf7304；C# 不檢查 HmacOk，搭配 B2-04 會崩潰。 |
+| X-01 | crimson-rs −28 HMAC_UNVERIFIED：載入時 HMAC 失敗的存檔，Save 會被拒絕 | bug | 確認 | P0 | 已修 | `ff24f9a` | 來自 crimson-rs ebf7304；C# 不檢查 HmacOk，搭配 B2-04 會崩潰。 |
 | X-02 | NativeItemInfoCatalog 把 _with_header 的 BODY_PARSE 退回 body-only 載入（Rule 12） | risk | 確認 | P4 | 待修 |  | 上游 header 檢查變嚴，退回後物品全部沒有名稱且不報錯。 |
-| X-03 | status.md 的 gotcha「promote then write in place」與 set_object_list_present(1) 語意已過時 | cleanup | 確認 | P0 | 待修 |  | 上游 G-08 / G-03 改變行為。 |
+| X-03 | status.md 的 gotcha「promote then write in place」與 set_object_list_present(1) 語意已過時 | cleanup | 確認 | P0 | 已修 | `ff24f9a` | 上游 G-08 / G-03 改變行為。 |
 | X-04 | ResolveDyeSlotCount 的意義改為 dye-slot bit 數；LookupSlotCount 是 sub-mesh 數 | cleanup | 確認 | P12 | 待修 |  | 目前沒有 UI 呼叫 ResolveDyeSlotCount；更新 C# 文件。 |
 | X-05 | Transplant 在同一個 handle 內已允許，C# 端的禁止可放寬 | cleanup | 確認 | P3 | 待修 |  | 上游 G-15。 |
 | X-06 | FindItemsWindow 使用 ThemeAccentBrush2 / ThemeBorderLowBrush / ThemeForegroundBrush，Fluent 主題沒有定義 | bug | 確認 | P8 | 待修 |  | 字串鍵比對時發現；需確認畫面上是否失色。 |
 | X-07 | 還原備份視窗是非 modal、fire-and-forget，可重複開啟並同時還原 | bug | 確認 | P1 | 待修 |  | Block 2 確認時發現。 |
-| X-08 | 註解規則（docs/code-comments.md）與 CommentRulesTests：行號、稽核/PR/commit id、重複 summary 歸零；歷史語句 ratchet | rule | 確認 | P0/P12 | 待修 |  | 使用者要求，參考 UE5CEDumper。 |
+| X-08 | 註解規則（docs/code-comments.md）與 CommentRulesTests：行號、稽核/PR/commit id、重複 summary 歸零；歷史語句 ratchet | rule | 確認 | P0/P12 | 部分 | `ff24f9a` | 使用者要求，參考 UE5CEDumper。 P0：行號/ID/重複 summary 歸零，歷史語句 ratchet 基準 43 行（22 檔）。 |
 
 ## 統計（確認後）
 
