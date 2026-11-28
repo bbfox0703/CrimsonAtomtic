@@ -209,42 +209,42 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 
 | ID | 標題 | 嚴重度 | 確認 | 批次 | 狀態 | 修正 | 備註 |
 |---|---|---|---|---|---|---|---|
-| B6-01 | `dump_challenges.py` 只把 missioninfo body 餵給 C ABI；2.06 上 0 筆輸出且 exit 0 | bug | 部分 | P11 | 待修 |  | 升 vendor 後從靜默變成 exit 1；仍需傳入 header。 |
-| B6-02 | `dump_catalogs.py` 在 2.06 上輸出空的 `string_key`；`extract_keycases.py` 把 `""` 當成已解析 | bug | 確認 | P11 | 待修 |  | 仍缺 header；"" 被當成已解析。 |
-| B6-03 | Debug 模式建出 Rust debug DLL，但 C# 專案永遠複製 `target\release` | bug | 確認 | P11 | 待修 |  | Debug 建 Rust debug，C# 永遠複製 release。 |
-| B6-04 | CI 的 vendor 步驟：`git checkout $CRIMSON_RS_REF` 失敗會被下一行的成功蓋掉 | bug | 確認 | P11 | 待修 |  | 潛在問題（目前 ref 是 main）。 |
-| B6-05 | Single-file 回歸檢查只發 warning；`release.yml` 卻說會 throw，且 dumpbin 檢查在 CI 不會執行 | bug | 確認 | P11 | 待修 |  | 回歸檢查只發 warning。 |
-| B6-06 | Release 不可重現：crimson-rs 跟 `main`、cargo 沒有 `--locked`、SHA 沒有寫進產出物 | risk | 確認 | P11 | 待修 |  | 需決定 crimson-rs 釘版策略。 使用者決定：釘 vendored SHA。 |
-| B6-07 | CI 的 Rust toolchain 沒有釘版本（`dtolnay/rust-toolchain@stable`） | risk | 確認 | P11 | 待修 |  | 需決定 Rust 版本（可能需上游加 rust-toolchain.toml）。 使用者決定：釘 Rust 版本。 |
-| B6-08 | CI 的 .NET SDK（`10.0.x`）不讀 `global.json`；ILCompiler pin 會隨 runner 更新觸發 NU1109 | risk | 確認 | P11 | 待修 |  | 需決定 SDK 釘版。 使用者決定：SDK 由 global.json 決定。 |
-| B6-09 | 供應鏈：actions 用可變 tag/branch 引用，且擁有 `contents: write`；NuGet / pip 沒有 lock | risk | 確認 | P11 | 待修 |  | 需決定：actions 以 SHA 釘版、權限縮小、lock file。 使用者決定：actions 以 SHA 釘、預設唯讀權限、lock file。 |
-| B6-10 | 沒有 PR CI；release workflow 也不跑測試（Pre-scan #6 確認） | risk | 確認 | P11 | 待修 |  | 需決定：是否新增 PR CI。 使用者決定：新增 PR CI。 |
-| B6-11 | `update_vendors.ps1` 的 dirty 檢查只看 working tree；vendor clone 內的本地 commit 會被 `reset --hard` 靜默丟掉 | risk | 確認 | P11 | 待修 |  | vendor clone 內的本地 commit 會被 reset --hard 丟掉。 |
-| B6-12 | Vendor 更新後不重建也不提示：`.pyd` 與 `crimson_rs.dll`/`.lib` 會停在舊版 | risk | 確認 | P11 | 待修 |  | vendor 更新後不提示重建。 |
-| B6-13 | `gamedata_layout._read_pamt` 吞掉所有例外，錯誤訊息誤導成「遊戲沒安裝？」 | risk | 確認 | P11 | 待修 |  | 上游同一支腳本也有相同問題。 |
-| B6-14 | Build 腳本宣稱支援 `linux-x64` / `osx-arm64`，實際流程只支援 Windows | risk | 確認 | P11 | 待修 |  | 宣稱支援 linux / osx，實際只有 Windows。 |
-| B6-15 | `build_number.txt`：每次本機 build 都 +1 並污染 working tree；CI 的 tag pin 對實際 tag 格式永遠不會觸發 | risk | 部分 | P11 | 待修 |  | 行為有寫明；但 v20260531 tag 會讓 VerBuild 超過 65535。需決定 build number 策略。 使用者決定：成功建置後才 +1，CI 擋超過 65535 的 tag。 |
-| B6-16 | `build_rust.ps1` 不控制 `CARGO_TARGET_DIR`；`#requires -Version 7` 允許 stderr 語意不同的 7.0/7.1 | risk | 確認 | P11 | 待修 |  | CARGO_TARGET_DIR 不受控；#requires 7 應為 7.2。 |
-| B6-17 | Build / test 會帶入遙測套件，CI 沒有設定 opt-out（需確認） | risk | 確認 | P11 | 待修 |  | 需決定遙測 opt-out。 使用者決定：CI 設遙測 opt-out。 |
-| B6-18 | 從遊戲擷取的資產 `sample_bc3_32x32.dds` 被 commit 進 repo | risk | 確認 | P11 | 待修 |  | 需決定：改合成 fixture 或在 data-policy 加例外。 使用者決定：改合成 fixture。 |
-| B6-19 | `.gitignore` 的 `!tests/fixtures/**/save.save` 指向不存在的目錄，且與「存檔不進公開 repo」相衝 | risk | 確認 | P11 | 待修 |  | .gitignore 指向不存在目錄。 |
-| B6-20 | Rule 9：`dump_challenges.py` 在 import 時重設 stdout、以寫死的絕對路徑載入 DLL | rule violation | 確認 | P11 | 待修 |  | import 時重設 stdout、寫死 DLL 路徑。 |
-| B6-21 | Rule 9：`tools/inspect/sa-investigations/` 的 8 支腳本都沒有 usage，無參數就直接執行 | rule violation | 確認 | P11 | 待修 |  | 需決定：刪除或補 usage。 使用者決定：刪除。 |
-| B6-22 | Rule 9（跨平台）：`extract_save.py` 建 parser 時就呼叫 `save_root()`，非 Windows 上 `--help` 也會 crash | rule violation | 確認 | P11 | 待修 |  | 已重現：LOCALAPPDATA 未設時 --help 崩潰。 |
-| B6-23 | Rule 10：同一張圖的衍生格式與複本被 commit | rule violation | 確認 | P11 | 待修 |  | 需決定：重複圖檔保留一份。 使用者決定：只留一份。 |
-| B6-24 | Rule 7：路徑與常數散落各處，沒有集中定義 | rule violation | 確認 | P9 | 部分 | `1836867` | DLL 路徑重複七處；與 magic-strings 批次合併。 MSBuild 已統一；PowerShell 腳本與 Python 工具的路徑在 P11。 |
+| B6-01 | `dump_challenges.py` 只把 missioninfo body 餵給 C ABI；2.06 上 0 筆輸出且 exit 0 | bug | 部分 | P11 | 已修 | `354681e` | 升 vendor 後從靜默變成 exit 1；仍需傳入 header。 傳入 missioninfo header（2.06 上 6,872 列 / 2,260 挑戰），0 列 exit 1。仍經 ctypes，待 B6-25。 |
+| B6-02 | `dump_catalogs.py` 在 2.06 上輸出空的 `string_key`；`extract_keycases.py` 把 `""` 當成已解析 | bug | 確認 | P11 | 已修 | `354681e` | 仍缺 header；"" 被當成已解析。 dump_catalogs 傳 iteminfo header（7,068/7,068 有 string_key）；extract_keycases 把 "" 視為未解析。 |
+| B6-03 | Debug 模式建出 Rust debug DLL，但 C# 專案永遠複製 `target\release` | bug | 確認 | P11 | 已修 | `354681e` | Debug 建 Rust debug，C# 永遠複製 release。 Rust 一律 release；C# build 在 DLL 缺少或與 ref 不符時發 warning（Directory.Build.targets）。 |
+| B6-04 | CI 的 vendor 步驟：`git checkout $CRIMSON_RS_REF` 失敗會被下一行的成功蓋掉 | bug | 確認 | P11 | 已修 | `354681e` | 潛在問題（目前 ref 是 main）。 scripts/checkout_crimson_rs.ps1：每個 git 步驟檢查 exit code，最後比對 HEAD 與 ref。 |
+| B6-05 | Single-file 回歸檢查只發 warning；`release.yml` 卻說會 throw，且 dumpbin 檢查在 CI 不會執行 | bug | 確認 | P11 | 已修 | `354681e` | 回歸檢查只發 warning。 三種回歸都 throw；dumpbin 經 vswhere 找到，CI 也會跑 import 檢查。 |
+| B6-06 | Release 不可重現：crimson-rs 跟 `main`、cargo 沒有 `--locked`、SHA 沒有寫進產出物 | risk | 確認 | P11 | 已修 | `354681e` | 需決定 crimson-rs 釘版策略。 使用者決定：釘 vendored SHA。 vendor/crimson-rs.ref（update_vendors 寫入、CI checkout）、cargo --locked、SHA 寫進 InformationalVersion 與 release notes。 |
+| B6-07 | CI 的 Rust toolchain 沒有釘版本（`dtolnay/rust-toolchain@stable`） | risk | 確認 | P11 | 已修 | `354681e` | 需決定 Rust 版本（可能需上游加 rust-toolchain.toml）。 使用者決定：釘 Rust 版本。 RUST_TOOLCHAIN 1.100.1，dtolnay/rust-toolchain 以 SHA 釘。 |
+| B6-08 | CI 的 .NET SDK（`10.0.x`）不讀 `global.json`；ILCompiler pin 會隨 runner 更新觸發 NU1109 | risk | 確認 | P11 | 已修 | `354681e` | 需決定 SDK 釘版。 使用者決定：SDK 由 global.json 決定。 setup-dotnet global-json-file；global.json 10.0.404 rollForward disable。 |
+| B6-09 | 供應鏈：actions 用可變 tag/branch 引用，且擁有 `contents: write`；NuGet / pip 沒有 lock | risk | 確認 | P11 | 已修 | `354681e` | 需決定：actions 以 SHA 釘版、權限縮小、lock file。 使用者決定：actions 以 SHA 釘、預設唯讀權限、lock file。 actions 以 SHA 釘、預設 contents: read（release job 才有 write）、NuGet lock file + locked mode、pip constraints。 |
+| B6-10 | 沒有 PR CI；release workflow 也不跑測試（Pre-scan #6 確認） | risk | 確認 | P11 | 已修 | `354681e` | 需決定：是否新增 PR CI。 使用者決定：新增 PR CI。 新增 ci.yml（C# 測試 + tools 測試）；release build job 也跑測試。首次 GitHub 執行待確認。 |
+| B6-11 | `update_vendors.ps1` 的 dirty 檢查只看 working tree；vendor clone 內的本地 commit 會被 `reset --hard` 靜默丟掉 | risk | 確認 | P11 | 已修 | `354681e` | vendor clone 內的本地 commit 會被 reset --hard 丟掉。 reset 前檢查 origin..HEAD；-Force 加 git clean -fd，說明已更正。 |
+| B6-12 | Vendor 更新後不重建也不提示：`.pyd` 與 `crimson_rs.dll`/`.lib` 會停在舊版 | risk | 確認 | P11 | 已修 | `354681e` | vendor 更新後不提示重建。 HEAD 變動時印出重建步驟；build_rust 寫 .crimson-rs-sha，C# build 比對 ref。 |
+| B6-13 | `gamedata_layout._read_pamt` 吞掉所有例外，錯誤訊息誤導成「遊戲沒安裝？」 | risk | 確認 | P11 | 已修 | `354681e` | 上游同一支腳本也有相同問題。 只接 OSError/ValueError，改拋 LookupError 並保留原因。 |
+| B6-14 | Build 腳本宣稱支援 `linux-x64` / `osx-arm64`，實際流程只支援 Windows | risk | 確認 | P11 | 已修 | `354681e` | 宣稱支援 linux / osx，實際只有 Windows。 ValidateSet 只留 win-x64；build_rust 非 Windows 直接 throw；NativeLibrary 加 win RID 條件。 |
+| B6-15 | `build_number.txt`：每次本機 build 都 +1 並污染 working tree；CI 的 tag pin 對實際 tag 格式永遠不會觸發 | risk | 部分 | P11 | 已修 | `354681e` | 行為有寫明；但 v20260531 tag 會讓 VerBuild 超過 65535。需決定 build number 策略。 使用者決定：成功建置後才 +1，CI 擋超過 65535 的 tag。 成功後才 +1（-p:VerBuild）；csproj 與 CI 擋 >65535；CI 檢查 vX.YY.ZZ 與 csproj 一致。 |
+| B6-16 | `build_rust.ps1` 不控制 `CARGO_TARGET_DIR`；`#requires -Version 7` 允許 stderr 語意不同的 7.0/7.1 | risk | 確認 | P11 | 已修 | `354681e` | CARGO_TARGET_DIR 不受控；#requires 7 應為 7.2。 CARGO_TARGET_DIR 呼叫期間固定為 vendor target；#requires 7.2。 |
+| B6-17 | Build / test 會帶入遙測套件，CI 沒有設定 opt-out（需確認） | risk | 確認 | P11 | 已修 | `354681e` | 需決定遙測 opt-out。 使用者決定：CI 設遙測 opt-out。 CI 設 DOTNET_CLI / TESTINGPLATFORM / AVALONIA 遙測 opt-out。Avalonia.BuildServices 保留。 |
+| B6-18 | 從遊戲擷取的資產 `sample_bc3_32x32.dds` 被 commit 進 repo | risk | 確認 | P11 | 已修 | `354681e` | 需決定：改合成 fixture 或在 data-policy 加例外。 使用者決定：改合成 fixture。 改用測試內產生的 BC3 輸入 + 逐像素 BC3 測試；data-policy 加「fixture 一律合成」。 |
+| B6-19 | `.gitignore` 的 `!tests/fixtures/**/save.save` 指向不存在的目錄，且與「存檔不進公開 repo」相衝 | risk | 確認 | P11 | 已修 | `354681e` | .gitignore 指向不存在目錄。 刪除 negation，改為全域 *.save。 |
+| B6-20 | Rule 9：`dump_challenges.py` 在 import 時重設 stdout、以寫死的絕對路徑載入 DLL | rule violation | 確認 | P11 | 已修 | `354681e` | import 時重設 stdout、寫死 DLL 路徑。 stdout 重設與 DLL 載入移入 main()；DLL 路徑來自 common/crimson_abi.py 或 --dll。 |
+| B6-21 | Rule 9：`tools/inspect/sa-investigations/` 的 8 支腳本都沒有 usage，無參數就直接執行 | rule violation | 確認 | P11 | 已修 | `354681e` | 需決定：刪除或補 usage。 使用者決定：刪除。 資料夾刪除；發現寫入 P11 dev-log 條目。 |
+| B6-22 | Rule 9（跨平台）：`extract_save.py` 建 parser 時就呼叫 `save_root()`，非 Windows 上 `--help` 也會 crash | rule violation | 確認 | P11 | 已修 | `354681e` | 已重現：LOCALAPPDATA 未設時 --help 崩潰。 help 文字用 SAVE_ROOT_DISPLAY，不在建 parser 時呼叫 save_root()。 |
+| B6-23 | Rule 10：同一張圖的衍生格式與複本被 commit | rule violation | 確認 | P11 | 已修 | `354681e` | 需決定：重複圖檔保留一份。 使用者決定：只留一份。 刪除 img/Logo.jpg、img/MainIcon.ico（與 Assets 同 blob）；img/README.md + data-policy 例外。 |
+| B6-24 | Rule 7：路徑與常數散落各處，沒有集中定義 | rule violation | 確認 | P9 | 已修 | `1836867` `354681e` | DLL 路徑重複七處；與 magic-strings 批次合併。 MSBuild 已統一；PowerShell 腳本與 Python 工具的路徑在 P11。 P9 MSBuild；P11 scripts/paths.ps1 與 tools/common/crimson_abi.py。 |
 | B6-25 | tools 規則 6：在 Python 裡做 byte 層級解析，並繞過 PyO3 直接用 ctypes 呼叫 C ABI | rule violation | 確認 | P11 | 待修 |  | 需上游提供 missioninfo PyO3 binding。 需請上游提供 missioninfo PyO3 binding。 |
 | B6-26 | `docs/architecture.md` 與現況大幅脫節（Pre-scan #2 確認並補充） | cleanup | 確認 | P12 | 待修 |  | architecture.md 大幅脫節。 |
 | B6-27 | `README.md` / `scripts/README.md` / root `CLAUDE.md` 的建置說明與實際不符 | cleanup | 確認 | P12 | 待修 |  | README / scripts/README 建置說明不符。 |
 | B6-28 | `tools/` 各 README 的清單與實際檔案不一致 | cleanup | 確認 | P12 | 待修 |  | tools README 清單不符。 |
 | B6-29 | 其他文件中的過時事實（`target-py`、DataGrid、game 1.10） | cleanup | 確認 | P12 | 待修 |  | status.md 等過時事實。 |
-| B6-30 | `Directory.Packages.props` 註解錯位；測試專案把一長串 transitive 套件提升成直接引用 | cleanup | 確認 | P11 | 待修 |  | 需決定：精簡測試專案的 transitive 引用。 使用者決定：精簡。 |
+| B6-30 | `Directory.Packages.props` 註解錯位；測試專案把一長串 transitive 套件提升成直接引用 | cleanup | 確認 | P11 | 已修 | `354681e` | 需決定：精簡測試專案的 transitive 引用。 使用者決定：精簡。 測試專案只留 xunit.v3 / Test.Sdk / runner；註解移到正確位置；ILCompiler 註解去歷史。 |
 | B6-31 | `<NoWarn>IL2104;IL3053</NoWarn>` 的理由已過時，是否仍需要沒有驗證 | cleanup | 部分 | P12 | 待修 |  | NoWarn 在 2026-08-18 已重新驗證仍需要；只有註解過時。 |
 | B6-32 | `ClaudeMdSizeTests` 先走完整棵樹才過濾，且沒有跳過 `.venv` | cleanup | 確認 | P13 | 待修 |  | ClaudeMdSizeTests 先走完整棵樹。 |
-| B6-33 | Build 腳本的小問題 | cleanup | 確認 | P11 | 待修 |  | build.cmd 退回 PS 5.1 等小問題。 |
-| B6-34 | `.gitignore` 的矛盾與冗餘規則 | cleanup | 確認 | P11 | 待修 |  | .gitignore 重複規則。 |
-| B6-35 | `tools/` 衛生問題：沒有測試、錯誤路徑 exit 0、handle 洩漏、`sys.path` 指錯位置 | cleanup | 部分 | P11 | 待修 |  | tools 沒有測試、錯誤路徑 exit 0；paloc 失敗路徑其實有釋放 handle。 |
-| B6-36 | `release.yml` 的過時註解與 `workflow_dispatch` 的邊界情況 | cleanup | 確認 | P11 | 待修 |  | 過時註解；workflow_dispatch 在 tag ref 上會走 release 步驟。 |
+| B6-33 | Build 腳本的小問題 | cleanup | 確認 | P11 | 已修 | `354681e` | build.cmd 退回 PS 5.1 等小問題。 build.cmd 無 pwsh 直接報錯；刪未用變數；Clean 失敗發 warning；Invoke-Step 先歸零。runtime 參數不加（只有 win-x64）。 |
+| B6-34 | `.gitignore` 的矛盾與冗餘規則 | cleanup | 確認 | P11 | 已修 | `354681e` | .gitignore 重複規則。 刪重複規則、.vscode 策略統一、/Backup*/ 只作用於根目錄。 |
+| B6-35 | `tools/` 衛生問題：沒有測試、錯誤路徑 exit 0、handle 洩漏、`sys.path` 指錯位置 | cleanup | 部分 | P11 | 已修 | `354681e` | tools 沒有測試、錯誤路徑 exit 0；paloc 失敗路徑其實有釋放 handle。 tools/tests（60）、exit code、handle try/finally、setup_python_env 檢查 3.12+。ruff 未進 CI（既有 finding）。 |
+| B6-36 | `release.yml` 的過時註解與 `workflow_dispatch` 的邊界情況 | cleanup | 確認 | P11 | 已修 | `354681e` | 過時註解；workflow_dispatch 在 tag ref 上會走 release 步驟。 註解改寫；release 步驟條件加 github.event_name == 'push'。 |
 
 ### 其它 issue（確認過程中發現）
 
