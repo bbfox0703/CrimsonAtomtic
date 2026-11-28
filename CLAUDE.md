@@ -20,10 +20,16 @@ this file as the source of truth, always check:
 If a rule grows past one or two lines, move it to a referenced doc and leave a
 one-line pointer here.
 
+⛔ **Every `CLAUDE.md` stays ≤ 40 KB (40,960 bytes)**: it is loaded on every
+turn, so a line nobody needs yet costs bytes on all of them. Check the size
+before committing (`ClaudeMdSizeTests` fails over the line); over it, trim or
+move text out, do not grow. A new doc gets its row in
+[docs/CLAUDE.md](docs/CLAUDE.md); a row here only if every session needs it.
+
 ## Project
 
 Crimson Desert save editor + game-data toolchain. Tracks the live game install
-(currently **2.05**) and stays compatible with 1.05 / 1.06 saves via schema
+(currently **2.06**) and stays compatible with 1.05 / 1.06 saves via schema
 auto-detection. Cross-platform goal: Windows (must), Linux, macOS.
 
 - High-level architecture: [docs/architecture.md](docs/architecture.md)
@@ -71,6 +77,7 @@ auto-detection. Cross-platform goal: Windows (must), Linux, macOS.
 - Asset containers (PAZ, PAMT, PAPGT, PALOC): [docs/paz-containers.md](docs/paz-containers.md)
 - CrimsonForge coverage gaps (the canonical RE-reference repo for CD formats): [docs/crimsonforge-coverage-gaps.md](docs/crimsonforge-coverage-gaps.md)
 - **「啟動 release CI」** = run the runbook in [docs/release-process.md](docs/release-process.md) end to end (pre-flight → player-facing bilingual notes → annotated tag → CI draft → replace notes → verify; publishing stays the user's call)
+- **What shipped and why** (append-only, newest first; add an entry in the same PR as the work): [docs/dev-log.md](docs/dev-log.md)
 - Dev workflow (branch/merge flow, switching machines, crimson-rs requests, running tests, in-game test saves, driving the UI, agent working notes): [docs/dev-workflow.md](docs/dev-workflow.md). Workflow facts go there, not in machine-local agent memory.
 - Python toolchain conventions: [tools/CLAUDE.md](tools/CLAUDE.md)
 - Rust core (our fork): [vendor/crimson-rs/README.md](vendor/crimson-rs/README.md)

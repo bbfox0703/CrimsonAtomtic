@@ -9,7 +9,7 @@
 > **For current state, next task, and active gotchas, read
 > [status.md](status.md) — not this file.** Look here only when you need
 > the deep history behind a decision. Do not append new sessions here;
-> append to status.md and let it be trimmed into this archive when it grows.
+> since 2026-11-28 new history goes to [dev-log.md](dev-log.md).
 
 ---
 # Status / session handoff

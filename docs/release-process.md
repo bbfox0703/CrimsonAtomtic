@@ -127,9 +127,11 @@ gh release view v2.02.01 --json isDraft,body   # still a draft; body == the note
 Report the tag, the run id, the draft URL, the asset sizes and hash, and what
 was verified. **Publishing is the user's call** — the draft is private until
 then. When they say publish: `gh release edit <tag> --draft=false --latest`
-(or the Publish button). Afterwards record it in [status.md](status.md)
-through `dev` → PR → `main` ("docs: record vX.YY.ZZ tagged, built and
-published").
+(or the Publish button). Afterwards record it through `dev` → PR → `main`
+("docs: record vX.YY.ZZ tagged, built and published"): a release entry at the
+top of [dev-log.md](dev-log.md) (tag commit, CI run, exe version, zip size and
+sha256, what was checked before publishing) and the new state in
+[status.md](status.md)'s header.
 
 ## Background
 
