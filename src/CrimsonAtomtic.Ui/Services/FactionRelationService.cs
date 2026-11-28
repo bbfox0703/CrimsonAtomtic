@@ -137,8 +137,10 @@ public sealed class FactionRelationService(ISaveLoader loader)
         Load(savePath, blocks)?.PlayerFaction;
 
     /// <summary>
-    /// Write each change in both directions. Stops at the first error; the
-    /// count says how many changes fully landed before it.
+    /// Write each change in both directions, each change in its own batch so
+    /// a failure on the second side rolls the first back: a relation is never
+    /// left one-sided by the editor. Stops at the first error; the count says
+    /// how many changes landed before it.
     /// </summary>
     public FactionRelationApplyResult Apply(
         string savePath, IReadOnlyList<BlockSummary> blocks, IReadOnlyList<FactionRelationChange> changes,
@@ -158,13 +160,22 @@ public sealed class FactionRelationService(ISaveLoader loader)
                 {
                     continue;
                 }
-                if (ApplySide(savePath, blocks, player, c.FactionKey, c.Relation) is { } e1)
+                string? sideError = null;
+                try
                 {
-                    return new FactionRelationApplyResult(applied, e1);
+                    loader.RunDeferred(() =>
+                    {
+                        sideError = ApplySide(savePath, blocks, player, c.FactionKey, c.Relation)
+                                    ?? ApplySide(savePath, blocks, c.FactionKey, player, c.Relation);
+                        if (sideError is not null)
+                        {
+                            throw new OperationCanceledException(sideError);
+                        }
+                    });
                 }
-                if (ApplySide(savePath, blocks, c.FactionKey, player, c.Relation) is { } e2)
+                catch (OperationCanceledException)
                 {
-                    return new FactionRelationApplyResult(applied, e2);
+                    return new FactionRelationApplyResult(applied, sideError);
                 }
                 applied++;
             }
@@ -185,7 +196,14 @@ public sealed class FactionRelationService(ISaveLoader loader)
                         UiText.Format("RelErrNoFaction", "Faction {0} is not in this save's faction list.", g.FactionKey), groups);
                 }
                 var path = new[] { new PathStep((uint)ctx.ElementListField, (uint)ei) };
-                SetScalar(ctx.Block, path, ctx.Elements[ei], GroupField, BitConverter.GetBytes((ushort)g.RelationGroupKey));
+                var element = ctx.Elements[ei];
+                var groupIdx = element.Fields.Select((f, i) => (f, i)).FirstOrDefault(x => x.f.Name == GroupField, (null!, -1)).Item2;
+                // The field's own type tag decides the width; an absent field has
+                // none, so it takes the u16 every save seen stores.
+                var groupBytes = groupIdx >= 0 && element.Fields[groupIdx].Present
+                    ? SaveFieldValues.EncodeLike(element, groupIdx, g.RelationGroupKey)
+                    : BitConverter.GetBytes(checked((ushort)g.RelationGroupKey));
+                SetScalar(ctx.Block, path, element, GroupField, groupBytes);
                 groups++;
             }
         }

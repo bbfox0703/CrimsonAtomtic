@@ -2119,6 +2119,7 @@ public sealed partial class MainWindowViewModel(
     [RelayCommand(CanExecute = nameof(IsCurrentChallengeMarkable))]
     private async Task MarkCurrentChallengeCompleteAsync()
     {
+        using var writeGate = await WriteGate.EnterAsync().ConfigureAwait(true);
         BulkOpStatus = null;
         if (!TryReadCurrentChallengeContext(out var ctx, out _)
             || ConfirmRequested is not { } ask
@@ -2218,8 +2219,25 @@ public sealed partial class MainWindowViewModel(
             return;
         }
 
+        // One batch, so a failing step rolls the whole challenge back.
         var error = await Task.Run(() =>
-            ApplyPatternBv1Writes(ctx, newCt, newElementIdx, lookup.FarKeyFieldIdx));
+        {
+            try
+            {
+                loader.RunDeferred(() =>
+                {
+                    if (ApplyPatternBv1Writes(ctx, newCt, newElementIdx, lookup.FarKeyFieldIdx) is { } err)
+                    {
+                        throw err;
+                    }
+                });
+                return null;
+            }
+            catch (CrimsonSaveException ex)
+            {
+                return ex;
+            }
+        });
 
         RefreshSelectedBlockSilently();
 
@@ -2274,6 +2292,68 @@ public sealed partial class MainWindowViewModel(
         {
             return (-1, ex);
         }
+    }
+
+    /// <summary>
+    /// Apply Pattern B v1 to <paramref name="contexts"/> in order inside one
+    /// deferred batch. The first challenge that fails throws, so the batch
+    /// rolls back and nothing of this sweep stays; <c>Done</c> then counts
+    /// the challenges before it and <c>ChallengeFailed</c> is true. A failed
+    /// commit also leaves nothing, with <c>ChallengeFailed</c> false.
+    /// </summary>
+    private (int Done, CrimsonSaveException? Error, uint ErrorKey, bool ChallengeFailed) SweepPatternB(
+        IReadOnlyList<CurrentChallengeContext> contexts, Dictionary<int, int> startCounts, ulong startCt,
+        IProgress<(int Done, int Total, uint CurrentKey)>? reporter)
+    {
+        var counts = new Dictionary<int, int>(startCounts);
+        var ct = startCt;
+        var done = 0;
+        try
+        {
+            loader.RunDeferred(() =>
+            {
+                foreach (var c in contexts)
+                {
+                    reporter?.Report((done, contexts.Count, c.CatalogKey));
+                    var lookup = TryReadFarKeyFieldIdx(c);
+                    if (lookup.FarKeyFieldIdx < 0)
+                    {
+                        throw new ChallengeFailedException(c.CatalogKey, lookup.Error ?? new CrimsonSaveException(0,
+                            $"Challenge {c.CatalogKey}: FAR tracker lacks _key field."));
+                    }
+                    var appendIdx = counts[c.MissionTopBlockIdx];
+                    if (ApplyPatternBv1Writes(c, ct, appendIdx, lookup.FarKeyFieldIdx) is { } err)
+                    {
+                        throw new ChallengeFailedException(c.CatalogKey, err);
+                    }
+                    if (!c.FollowUpAlreadyExists)
+                    {
+                        counts[c.MissionTopBlockIdx] = appendIdx + 1;
+                    }
+                    ct++;
+                    done++;
+                }
+            });
+        }
+        catch (ChallengeFailedException failed)
+        {
+            return (done, failed.Error, failed.Key, true);
+        }
+        catch (CrimsonSaveException commitEx)
+        {
+            return (0, commitEx, 0u, false);
+        }
+        reporter?.Report((done, contexts.Count, 0u));
+        return (done, null, 0u, false);
+    }
+
+    /// <summary>A challenge's Pattern B v1 writes failed; carries its key and the native error.</summary>
+    private sealed class ChallengeFailedException(uint key, CrimsonSaveException error)
+        : Exception(error.Message, error)
+    {
+        public uint Key { get; } = key;
+
+        public CrimsonSaveException Error { get; } = error;
     }
 
     /// <summary>
@@ -2415,6 +2495,7 @@ public sealed partial class MainWindowViewModel(
     internal async Task<(int Applied, CrimsonSaveException? Err, uint ErrKey)>
         ApplySealedArtifactChallengesAsync(IReadOnlyList<CurrentChallengeContext> contexts)
     {
+        using var writeGate = await WriteGate.EnterAsync().ConfigureAwait(true);
         if (_loadedPath is null || contexts.Count == 0)
         {
             return (0, null, 0u);
@@ -2459,75 +2540,25 @@ public sealed partial class MainWindowViewModel(
         });
         var reporter = (IProgress<(int Done, int Total, uint CurrentKey)>)progress;
 
+        // The whole sweep runs in one deferred batch (one re-decode). A
+        // challenge that fails throws, which rolls the batch back, since the
+        // steps before the failure would otherwise commit a half-written
+        // challenge; the challenges before it are then applied again in a
+        // second batch, so each challenge lands whole or not at all.
         var (applied, firstError, firstErrorKey) = await Task.Run<(int, CrimsonSaveException?, uint)>(() =>
         {
-            var done = 0;
-            CrimsonSaveException? loopError = null;
-            uint loopErrorKey = 0;
-            // Wrap the apply loop in a deferred-redecode batch (see
-            // vendor/crimson-rs/docs/save-deferred-redecode.md). Each
-            // per-challenge write today triggers ~3 length-changing
-            // body re-decodes (~25ms each on a 5MB body); without the
-            // batch, 141 challenges × 3 = ~423 re-decodes ≈ 10s. With
-            // the batch, every write mutates the in-memory tree only,
-            // and the trailing EndDeferredRedecode runs ONE encode +
-            // parse + decode pass for the whole sweep — ~100ms total.
-            //
-            // Partial-success semantics preserved: per-op failure is
-            // captured into loopError/loopErrorKey and we BREAK out
-            // of the loop, letting the deferred batch commit the
-            // already-applied work (matching the pre-batch behaviour
-            // where partial progress was kept and the user could
-            // still Save or reload-to-revert). Letting the exception
-            // escape RunDeferred would Abort and roll the partial
-            // work back, which is the wrong UX for this flow.
-            try
+            var first = SweepPatternB(contexts, perBlockCount, newCt, reporter);
+            if (first.Error is null || !first.ChallengeFailed || first.Done == 0)
             {
-                loader.RunDeferred(() =>
-                {
-                    foreach (var c in contexts)
-                    {
-                        // Announce BEFORE applying so the user sees the
-                        // current challenge key while the FFI is in
-                        // flight. With the deferred batch the loop runs
-                        // ~100x faster than before; the IProgress<T>
-                        // posts to the UI thread coalesce naturally.
-                        reporter.Report((done, totalCandidates, c.CatalogKey));
-                        var lookup = TryReadFarKeyFieldIdx(c);
-                        if (lookup.FarKeyFieldIdx < 0)
-                        {
-                            loopError = lookup.Error ?? new CrimsonSaveException(0,
-                                $"Challenge {c.CatalogKey}: FAR tracker lacks _key field.");
-                            loopErrorKey = c.CatalogKey;
-                            return;
-                        }
-                        var appendIdx = perBlockCount[c.MissionTopBlockIdx];
-                        var err = ApplyPatternBv1Writes(c, newCt, appendIdx, lookup.FarKeyFieldIdx);
-                        if (err is not null)
-                        {
-                            loopError = err;
-                            loopErrorKey = c.CatalogKey;
-                            return;
-                        }
-                        if (!c.FollowUpAlreadyExists)
-                        {
-                            perBlockCount[c.MissionTopBlockIdx] = appendIdx + 1;
-                        }
-                        newCt++;
-                        done++;
-                    }
-                });
+                return first.ChallengeFailed || first.Error is null
+                    ? (first.Done, first.Error, first.ErrorKey)
+                    : (0, first.Error, 0u);
             }
-            catch (CrimsonSaveException commitEx)
-            {
-                // End_*'s own commit failed (MUTATION_INVALID): the
-                // Rust side already rolled `blocks` back to the
-                // pre-begin snapshot, so nothing landed. Surface as
-                // applied=0 with the commit error.
-                return (0, commitEx, 0u);
-            }
-            reporter.Report((done, totalCandidates, 0u));
-            return (done, loopError, loopErrorKey);
+            var prefix = contexts.Take(first.Done).ToList();
+            var again = SweepPatternB(prefix, perBlockCount, newCt, reporter: null);
+            return again.Error is null
+                ? (first.Done, first.Error, first.ErrorKey)
+                : (0, again.Error, again.ErrorKey);
         });
 
         RefreshSelectedBlockSilently();
@@ -2545,9 +2576,9 @@ public sealed partial class MainWindowViewModel(
         }
         else
         {
-            BulkOpStatus = UiText.Format("BulkMarkFailed",
-                "Bulk Mark failed at challenge {0} after {1}/{2} applied: {3}. "
-                + "Save state is partial — reload without writing to revert.",
+            BulkOpStatus = UiText.Format("BulkMarkFailedWhole",
+                "Bulk Mark stopped at challenge {0}: {3}. The {1} of {2} challenge(s) before it are complete; "
+                + "nothing of challenge {0} was written.",
                 firstErrorKey, applied, contexts.Count, firstError.Message);
             // Even partial success counts as dirty so the user sees
             // the title-bar warning + can still Save what landed.
@@ -2876,6 +2907,7 @@ public sealed partial class MainWindowViewModel(
     internal async Task<(int Applied, CrimsonSaveException? Err)> SetFactionNodeStatesAsync(
         IReadOnlyList<(FactionNodeTarget Target, byte NewState)> changes)
     {
+        using var writeGate = await WriteGate.EnterAsync().ConfigureAwait(true);
         if (_loadedPath is null || changes.Count == 0)
         {
             return (0, null);
@@ -3413,6 +3445,7 @@ public sealed partial class MainWindowViewModel(
     [RelayCommand]
     private async Task BulkFillItemListMaxStackAsync(ElementRowViewModel? row)
     {
+        using var writeGate = await WriteGate.EnterAsync().ConfigureAwait(true);
         BulkOpStatus = null;
         if (row is null
             || !row.IsBulkFillCandidate
@@ -3586,6 +3619,7 @@ public sealed partial class MainWindowViewModel(
     [RelayCommand]
     private async Task RemoveElementAsync(ElementRowViewModel? row)
     {
+        using var writeGate = await WriteGate.EnterAsync().ConfigureAwait(true);
         BulkOpStatus = null;
         if (row is null
             || _loadedPath is null
@@ -3700,6 +3734,7 @@ public sealed partial class MainWindowViewModel(
     /// </remarks>
     public async Task AddItemToCurrentListAsync(uint itemKey)
     {
+        using var writeGate = await WriteGate.EnterAsync().ConfigureAwait(true);
         BulkOpStatus = null;
         if (_loadedPath is null
             || SelectedBlock is not { } topBlock
@@ -3781,21 +3816,12 @@ public sealed partial class MainWindowViewModel(
         // on load fails and the save crashes. Find the field so we can
         // apply a delta patch alongside the four standard ones.
         var idxTransferred = -1;
-        ulong sourceTransferred = 0;
-        ulong sourceItemKeyValue = 0;
         for (var i = 0; i < sourceElement.Fields.Count; i++)
         {
             var f = sourceElement.Fields[i];
-            if (f.Name == "_transferredItemKey" && f.Present
-                && TryParseScalarUInt(f.Value, out var v))
+            if (f.Name == "_transferredItemKey" && f.Present && TryParseScalarUInt(f.Value, out _))
             {
                 idxTransferred = i;
-                sourceTransferred = v;
-            }
-            else if (f.Name == "_itemKey" && f.Present
-                     && TryParseScalarUInt(f.Value, out var ik))
-            {
-                sourceItemKeyValue = ik;
             }
         }
         // _isNewMark: bool flag the engine sets on freshly-spawned
@@ -3822,7 +3848,17 @@ public sealed partial class MainWindowViewModel(
         var (existingMaxSlot, existingMaxItemNo) =
             ScanItemListMaxes(parent.Elements);
         var newSlotNo = (ushort)Math.Min(existingMaxSlot + 1, ushort.MaxValue);
-        var newItemNo = existingMaxItemNo + 1;
+        // _itemNo is unique across the whole block, not just this list.
+        ulong blockMaxItemNo = existingMaxItemNo;
+        try
+        {
+            blockMaxItemNo = Math.Max(blockMaxItemNo, MaxItemNoIn(loader.LoadBlockDetails(_loadedPath, topBlock.Index)));
+        }
+        catch (CrimsonSaveException)
+        {
+            // Keep the list's max; the block read failing is reported by the add itself.
+        }
+        var newItemNo = blockMaxItemNo + 1;
         // _stackCount defaults to 1 — guaranteed-safe across every
         // iteminfo entry. The user can bump it via the edit panel's
         // Set-to-max button or by typing a new value; those paths
@@ -3849,81 +3885,40 @@ public sealed partial class MainWindowViewModel(
         // Pre-compute LE byte buffers for the batched patch. One batch
         // FFI call mutates every scalar atomically (all-or-nothing on
         // validation), with a single post-batch re-decode.
-        var itemKeyBytes = BitConverter.GetBytes(itemKey);
-        var stackCountBytes = BitConverter.GetBytes(newStackCount);
-        var slotNoBytes = BitConverter.GetBytes(newSlotNo);
-        var itemNoBytes = BitConverter.GetBytes(newItemNo);
-        var batchOps = new List<ScalarBatchOp>(6)
+        List<ScalarBatchOp> batchOps;
+        try
         {
-            new(blockIdx, clonePath, idxItemKey,    itemKeyBytes),
-            new(blockIdx, clonePath, idxStackCount, stackCountBytes),
-            new(blockIdx, clonePath, idxSlotNo,     slotNoBytes),
-            new(blockIdx, clonePath, idxItemNo,     itemNoBytes),
-        };
-        // _transferredItemKey encoding (verified empirically against
-        // every ItemSaveData in the user's restored slot100):
-        //
-        //   _transferredItemKey = ((itemKey & 0xFFFF) << 16) | 0x0101
-        //
-        //   Worked examples:
-        //     itemKey 22007    (Beer)             → 0x55F7_0101 = 1442251009
-        //     itemKey 1000677  (Investigative Rpt)→ 0x44E5_0101 = 1155858689
-        //     itemKey 950017   (some equipment)   → 0x7F01_0101 = 2130772225
-        //
-        // The high 16 bits are `itemKey % 65536` (i.e. the low 16 bits
-        // of itemKey, even when itemKey itself overflows u16). The low
-        // 16 bits are a constant `0x0101` for every item observed —
-        // not a "newly-spawned" flag as I'd initially guessed; the
-        // distinction was a math error on my part decoding the bytes.
-        //
-        // Same formula for all itemKeys, no conditional branch.
-        const ushort TransferredLowConstant = 0x0101;
-        if (idxTransferred >= 0)
-        {
-            var newTransferred = (uint)(((itemKey & 0xFFFFu) << 16) | TransferredLowConstant);
-            var transferredBytes = BitConverter.GetBytes(newTransferred);
-            batchOps.Add(new ScalarBatchOp(blockIdx, clonePath, idxTransferred, transferredBytes));
+            batchOps =
+            [
+                new(blockIdx, clonePath, idxItemKey,    SaveFieldValues.EncodeLike(sourceElement, idxItemKey, itemKey)),
+                new(blockIdx, clonePath, idxStackCount, SaveFieldValues.EncodeLike(sourceElement, idxStackCount, newStackCount)),
+                new(blockIdx, clonePath, idxSlotNo,     SaveFieldValues.EncodeLike(sourceElement, idxSlotNo, newSlotNo)),
+                new(blockIdx, clonePath, idxItemNo,     SaveFieldValues.EncodeLike(sourceElement, idxItemNo, newItemNo)),
+            ];
+            if (idxTransferred >= 0)
+            {
+                batchOps.Add(new ScalarBatchOp(blockIdx, clonePath, idxTransferred,
+                    SaveFieldValues.EncodeLike(sourceElement, idxTransferred, ContributionService.TransferredItemKey(itemKey))));
+            }
         }
-        // `sourceTransferred` and `sourceItemKeyValue` were captured
-        // for an earlier delta-shift approach that's no longer used;
-        // keeping the destructure for diagnostic value if a future
-        // patch needs them again.
-        _ = sourceTransferred;
-        _ = sourceItemKeyValue;
+        catch (InvalidOperationException ex)
+        {
+            BulkOpStatus = string.Format(System.Globalization.CultureInfo.CurrentCulture,
+                LookupUiResourceString("AddItemStatusFailed") ?? "Add failed: {0}", ex.Message);
+            return;
+        }
+        // _transferredItemKey is the engine's cross-check handle,
+        // ((itemKey & 0xFFFF) << 16) | 0x0101 for every item observed;
+        // left at the template's value the game rejects the save.
         // Mark the new item as "fresh" so the in-game inventory UI shows
         // the (NEW) indicator. When the source had _isNewMark present,
         // we just overwrite the byte; when it was absent, the simpler
         // path is the standalone SetScalarFieldPresent call below.
         var markIsNewMarkPresent = idxIsNewMark >= 0 && !sourceElement.Fields[idxIsNewMark].Present;
 
-        CrimsonSaveException? error = null;
-        await Task.Run(() =>
-        {
-            try
-            {
-                loader.ListCloneElement(blockIdx, listPath, listFieldIdx, sourceIndex, dstIdx);
-                loader.SetScalarFieldsBatch(batchOps);
-                if (idxIsNewMark >= 0)
-                {
-                    var newMarkByte = new byte[] { 0x01 };
-                    if (markIsNewMarkPresent)
-                    {
-                        // Source had it absent — set present + true.
-                        loader.SetScalarFieldPresent(blockIdx, clonePath, idxIsNewMark,
-                            makePresent: true, newMarkByte);
-                    }
-                    else
-                    {
-                        // Source had it present — just overwrite the byte.
-                        loader.SetScalarField(blockIdx, clonePath, idxIsNewMark, newMarkByte);
-                    }
-                }
-            }
-            catch (CrimsonSaveException ex)
-            {
-                error = ex;
-            }
-        });
+        var (error, markWarning) = await Task.Run(() =>
+            CloneAndPatchItem(blockIdx, listPath, listFieldIdx, sourceIndex, dstIdx, clonePath, batchOps,
+                idxIsNewMark, newMarkWasAbsent: markIsNewMarkPresent));
 
         try
         {
@@ -3951,7 +3946,7 @@ public sealed partial class MainWindowViewModel(
                 System.Globalization.CultureInfo.CurrentCulture,
                 LookupUiResourceString("AddItemStatusSuccess")
                     ?? "Added item {0} from {1} (qty {2}, slot {3}, itemNo {4}).",
-                itemKey, cloneSourceLabel, newStackCount, newSlotNo, newItemNo) + learnedNote;
+                itemKey, cloneSourceLabel, newStackCount, newSlotNo, newItemNo) + learnedNote + markWarning;
         }
         else
         {
@@ -3977,6 +3972,7 @@ public sealed partial class MainWindowViewModel(
     internal async Task<(bool Ok, string Message)> GrantItemToContainerAsync(
         uint inventoryKey, uint itemKey)
     {
+        using var writeGate = await WriteGate.EnterAsync().ConfigureAwait(true);
         if (_loadedPath is null || Summary is not { Blocks: { } blocks })
         {
             return (false, "No save loaded.");
@@ -4053,7 +4049,8 @@ public sealed partial class MainWindowViewModel(
 
         var (maxSlot, maxItemNo) = ScanItemListMaxes(items);
         var newSlotNo = (ushort)Math.Min(maxSlot + 1, ushort.MaxValue);
-        var newItemNo = maxItemNo + 1;
+        // _itemNo is unique across the whole inventory block.
+        var newItemNo = Math.Max(maxItemNo, MaxItemNoIn(invDetails)) + 1;
         const ulong newStackCount = 1UL;
 
         var blockIdx = invBlock.Index;
@@ -4071,50 +4068,30 @@ public sealed partial class MainWindowViewModel(
             new PathStep((uint)itemListFieldIdx, (uint)dstIdx),
         };
 
-        var batchOps = new List<ScalarBatchOp>(6)
+        List<ScalarBatchOp> batchOps;
+        try
         {
-            new(blockIdx, clonePath, idxItemKey,    BitConverter.GetBytes(itemKey)),
-            new(blockIdx, clonePath, idxStackCount, BitConverter.GetBytes(newStackCount)),
-            new(blockIdx, clonePath, idxSlotNo,     BitConverter.GetBytes(newSlotNo)),
-            new(blockIdx, clonePath, idxItemNo,     BitConverter.GetBytes(newItemNo)),
-        };
-        // _transferredItemKey = ((itemKey & 0xFFFF) << 16) | 0x0101 — the
-        // engine cross-check field; omitting it corrupts the entry (see
-        // AddItemToCurrentListAsync for the empirical derivation).
-        if (idxTransferred >= 0)
+            batchOps =
+            [
+                new(blockIdx, clonePath, idxItemKey,    SaveFieldValues.EncodeLike(template, idxItemKey, itemKey)),
+                new(blockIdx, clonePath, idxStackCount, SaveFieldValues.EncodeLike(template, idxStackCount, newStackCount)),
+                new(blockIdx, clonePath, idxSlotNo,     SaveFieldValues.EncodeLike(template, idxSlotNo, newSlotNo)),
+                new(blockIdx, clonePath, idxItemNo,     SaveFieldValues.EncodeLike(template, idxItemNo, newItemNo)),
+            ];
+            if (idxTransferred >= 0 && template.Fields[idxTransferred].Present)
+            {
+                batchOps.Add(new ScalarBatchOp(blockIdx, clonePath, idxTransferred,
+                    SaveFieldValues.EncodeLike(template, idxTransferred, ContributionService.TransferredItemKey(itemKey))));
+            }
+        }
+        catch (InvalidOperationException ex)
         {
-            var newTransferred = (uint)(((itemKey & 0xFFFFu) << 16) | 0x0101u);
-            batchOps.Add(new ScalarBatchOp(
-                blockIdx, clonePath, idxTransferred, BitConverter.GetBytes(newTransferred)));
+            return (false, ex.Message);
         }
 
-        CrimsonSaveException? error = null;
-        await Task.Run(() =>
-        {
-            try
-            {
-                loader.ListCloneElement(blockIdx, listPath, itemListFieldIdx,
-                    sourceIndex: 0, destinationIndex: dstIdx);
-                loader.SetScalarFieldsBatch(batchOps);
-                if (idxIsNewMark >= 0)
-                {
-                    var markByte = new byte[] { 0x01 };
-                    if (!sourceIsNewMarkPresent)
-                    {
-                        loader.SetScalarFieldPresent(blockIdx, clonePath, idxIsNewMark,
-                            makePresent: true, markByte);
-                    }
-                    else
-                    {
-                        loader.SetScalarField(blockIdx, clonePath, idxIsNewMark, markByte);
-                    }
-                }
-            }
-            catch (CrimsonSaveException ex)
-            {
-                error = ex;
-            }
-        });
+        var (error, markWarning) = await Task.Run(() =>
+            CloneAndPatchItem(blockIdx, listPath, itemListFieldIdx, sourceIndex: 0, dstIdx, clonePath, batchOps,
+                idxIsNewMark, newMarkWasAbsent: !sourceIsNewMarkPresent));
 
         // Refresh the navigation view if it's currently showing this block.
         try
@@ -4143,7 +4120,7 @@ public sealed partial class MainWindowViewModel(
         var learnedNote = await LearnItemKnowledgeAsync(itemKey);
         return (true,
             UiText.Format("MountGrantDone", "Granted {0} (slot {1}, itemNo {2}).", name, newSlotNo, newItemNo)
-            + learnedNote);
+            + learnedNote + markWarning);
     }
 
     /// <summary>
@@ -4324,6 +4301,7 @@ public sealed partial class MainWindowViewModel(
     /// </summary>
     private async Task<(bool Changed, string Note)> FillDragonHpAsync()
     {
+        using var writeGate = await WriteGate.EnterAsync().ConfigureAwait(true);
         if (_loadedPath is null || Summary is not { Blocks: { } blocks })
         {
             return (false, string.Empty);
@@ -4387,6 +4365,7 @@ public sealed partial class MainWindowViewModel(
     private async Task<string?> InsertDragonElementAsync(
         (int BlockIndex, int ListFieldIndex, IReadOnlyList<BlockDetails> Elements) tgt)
     {
+        using var writeGate = await WriteGate.EnterAsync().ConfigureAwait(true);
         if (_loadedPath is not { } savePath)
         {
             return "No save loaded.";
@@ -4411,41 +4390,45 @@ public sealed partial class MainWindowViewModel(
         var template = Convert.FromHexString(MountCatalog.DragonElementTemplateHex);
         var blockIdx = tgt.BlockIndex;
         var listFieldIdx = tgt.ListFieldIndex;
-        CrimsonSaveException? error = null;
+        Exception? error = null;
         await Task.Run(() =>
         {
             try
             {
-                loader.ListInsertElementTemplate(
-                    blockIdx, ReadOnlySpan<PathStep>.Empty, listFieldIdx, insertAt, template);
-                // Field indices come from the element just built, i.e. from
-                // this save's schema — they move between patches.
-                var list = FindFieldByName(loader.LoadBlockDetails(savePath, blockIdx), "_mercenaryDataList");
-                var dragon = list?.Elements is { } els && insertAt < els.Count ? els[insertAt] : null;
-                var dragonPath = new[] { new PathStep((uint)listFieldIdx, (uint)insertAt) };
-                // Fresh u64 _mercenaryNo so it can't collide with an existing
-                // merc/mount; the captured element's number would.
-                if (dragon is not null && FindFieldByName(dragon, "_mercenaryNo") is { Present: true } mercNo)
+                // One batch: a dragon that cannot get its own _mercenaryNo
+                // would collide with the captured element's number, so the
+                // insert is rolled back instead of kept.
+                loader.RunDeferred(() =>
                 {
-                    loader.SetScalarField(
-                        blockIdx, dragonPath, mercNo.FieldIndex, BitConverter.GetBytes(newMercNo));
-                }
-                // Clear _isMainMercenary so the dragon doesn't displace the
-                // player's current active mount on load.
-                if (dragon is not null && FindFieldByName(dragon, "_isMainMercenary") is { Present: true } isMain)
-                {
-                    loader.SetScalarField(
-                        blockIdx, dragonPath, isMain.FieldIndex, new byte[] { 0 });
-                }
+                    loader.ListInsertElementTemplate(
+                        blockIdx, ReadOnlySpan<PathStep>.Empty, listFieldIdx, insertAt, template);
+                    // Field indices come from the element just built, i.e. from
+                    // this save's schema — they move between patches.
+                    var list = FindFieldByName(loader.LoadBlockDetails(savePath, blockIdx), "_mercenaryDataList");
+                    var dragon = list?.Elements is { } els && insertAt < els.Count ? els[insertAt] : null;
+                    var dragonPath = new[] { new PathStep((uint)listFieldIdx, (uint)insertAt) };
+                    if (dragon is null || FindFieldByName(dragon, "_mercenaryNo") is not { Present: true } mercNo)
+                    {
+                        throw new InvalidOperationException("the inserted dragon has no _mercenaryNo to make unique");
+                    }
+                    loader.SetScalarField(blockIdx, dragonPath, mercNo.FieldIndex, BitConverter.GetBytes(newMercNo));
+                    // Clear _isMainMercenary so the dragon doesn't displace the
+                    // player's current active mount on load.
+                    if (FindFieldByName(dragon, "_isMainMercenary") is { Present: true } isMain)
+                    {
+                        loader.SetScalarField(blockIdx, dragonPath, isMain.FieldIndex, new byte[] { 0 });
+                    }
+                });
             }
-            catch (CrimsonSaveException ex)
+            catch (Exception ex) when (ex is CrimsonSaveException or InvalidOperationException)
             {
                 error = ex;
             }
         });
 
         return error is not null
-            ? $"Dragon element insert failed: {error.Message} (code {error.ErrorCode})."
+            ? $"Dragon element insert failed: {error.Message}"
+              + (error is CrimsonSaveException cse ? $" (code {cse.ErrorCode})." : ".")
             : null;
     }
 
@@ -4504,6 +4487,82 @@ public sealed partial class MainWindowViewModel(
             }
         }
         return itemKey >= 0 && stackCount >= 0 && slotNo >= 0 && itemNo >= 0;
+    }
+
+    /// <summary>
+    /// Clone the template item at <paramref name="sourceIndex"/> to
+    /// <paramref name="dstIdx"/> and patch its identity fields, as one
+    /// deferred batch: a failure rolls the clone back too, so no duplicate
+    /// of the template (same <c>_itemNo</c>, which the game rejects) is
+    /// left behind. The "new item" mark is set after the commit, and its
+    /// failure is only a warning. Returns the error, if any, and the warning
+    /// text to append to the status.
+    /// </summary>
+    private (CrimsonSaveException? Error, string Warning) CloneAndPatchItem(
+        int blockIdx, PathStep[] listPath, int listFieldIdx, int sourceIndex, int dstIdx,
+        PathStep[] clonePath, List<ScalarBatchOp> identityOps, int idxIsNewMark, bool newMarkWasAbsent)
+    {
+        try
+        {
+            loader.RunDeferred(() =>
+            {
+                loader.ListCloneElement(blockIdx, listPath, listFieldIdx, sourceIndex, dstIdx);
+                loader.SetScalarFieldsBatch(identityOps);
+            });
+        }
+        catch (CrimsonSaveException ex)
+        {
+            return (ex, string.Empty);
+        }
+        if (idxIsNewMark < 0)
+        {
+            return (null, string.Empty);
+        }
+        try
+        {
+            byte[] mark = [0x01];
+            if (newMarkWasAbsent)
+            {
+                loader.SetScalarFieldPresent(blockIdx, clonePath, idxIsNewMark, makePresent: true, mark);
+            }
+            else
+            {
+                loader.SetScalarField(blockIdx, clonePath, idxIsNewMark, mark);
+            }
+            return (null, string.Empty);
+        }
+        catch (CrimsonSaveException ex)
+        {
+            return (null, " " + UiText.Format("AddItemNewMarkFailed",
+                "(The item is added, but its \"new\" mark could not be set: {0}.)", ex.Message));
+        }
+    }
+
+    /// <summary>The largest <c>_itemNo</c> anywhere in <paramref name="block"/>, or 0.</summary>
+    private static ulong MaxItemNoIn(BlockDetails block)
+    {
+        ulong max = 0;
+        var stack = new Stack<BlockDetails>();
+        stack.Push(block);
+        while (stack.Count > 0)
+        {
+            var node = stack.Pop();
+            foreach (var f in node.Fields)
+            {
+                if (f.Name == "_itemNo" && f.Present && TryParseScalarUInt(f.Value, out var n))
+                {
+                    max = Math.Max(max, n);
+                }
+                if (f.Elements is { } els)
+                {
+                    foreach (var e in els)
+                    {
+                        stack.Push(e);
+                    }
+                }
+            }
+        }
+        return max;
     }
 
     /// <summary>
@@ -4813,6 +4872,7 @@ public sealed partial class MainWindowViewModel(
     [RelayCommand(CanExecute = nameof(HasSave))]
     private async Task FillAllStacksAcrossInventoriesAsync()
     {
+        using var writeGate = await WriteGate.EnterAsync().ConfigureAwait(true);
         BulkOpStatus = null;
         if (_loadedPath is null || Summary is not { Blocks: { } blocks })
         {
@@ -5285,6 +5345,7 @@ public sealed partial class MainWindowViewModel(
     private async Task<(int Applied, CrimsonSaveException? FirstError, uint? FirstFailedKey)>
         ApplyKnowledgeInjectAsync(KnowledgeListContext ctx, List<uint> keysToAdd)
     {
+        using var writeGate = await WriteGate.EnterAsync().ConfigureAwait(true);
         var blockIdx = ctx.BlockIndex;
         var listFieldIdx = ctx.ListFieldIndex;
         var baselineCount = ctx.BaselineCount;
@@ -5297,87 +5358,91 @@ public sealed partial class MainWindowViewModel(
 
         await Task.Run(() =>
         {
-            // Wrap the per-key inject loop in a deferred-redecode batch
-            // (see vendor/crimson-rs/docs/save-deferred-redecode.md).
-            // Each key costs 1 ListCloneElement (length-changing) + up
-            // to 3 SetScalarField (in-place); without the batch every
-            // ListCloneElement triggers a full body re-decode (~25ms on
-            // a 5MB body). For a ~30-key inject that's ~30 re-decodes ≈
-            // 750ms; with the batch every clone stays in the in-memory
-            // tree and the trailing commit runs ONE encode+parse+decode.
-            //
-            // Partial-success preserved: per-op exceptions are caught
-            // inside the inner try/catch + `return` out of the lambda.
-            // RunDeferred sees normal completion → commits whatever
-            // already landed. A commit-time MUTATION_INVALID surfaces
-            // through the outer try/catch as applied=0.
-            try
+            // One batch for the whole inject. A key that fails throws, which
+            // rolls the batch back (a clone whose _key patch failed would
+            // otherwise commit as a duplicate of element 0); the keys before
+            // it are then injected again in a second batch.
+            var first = InjectKnowledge(ctx, keysToAdd);
+            if (first.Error is { } err && first.KeyFailed && first.Done > 0)
             {
-                loader.RunDeferred(() =>
-                {
-                    for (var i = 0; i < keysToAdd.Count; i++)
-                    {
-                        var newIdx = baselineCount + i;
-                        var key = keysToAdd[i];
-                        try
-                        {
-                            // Clone element 0 as a fresh template at the tail.
-                            loader.ListCloneElement(
-                                blockIdx,
-                                ReadOnlySpan<PathStep>.Empty,
-                                listFieldIdx,
-                                sourceIndex: 0,
-                                destinationIndex: newIdx);
-
-                            var newPath = new[] { new PathStep((uint)listFieldIdx, (uint)newIdx) };
-
-                            // Patch _key → the target knowledge key.
-                            loader.SetScalarField(
-                                blockIdx, newPath, keyFieldIdx, BitConverter.GetBytes(key));
-
-                            // Patch _learnedFieldTime → 0 (inject sentinel —
-                            // distinguishes editor-injected discoveries from
-                            // organically learned ones). Only if in schema.
-                            if (learnedTimeFieldIdx >= 0)
-                            {
-                                loader.SetScalarField(
-                                    blockIdx, newPath, learnedTimeFieldIdx,
-                                    BitConverter.GetBytes((ulong)0));
-                            }
-                            // Patch _isNewMark → false so the injected entries
-                            // don't all flash as new in the player's UI on the
-                            // next load.
-                            if (isNewMarkFieldIdx >= 0)
-                            {
-                                loader.SetScalarField(
-                                    blockIdx, newPath, isNewMarkFieldIdx, new byte[] { 0 });
-                            }
-                            applied++;
-                        }
-                        catch (CrimsonSaveException ex)
-                        {
-                            firstError ??= ex;
-                            firstFailedKey ??= key;
-                            // Abort the sweep on first failure — the list shape
-                            // may now be inconsistent, and continuing risks
-                            // compounding the error. Returning out of the lambda
-                            // lets the deferred batch commit the partial progress.
-                            return;
-                        }
-                    }
-                });
+                var again = InjectKnowledge(ctx, keysToAdd.Take(first.Done).ToList());
+                applied = again.Error is null ? first.Done : 0;
+                firstError = again.Error ?? err;
+                firstFailedKey = again.Error is null ? first.FailedKey : again.FailedKey;
             }
-            catch (CrimsonSaveException commitEx)
+            else
             {
-                // End_*'s commit failed (MUTATION_INVALID): the Rust side
-                // already rolled `blocks` back to pre-begin, so nothing
-                // landed. Reset applied so reporting matches reality.
-                applied = 0;
-                firstError ??= commitEx;
+                applied = first.Error is null ? first.Done : (first.KeyFailed ? first.Done : 0);
+                firstError = first.Error;
+                firstFailedKey = first.FailedKey;
             }
         });
 
         return (applied, firstError, firstFailedKey);
+    }
+
+    /// <summary>
+    /// Append one knowledge element per key to the save's knowledge list
+    /// inside one deferred batch: clone element 0, then set <c>_key</c>,
+    /// <c>_learnedFieldTime</c> = 0 and <c>_isNewMark</c> = false, promoting
+    /// a field the template has absent. The first key that fails throws,
+    /// so the batch rolls back and nothing stays; <c>Done</c> counts the
+    /// keys before it and <c>KeyFailed</c> is true. A failed commit leaves
+    /// nothing, with <c>KeyFailed</c> false.
+    /// </summary>
+    private (int Done, CrimsonSaveException? Error, uint? FailedKey, bool KeyFailed) InjectKnowledge(
+        KnowledgeListContext ctx, List<uint> keys)
+    {
+        var done = 0;
+        uint? current = null;
+        try
+        {
+            loader.RunDeferred(() =>
+            {
+                for (var i = 0; i < keys.Count; i++)
+                {
+                    current = keys[i];
+                    var newIdx = ctx.BaselineCount + i;
+                    loader.ListCloneElement(ctx.BlockIndex, ReadOnlySpan<PathStep>.Empty, ctx.ListFieldIndex,
+                        sourceIndex: 0, destinationIndex: newIdx);
+                    var newPath = new[] { new PathStep((uint)ctx.ListFieldIndex, (uint)newIdx) };
+                    WriteKnowledgeField(ctx.BlockIndex, newPath, ctx.KeyFieldIndex, BitConverter.GetBytes(keys[i]));
+                    if (ctx.LearnedTimeFieldIndex >= 0)
+                    {
+                        WriteKnowledgeField(ctx.BlockIndex, newPath, ctx.LearnedTimeFieldIndex,
+                            BitConverter.GetBytes((ulong)0));
+                    }
+                    if (ctx.IsNewMarkFieldIndex >= 0)
+                    {
+                        WriteKnowledgeField(ctx.BlockIndex, newPath, ctx.IsNewMarkFieldIndex, [0]);
+                    }
+                    done++;
+                }
+                current = null;
+            });
+        }
+        catch (CrimsonSaveException ex)
+        {
+            return current is { } key ? (done, ex, key, true) : (0, ex, null, false);
+        }
+        return (done, null, null, false);
+    }
+
+    /// <summary>
+    /// Write a scalar on a freshly cloned element: in place when the template
+    /// had it present, else by promoting it, since an absent field has no
+    /// bytes to overwrite (NOT_SCALAR).
+    /// </summary>
+    private void WriteKnowledgeField(int blockIdx, PathStep[] path, int fieldIdx, byte[] bytes)
+    {
+        try
+        {
+            loader.SetScalarField(blockIdx, path, fieldIdx, bytes);
+        }
+        catch (CrimsonSaveException ex) when (ex.ErrorCode == CrimsonErrorCode.NotScalar)
+        {
+            loader.SetScalarFieldPresent(blockIdx, path, fieldIdx, makePresent: true, bytes);
+        }
     }
 
     /// <summary>

@@ -525,22 +525,15 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         }
         var applyCount = Math.Min(set.GemKeys.Count, target.MaxSocketCount);
         var changed = 0;
-        // Wrap the per-slot Apply loop in a deferred-redecode batch
-        // (see vendor/crimson-rs/docs/save-deferred-redecode.md). Each
-        // empty→fill transition fires SetScalarFieldsPresentBatch which
-        // is length-changing; without the batch every flip triggers a
-        // full body re-decode (~25ms on a 5MB body), so a 5-slot Apply
-        // pays ~5 re-decodes. With the batch every flip stays in the
-        // in-memory tree and the trailing commit runs ONE encode +
-        // parse + decode pass.
-        //
-        // ApplyGemPick catches CrimsonSaveException internally + sets
-        // row.LastError + returns void, so the loop never lets an
-        // exception escape — the deferred batch sees normal completion
-        // and commits the partial progress (matches the pre-batch
-        // partial-success UX). A commit-time MUTATION_INVALID surfaces
-        // as the outer try/catch falling through to the error footer.
-        var failed = 0;
+        // All or nothing, in one deferred-redecode batch: a slot that fails
+        // throws, which rolls the whole batch back (crimson-rs keeps the ops
+        // before a failure applied, so returning would commit half a set).
+        // The rows are restored to match, and the journal lines wait for
+        // the commit.
+        var item = _allSockets.Where(r => r.ItemIdentity == target.ItemIdentity).ToList();
+        var saved = item.Select(r => r.Capture()).ToList();
+        _pendingJournal.Clear();
+        SocketRow? failedRow = null;
         try
         {
             _loader.RunDeferred(() =>
@@ -551,24 +544,14 @@ public sealed partial class SocketEditorViewModel : ObservableObject
                     for (var i = 0; i < applyCount; i++)
                     {
                         if (!rows.TryGetValue(i, out var row)) continue;
-                        var newKey = set.GemKeys[i];
-                        if (row.IsFilled && row.CurrentGemKey == newKey)
+                        switch (ApplyGemPick(row, set.GemKeys[i]))
                         {
-                            continue; // already what we want
-                        }
-                        // Count only what actually landed. ApplyGemPick
-                        // swallows its own failures (socket-open abort,
-                        // CrimsonSaveException) and returns false;
-                        // incrementing regardless used to report "N
-                        // slot(s) changed" for a run that wrote nothing,
-                        // and overwrite the per-slot error text with it.
-                        if (ApplyGemPick(row, newKey))
-                        {
-                            changed++;
-                        }
-                        else
-                        {
-                            failed++;
+                            case GemPickResult.Changed:
+                                changed++;
+                                break;
+                            case GemPickResult.Failed:
+                                failedRow = row;
+                                throw new OperationCanceledException(row.LastError);
                         }
                     }
                 }
@@ -578,38 +561,35 @@ public sealed partial class SocketEditorViewModel : ObservableObject
                 }
             });
         }
-        catch (CrimsonSaveException commitEx)
+        catch (Exception ex) when (ex is OperationCanceledException or CrimsonSaveException)
         {
-            StatusMessage = UiText.Format("SocketApplySetFailed",
-                "Apply Set: {0} — commit failed after {1} slot(s): {2} (code {3}). "
-                + "Reload the save without writing to revert.",
-                set.Label, changed, commitEx.Message, commitEx.ErrorCode);
+            var rowError = failedRow?.LastError;
+            for (var i = 0; i < item.Count; i++)
+            {
+                item[i].Restore(saved[i]);
+            }
+            if (failedRow is not null)
+            {
+                failedRow.LastError = rowError;
+            }
+            _pendingJournal.Clear();
+            ResyncSnapshotVersion();
+            StatusMessage = UiText.Format("SocketApplySetRolledBack",
+                "Apply Set: {0} — nothing written: {1} (code {2}).",
+                set.Label,
+                failedRow is null ? ex.Message : $"socket {failedRow.SocketIndex}: {rowError}",
+                ex is CrimsonSaveException cse ? cse.ErrorCode : 0);
             return;
-        }
-        // The commit re-decoded, so every promoted field has a fresh
-        // byte range again.
-        foreach (var r in _allSockets)
-        {
-            r.ValidSocketCountRangeStale = false;
         }
         ResyncSnapshotVersion();
-        if (failed > 0)
-        {
-            // Leave the per-slot failure text from ApplyGemPick standing
-            // — it names the slot and the native error — and only add the
-            // tally in the journal.
-            _journal.Log(UiText.Get("JournalCatSockets", "Sockets"),
-                UiText.Format("JournalSocketApplySetPartial",
-                    "Applied set \"{0}\" to {1} — {2} slot(s) changed, {3} failed",
-                    set.Label, target.DisplayName, changed, failed));
-            return;
-        }
         if (changed == 0)
         {
             StatusMessage = UiText.Format("SocketApplySetNoChange",
                 "Apply Set: {0} — no changes (every targeted slot already matches).", set.Label);
             return;
         }
+        IsDirty = true;
+        _pendingJournal.Clear();
         _journal.Log(UiText.Get("JournalCatSockets", "Sockets"),
             UiText.Format("JournalSocketApplySet", "Applied set \"{0}\" to {1} — {2} slot(s) changed",
                 set.Label, target.DisplayName, changed));
@@ -874,50 +854,58 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     /// Apply a user-picked gem to <paramref name="row"/>. Routes by
     /// state: empty → batch-fill (promote endurance + itemkey to
     /// present), filled → in-place change (overwrite itemkey + reset
-    /// endurance). Same-gem-as-current is a no-op. Auto-bumps
-    /// <c>_validSocketCount</c> when the slot index is past the
-    /// current count so the slot becomes visible in-game.
+    /// endurance). Raises <c>_validSocketCount</c> first when the slot
+    /// index is past it, so the slot is open in-game; re-picking the gem
+    /// already in an unopened slot is how a user repairs it, and counts
+    /// as a change. Inside an Apply-Set batch the journal entry waits for
+    /// the commit.
     /// </summary>
-    public bool ApplyGemPick(SocketRow row, uint newGemKey)
+    public GemPickResult ApplyGemPick(SocketRow row, uint newGemKey)
     {
         if (RejectIfSnapshotStale(row))
         {
-            return false;
+            return GemPickResult.Failed;
         }
-        // Open the slot FIRST. A gem sitting at an index the item's
-        // _validSocketCount doesn't cover is a state the game never
-        // writes (all 734 filled sockets in the reference saves sit
-        // inside their item's opened window) and the engine
-        // rejects it — the item comes back with every socket sealed.
-        // Doing the count before the gem means a failure here leaves
-        // the save consistent instead of stranding an orphan gem.
-        //
-        // This runs BEFORE the same-gem short-circuit on purpose: a slot
-        // that is filled but sits outside the window is exactly what
-        // StateLabel flags as "bump on next edit", and re-picking the
-        // gem already there is the obvious way a user tries to trigger
-        // that repair.
-        if (!TryEnsureSocketOpened(row))
-        {
-            return false;
-        }
-        if (row.IsFilled && newGemKey == row.CurrentGemKey)
-        {
-            StatusMessage = UiText.Get("SocketSameGem", "Same gem as current — no write performed.");
-            return false;
-        }
+        var sameGem = row.IsFilled && newGemKey == row.CurrentGemKey;
         // A gem must carry its own gamedata max_endurance. Without
         // iteminfo we cannot know it, and guessing reinstates exactly the
         // above-the-cap value that makes the engine reject the item — so
-        // refuse rather than write something plausible-looking.
-        if (ResolveGemEndurance(newGemKey) is not { } endurance)
+        // refuse rather than write something plausible-looking. Checked
+        // before the socket is opened, so a refusal writes nothing.
+        ushort endurance = 0;
+        if (!sameGem)
         {
-            row.LastError = "iteminfo not loaded — gem durability unknown";
-            StatusMessage = UiText.Get("SocketNoIteminfo",
-                "Game data (iteminfo) isn't loaded, so a gem's durability can't be read. "
-                + "Point the editor at the game install and reopen this dialog — writing a "
-                + "guessed durability makes the game reject the item's sockets.");
-            return false;
+            if (ResolveGemEndurance(newGemKey) is not { } known)
+            {
+                row.LastError = "iteminfo not loaded — gem durability unknown";
+                StatusMessage = UiText.Get("SocketNoIteminfo",
+                    "Game data (iteminfo) isn't loaded, so a gem's durability can't be read. "
+                    + "Point the editor at the game install and reopen this dialog — writing a "
+                    + "guessed durability makes the game reject the item's sockets.");
+                return GemPickResult.Failed;
+            }
+            endurance = known;
+        }
+        // Open the slot before the gem: a gem at an index the item's
+        // _validSocketCount does not cover is a state the game never writes,
+        // and the engine re-seals every socket on such an item. Doing the
+        // count first means a failure here leaves the save consistent.
+        if (!TryEnsureSocketOpened(row, out var opened))
+        {
+            return GemPickResult.Failed;
+        }
+        if (sameGem)
+        {
+            if (!opened)
+            {
+                StatusMessage = UiText.Get("SocketSameGem", "Same gem as current — no write performed.");
+                return GemPickResult.NoChange;
+            }
+            row.LastError = null;
+            RecordEdit(
+                UiText.Format("JournalSocketOpened", "Opened socket {1} on {0}", row.ItemName, row.SocketIndex),
+                UiText.Format("SocketOpenedDone", "Opened socket {1} on {0}.", row.ItemName, row.SocketIndex));
+            return GemPickResult.Changed;
         }
         var pathToSocket = new[]
         {
@@ -935,27 +923,21 @@ public sealed partial class SocketEditorViewModel : ObservableObject
                 // Empty → fill. Both fields go absent → present in one
                 // batch so the slot transitions atomically; mask flips
                 // from [0x00] to [0x03] in one re-emit.
-                var ops = new List<ScalarPresentBatchOp>
+                _loader.SetScalarFieldsPresentBatch(new List<ScalarPresentBatchOp>
                 {
-                    new ScalarPresentBatchOp(
-                        row.BlockIndex, pathToSocket, row.EnduranceFieldIdx,
-                        MakePresent: true, enduranceBytes),
-                    new ScalarPresentBatchOp(
-                        row.BlockIndex, pathToSocket, row.GemKeyFieldIdx,
-                        MakePresent: true, keyBytes),
-                };
-                _loader.SetScalarFieldsPresentBatch(ops);
+                    new(row.BlockIndex, pathToSocket, row.EnduranceFieldIdx, MakePresent: true, enduranceBytes),
+                    new(row.BlockIndex, pathToSocket, row.GemKeyFieldIdx, MakePresent: true, keyBytes),
+                });
             }
             else
             {
-                // Filled → change. Overwrite both fields in place;
-                // resetting _currentEndurance to max is the durability
-                // fix v1 missed (greater gems used to inherit the old
-                // slot's worn value when swapped).
-                _loader.SetScalarField(row.BlockIndex, pathToSocket,
-                    row.GemKeyFieldIdx, keyBytes);
-                _loader.SetScalarField(row.BlockIndex, pathToSocket,
-                    row.EnduranceFieldIdx, enduranceBytes);
+                // Filled → change: key and endurance in one batch, so a
+                // swapped gem never keeps the old gem's worn durability.
+                _loader.SetScalarFieldsBatch(new List<ScalarBatchOp>
+                {
+                    new(row.BlockIndex, pathToSocket, row.GemKeyFieldIdx, keyBytes),
+                    new(row.BlockIndex, pathToSocket, row.EnduranceFieldIdx, enduranceBytes),
+                });
             }
         }
         catch (CrimsonSaveException ex)
@@ -964,7 +946,14 @@ public sealed partial class SocketEditorViewModel : ObservableObject
                 "Apply failed ({0}, item {1}, socket {2}): {3}",
                 row.BagLabel, row.ItemName, row.SocketIndex, ex.Message);
             row.LastError = ex.Message;
-            return false;
+            if (opened)
+            {
+                // The socket count did change; account for that write.
+                RecordEdit(
+                    UiText.Format("JournalSocketOpened", "Opened socket {1} on {0}", row.ItemName, row.SocketIndex),
+                    StatusMessage);
+            }
+            return GemPickResult.Failed;
         }
         // Mirror state back so the row UI repaints and a follow-up
         // edit of the same slot routes through the "filled" branch
@@ -975,20 +964,39 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         row.AppliedGemName = newGemName;
         row.SetFilled(newGemKey, newGemName);
         row.LastError = null;
-        IsDirty = true;
-        _journal.Log(UiText.Get("JournalCatSockets", "Sockets"),
+        RecordEdit(
             wasFilled
                 ? UiText.Format("JournalSocketSet", "Set gem in {0} socket {1} → {2}",
                     row.ItemName, row.SocketIndex, newGemName)
                 : UiText.Format("JournalSocketFilled", "Filled gem in {0} socket {1} → {2}",
+                    row.ItemName, row.SocketIndex, newGemName),
+            wasFilled
+                ? UiText.Format("SocketSetDone", "Set gem in {0} socket {1}: → {2}.",
+                    row.ItemName, row.SocketIndex, newGemName)
+                : UiText.Format("SocketFilledDone", "Filled gem in {0} socket {1}: → {2}.",
                     row.ItemName, row.SocketIndex, newGemName));
-        StatusMessage = wasFilled
-            ? UiText.Format("SocketSetDone", "Set gem in {0} socket {1}: → {2}.",
-                row.ItemName, row.SocketIndex, newGemName)
-            : UiText.Format("SocketFilledDone", "Filled gem in {0} socket {1}: → {2}.",
-                row.ItemName, row.SocketIndex, newGemName);
+        return GemPickResult.Changed;
+    }
+
+    // Journal lines of an open Apply-Set batch; logged once it commits.
+    private readonly List<string> _pendingJournal = new();
+
+    /// <summary>
+    /// Account for one landed edit: journal it, mark dirty and re-baseline
+    /// the snapshot. Inside an Apply-Set batch the journal line waits for
+    /// the commit, since a rolled-back batch wrote nothing.
+    /// </summary>
+    private void RecordEdit(string journalLine, string status)
+    {
+        StatusMessage = status;
+        if (_deferredDepth > 0)
+        {
+            _pendingJournal.Add(journalLine);
+            return;
+        }
+        _journal.Log(UiText.Get("JournalCatSockets", "Sockets"), journalLine);
+        IsDirty = true;
         ResyncSnapshotVersion();
-        return true;
     }
 
     /// <summary>
@@ -1105,6 +1113,11 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     /// </summary>
     private bool RejectIfSnapshotStale(SocketRow row)
     {
+        if (WriteGate.IsBusy)
+        {
+            row.LastError = StatusMessage = UiText.Get("WriteGateBusy", "Another edit is still running; try again when it finishes.");
+            return true;
+        }
         if (!IsSnapshotStale)
         {
             return false;
@@ -1145,8 +1158,9 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     /// bad data to the game, and it re-seals every socket on the item.
     /// </para>
     /// </remarks>
-    private bool TryEnsureSocketOpened(SocketRow row)
+    private bool TryEnsureSocketOpened(SocketRow row, out bool wrote)
     {
+        wrote = false;
         if (row.ValidSocketCountFieldIdx < 0)
         {
             // Schema doesn't carry the field at all — nothing to
@@ -1172,24 +1186,6 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         {
             if (!row.ValidSocketCountPresent)
             {
-                _loader.SetScalarFieldPresent(row.BlockIndex, pathToItem,
-                    row.ValidSocketCountFieldIdx, makePresent: true, new[] { needed });
-                // Inside a deferred batch the promotion leaves the field's
-                // decoded byte range at start == end == 0 until the commit
-                // re-decodes, so a later in-place raise would compute
-                // expected = 0 and fail LENGTH_MISMATCH. Remember that.
-                row.ValidSocketCountRangeStale = _deferredDepth > 0;
-            }
-            else if (row.ValidSocketCountRangeStale)
-            {
-                // Stale range: the in-place setter is unusable. The
-                // presence surface writes the value from init_bytes and
-                // never reads start/end, but present(1) on an already-
-                // present field is a documented no-op — so clear it
-                // first. Both halves stay inside the same deferred batch,
-                // so the save is never observably missing the field.
-                _loader.SetScalarFieldPresent(row.BlockIndex, pathToItem,
-                    row.ValidSocketCountFieldIdx, makePresent: false, ReadOnlySpan<byte>.Empty);
                 _loader.SetScalarFieldPresent(row.BlockIndex, pathToItem,
                     row.ValidSocketCountFieldIdx, makePresent: true, new[] { needed });
             }
@@ -1222,9 +1218,9 @@ public sealed partial class SocketEditorViewModel : ObservableObject
             {
                 r.CurrentValidSocketCount = needed;
                 r.ValidSocketCountPresent = true;
-                r.ValidSocketCountRangeStale = row.ValidSocketCountRangeStale;
             }
         }
+        wrote = true;
         return true;
     }
 
@@ -1331,6 +1327,19 @@ public sealed partial class SocketEditorViewModel : ObservableObject
                               System.Globalization.CultureInfo.InvariantCulture,
                               out value);
     }
+}
+
+/// <summary>What <see cref="SocketEditorViewModel.ApplyGemPick"/> did to a slot.</summary>
+public enum GemPickResult
+{
+    /// <summary>The slot was written (a gem, or the socket count that opens it).</summary>
+    Changed,
+
+    /// <summary>The slot already held the gem and was open; nothing written.</summary>
+    NoChange,
+
+    /// <summary>Refused or failed; the row's error says why.</summary>
+    Failed,
 }
 
 /// <summary>
@@ -1583,17 +1592,6 @@ public sealed partial class SocketRow : ObservableObject
     [ObservableProperty]
     private bool _validSocketCountPresent;
 
-    /// <summary>
-    /// Set when this item's <c>_validSocketCount</c> was promoted
-    /// absent → present <b>inside an open deferred batch</b>, which
-    /// leaves its decoded byte range at <c>start == end == 0</c> until
-    /// the commit re-decodes. While that holds, the in-place scalar
-    /// setter rejects a write to it with <c>LENGTH_MISMATCH</c>, so
-    /// <see cref="SocketEditorViewModel.TryEnsureSocketOpened"/> must
-    /// raise the count through the presence surface instead.
-    /// </summary>
-    [ObservableProperty]
-    private bool _validSocketCountRangeStale;
 
     [ObservableProperty]
     private uint? _appliedGemKey;
@@ -1649,6 +1647,25 @@ public sealed partial class SocketRow : ObservableObject
         CurrentGemKey = gemKey;
         CurrentGemName = gemName;
         IsFilled = true;
+    }
+
+    /// <summary>The row's editable state, for putting it back after a rolled-back batch.</summary>
+    internal (bool Filled, uint GemKey, string GemName, uint? AppliedKey, string? AppliedName,
+        byte ValidCount, bool ValidPresent, string? Error) Capture() =>
+        (IsFilled, CurrentGemKey, CurrentGemName, AppliedGemKey, AppliedGemName,
+         CurrentValidSocketCount, ValidSocketCountPresent, LastError);
+
+    internal void Restore((bool Filled, uint GemKey, string GemName, uint? AppliedKey, string? AppliedName,
+        byte ValidCount, bool ValidPresent, string? Error) state)
+    {
+        CurrentGemKey = state.GemKey;
+        CurrentGemName = state.GemName;
+        IsFilled = state.Filled;
+        AppliedGemKey = state.AppliedKey;
+        AppliedGemName = state.AppliedName;
+        CurrentValidSocketCount = state.ValidCount;
+        ValidSocketCountPresent = state.ValidPresent;
+        LastError = state.Error;
     }
 
     /// <summary>Internal: flip state to empty after a successful Clear.</summary>

@@ -174,24 +174,28 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
         var listField = (int)_itemRow.DyeListFieldIndex;
         var index = Slots.Count;
         var newPath = itemPath.Append(new PathStep((uint)listField, (uint)index)).ToArray();
+        // One batch: create the element (from a sibling's template, or by
+        // cloning element 0), set its slot and clear the copied values. Any
+        // failure throws, which rolls the batch back, so no half-made or
+        // duplicated element stays behind.
+        var materialising = false;
         try
         {
-            if (index == 0)
-            {
-                // Template comes from a sibling item; all fields absent.
-                _loader.SetObjectListPresent(_itemRow.BlockIndex, itemPath, listField, makePresent: true);
-            }
-            else
-            {
-                _loader.ListCloneElement(_itemRow.BlockIndex, itemPath, listField, sourceIndex: 0, destinationIndex: index);
-            }
-            if (LoadElement(index) is not { } element)
-            {
-                StatusMessage = UiText.Get("DyeItemNotFound", "Item not found (schema drift?).");
-                return;
-            }
             _loader.RunDeferred(() =>
             {
+                if (index == 0)
+                {
+                    materialising = true;
+                    _loader.SetObjectListPresent(_itemRow.BlockIndex, itemPath, listField, makePresent: true);
+                    materialising = false;
+                }
+                else
+                {
+                    _loader.ListCloneElement(_itemRow.BlockIndex, itemPath, listField, sourceIndex: 0, destinationIndex: index);
+                }
+                var element = LoadElement(index)
+                    ?? throw new InvalidOperationException(UiText.Get("DyeItemNotFound", "Item not found (schema drift?)."));
+                var slotSet = false;
                 foreach (var f in element.Fields)
                 {
                     if (f.Name == "_dyeSlotNo")
@@ -201,6 +205,7 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
                         else
                             _loader.SetScalarFieldPresent(_itemRow.BlockIndex, newPath, f.FieldIndex,
                                 makePresent: true, initialBytes: [(byte)pick.SlotIndex]);
+                        slotSet = true;
                     }
                     else if (f.Present && f.Kind != "object_list" && f.Kind != "object_locator")
                     {
@@ -208,18 +213,24 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
                             makePresent: false, initialBytes: ReadOnlySpan<byte>.Empty);
                     }
                 }
+                if (!slotSet)
+                {
+                    throw new InvalidOperationException(UiText.Get("DyeSlotFieldMissing",
+                        "The new dye element has no _dyeSlotNo field, so its slot cannot be set."));
+                }
             });
         }
-        catch (CrimsonSaveException ex) when (ex.ErrorCode == -16 && index == 0)
+        catch (CrimsonSaveException ex) when (materialising && ex.ErrorCode == CrimsonErrorCode.NotFound)
         {
             StatusMessage = UiText.Get("DyeEditorAddNoTemplateBody",
                 "Dye one item in-game first to establish a template.");
+            _guard.Resync();
             return;
         }
-        catch (CrimsonSaveException ex)
+        catch (Exception ex) when (ex is CrimsonSaveException or InvalidOperationException)
         {
             StatusMessage = UiText.Format("DyeSlotAddFailed", "Could not add {0}: {1} (code {2})",
-                pick.DisplayLabel, ex.Message, ex.ErrorCode);
+                pick.DisplayLabel, ex.Message, ex is CrimsonSaveException cse ? cse.ErrorCode : 0);
             LoadSlots();
             return;
         }
@@ -431,6 +442,11 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
     /// </summary>
     internal bool RejectIfStale()
     {
+        if (WriteGate.IsBusy)
+        {
+            StatusMessage = UiText.Get("WriteGateBusy", "Another edit is still running; try again when it finishes.");
+            return true;
+        }
         if (!_guard.IsStale)
         {
             return false;
@@ -505,9 +521,14 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
             errorMessage = $"{ex.Message} (code {ex.ErrorCode})";
             return false;
         }
-        IsDirty = true;
         return true;
     }
+
+    /// <summary>
+    /// Mark the editor dirty once a row's Apply batch has committed; a
+    /// rolled-back batch changed nothing.
+    /// </summary>
+    internal void MarkApplied() => IsDirty = true;
 }
 
 /// <summary>Field-index cache for one ItemDyeSaveData element.</summary>
@@ -811,27 +832,28 @@ public sealed partial class DyeSlotRow : ObservableObject
                     if (!_parent.TryWriteScalar(SlotIndex, w.FieldIdx, w.WasPresent, w.Bytes,
                                                 out var err))
                     {
-                        LastError = $"{w.Label}: {err}";
-                        return;
+                        // Throwing rolls back the writes before this one too.
+                        throw new OperationCanceledException($"{w.Label}: {err}");
                     }
                     appliedLabels.Add(w.Label);
                 }
             });
         }
+        catch (OperationCanceledException failed)
+        {
+            _parent.ResyncSnapshot();
+            LastError = UiText.Format("DyeApplyRolledBack", "{0} — nothing applied.", failed.Message);
+            return;
+        }
         catch (CrimsonSaveException commitEx)
         {
             _parent.ResyncSnapshot();
-            LastError = $"Commit failed: {commitEx.Message} (code {commitEx.ErrorCode}). "
-                + "Reload the save without writing to revert.";
+            LastError = UiText.Format("DyeApplyCommitFailed", "Commit failed: {0} (code {1}) — nothing applied.",
+                commitEx.Message, commitEx.ErrorCode);
             return;
         }
         _parent.ResyncSnapshot();
-        if (LastError is not null && appliedLabels.Count == 0)
-        {
-            // First write failed pre-commit — LastError already set to
-            // "<Label>: <err>". Leave it as-is.
-            return;
-        }
+        _parent.MarkApplied();
         // Single per-slot journal entry aggregates which scalars
         // flipped, so the user's change list reads "Edited dye on
         // Robe slot 1 (R,G,B,Material)" not 4 separate lines.

@@ -191,20 +191,35 @@ public sealed class ContributionService(ISaveLoader loader, LocalizationProvider
             new PathStep((uint)t.ContainerListField, (uint)t.ContainerIndex),
             new PathStep((uint)t.ItemListField, 0),
         };
-        var ops = new List<ScalarBatchOp>
+        var item = t.ContainerElement.Fields.First(f => f.FieldIndex == t.ItemListField).Elements![t.ItemIndex];
+        List<ScalarBatchOp> ops;
+        try
         {
-            new(blockIndex, clonePath, t.Fields.ItemKeyIndex, BitConverter.GetBytes(itemKey)),
-            new(blockIndex, clonePath, t.Fields.StackIndex, BitConverter.GetBytes(amount)),
-            new(blockIndex, clonePath, t.Fields.SlotIndex, BitConverter.GetBytes((ushort)Math.Min(maxSlot + 1, ushort.MaxValue))),
-            new(blockIndex, clonePath, t.Fields.ItemNoIndex, BitConverter.GetBytes(maxItemNo + 1)),
-        };
-        if (t.Fields.TransferredIndex >= 0)
-        {
-            ops.Add(new ScalarBatchOp(blockIndex, clonePath, t.Fields.TransferredIndex,
-                BitConverter.GetBytes(TransferredItemKey(itemKey))));
+            ops =
+            [
+                new(blockIndex, clonePath, t.Fields.ItemKeyIndex, SaveFieldValues.EncodeLike(item, t.Fields.ItemKeyIndex, itemKey)),
+                new(blockIndex, clonePath, t.Fields.StackIndex, SaveFieldValues.EncodeLike(item, t.Fields.StackIndex, amount)),
+                new(blockIndex, clonePath, t.Fields.SlotIndex,
+                    SaveFieldValues.EncodeLike(item, t.Fields.SlotIndex, Math.Min(maxSlot + 1, ushort.MaxValue))),
+                new(blockIndex, clonePath, t.Fields.ItemNoIndex, SaveFieldValues.EncodeLike(item, t.Fields.ItemNoIndex, maxItemNo + 1)),
+            ];
+            if (t.Fields.TransferredIndex >= 0 && item.Fields[t.Fields.TransferredIndex].Present)
+            {
+                ops.Add(new ScalarBatchOp(blockIndex, clonePath, t.Fields.TransferredIndex,
+                    SaveFieldValues.EncodeLike(item, t.Fields.TransferredIndex, TransferredItemKey(itemKey))));
+            }
         }
-        loader.ListCloneElement(blockIndex, listPath, t.ItemListField, t.ItemIndex, destinationIndex: 0);
-        loader.SetScalarFieldsBatch(ops);
+        catch (InvalidOperationException ex)
+        {
+            return ex.Message;
+        }
+        // One batch: a failed patch rolls the clone back, so no copy of the
+        // template (same _itemNo) is left behind.
+        loader.RunDeferred(() =>
+        {
+            loader.ListCloneElement(blockIndex, listPath, t.ItemListField, t.ItemIndex, destinationIndex: 0);
+            loader.SetScalarFieldsBatch(ops);
+        });
         return null;
     }
 

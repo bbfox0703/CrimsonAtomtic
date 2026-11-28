@@ -340,6 +340,11 @@ public sealed partial class VendorBuybackViewModel : ObservableObject
     /// </summary>
     internal void ApplyRemove(VendorBuybackRow row)
     {
+        if (WriteGate.IsBusy)
+        {
+            row.LastError = StatusMessage = UiText.Get("WriteGateBusy", "Another edit is still running; try again when it finishes.");
+            return;
+        }
         if (_guard.IsStale)
         {
             row.LastError = UiText.Get("BuybackSnapshotStaleRow", "save changed elsewhere — reopen this dialog");

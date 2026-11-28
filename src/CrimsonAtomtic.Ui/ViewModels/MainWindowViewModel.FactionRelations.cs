@@ -26,6 +26,7 @@ public sealed partial class MainWindowViewModel
     internal async Task<FactionRelationApplyResult> ApplyFactionRelationsAsync(
         IReadOnlyList<FactionRelationChange> changes, IReadOnlyList<FactionGroupChange> groupChanges)
     {
+        using var writeGate = await WriteGate.EnterAsync().ConfigureAwait(true);
         if (_loadedPath is null || Summary is not { Blocks: { } blocks } || changes.Count + groupChanges.Count == 0)
         {
             return new FactionRelationApplyResult(0, null);

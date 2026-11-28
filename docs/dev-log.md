@@ -28,6 +28,48 @@ read from the top.
 
 -----
 
+## 2026-11-28 (no release) — Code audit P3: multi-step writes land whole or not at all
+
+- **The rule:** inside a deferred batch crimson-rs keeps the ops before a failure applied (it has no
+  savepoint), so a batch body that catches a failure and returns commits a half-made edit. Every
+  multi-step edit now throws on failure so `RunDeferred` rolls it back, and `ISaveLoader` says so
+  (B1-02). `RunDeferred` reports a failed rollback with the original error as the inner exception
+  and whether the batch is still open (B1-17); a rolled-back batch restores `HasStructuralEdit`
+  (B1-16); a batch failure no longer reports op 0 when no op was at fault (B1-03).
+- **What changes:**
+  - **Add Item, Grant and Contributions** clone and patch the new item in one batch, so a failure
+    no longer leaves a copy of the template with its `_itemNo` (which the game rejects). Field
+    bytes come from each field's own type tag, `_itemNo` is unique across the whole block, and a
+    failed "new" mark is a warning, not a failed add (B4-09, B4-12, B4-30).
+  - **Socket editor:** opening a socket is accounted for even when the gem write then stops, and
+    re-picking the gem already in an unopened socket opens it, in Apply-Set too (B4-07, B4-19). A
+    gem change writes key and durability in one call (B4-18). Apply-Set is all or nothing: a
+    failing slot rolls the whole set back, the rows are restored to match, and the journal line is
+    written only after the commit (B4-08).
+  - **Dye editor:** Add Dye, Add Slot and a row's Apply each run as one batch; a missing
+    `_dyeSlotNo` is a failure instead of a silent success; a row's failure is not overwritten by
+    "Applied"; the editor is marked dirty only after the commit (B4-02, B4-03, B4-06).
+  - **Sealed Abyss and knowledge:** a single Mark is one batch. The bulk Mark and the knowledge
+    inject run the whole sweep in one batch; when one entry fails, the batch rolls back and the
+    entries before it are applied again in a second batch, so each challenge or key lands whole
+    and the usual run still costs one re-decode. A knowledge field the template has absent is
+    promoted instead of failing (B5-03, B5-06).
+  - **Faction Relations** writes both sides of a change in one batch, so a relation is never left
+    one-sided; a group key takes the field's own width. **The dragon insert** rolls back when the
+    new dragon cannot get its own `_mercenaryNo` (B5-06).
+  - **One writer at a time:** `WriteGate` serialises every background edit for its whole flow (an
+    edit that calls another does not wait on itself), and the socket, dye and buyback editors
+    refuse to write while one runs (B1-05, B4-21, B5-13).
+  - crimson-rs accepts the same handle as transplant source and target, so the C# ban is gone (X-05).
+- **Found on the way:** the first `WriteGate` was an `async` method that set its `AsyncLocal`
+  depth inside itself; that change does not flow back to the caller, so a nested edit (Add Item
+  learning the item's knowledge) would have waited on itself forever. Its test caught it.
+- **Not verified in the app:** Apply-Set rollback and the bulk Mark retry need a failing write to
+  show; no live save produces one.
+- **Tests:** 466 green (+1 `WriteGateTests`).
+
+-----
+
 ## 2026-11-28 (no release) — Code audit P2: tool windows never write through a stale snapshot
 
 - **What changes:** tool windows address items by element index, and an insert or remove made

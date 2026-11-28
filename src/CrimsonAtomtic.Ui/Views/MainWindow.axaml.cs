@@ -1150,36 +1150,56 @@ public sealed partial class MainWindow : Window
             {
                 return;
             }
+            if (WriteGate.IsBusy)
+            {
+                await ConfirmDialog.ShowAlertAsync(this,
+                    UiText.Get("DyeEditorAddFailedTitle", "Could not add dye"),
+                    UiText.Get("WriteGateBusy", "Another edit is still running; try again when it finishes."));
+                return;
+            }
+            // One batch: materialise the list and set the new element's
+            // _dyeSlotNo. Any failure throws, which rolls both back, so an
+            // item never keeps a dye element on the wrong slot.
+            var materialising = false;
             try
             {
                 var loader = vm.GetSaveLoader();
-                // Step 1: materialize the _itemDyeDataList with one
-                // default-empty element (count=1, all fields absent).
-                loader.SetObjectListPresent(
-                    row.BlockIndex,
-                    row.BuildPathToItem(),
-                    (int)row.DyeListFieldIndex,
-                    makePresent: true);
-                // Step 2: patch _dyeSlotNo on the new element to the
-                // picked dye slot number. _dyeSlotNo is an i8 (signed), but
-                // dye slot numbers are 0..11, so the u8 encoding is identical.
-                var newElementPath = new[]
+                loader.RunDeferred(() =>
                 {
-                    new PathStep(row.FirstStepFieldIndex, row.FirstStepElementIndex),
-                    new PathStep(row.SecondStepFieldIndex, row.SecondStepElementIndex),
-                    new PathStep(row.DyeListFieldIndex, 0u),
-                };
-                var dyeSlotNoFieldIdx = ResolveDyeSlotNoFieldIndex(
-                    loader, loadedPath, row, newElementPath);
-                if (dyeSlotNoFieldIdx is int fieldIdx)
-                {
+                    materialising = true;
+                    loader.SetObjectListPresent(
+                        row.BlockIndex,
+                        row.BuildPathToItem(),
+                        (int)row.DyeListFieldIndex,
+                        makePresent: true);
+                    materialising = false;
+                    // _dyeSlotNo is an i8, but dye slot numbers are 0..11,
+                    // so the u8 encoding is identical.
+                    var newElementPath = new[]
+                    {
+                        new PathStep(row.FirstStepFieldIndex, row.FirstStepElementIndex),
+                        new PathStep(row.SecondStepFieldIndex, row.SecondStepElementIndex),
+                        new PathStep(row.DyeListFieldIndex, 0u),
+                    };
+                    if (ResolveDyeSlotNoFieldIndex(loader, loadedPath, row, newElementPath) is not int fieldIdx)
+                    {
+                        throw new InvalidOperationException(UiText.Get("DyeSlotFieldMissing",
+                            "The new dye element has no _dyeSlotNo field, so its slot cannot be set."));
+                    }
                     loader.SetScalarFieldPresent(
                         row.BlockIndex, newElementPath, fieldIdx,
                         makePresent: true,
                         initialBytes: [(byte)slotIdx]);
-                }
+                });
             }
-            catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex) when (ex.ErrorCode == CrimsonAtomtic.RustInterop.CrimsonErrorCode.NotFound)
+            catch (InvalidOperationException ex)
+            {
+                await ConfirmDialog.ShowAlertAsync(this,
+                    UiText.Get("DyeEditorAddFailedTitle", "Could not add dye"), ex.Message);
+                return;
+            }
+            catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex)
+                when (materialising && ex.ErrorCode == CrimsonAtomtic.RustInterop.CrimsonErrorCode.NotFound)
             {
                 // NOT_FOUND from SetObjectListPresent: no sibling block
                 // provides a template element. Tell the user how to

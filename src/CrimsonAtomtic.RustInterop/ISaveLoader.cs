@@ -121,10 +121,12 @@ public interface ISaveLoader
     ///     <see cref="EndDeferredRedecode"/> — which itself may throw
     ///     <c>MUTATION_INVALID</c>.</item>
     /// </list>
-    /// For partial-success workflows that want to KEEP already-applied
-    /// work when a per-op failure mid-batch fires, swallow per-op
-    /// exceptions inside <paramref name="body"/> so it returns
-    /// normally — that path lets the commit land.
+    /// Inside a batch a failed mutation leaves the ops before it applied
+    /// (crimson-rs has no savepoint), so a body that hits a failure must
+    /// throw to have the whole batch rolled back. A body that catches the
+    /// failure and returns commits the partly-applied tree. When the
+    /// rollback itself fails, the thrown exception carries the original
+    /// one as its inner exception and says whether the batch is still open.
     /// </summary>
     void RunDeferred(Action body);
 
@@ -326,7 +328,8 @@ public interface ISaveLoader
 
     /// <summary>
     /// Apply many <see cref="ScalarBatchOp"/> mutations in one FFI round
-    /// trip, sharing a single post-batch re-decode. All-or-nothing: if
+    /// trip, sharing a single post-batch re-decode. Outside a deferred
+    /// batch it is all-or-nothing: if
     /// any op fails validation the save body is left exactly as it was
     /// before the call, and the thrown
     /// <see cref="CrimsonSaveException"/> carries
@@ -520,7 +523,7 @@ public interface ISaveLoader
     /// <summary>
     /// Apply many <see cref="ScalarPresentBatchOp"/> presence-flips in
     /// one FFI round trip, sharing a single post-batch re-emit + re-decode.
-    /// All-or-nothing: if any op fails validation the save body is left
+    /// Outside a deferred batch it is all-or-nothing: if any op fails validation the save body is left
     /// exactly as it was before the call, and the thrown
     /// <see cref="CrimsonSaveException"/> carries
     /// <see cref="CrimsonSaveException.FailedOpIndex"/> pinpointing the
@@ -550,7 +553,7 @@ public interface ISaveLoader
 
     /// <summary>
     /// Apply many <see cref="ListRemoveBatchOp"/> element drops in one
-    /// FFI round trip. All-or-nothing on validation failure (same
+    /// FFI round trip. Outside a deferred batch, all-or-nothing on validation failure (same
     /// <see cref="CrimsonSaveException.FailedOpIndex"/> protocol as the
     /// scalar batches).
     /// </summary>

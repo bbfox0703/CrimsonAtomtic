@@ -20,6 +20,7 @@ public sealed partial class MainWindowViewModel
     /// <summary>Apply amount changes on a background thread, then refresh and journal.</summary>
     internal async Task<ContributionApplyResult> ApplyContributionsAsync(IReadOnlyList<ContributionChange> changes)
     {
+        using var writeGate = await WriteGate.EnterAsync().ConfigureAwait(true);
         if (_loadedPath is null || Summary is not { Blocks: { } blocks } || changes.Count == 0)
         {
             return new ContributionApplyResult(0, 0, null);

@@ -15,7 +15,7 @@
   "src/CrimsonAtomtic.Ui/ViewModels/AbyssGatesViewModel.cs": 1,
   "src/CrimsonAtomtic.Ui/ViewModels/FieldRowViewModel.cs": 1,
   "src/CrimsonAtomtic.Ui/ViewModels/ItemPickerViewModel.cs": 1,
-  "src/CrimsonAtomtic.Ui/ViewModels/MainWindowViewModel.cs": 8,
+  "src/CrimsonAtomtic.Ui/ViewModels/MainWindowViewModel.cs": 7,
   "src/CrimsonAtomtic.Ui/ViewModels/SocketEditorViewModel.cs": 1,
   "src/CrimsonAtomtic.Ui/Views/GameVersionMismatchDialog.axaml.cs": 1,
   "src/CrimsonAtomtic.Ui/Views/MainWindow.axaml": 1,

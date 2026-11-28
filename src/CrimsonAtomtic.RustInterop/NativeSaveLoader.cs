@@ -175,7 +175,12 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
             throw new CrimsonSaveException(rc,
                 $"crimson_save_begin_deferred_redecode failed: {ErrorName(rc)}");
         }
+        _structuralAtBegin = _structuralEditMade;
     }
+
+    // HasStructuralEdit as it was when the open batch began; a rollback
+    // restores it, since the rolled-back edits are gone.
+    private bool _structuralAtBegin;
 
     public void EndDeferredRedecode()
     {
@@ -183,6 +188,8 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         var rc = NativeMethods.EndDeferredRedecode(cached);
         if (rc != NativeMethods.OK)
         {
+            // A failed commit rolls the handle back to the pre-begin tree.
+            _structuralEditMade = _structuralAtBegin;
             throw new CrimsonSaveException(rc,
                 $"crimson_save_end_deferred_redecode failed: {ErrorName(rc)}");
         }
@@ -197,6 +204,7 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
             throw new CrimsonSaveException(rc,
                 $"crimson_save_abort_deferred_redecode failed: {ErrorName(rc)}");
         }
+        _structuralEditMade = _structuralAtBegin;
     }
 
     public bool IsDeferredRedecodeOpen()
@@ -247,10 +255,23 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
         {
             body();
         }
-        catch
+        catch (Exception original)
         {
-            try { AbortDeferredRedecode(); }
-            catch (CrimsonSaveException) { /* surface the original exception */ }
+            try
+            {
+                AbortDeferredRedecode();
+            }
+            catch (Exception abortEx)
+            {
+                bool? stillOpen;
+                try { stillOpen = IsDeferredRedecodeOpen(); }
+                catch (Exception probe) when (probe is CrimsonSaveException or InvalidOperationException) { stillOpen = null; }
+                var code = abortEx is CrimsonSaveException cse ? cse.ErrorCode : CrimsonErrorCode.Panic;
+                throw new CrimsonSaveException(code,
+                    $"Rolling back the deferred batch failed ({abortEx.Message}); batch still open: "
+                    + (stillOpen?.ToString() ?? "unknown") + $". The batch failed first with: {original.Message}",
+                    failedOpIndex: null, inner: original);
+            }
             throw;
         }
         EndDeferredRedecode();
@@ -537,16 +558,20 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
 
                 fixed (NativeMethods.CrimsonScalarBatchOp* pOps = cOps)
                 {
+                    nuint failedIdx = nuint.MaxValue;
                     var rc = NativeMethods.SetScalarFieldsBatch(
-                        cached, pOps, (nuint)count, out var failedIdx);
+                        cached, pOps, (nuint)count, ref failedIdx);
                     if (rc != NativeMethods.OK)
                     {
                         // usize::MAX (~unsigned -1) is the success
                         // sentinel — never written on error, but
                         // guard against a defensive Rust write anyway.
-                        int? failedOpIdx = failedIdx == nuint.MaxValue
+                        // The index is written only for a failing op; an early return or a
+                        // panic leaves the sentinel, and anything past the ops is not an op.
+                        int? failedOpIdx = rc is NativeMethods.PANIC or NativeMethods.NULL_ARG
+                                           || failedIdx >= (nuint)count
                             ? null
-                            : checked((int)failedIdx);
+                            : (int)failedIdx;
                         throw new CrimsonSaveException(
                             rc,
                             failedOpIdx is { } fi
@@ -639,13 +664,17 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                 }
                 fixed (NativeMethods.CrimsonScalarPresentBatchOp* pOps = cOps)
                 {
+                    nuint failedIdx = nuint.MaxValue;
                     var rc = NativeMethods.SetScalarFieldsPresentBatch(
-                        cached, pOps, (nuint)count, out var failedIdx);
+                        cached, pOps, (nuint)count, ref failedIdx);
                     if (rc != NativeMethods.OK)
                     {
-                        int? failedOpIdx = failedIdx == nuint.MaxValue
+                        // The index is written only for a failing op; an early return or a
+                        // panic leaves the sentinel, and anything past the ops is not an op.
+                        int? failedOpIdx = rc is NativeMethods.PANIC or NativeMethods.NULL_ARG
+                                           || failedIdx >= (nuint)count
                             ? null
-                            : checked((int)failedIdx);
+                            : (int)failedIdx;
                         throw new CrimsonSaveException(
                             rc,
                             failedOpIdx is { } fi
@@ -728,13 +757,17 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                 }
                 fixed (NativeMethods.CrimsonListRemoveBatchOp* pOps = cOps)
                 {
+                    nuint failedIdx = nuint.MaxValue;
                     var rc = NativeMethods.ListRemoveElementsBatch(
-                        cached, pOps, (nuint)count, out var failedIdx);
+                        cached, pOps, (nuint)count, ref failedIdx);
                     if (rc != NativeMethods.OK)
                     {
-                        int? failedOpIdx = failedIdx == nuint.MaxValue
+                        // The index is written only for a failing op; an early return or a
+                        // panic leaves the sentinel, and anything past the ops is not an op.
+                        int? failedOpIdx = rc is NativeMethods.PANIC or NativeMethods.NULL_ARG
+                                           || failedIdx >= (nuint)count
                             ? null
-                            : checked((int)failedIdx);
+                            : (int)failedIdx;
                         throw new CrimsonSaveException(
                             rc,
                             failedOpIdx is { } fi
@@ -1062,19 +1095,9 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                 + $"got {source.GetType().Name}.",
                 nameof(source));
         }
-        // The native side takes `&mut *target_handle` and `&*source_handle`
-        // from the two pointers; if they alias the same handle that's a
-        // simultaneous mutable + shared borrow — undefined behaviour in
-        // Rust. Reject same-instance transplant at the boundary. Duplicating
-        // an element within one save is ListCloneElement's job, not this.
-        if (ReferenceEquals(sourceNative, this))
-        {
-            throw new ArgumentException(
-                "TransplantListElement source and target must be different "
-                + "NativeSaveLoader instances; use ListCloneElement to duplicate "
-                + "an element within the same save.",
-                nameof(source));
-        }
+        // crimson-rs accepts the same handle as source and target (it copies
+        // the source element before mutating), so an element can move between
+        // lists of one save.
         ArgumentOutOfRangeException.ThrowIfNegative(targetBlockIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(targetFieldIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(insertAt);
@@ -1694,6 +1717,13 @@ public sealed class CrimsonSaveException : Exception
         FailedOpIndex = failedOpIndex;
     }
 
+    public CrimsonSaveException(int errorCode, string message, int? failedOpIndex, Exception? inner)
+        : base(message, inner)
+    {
+        ErrorCode = errorCode;
+        FailedOpIndex = failedOpIndex;
+    }
+
     public int ErrorCode { get; }
 
     /// <summary>
@@ -1830,7 +1860,7 @@ internal static partial class NativeMethods
         CrimsonSaveHandle handle,
         CrimsonScalarBatchOp* ops,
         nuint opCount,
-        out nuint failedOpIndex);
+        ref nuint failedOpIndex);
 
     /// <summary>
     /// Mirror of <c>CrimsonScalarPresentBatchOp</c> in
@@ -1856,7 +1886,7 @@ internal static partial class NativeMethods
         CrimsonSaveHandle handle,
         CrimsonScalarPresentBatchOp* ops,
         nuint opCount,
-        out nuint failedOpIndex);
+        ref nuint failedOpIndex);
 
     /// <summary>
     /// Mirror of <c>CrimsonListRemoveBatchOp</c> in
@@ -1877,7 +1907,7 @@ internal static partial class NativeMethods
         CrimsonSaveHandle handle,
         CrimsonListRemoveBatchOp* ops,
         nuint opCount,
-        out nuint failedOpIndex);
+        ref nuint failedOpIndex);
 
     [LibraryImport(LibraryName, EntryPoint = "crimson_save_dynamic_array_set_u32_elements")]
     public static unsafe partial int DynamicArraySetU32Elements(
