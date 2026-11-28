@@ -246,7 +246,7 @@ public sealed partial class MainWindowViewModel(
         {
             BulkOpStatus = string.Format(
                 System.Globalization.CultureInfo.CurrentCulture,
-                LookupUiResourceString("ItemPickerGotoNotFound")
+                UiText.Find("ItemPickerGotoNotFound")
                     ?? "Item {0} isn't in the loaded save.",
                 itemKey);
             return;
@@ -2126,21 +2126,11 @@ public sealed partial class MainWindowViewModel(
             var markable = TryReadCurrentChallengeContext(out _, out var skipReason);
             if (markable)
             {
-                return LookupUiResourceString("MarkChallengeCompleteTip") ?? string.Empty;
+                return UiText.Find("MarkChallengeCompleteTip") ?? string.Empty;
             }
-            var prefix = LookupUiResourceString("MarkChallengeSkipReasonPrefix") ?? "Disabled:";
+            var prefix = UiText.Find("MarkChallengeSkipReasonPrefix") ?? "Disabled:";
             return $"{prefix} {skipReason ?? "(unknown reason)"}";
         }
-    }
-
-    private static string? LookupUiResourceString(string key)
-    {
-        if (Avalonia.Application.Current?.TryGetResource(key, null, out var v) == true
-            && v is string s)
-        {
-            return s;
-        }
-        return null;
     }
 
     /// <summary>
@@ -2212,16 +2202,16 @@ public sealed partial class MainWindowViewModel(
         // missing (the `?? "..."` shape also keeps CA1863/CompositeFormat
         // from firing on string.Format). {10} = the conditional follow-up
         // bullet, itself a localized line that already ends with a newline.
-        var updateOrCreate = LookupUiResourceString(
+        var updateOrCreate = UiText.Find(
                 ctx.FollowUpAlreadyExists ? "MarkChallengeWordUpdate" : "MarkChallengeWordCreate")
             ?? (ctx.FollowUpAlreadyExists ? "update" : "create");
-        var followUpLine = LookupUiResourceString(
+        var followUpLine = UiText.Find(
                 ctx.FollowUpAlreadyExists ? "MarkChallengeFollowUpExists" : "MarkChallengeFollowUpNew")
             ?? (ctx.FollowUpAlreadyExists
                 ? "  • X_2 sub-mission entry already exists; skipped insert.\n"
                 : "  • NEW MissionStateData entry appended (cloned from FAR tracker, "
                   + "_key + _branchedTime patched to the X_2 sub-mission shape).\n");
-        var detailFmt = LookupUiResourceString("MarkChallengeConfirmDetail")
+        var detailFmt = UiText.Find("MarkChallengeConfirmDetail")
             ?? ("Mark this challenge as completed using the Pattern B v1 recipe?\n\n"
                 + "  Challenge key: {0}\n"
                 + "  Internal name: {1}\n"
@@ -2233,7 +2223,7 @@ public sealed partial class MainWindowViewModel(
                 + "  • FAR tracker _usedTagList: {8} → {9} entries (adds visible magic tag).\n"
                 + "{10}"
                 + "  • Catalog row + adjacent twin: UNTOUCHED. Engine handles those at reward pickup.\n\n");
-        var warnings = LookupUiResourceString("MarkChallengeConfirmWarnings")
+        var warnings = UiText.Find("MarkChallengeConfirmWarnings")
             ?? ("[!! HOLD THE MATCHING ARTIFACT] Confirm that the Sealed Abyss Artifact for THIS "
                 + "specific challenge is currently in your inventory. The editor does not check "
                 + "your inventory, and the in-game reward-claim "
@@ -2264,12 +2254,12 @@ public sealed partial class MainWindowViewModel(
             updateOrCreate, ctx.FollowUpKey, ctx.FollowUpInternalName,
             ctx.FarUsedTagList.Count, farTagsAfter, followUpLine) + warnings;
         var ok = await ask(
-            LookupUiResourceString("MarkChallengeConfirmTitle")
+            UiText.Find("MarkChallengeConfirmTitle")
                 ?? "Mark challenge complete (Pattern B v1)?",
             msg);
         if (!ok)
         {
-            BulkOpStatus = LookupUiResourceString("MarkChallengeCancelled") ?? "Mark cancelled.";
+            BulkOpStatus = UiText.Find("MarkChallengeCancelled") ?? "Mark cancelled.";
             return;
         }
 
@@ -2504,10 +2494,10 @@ public sealed partial class MainWindowViewModel(
                 ctx.FarUsedTagListFieldIdx, farTarget);
 
             // Phase 2b + 3: every remaining scalar mutation in one
-            // call, up to 3 FFI round trips fewer per challenge. The call
-            // validates every op before patching any, so a bad op
-            // applies none of them, and the caller's RunDeferred rolls
-            // back the writes above. Validation fails only on schema
+            // call, up to 3 FFI round trips fewer per challenge. Inside the
+            // caller's RunDeferred a failing op leaves the ops before it
+            // applied, so the error is returned and the caller throws to
+            // roll the whole batch back. Validation fails only on schema
             // drift, which would have errored earlier in this method.
             var batch = new List<ScalarBatchOp>(4)
             {
@@ -2839,7 +2829,6 @@ public sealed partial class MainWindowViewModel(
             skippedNoMission, skippedNoFar, skippedAlreadyDone, skippedOther,
             skipDetails);
     }
-
 
     /// <summary>
     /// One faction-stronghold node addressable for a state edit. Captured
@@ -3813,7 +3802,7 @@ public sealed partial class MainWindowViewModel(
             || _navStack.Peek() is not ElementsFrame parent
             || parent.Elements.Count == 0)
         {
-            BulkOpStatus = LookupUiResourceString("AddItemStatusOpenBag")
+            BulkOpStatus = UiText.Find("AddItemStatusOpenBag")
                 ?? "Open a bag first (drill into _inventorylist[N]._itemList).";
             return;
         }
@@ -3825,7 +3814,7 @@ public sealed partial class MainWindowViewModel(
         {
             BulkOpStatus = string.Format(
                 System.Globalization.CultureInfo.CurrentCulture,
-                LookupUiResourceString("AddItemStatusWrongList")
+                UiText.Find("AddItemStatusWrongList")
                     ?? "This list holds {0}, not ItemSaveData. Add unsupported here.",
                 sourceClass);
             return;
@@ -3845,7 +3834,7 @@ public sealed partial class MainWindowViewModel(
         // that don't match the item's iteminfo profile.
         int sourceIndex = 0;
         BlockDetails sourceElement = parent.Elements[0];
-        string cloneSourceLabel = LookupUiResourceString("AddItemSourceFirst") ?? "[0]: first element";
+        string cloneSourceLabel = UiText.Find("AddItemSourceFirst") ?? "[0]: first element";
         if (SelectedElement is { Block: var selBlock and not null } selRow)
         {
             for (var i = 0; i < parent.Elements.Count; i++)
@@ -3857,7 +3846,7 @@ public sealed partial class MainWindowViewModel(
                     var name = string.IsNullOrEmpty(selRow.ResolvedName) ? selRow.KeyText : selRow.ResolvedName;
                     cloneSourceLabel = string.Format(
                         System.Globalization.CultureInfo.CurrentCulture,
-                        LookupUiResourceString("AddItemSourceSelected") ?? "selected [{0}]: {1}",
+                        UiText.Find("AddItemSourceSelected") ?? "selected [{0}]: {1}",
                         i, name);
                     break;
                 }
@@ -3873,7 +3862,7 @@ public sealed partial class MainWindowViewModel(
                 out var idxSlotNo,
                 out var idxItemNo))
         {
-            BulkOpStatus = LookupUiResourceString("AddItemStatusMissingFields")
+            BulkOpStatus = UiText.Find("AddItemStatusMissingFields")
                 ?? "Source element missing one of "
                    + "_itemKey / _stackCount / _slotNo / _itemNo — bag layout "
                    + "incompatible with the clone-and-patch strategy.";
@@ -3938,7 +3927,7 @@ public sealed partial class MainWindowViewModel(
 
         BulkOpStatus = string.Format(
             System.Globalization.CultureInfo.CurrentCulture,
-            LookupUiResourceString("AddItemStatusProgress") ?? "Adding item {0} (template: {1})…",
+            UiText.Find("AddItemStatusProgress") ?? "Adding item {0} (template: {1})…",
             itemKey, cloneSourceLabel);
         var blockIdx = topBlock.Index;
         var listPath = parent.PathToList is PathStep[] a ? a : parent.PathToList.ToArray();
@@ -3953,9 +3942,9 @@ public sealed partial class MainWindowViewModel(
         // since that's where the clone now lives.
         var clonePath = ExtendPath(listPath, new PathStep((uint)listFieldIdx, (uint)dstIdx));
 
-        // Pre-compute LE byte buffers for the batched patch. One batch
-        // FFI call mutates every scalar atomically (all-or-nothing on
-        // validation), with a single post-batch re-decode.
+        // Pre-compute LE byte buffers for the batched patch: one FFI call
+        // for every identity scalar, inside the same deferred batch as the
+        // clone (see CloneAndPatchItem), so a failure rolls back both.
         List<ScalarBatchOp> batchOps;
         try
         {
@@ -3975,7 +3964,7 @@ public sealed partial class MainWindowViewModel(
         catch (InvalidOperationException ex)
         {
             BulkOpStatus = string.Format(System.Globalization.CultureInfo.CurrentCulture,
-                LookupUiResourceString("AddItemStatusFailed") ?? "Add failed: {0}", ex.Message);
+                UiText.Find("AddItemStatusFailed") ?? "Add failed: {0}", ex.Message);
             return;
         }
         // _transferredItemKey is the engine's cross-check handle,
@@ -4015,7 +4004,7 @@ public sealed partial class MainWindowViewModel(
             var learnedNote = await LearnItemKnowledgeAsync(itemKey);
             BulkOpStatus = string.Format(
                 System.Globalization.CultureInfo.CurrentCulture,
-                LookupUiResourceString("AddItemStatusSuccess")
+                UiText.Find("AddItemStatusSuccess")
                     ?? "Added item {0} from {1} (qty {2}, slot {3}, itemNo {4}).",
                 itemKey, cloneSourceLabel, newStackCount, newSlotNo, newItemNo) + learnedNote + markWarning;
         }
@@ -4023,7 +4012,7 @@ public sealed partial class MainWindowViewModel(
         {
             BulkOpStatus = string.Format(
                 System.Globalization.CultureInfo.CurrentCulture,
-                LookupUiResourceString("AddItemStatusFailed") ?? "Add failed: {0}",
+                UiText.Find("AddItemStatusFailed") ?? "Add failed: {0}",
                 error.Message);
         }
     }
@@ -5766,9 +5755,9 @@ public sealed partial class MainWindowViewModel(
             return true;
         }
         var proceed = await ask(
-            LookupUiResourceString("StructuralEditWarningTitle")
+            UiText.Find("StructuralEditWarningTitle")
                 ?? "Structural edit — may not load",
-            LookupUiResourceString("StructuralEditWarningBody")
+            UiText.Find("StructuralEditWarningBody")
                 ?? "This save has length-changing (structural) edits, such as completing a "
                 + "sealed abyss artifact challenge or adding/removing list items.\n\n"
                 + "The data is written correctly, but Crimson Desert's own save loader has a "

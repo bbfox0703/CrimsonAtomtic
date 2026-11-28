@@ -396,21 +396,11 @@ public sealed record ItemFlagChipModel(string Label, string Tooltip)
         foreach (var d in defs)
         {
             if ((flags & d.Bit) == 0) continue;
-            var label = LookupUiResourceString(d.LabelKey) ?? d.LabelFallback;
-            var tip = LookupUiResourceString(d.TipKey) ?? d.TipFallback;
+            var label = UiText.Find(d.LabelKey) ?? d.LabelFallback;
+            var tip = UiText.Find(d.TipKey) ?? d.TipFallback;
             chips.Add(new ItemFlagChipModel(label, tip));
         }
         return chips;
-    }
-
-    private static string? LookupUiResourceString(string key)
-    {
-        if (Avalonia.Application.Current?.TryGetResource(key, null, out var v) == true
-            && v is string s)
-        {
-            return s;
-        }
-        return null;
     }
 
     private readonly record struct FlagDef(

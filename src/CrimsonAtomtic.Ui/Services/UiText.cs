@@ -10,10 +10,9 @@ namespace CrimsonAtomtic.Ui.Services;
 /// <para>
 /// AOT-safe: just <see cref="Application.TryGetResource(object, Avalonia.Styling.ThemeVariant?, out object?)"/>
 /// + <see cref="string.Format(IFormatProvider, string, object?[])"/> — no
-/// reflection. This replaces the per-view-model <c>LookupUiResourceString</c>
-/// copies so confirm dialogs, status lines, and journal entries built in
-/// code can be localized the same way as <c>{DynamicResource}</c> bindings
-/// in XAML.
+/// reflection. Confirm dialogs, status lines, and journal entries built in
+/// code are localized through it the same way as <c>{DynamicResource}</c>
+/// bindings in XAML.
 /// </para>
 ///
 /// <para>
@@ -30,10 +29,17 @@ public static class UiText
     /// or return <paramref name="fallback"/> when the key is absent (or no
     /// <see cref="Application"/> is running, e.g. in a headless test host).
     /// </summary>
-    public static string Get(string key, string fallback)
+    public static string Get(string key, string fallback) => Find(key) ?? fallback;
+
+    /// <summary>
+    /// Resolve <paramref name="key"/> from the active language dictionary, or
+    /// <c>null</c> when it is absent, for callers whose fallback is more than
+    /// a constant.
+    /// </summary>
+    public static string? Find(string key)
         => Application.Current?.TryGetResource(key, null, out var v) == true && v is string s
             ? s
-            : fallback;
+            : null;
 
     /// <summary>
     /// Resolve <paramref name="key"/> (English <paramref name="fallback"/>

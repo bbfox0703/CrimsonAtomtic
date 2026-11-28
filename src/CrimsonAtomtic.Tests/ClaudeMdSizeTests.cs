@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Xunit;
@@ -14,17 +15,20 @@ public sealed class ClaudeMdSizeTests
 {
     private const long MaxBytes = 40 * 1024;
 
-    private static readonly string[] SkippedDirs = ["vendor", "out", "bin", "obj", ".git", "dist", "data"];
+    // Pruned by name before descending, so build trees, caches and the
+    // vendored crate's target/ are never walked.
+    private static readonly string[] SkippedDirNames =
+        ["vendor", "bin", "obj", ".git", ".vs", ".venv", "node_modules", "target", "__pycache__"];
+
+    // Root-level folders only: a "data" or "out" folder deeper down is
+    // ordinary source.
+    private static readonly string[] SkippedRootDirs = ["out", "dist", "data"];
 
     [Fact]
     public void EveryClaudeMd_IsAtMost40KB()
     {
         var root = FindRepoRoot();
-        var files = Directory.EnumerateFiles(root, "CLAUDE.md", SearchOption.AllDirectories)
-            .Where(f => !Path.GetRelativePath(root, f)
-                .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-                .Any(part => SkippedDirs.Contains(part, StringComparer.OrdinalIgnoreCase)))
-            .ToList();
+        var files = FindClaudeMds(root);
 
         Assert.Contains(files, f => Path.GetDirectoryName(f) == root);
 
@@ -36,6 +40,28 @@ public sealed class ClaudeMdSizeTests
 
         Assert.True(over.Count == 0,
             $"CLAUDE.md over {MaxBytes:N0} B; trim it or move text to a doc: {string.Join("; ", over)}");
+    }
+
+    private static List<string> FindClaudeMds(string root)
+    {
+        var found = new List<string>();
+        var pending = new Stack<string>();
+        pending.Push(root);
+        var options = new EnumerationOptions { IgnoreInaccessible = true };
+        while (pending.Count > 0)
+        {
+            var dir = pending.Pop();
+            var claudeMd = Path.Combine(dir, "CLAUDE.md");
+            if (File.Exists(claudeMd)) found.Add(claudeMd);
+            foreach (var sub in Directory.EnumerateDirectories(dir, "*", options))
+            {
+                var name = Path.GetFileName(sub);
+                if (SkippedDirNames.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
+                if (dir == root && SkippedRootDirs.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
+                pending.Push(sub);
+            }
+        }
+        return found;
     }
 
     private static string FindRepoRoot()

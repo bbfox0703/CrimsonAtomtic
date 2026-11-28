@@ -176,15 +176,6 @@ public sealed partial class ItemPickerViewModel : ObservableObject
     private bool _canAddToTarget;
 
     /// <summary>
-    /// Resolve a localized UI string by resource key (null when absent).
-    /// Mirrors the helper in MainWindowViewModel / FindItemsViewModel.
-    /// </summary>
-    private static string? LookupUiResourceString(string key)
-        => Avalonia.Application.Current?.TryGetResource(key, null, out var v) == true && v is string s
-            ? s
-            : null;
-
-    /// <summary>
     /// Composed label for the top action button: names the picked item
     /// and (when there's a valid clone source) where it comes from. Built
     /// from localized format strings so en/zh/ja each control word order;
@@ -196,17 +187,17 @@ public sealed partial class ItemPickerViewModel : ObservableObject
         {
             if (SelectedRow is not { } row)
             {
-                return LookupUiResourceString("ItemPickerSelectPrompt")
+                return UiText.Find("ItemPickerSelectPrompt")
                     ?? "Select an item below, then Add";
             }
             return CanAddToTarget && !string.IsNullOrEmpty(SourceName)
                 ? string.Format(
                     System.Globalization.CultureInfo.CurrentCulture,
-                    LookupUiResourceString("ItemPickerAddWithSource") ?? "+ Add \"{0}\" from \"{1}\"",
+                    UiText.Find("ItemPickerAddWithSource") ?? "+ Add \"{0}\" from \"{1}\"",
                     row.DisplayLabel, SourceName)
                 : string.Format(
                     System.Globalization.CultureInfo.CurrentCulture,
-                    LookupUiResourceString("ItemPickerAddNoSource") ?? "+ Add \"{0}\"",
+                    UiText.Find("ItemPickerAddNoSource") ?? "+ Add \"{0}\"",
                     row.DisplayLabel);
         }
     }
@@ -215,7 +206,7 @@ public sealed partial class ItemPickerViewModel : ObservableObject
     public string? TopActionHint =>
         CanAddToTarget
             ? null
-            : LookupUiResourceString("ItemPickerOpenBagHint")
+            : UiText.Find("ItemPickerOpenBagHint")
               ?? "Open a bag (drill into an item list) and pick a row to clone from.";
 
     [ObservableProperty]

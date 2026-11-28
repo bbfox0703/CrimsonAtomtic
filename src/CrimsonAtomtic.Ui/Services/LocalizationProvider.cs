@@ -347,6 +347,9 @@ public sealed class LocalizationProvider : IDisposable
     /// <summary>Owns each DLC's key-table bridges.</summary>
     private readonly List<IDisposable> _dlcBridges = [];
 
+    /// <summary>(DLC name, table stem) pairs merged into their base bridge.</summary>
+    private readonly HashSet<(string Dlc, string Table)> _mergedDlcTables = [];
+
     /// <summary>
     /// By field TypeName, one resolver per DLC table: <c>(key, PALOC parts of
     /// the asked language) → name</c>. Asked after the base bridge misses.
@@ -674,8 +677,10 @@ public sealed class LocalizationProvider : IDisposable
         TryBootstrapDyeGamedata(gameRoot);
         TryBootstrapStoreInfo(gameRoot);
         TryBootstrapNicheBridges(gameRoot);
-        TryBootstrapDlcKeyTables(gameRoot);
+        // Merge first: a DLC table that merged into its base bridge needs no
+        // resolver of its own.
         TryMergeDlcTables(gameRoot);
+        TryBootstrapDlcKeyTables(gameRoot);
 
         // ── Discover available PALOC languages by probing the well-known
         // group range. PAMT parses are fast (a few ms each); the probe
@@ -808,6 +813,7 @@ public sealed class LocalizationProvider : IDisposable
     /// </summary>
     private void TryMergeDlcTables(string gameRoot)
     {
+        _mergedDlcTables.Clear();
         foreach (var dlc in GameDataLayout.DlcNames(gameRoot))
         {
             var pamt = Path.Combine(
@@ -826,8 +832,11 @@ public sealed class LocalizationProvider : IDisposable
                 try
                 {
                     var stem = GameDataLayout.DlcTableStem(table, dlc);
-                    merge(_paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(stem)),
-                          _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Header(stem)));
+                    if (merge(_paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(stem)),
+                              _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Header(stem))) is not null)
+                    {
+                        _mergedDlcTables.Add((dlc, table));
+                    }
                 }
                 catch (CrimsonSaveException ex) { NoteLoadFailure(ex); }
                 catch (IOException ex) { NoteLoadFailure(ex); }
@@ -903,6 +912,12 @@ public sealed class LocalizationProvider : IDisposable
         params string[] typeNames)
         where T : class, IDisposable
     {
+        // Its rows are in the base bridge already, which is asked first; a
+        // second copy would never be reached.
+        if (_mergedDlcTables.Contains((dlc, tableStem)))
+        {
+            return;
+        }
         try
         {
             var stem = GameDataLayout.DlcTableStem(tableStem, dlc);

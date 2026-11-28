@@ -10,6 +10,12 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <!-- The layout tests read the native batch-op structs, which stay
+       internal to this assembly. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="CrimsonAtomtic.Tests" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\CrimsonAtomtic.Core\CrimsonAtomtic.Core.csproj" />
     <ProjectReference Include="..\CrimsonAtomtic.SaveModel\CrimsonAtomtic.SaveModel.csproj" />

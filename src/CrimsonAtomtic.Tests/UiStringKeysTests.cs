@@ -15,9 +15,9 @@ public sealed partial class UiStringKeysTests
     [GeneratedRegex("""x:Key="([^"]+)"[^>]*>""")]
     private static partial Regex DictionaryKey();
 
-    // UiText.Get("Key", …), UiText.Format("Key", …), LookupUiResourceString("Key"),
+    // UiText.Get("Key", …), UiText.Format("Key", …), UiText.Find("Key"),
     // FindResource("Key"), DynamicResource Key in AXAML.
-    [GeneratedRegex("""(?:UiText\.(?:Get|Format)|LookupUiResourceString|FindResource)\(\s*"([A-Za-z0-9_]+)"\s*[,)]""")]
+    [GeneratedRegex("""(?:UiText\.(?:Get|Format|Find)|FindResource)\(\s*"([A-Za-z0-9_]+)"\s*[,)]""")]
     private static partial Regex CodeKey();
 
     [GeneratedRegex("""\{DynamicResource\s+([A-Za-z0-9_]+)\s*\}""")]

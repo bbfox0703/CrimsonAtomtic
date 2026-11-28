@@ -384,6 +384,38 @@ public sealed class SaveBackupServiceTests : IDisposable
     }
 
     [Fact]
+    public void ListBackups_AFolderThatCannotBeOpened_IsCountedAndSkipped()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var savePath = CreateSaveFile("102190433", "slot0", [0x11]);
+        Assert.True(_service.BackupBeforeWrite(savePath).IsSuccess);
+
+        // A junction whose target is gone: listed by its parent, but opening
+        // it fails, which is how an unreadable folder looks to the scan.
+        var target = Path.Combine(Path.GetTempPath(), "crimson-gone-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(target);
+        var junction = Path.Combine(_service.BackupRoot, "Steam", "999");
+        var mklink = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+            "cmd.exe", ["/c", "mklink", "/J", junction, target])
+        { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true })!;
+        mklink.WaitForExit();
+        Assert.Equal(0, mklink.ExitCode);
+        Directory.Delete(target);
+
+        try
+        {
+            var entries = _service.ListBackups(out var unreadable);
+
+            Assert.Single(entries);
+            Assert.Equal(1, unreadable);
+        }
+        finally
+        {
+            Directory.Delete(junction);
+        }
+    }
+
+    [Fact]
     public void RestoreDirectory_UnknownPlatformWithoutSource_IsNull()
     {
         var entry = new BackupEntry(SavePlatform.Unknown, "u", "s", DateTime.UtcNow, _root, ["save.save"], 1);

@@ -28,6 +28,47 @@ read from the top.
 
 -----
 
+## 2026-11-28 (no release) — Code audit P13 (part) and P14 (start): interop tests, key coverage, first cleanups
+
+- **What changes:**
+  - **Interop layout tests:** size and every field offset of the seven structs that cross the C ABI
+    (inventory / character-ref records, PAZ entry, path step, the three batch-op structs) are
+    checked against their `#[repr(C)]` twins (B1-24). The tests read the batch-op structs through
+    `InternalsVisibleTo`.
+  - **Deferred-failure tests:** a failure inside a deferred batch keeps everything before it, and
+    only a throw out of `RunDeferred` rolls back. A body that swallows the failure commits the
+    partial tree (B1-24).
+  - **Key coverage:** a live test walks every `*Key` field of the newest save. A resolvable type
+    may not leave more distinct keys unresolved than `key_resolution_baseline.json` allows, and a
+    key type with no resolver must be listed there. Regenerate it with
+    `$env:UPDATE_KEY_BASELINE = '1'` (B3-13).
+  - **Backup and settings tests:** a backup folder that cannot be opened is counted and skipped;
+    an unreadable `settings.json` is kept aside and defaults are used (B2-30, service part).
+  - `ClaudeMdSizeTests` prunes `vendor/`, `target/`, `.venv/` and the like before walking, and
+    skips `data/` / `out/` / `dist/` only at the root (B6-32).
+  - **DLC tables:** a DLC table merged into its base bridge no longer also gets its own resolver
+    and native copy. One whose merge failed keeps its resolver as the fallback (B3-21, part).
+  - **One UI-string lookup:** `UiText.Find` replaces three private copies in the view models
+    (B3-19, part).
+- **Found on the way:**
+  - Inside a deferred batch, a multi-op call that fails keeps its own earlier ops. The
+    all-or-nothing validation holds only outside a batch, as `ISaveLoader` says. Two comments
+    claiming otherwise inside `RunDeferred` flows (Pattern B, clone-and-patch) were corrected; the
+    flows themselves were right, since they throw and roll back.
+  - In the newest save, 5 of 4,948 distinct mission keys do not resolve: 1000194, 1000444, and
+    three negative-encoded ones (0xFFFFF46D, 0xFFFFF4B0, 0xFFFFF4B1), the range the Sealed Abyss
+    Artifact notes in the P11 entry describe. One `StringInfoKey` (3938836851) does not resolve.
+    Nine key types have no resolver.
+- **Left open:**
+  - The editor-flow tests (B4-22, B5-16).
+  - The view-model lifecycle tests: they need a seam, because `MainWindowViewModel` wants a live
+    Avalonia `Application` through `UiLanguageService`.
+  - The rest of P14: file splits, the tool-window helper, Add Dye out of the view, and the
+    Sealed Abyss / knowledge services.
+- **Tests:** 509 C# + 60 Python green.
+
+-----
+
 ## 2026-11-28 (no release) — Code audit P12: docs match the code, and no history in comments
 
 - **What changes:**

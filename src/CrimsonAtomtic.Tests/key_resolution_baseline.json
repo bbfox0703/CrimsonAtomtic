@@ -1,0 +1,17 @@
+{
+  "maxUnresolved": {
+    "MissionKey": 5,
+    "StringInfoKey": 1
+  },
+  "noResolver": [
+    "BuffDBKey",
+    "EquipSlotNameKey",
+    "FactionOperationKey",
+    "FactionResearchKey",
+    "FactionSpawnDataKey",
+    "FieldGimmickSaveDataKey",
+    "FieldInfoKey",
+    "FieldNPCSaveDataKey",
+    "GamePlayTriggerInfoKey"
+  ]
+}
