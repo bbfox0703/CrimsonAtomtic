@@ -53,10 +53,10 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | ID | 標題 | 嚴重度 | 確認 | 批次 | 狀態 | 修正 | 備註 |
 |---|---|---|---|---|---|---|---|
 | B1-01 | `LoadBlockDetails` 的 details cache 在 deferred batch 中失效（abort 後出現 ABA 舊資料） | bug | 上游已修 | P0 | 已修 | `ff24f9a` | crimson-rs ebf7304: mutation_version 在 batch 內每次 mutation 都遞增、abort 只往前；C# 的 cache 每次讀 FFI version，升 vendor 即修。四個 rollback 測試改成新契約。 |
-| B1-02 | deferred 模式下 batch 不再「all-or-nothing」，而文件推薦的 partial-success 寫法會 commit 半套操作 | bug | 確認 | P3 | 待修 |  | Rust 端已寫明 deferred 模式下前面的 op 保留；沒有 savepoint API。新增 −26/−27 與 re-decode 驗證，batch 中途失敗點更多。 |
-| B1-03 | batch 的 `FailedOpIndex` 在 PANIC 或提早返回時誤報為 op 0 | bug | 確認 | P3 | 待修 |  | NULL_ARG 提早返回與 PANIC 仍不寫 out_failed_op_index；成功時改為 usize::MAX。 |
+| B1-02 | deferred 模式下 batch 不再「all-or-nothing」，而文件推薦的 partial-success 寫法會 commit 半套操作 | bug | 確認 | P3 | 已修 | `951ac21` | Rust 端已寫明 deferred 模式下前面的 op 保留；沒有 savepoint API。新增 −26/−27 與 re-decode 驗證，batch 中途失敗點更多。 |
+| B1-03 | batch 的 `FailedOpIndex` 在 PANIC 或提早返回時誤報為 op 0 | bug | 確認 | P3 | 已修 | `951ac21` | NULL_ARG 提早返回與 PANIC 仍不寫 out_failed_op_index；成功時改為 usize::MAX。 |
 | B1-04 | two-call pattern 丟棄第二次呼叫回報的長度或筆數 | risk | 確認 | P5 | 待修 |  | two-call 語意不變（第二次回報實際長度/筆數）；列舉改為加鎖，不再有 data race，但兩次呼叫之間仍可能被插入。 |
-| B1-05 | handle 層級的 batch 狀態沒有 C# 端的單一寫入者保證（跨執行緒 mutation 會混入別人的 batch） | risk | 確認 | P3 | 待修 |  | batch 狀態仍屬於 handle，C# 端沒有單一寫入者；與 B4-21、B5-13 同一個 mutation gate。 |
+| B1-05 | handle 層級的 batch 狀態沒有 C# 端的單一寫入者保證（跨執行緒 mutation 會混入別人的 batch） | risk | 確認 | P3 | 已修 | `951ac21` | batch 狀態仍屬於 handle，C# 端沒有單一寫入者；與 B4-21、B5-13 同一個 mutation gate。 |
 | B1-06 | catalog 的 `MergeDlcFromBytes` 與並行 lookup 不安全，C# 端沒有防護也沒有文件 | risk | 確認 | P6 | 待修 |  | Rust 文件仍寫「不能與並行 lookup 同時進行」；merge 現在可能回傳 BODY_PARSE。 |
 | B1-07 | 部分 catalog lookup 把所有錯誤碼默默轉成「找不到」或 0 | risk | 確認 | P4 | 待修 |  | faction get_entry / lookup_count 改為先清零 out 參數，錯誤一律讀成「找不到」。 |
 | B1-08 | `GameDataLayout.TryListDir` 吞掉所有 `CrimsonSaveException` | risk | 確認 | P4 | 待修 |  | 新增更多 BODY_PARSE 來源（未知 PAMT flag），TryListDir 仍全吞。 |
@@ -67,8 +67,8 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B1-13 | 綁定了 2.01 以後語意已錯的 3-byte dye mask ABI | risk | 確認 | P5 | 待修 |  | 3-byte mask 保留做相容；_mask_full / _dye_slot_bits 等新函式尚未綁定。 |
 | B1-14 | PAZ 每抽取一個檔案都做兩次完整的 PAMT 解析與解密解壓 | risk | 確認 | P6 | 待修 |  | PAZ 仍每次重新解析 PAMT；沒有 allocate-and-free API。 |
 | B1-15 | `LoadBlockDetails` 持有 `_cacheLock` 期間做 1–2 秒的 FFI 與 JSON 反序列化 | risk | 確認 | P6 | 待修 |  | 純 C# 問題。 |
-| B1-16 | `HasStructuralEdit` 與 deferred 狀態不同步 | risk | 確認 | P3 | 待修 |  | 新增 −26/−27 部分失敗路徑。 |
-| B1-17 | `RunDeferred` 對 abort 或 commit 失敗的處理不完整 | risk | 確認 | P3 | 待修 |  | commit 失敗時 version 現在往前移；take() 之後的 PANIC 不變。 |
+| B1-16 | `HasStructuralEdit` 與 deferred 狀態不同步 | risk | 確認 | P3 | 已修 | `951ac21` | 新增 −26/−27 部分失敗路徑。 |
+| B1-17 | `RunDeferred` 對 abort 或 commit 失敗的處理不完整 | risk | 確認 | P3 | 已修 | `951ac21` | commit 失敗時 version 現在往前移；take() 之後的 PANIC 不變。 |
 | B1-18 | Rule 7：magic strings 沒有集中管理，錯誤碼名稱表重複 8 份且內容不一致 | rule violation | 確認 | P9 | 已修 | `ff24f9a` | 變嚴重：−26 LIST_PARTIALLY_DECODED、−27 ELEMENT_CLASS_MISMATCH、−28 HMAC_UNVERIFIED 不在常數與 8 份名稱表內。P0 先補常數與單一名稱表。 P0 建立 CrimsonErrorCode 單一名稱表並補 −26/−27/−28；其餘 magic strings 仍在 P9。 |
 | B1-19 | 整個專案抑制 CA1416，且理由已過時（削弱 Rule 4 的防線） | rule violation | 確認 | P10 | 待修 |  | 純 C# 問題。 |
 | B1-20 | 文件與註解過時或錯置 | cleanup | 確認 | P12 | 待修 |  | ISaveLoader 的「每次成功 mutation 剛好 +1」在新版更錯；NativePaverReader「最新 export」註解過時。 |
@@ -144,26 +144,26 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | ID | 標題 | 嚴重度 | 確認 | 批次 | 狀態 | 修正 | 備註 |
 |---|---|---|---|---|---|---|---|
 | B4-01 | Dye 與 Vendor Buyback 沒有 snapshot 過期檢查；其他視窗做了 length-changing 編輯後，會寫到錯的物品 | bug | 確認 | P2 | 已修 | `30dd0ce` | Dye 完全成立；Buyback 較窄（只在同一商店的 sold list 被動到時）。 |
-| B4-02 | 「+ Add dye」流程分兩步寫入、失敗時不回復；找不到 `_dyeSlotNo` 時仍回報成功 | bug | 確認 | P3 | 待修 |  | Add dye 兩步寫入、失敗不回復、找不到 _dyeSlotNo 仍回報成功。 |
-| B4-03 | `DyeSlotEditorViewModel.AddSlot`：batch 外先 clone，後續失敗時留下一份完整複製的 element 0 | bug | 確認 | P3 | 待修 |  | AddSlot 在 batch 外 clone，失敗時留下複本。 |
+| B4-02 | 「+ Add dye」流程分兩步寫入、失敗時不回復；找不到 `_dyeSlotNo` 時仍回報成功 | bug | 確認 | P3 | 已修 | `951ac21` | Add dye 兩步寫入、失敗不回復、找不到 _dyeSlotNo 仍回報成功。 |
+| B4-03 | `DyeSlotEditorViewModel.AddSlot`：batch 外先 clone，後續失敗時留下一份完整複製的 element 0 | bug | 確認 | P3 | 已修 | `951ac21` | AddSlot 在 batch 外 clone，失敗時留下複本。 |
 | B4-04 | `DyeSlotRow` 的原始值在 Apply 後不會更新：改回原值時不會寫入，畫面與存檔不一致 | bug | 確認 | P5 | 待修 |  | _orig* 不更新；第二次 Apply 的 present(1) 在新版 crimson-rs 是 no-op（G-03）。 |
 | B4-05 | Dye Apply 會把所有 absent 的 scalar 以 0 寫成 present；`_grimeOpacity` absent ≠ 0 | bug | 確認 | P5 | 待修 |  | absent channel 被寫成 present 0；grime absent 的意義需存檔掃描確認。 |
-| B4-06 | `DyeSlotRow.Apply` 部分失敗時，錯誤訊息被「Applied: …」蓋掉 | bug | 確認 | P3 | 待修 |  | LastError 被「Applied」蓋掉；IsDirty 在 batch 內設定。 |
-| B4-07 | `ApplyGemPick` 開啟 socket 後回傳 false：自己的寫入讓之後的編輯全被擋下，也沒有記帳 | bug | 確認 | P3 | 待修 |  | 開了 socket 卻回傳 false，之後的編輯全被擋。 |
-| B4-08 | Apply-Set 的 commit 失敗會回滾存檔，但 row 狀態與 Journal 仍宣稱已套用 | bug | 確認 | P3 | 待修 |  | commit 失敗回滾存檔，但 row 狀態與 Journal 仍宣稱已套用。 |
-| B4-09 | Add Item / Grant：clone 與修改欄位不是原子操作，失敗時留下會讓遊戲崩潰的重複物品 | bug | 確認 | P3 | 待修 |  | clone / batch / new-mark 三次獨立 commit；上游 G-08 讓 batch 內 clone 後寫入變可行。 |
+| B4-06 | `DyeSlotRow.Apply` 部分失敗時，錯誤訊息被「Applied: …」蓋掉 | bug | 確認 | P3 | 已修 | `951ac21` | LastError 被「Applied」蓋掉；IsDirty 在 batch 內設定。 |
+| B4-07 | `ApplyGemPick` 開啟 socket 後回傳 false：自己的寫入讓之後的編輯全被擋下，也沒有記帳 | bug | 確認 | P3 | 已修 | `951ac21` | 開了 socket 卻回傳 false，之後的編輯全被擋。 |
+| B4-08 | Apply-Set 的 commit 失敗會回滾存檔，但 row 狀態與 Journal 仍宣稱已套用 | bug | 確認 | P3 | 已修 | `951ac21` | commit 失敗回滾存檔，但 row 狀態與 Journal 仍宣稱已套用。 |
+| B4-09 | Add Item / Grant：clone 與修改欄位不是原子操作，失敗時留下會讓遊戲崩潰的重複物品 | bug | 確認 | P3 | 已修 | `951ac21` | clone / batch / new-mark 三次獨立 commit；上游 G-08 讓 batch 內 clone 後寫入變可行。 |
 | B4-10 | Find Items 的「Go」不檢查 snapshot 是否過期，會導航到別的物品 | risk | 確認 | P2 | 已修 | `30dd0ce` | Find Items 的 Go 不檢查 IsStale。 |
 | B4-11 | Bulk fill 在「掃描 → 確認對話框 → 套用」之間沒有重新檢查 version | risk | 確認 | P2 | 已修 | `30dd0ce` | Bulk fill 確認對話框前後不檢查 version。 |
-| B4-12 | `_itemNo` 唯一性的範圍不一致：Add Item / Grant 只看同一個 list，Contributions 看整個 block | risk | 確認 | P3 | 待修 |  | _itemNo 唯一性範圍不一致。 |
+| B4-12 | `_itemNo` 唯一性的範圍不一致：Add Item / Grant 只看同一個 list，Contributions 看整個 block | risk | 確認 | P3 | 已修 | `951ac21` | _itemNo 唯一性範圍不一致。 |
 | B4-13 | Stack fill 忽略 iteminfo 的 `ApplyMaxStackCap` 旗標，會寫出超過上限的數量 | risk | 部分 | P5 | 待修 |  | 只會把已超過上限的 stack 往上取整，不會把未滿的推過上限；仍應尊重 ApplyMaxStackCap。 |
 | B4-14 | 選 slot 0 時把 `_dyeSlotNo` 明確寫成 0；遊戲對 slot 0 的寫法是 absent | risk | 待資料 | P5 | 待資料 |  | 程式確實寫 present 0；遊戲是否接受需掃描存檔。 |
 | B4-15 | Vendor Buyback 刪除最後一筆時留下 present 但長度為 0 的 list；Remove 也沒有確認 | risk | 待資料 | P5 | 待資料 |  | 刪最後一筆留下 present 空 list 是否合法需掃描存檔；沒有確認對話框是真的。 |
 | B4-16 | 自訂寶石組可以存任意 u32；Apply-Set 會把非寶石寫進 socket | risk | 確認 | P5 | 待修 |  | 自訂寶石組可存任意 u32，空格會讓後面的寶石左移。 |
 | B4-17 | 判斷「寶石」有兩套標準：picker 用 string_key prefix，內建組用 `item_type` / `category_info`（Rule 12） | risk | 確認 | P5 | 待修 |  | 兩套寶石判斷標準；目前未觀察到實際分歧。 |
-| B4-18 | Socket 的其他非原子寫入序列 | risk | 確認 | P3 | 待修 |  | Change 分支兩次獨立 SetScalarField。 |
-| B4-19 | Apply-Set 在呼叫 `ApplyGemPick` 前就跳過同一顆寶石，在範圍外的 slot 永遠不會被修復 | risk | 確認 | P3 | 待修 |  | Apply-Set 遇同一顆寶石就跳過，範圍外的 slot 永遠不會修復。 |
+| B4-18 | Socket 的其他非原子寫入序列 | risk | 確認 | P3 | 已修 | `951ac21` | Change 分支兩次獨立 SetScalarField。 |
+| B4-19 | Apply-Set 在呼叫 `ApplyGemPick` 前就跳過同一顆寶石，在範圍外的 slot 永遠不會被修復 | risk | 確認 | P3 | 已修 | `951ac21` | Apply-Set 遇同一顆寶石就跳過，範圍外的 slot 永遠不會修復。 |
 | B4-20 | `async void` 路徑的例外沒有完整捕捉 | risk | 部分 | P4 | 待修 |  | AddDye lambda 與 OnEditItemSocketsClick 只捕捉 CrimsonSaveException；InvalidOperation 路徑大多被前置條件擋住。 |
-| B4-21 | 背景執行緒的多步 mutation 可能與 UI 執行緒的 `RunDeferred` 交錯 | risk | 確認 | P3 | 待修 |  | Add Item / Grant 在 Task.Run 多步寫入，與 UI 執行緒 RunDeferred 可能交錯。 |
+| B4-21 | 背景執行緒的多步 mutation 可能與 UI 執行緒的 `RunDeferred` 交錯 | risk | 確認 | P3 | 已修 | `951ac21` | Add Item / Grant 在 Task.Run 多步寫入，與 UI 執行緒 RunDeferred 可能交錯。 |
 | B4-22 | 測試缺口：deferred 模式的 dye 寫入、Socket 修復路徑、過期檢查與多個工具都沒有測試 | risk | 確認 | P13 | 待修 |  | 多個工具沒有測試。 |
 | B4-23 | 掃描時讀取失敗的 block 被靜默跳過，結果不完整也不告知使用者 | risk | 確認 | P4 | 待修 |  | 掃描讀取失敗的 block 被靜默跳過。 |
 | B4-24 | Rule：五個 UI 字串鍵在三個語系字典中都不存在 | rule violation | 確認 | P8 | 已修 | `ff24f9a` | 五個字串鍵三語系都缺；P0 補上並加鍵值測試。 |
@@ -172,7 +172,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B4-27 | Rule 3：同步檔案 I/O 與耗時的 FFI 跑在 UI 執行緒 | rule violation | 確認 | P7 | 待修 |  | 設定檔 I/O 與 FFI 在 UI 執行緒。 |
 | B4-28 | 文件漂移與錯置的 XML doc | cleanup | 確認 | P12 | 部分 | `ff24f9a` | 孤立 summary 在 P0 已修（SocketEditor）；其餘過時說明。 |
 | B4-29 | 重複的 helper 與死碼 | cleanup | 確認 | P14 | 待修 |  | 重複 helper 與死碼。 |
-| B4-30 | Add Item / Grant 寫死 scalar 的 byte 寬度，沒有依 type tag 編碼 | cleanup | 確認 | P3 | 待修 |  | scalar byte 寬度寫死。 |
+| B4-30 | Add Item / Grant 寫死 scalar 的 byte 寬度，沒有依 type tag 編碼 | cleanup | 確認 | P3 | 已修 | `951ac21` | scalar byte 寬度寫死。 |
 | B4-31 | 結構與大小 | cleanup | 確認 | P14 | 待修 |  | 純結構。 |
 | B4-32 | 其他 UX / 正確性小問題 | cleanup | 確認 | P5 | 待修 |  | 500 筆上限在排序前截斷等小問題。 |
 
@@ -182,17 +182,17 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 |---|---|---|---|---|---|---|---|
 | B5-01 | 非 modal 的 Block 5 工具視窗在開另一個存檔後，仍用舊索引寫進新文件 | bug | 確認 | P2 | 已修 | `30dd0ce` | 與 B2-03 同修。Faction Relations / Knowledge / Mount 在套用時依 key 重新解析，只會顯示舊資料。 |
 | B5-02 | 同一份文件內也會過期：Sealed Abyss 重複套用、Contributions 寫到隔壁物品 | bug | 確認 | P2 | 已修 | `30dd0ce` | 另：SA 對話框 applied==0 時不重掃，重試會重複 clone FAR。 |
-| B5-03 | 多步驟寫入失敗時留下半套結果，而且成功筆數為 0 時不設 dirty、不記 Journal | bug | 確認 | P3 | 待修 |  | 單筆 Mark 失敗不設 dirty；bulk / knowledge 在 RunDeferred 內 return 會 commit 半套。 |
+| B5-03 | 多步驟寫入失敗時留下半套結果，而且成功筆數為 0 時不設 dirty、不記 Journal | bug | 確認 | P3 | 已修 | `951ac21` | 單筆 Mark 失敗不設 dirty；bulk / knowledge 在 RunDeferred 內 return 會 commit 半套。 |
 | B5-04 | Abyss Gates 的 Lock / Unlock 在狀態改變後不會重新評估 CanExecute | bug | 確認 | P5 | 待修 |  | Lock / Unlock 不重新評估 CanExecute。 |
 | B5-05 | Faction Nodes 的 `_isCapital` 是 bool，卻用只接受整數的 parser，★ 永遠不會顯示 | bug | 確認 | P5 | 待修 |  | _isCapital 是 bool，61 個節點為 true，★ 永遠不顯示（存檔探測確認）。 |
-| B5-06 | clone 後的 in-place patch 只檢查欄位「在 schema 裡」，沒檢查「present」 | risk | 部分 | P3 | 待修 |  | 5 份存檔中模板欄位都是 present；只缺 presence 檢查。 |
+| B5-06 | clone 後的 in-place patch 只檢查欄位「在 schema 裡」，沒檢查「present」 | risk | 部分 | P3 | 已修 | `951ac21` | 5 份存檔中模板欄位都是 present；只缺 presence 檢查。 |
 | B5-07 | Knowledge 注入以 element 0 為模板，未覆寫的欄位（如 `_level`）全部沿用 | risk | 部分 | P5 | 待修 |  | _level 是 TLevel u32（不是 u8），_list[0] 永遠是 key 1 level 2；遊戲自己的寫法是 level 1、時間與新標記 absent。注入配方已在實機確認可用，需實機 A/B 才能改。 |
 | B5-08 | 非 `CrimsonSaveException` 的例外會讓 process 崩潰 | risk | 確認 | P4 | 待修 |  | 沒有全域例外處理。 |
 | B5-09 | Faction Relations 的 Apply 會默默改寫所有「兩側不一致」的 faction | risk | 確認 | P5 | 待修 |  | Apply 會默默改寫所有兩側不一致的 faction。 |
 | B5-10 | Sealed Abyss 對話框會套用被篩選隱藏、但仍勾選的列 | risk | 確認 | P5 | 已修 | `30dd0ce` | 套用被篩選隱藏但仍勾選的列。 P2 一併修正。 |
 | B5-11 | Mark Challenge 的警告文字仍宣稱「至少持有一件 SA 遺物才會啟用」，但這道檢查已經移除 | risk | 確認 | P8 | 待修 |  | 三語系警告文字仍寫「需持有遺物」。 |
 | B5-12 | Rename Mercenary：清空名稱寫成「present + 長度 0」，長度也沒有上限 | risk | 確認 | P5 | 待修 |  | _mercenaryName 98 筆中 95 筆 absent；清空寫成 present 長度 0、沒有長度上限。 |
-| B5-13 | Mount 對話框允許多列同時解鎖，工具視窗之間的 mutation 也沒有序列化 | risk | 確認 | P3 | 待修 |  | IsBusy 只到列；兩次快速點擊可能算出相同 _itemNo。 |
+| B5-13 | Mount 對話框允許多列同時解鎖，工具視窗之間的 mutation 也沒有序列化 | risk | 確認 | P3 | 已修 | `951ac21` | IsBusy 只到列；兩次快速點擊可能算出相同 _itemNo。 |
 | B5-14 | 尚未實機驗證的寫入與啟發式判斷 | risk | 待資料 | P5 | 待資料 |  | _relationGroupKey 寬度目前正確（146 筆 u16）；群組態度、Abyss 欄位、bulk Pattern B 仍待實機。 |
 | B5-15 | 掃描時吞掉讀取錯誤，可能讓 `_completedTime` watermark 偏低，也讓清單少項目 | risk | 確認 | P4 | 待修 |  | 掃描吞讀取錯誤，_completedTime watermark 可能偏低。 |
 | B5-16 | 測試缺口 | risk | 確認 | P13 | 待修 |  | 多個 world 工具沒有測試。 |
@@ -254,7 +254,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | X-02 | NativeItemInfoCatalog 把 _with_header 的 BODY_PARSE 退回 body-only 載入（Rule 12） | risk | 確認 | P4 | 待修 |  | 上游 header 檢查變嚴，退回後物品全部沒有名稱且不報錯。 |
 | X-03 | status.md 的 gotcha「promote then write in place」與 set_object_list_present(1) 語意已過時 | cleanup | 確認 | P0 | 已修 | `ff24f9a` | 上游 G-08 / G-03 改變行為。 |
 | X-04 | ResolveDyeSlotCount 的意義改為 dye-slot bit 數；LookupSlotCount 是 sub-mesh 數 | cleanup | 確認 | P12 | 待修 |  | 目前沒有 UI 呼叫 ResolveDyeSlotCount；更新 C# 文件。 |
-| X-05 | Transplant 在同一個 handle 內已允許，C# 端的禁止可放寬 | cleanup | 確認 | P3 | 待修 |  | 上游 G-15。 |
+| X-05 | Transplant 在同一個 handle 內已允許，C# 端的禁止可放寬 | cleanup | 確認 | P3 | 已修 | `951ac21` | 上游 G-15。 |
 | X-06 | FindItemsWindow 使用 ThemeAccentBrush2 / ThemeBorderLowBrush / ThemeForegroundBrush，Fluent 主題沒有定義 | bug | 確認 | P8 | 待修 |  | 字串鍵比對時發現；需確認畫面上是否失色。 |
 | X-07 | 還原備份視窗是非 modal、fire-and-forget，可重複開啟並同時還原 | bug | 確認 | P1 | 已修 | `09394d6` | Block 2 確認時發現。 |
 | X-08 | 註解規則（docs/code-comments.md）與 CommentRulesTests：行號、稽核/PR/commit id、重複 summary 歸零；歷史語句 ratchet | rule | 確認 | P0/P12 | 部分 | `ff24f9a` | 使用者要求，參考 UE5CEDumper。 P0：行號/ID/重複 summary 歸零，歷史語句 ratchet 基準 43 行（22 檔）。 |
