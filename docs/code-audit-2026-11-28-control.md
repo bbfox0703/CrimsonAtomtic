@@ -70,7 +70,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B1-16 | `HasStructuralEdit` 與 deferred 狀態不同步 | risk | 確認 | P3 | 已修 | `951ac21` | 新增 −26/−27 部分失敗路徑。 |
 | B1-17 | `RunDeferred` 對 abort 或 commit 失敗的處理不完整 | risk | 確認 | P3 | 已修 | `951ac21` | commit 失敗時 version 現在往前移；take() 之後的 PANIC 不變。 |
 | B1-18 | Rule 7：magic strings 沒有集中管理，錯誤碼名稱表重複 8 份且內容不一致 | rule violation | 確認 | P9 | 已修 | `ff24f9a` `1836867` | 變嚴重：−26 LIST_PARTIALLY_DECODED、−27 ELEMENT_CLASS_MISMATCH、−28 HMAC_UNVERIFIED 不在常數與 8 份名稱表內。P0 先補常數與單一名稱表。 P0 建立 CrimsonErrorCode 單一名稱表並補 −26/−27/−28；其餘 magic strings 仍在 P9。 P9 完成其餘 magic strings。 |
-| B1-19 | 整個專案抑制 CA1416，且理由已過時（削弱 Rule 4 的防線） | rule violation | 確認 | P10 | 待修 |  | 純 C# 問題。 |
+| B1-19 | 整個專案抑制 CA1416，且理由已過時（削弱 Rule 4 的防線） | rule violation | 確認 | P10 | 已修 | `4cbcef7` | 純 C# 問題。 抑制已移除；專案內無 CA1416 警告。 |
 | B1-20 | 文件與註解過時或錯置 | cleanup | 確認 | P12 | 待修 |  | ISaveLoader 的「每次成功 mutation 剛好 +1」在新版更錯；NativePaverReader「最新 export」註解過時。 |
 | B1-21 | 例外訊息未本地化就直接送到 UI | cleanup | 確認 | P8 | 待修 | `6a8c473` | 純 C# 問題。 原生例外訊息直接顯示，需錯誤碼對應的本地化訊息。 |
 | B1-22 | 檔案規模與重複（只談結構） | cleanup | 確認 | P14 | 待修 |  | 純結構。 |
@@ -98,18 +98,18 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B2-15 | 通用欄位編輯器的「absent ≠ 0」語意沒有任何防護 | risk | 確認 | P5 | 已修 | `559a80b` | absent 欄位輸入 0 沒有警告；Make absent 沒有確認。 |
 | B2-16 | `ScalarFieldEditing.TryEncode` 接受 NaN、Infinity，以及溢位後變成 ∞ 的浮點數 | risk | 確認 | P5 | 已修 | `559a80b` | TryEncode 接受 NaN / ∞ / 溢位成 ∞ 的值。 |
 | B2-17 | `AppSettingsStore`：非原子寫入、檔案損毀後靜默重置、`TrySave` 的回傳值全被忽略 | risk | 部分 | P1 | 已修 | `09394d6` | 非原子寫入與損毀時靜默重置是真的；「全部忽略 TrySave」太廣（CustomGemSets 有檢查，WorldMap 也忽略）。 |
-| B2-18 | 單一執行個體保護（Rule 2）的邊界情況 | risk | 確認 | P10 | 待修 |  | Global\ mutex 沒有 try；WinExe 用 Console.Error。多使用者情境需實機。 |
+| B2-18 | 單一執行個體保護（Rule 2）的邊界情況 | risk | 確認 | P10 | 已修 | `4cbcef7` | Global\ mutex 沒有 try；WinExe 用 Console.Error。多使用者情境需實機。 Local\ mutex、無法開啟視為已執行、第二次啟動寫入 app log。多使用者情境未實機驗證。 |
 | B2-19 | async void handler 與 fire-and-forget 的失敗不會被使用者看到 | risk | 確認 | P4 | 已修 | `5127921` | 六個 async void 工具 handler 沒有 try；SafeFireAndForget 只 Trace。 以全域處理器涵蓋。 |
 | B2-20 | Rule 3：檔案 I/O 與重 FFI 在 UI 執行緒同步執行 | rule violation | 確認 | P7 | 已修 | `f3f25a8` | LoadSave 同步、備份清單在 ctor、DiscoverSaveRoots 每次全樹掃描。 備份檔複製仍在 UI 執行緒（小檔）。 |
-| B2-21 | Rule 6：沒有任何日誌實作（Pre-scan #1 確認） | rule violation | 確認 | P10 | 待修 |  | 沒有任何日誌實作。 |
-| B2-22 | Rule 7：沒有集中的 magic-string 檔（Pre-scan #4，Block 2 範圍確認） | rule violation | 確認 | P9 | 已修 | `1836867` | 與 B1-18、B3-16、B4-26、B5-18、B6-24 合併。 VM 自組 Windows 存檔路徑併入 P10（B2-23）。 |
-| B2-23 | Rule 4：平台相關的路徑知識與具體實作洩漏到 ViewModel / composition root 之外 | rule violation | 確認 | P10 | 待修 |  | VM 自己組 Windows 存檔路徑、直接呼叫 SteamLibraryProbe。 |
+| B2-21 | Rule 6：沒有任何日誌實作（Pre-scan #1 確認） | rule violation | 確認 | P10 | 已修 | `4cbcef7` | 沒有任何日誌實作。 FileAppLog（8 MB × 4 輪替），記錄啟動、存檔、備份、遊戲資料載入失敗與未處理例外。 |
+| B2-22 | Rule 7：沒有集中的 magic-string 檔（Pre-scan #4，Block 2 範圍確認） | rule violation | 確認 | P9 | 已修 | `1836867` `4cbcef7` | 與 B1-18、B3-16、B4-26、B5-18、B6-24 合併。 VM 自組 Windows 存檔路徑併入 P10（B2-23）。 P9 集中字串；P10 的 IPlatformPaths.FallbackSaveRoot 收掉 VM 自組的存檔路徑。 |
+| B2-23 | Rule 4：平台相關的路徑知識與具體實作洩漏到 ViewModel / composition root 之外 | rule violation | 確認 | P10 | 已修 | `4cbcef7` | VM 自己組 Windows 存檔路徑、直接呼叫 SteamLibraryProbe。 IPlatformPaths.FallbackSaveRoot / LooksLikeGameInstall；VM 不再直接呼叫 SteamLibraryProbe。 |
 | B2-24 | Rule 12：absent 欄位的型別是由消費端用 schema TypeName 猜出來的 | rule violation | 部分 | P5 | 待上游 | `559a80b` | TypeName 別名表與 *Key→u32 猜測確實是 Rule 12 workaround；i32/u32 風險不成立，實際代價是未知 typedef 無法編輯。需上游為 absent scalar 提供 type_tag。 需 crimson-rs 回報 absent scalar 的 type_tag。 |
 | B2-25 | UI 字串寫死英文，沒有放進三語系資源 | rule violation | 確認 | P8 | 已修 | `6a8c473` | 多處寫死英文。 |
 | B2-26 | `MainWindow.axaml.cs`（1,997 行）中有應該放在 ViewModel / Service 的邏輯 | cleanup | 確認 | P14 | 待修 |  | 約 20 個複製貼上的工具啟動器；Add Dye 邏輯在 View。 |
 | B2-27 | 過時或錯誤的註解與文件 | cleanup | 確認 | P12 | 部分 | `ff24f9a` | 多處過時註解；孤立 summary 已在 P0 由註解檢查修掉一部分。 P0 修掉孤立 summary 2 處。 |
 | B2-28 | `ChangeJournal` 的執行緒安全只是表面上的 | cleanup | 確認 | P6 | 已修 | `8577638` | CollectionChanged 在呼叫端執行緒觸發；目前沒有背景呼叫端。 |
-| B2-29 | 平台探測的穩健性 | cleanup | 確認 | P10 | 待修 |  | IgnoreInaccessible=false，一個無權限子目錄就讓整個掃描回 null。 |
+| B2-29 | 平台探測的穩健性 | cleanup | 確認 | P10 | 已修 | `4cbcef7` | IgnoreInaccessible=false，一個無權限子目錄就讓整個掃描回 null。 EnumerationOptions.IgnoreInaccessible = true。 |
 | B2-30 | 測試缺口 | cleanup | 確認 | P13 | 待修 |  | 沒有 MainWindowViewModel 生命週期測試。 |
 
 ### Block 3
@@ -129,7 +129,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B3-11 | `GameDataLayout.DlcNames` 的檔案系統例外沒有被捕捉，可能讓 app 啟動失敗 | risk | 確認 | P4 | 已修 | `5127921` | DlcNames 的檔案系統例外沒有捕捉，可能讓啟動失敗。 |
 | B3-12 | `LevelGimmickSceneObjectInfoKey` 先查 gimmickinfo 表，兩個 namespace 的數值範圍重疊（Rule 12） | risk | 待資料 | P5 | 待資料 |  | 兩個 TypeName 已共用 PALOC byte 0x00，可能本來就是同一個 namespace；需資料比對。 |
 | B3-13 | 沒有任何測試斷言「最新存檔的每個 key TypeName 都能解析」 | risk | 確認 | P13 | 待修 |  | 沒有「最新存檔每個 TypeName 都能解析」的測試。 |
-| B3-14 | Rule 4：`UiLanguageService` 直接 P/Invoke `kernel32!GetUserDefaultUILanguage` | rule violation | 確認 | P10 | 待修 |  | kernel32 P/Invoke 在 Ui；fallback 被 InvariantGlobalization 弄壞。 |
+| B3-14 | Rule 4：`UiLanguageService` 直接 P/Invoke `kernel32!GetUserDefaultUILanguage` | rule violation | 確認 | P10 | 已修 | `4cbcef7` | kernel32 P/Invoke 在 Ui；fallback 被 InvariantGlobalization 弄壞。 Core 的 IOsUiLanguage（Win32 LCID / POSIX locale 變數），不依賴 CultureInfo。 |
 | B3-15 | Rule 3：同步 I/O 與長時間工作跑在 UI 執行緒 | rule violation | 確認 | P7 | 已修 | `f3f25a8` | bootstrap、語言載入、180k 掃描、圖示解碼都在 UI 執行緒。 圖示在 converter 解碼一次後快取，未改。 |
 | B3-16 | Rule 7：magic string 散落各處，沒有集中檔案 | rule violation | 確認 | P9 | 已修 | `1836867` | 合併至 magic-strings 批次。 |
 | B3-17 | UI 字串寫死在 C#，沒有進三語系 `Strings/*.axaml` | rule violation | 確認 | P8 | 部分 | `6a8c473` | 合併至 UI 字串批次。 ItemPicker 內部分字串未改。 |
