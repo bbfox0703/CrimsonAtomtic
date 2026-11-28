@@ -28,6 +28,29 @@ read from the top.
 
 -----
 
+## 2026-11-28 (no release) — Code audit P7: slow work off the UI thread
+
+- **What changes:**
+  - **Game data loads behind a disabled window.** The main window appears at once; the bootstrap,
+    the saved secondary language and the portrait cache then load on a background thread while
+    the window takes no input. Changing the install folder does the same after closing the tool
+    windows. That exclusion is what keeps a DLC merge from running alongside a lookup, which
+    crimson-rs does not allow (B3-15, B1-06). The secondary-language menu is rebuilt when game
+    data reloads (`GameDataReloaded`).
+  - **Opening a save** parses and decodes it on a background thread (`LoadSaveAsync`), and the
+    Open dialog's save-folder discovery no longer walks the disk on the UI thread (B2-20).
+  - **Tool windows** build their lists in the background: Sockets, Vendor Buyback, the restore
+    list, Browse Localization's 180k entries, the knowledge list and the world map image (B4-27,
+    B5-17). Switching the secondary language loads its tables in the background; the UI-language
+    setting is read from disk once (B3-15).
+- **Verified:** the app starts and its window responds (a 25-second launch).
+- **Left as is:** small settings-file reads and writes, the dye slot editor (its rows hold brushes,
+  which belong to the UI thread), a single rename write, and icon decoding in the converter, which
+  caches each Bitmap after its first use.
+- **Tests:** 479 green.
+
+-----
+
 ## 2026-11-28 (no release) — Code audit P6: game-data caches and the threads that read them
 
 - **What changes:**

@@ -301,9 +301,10 @@ public sealed partial class WorldMapViewModel : ObservableObject, IDisposable
     /// so the dialog auto-loads it on next launch. Called by the view's
     /// "Pick Map…" handler after the file picker resolves.
     /// </summary>
-    public void SetBasemap(string path)
+    public async Task SetBasemapAsync(string path)
     {
-        var bitmap = WorldMapBasemapService.TryLoad(path);
+        // Decoding a full-size map image takes a moment; off the UI thread.
+        var bitmap = await Task.Run(() => WorldMapBasemapService.TryLoad(path));
         if (bitmap is null)
         {
             return;

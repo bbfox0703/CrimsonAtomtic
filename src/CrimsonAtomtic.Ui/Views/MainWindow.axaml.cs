@@ -218,7 +218,7 @@ public sealed partial class MainWindow : Window
                     // must surface as an alert, not crash the app.
                     try
                     {
-                        vm.LoadSaveCommand.Execute(path);
+                        await vm.LoadSaveCommand.ExecuteAsync(path);
                     }
                     catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex)
                     {
@@ -617,6 +617,8 @@ public sealed partial class MainWindow : Window
             prev.ConfirmRequested = null;
             prev.AlertRequested = null;
             prev.DocumentReplaced -= CloseToolWindows;
+            prev.GameDataReloaded -= RebuildSecondaryLanguageMenu;
+            prev.PropertyChanged -= OnLoadingGameDataChanged;
             _wiredVm = null;
         }
         if (DataContext is not MainWindowViewModel vm)
@@ -632,6 +634,31 @@ public sealed partial class MainWindow : Window
         vm.AlertRequested = (title, msg) => ConfirmDialog.ShowAlertAsync(this, title, msg);
         vm.DocumentReplaced += CloseToolWindows;
         _wiredVm = vm;
+        vm.GameDataReloaded += RebuildSecondaryLanguageMenu;
+        vm.PropertyChanged += OnLoadingGameDataChanged;
+        RebuildSecondaryLanguageMenu();
+    }
+
+    // The window takes no input while game data loads (see LoadGameDataAsync).
+    private void OnLoadingGameDataChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainWindowViewModel.IsLoadingGameData) && sender is MainWindowViewModel vm)
+        {
+            IsEnabled = !vm.IsLoadingGameData;
+        }
+    }
+
+    /// <summary>
+    /// Fill the secondary-language menu from the languages the loaded game
+    /// data ships, and refresh the ticks of it and of the font-size and UI
+    /// language menus.
+    /// </summary>
+    private void RebuildSecondaryLanguageMenu()
+    {
+        if (DataContext is not MainWindowViewModel vm)
+        {
+            return;
+        }
         var menu = SecondaryLanguageMenu;
         // Clear any dynamic entries (everything past the static "English
         // only" placeholder at index 0).
@@ -756,7 +783,8 @@ public sealed partial class MainWindow : Window
         // TryGetFolderFromPathAsync returns null for non-existent paths,
         // in which case the picker falls back to its own default.
         IStorageFolder? startLocation = null;
-        var startPath = vm.DefaultOpenSaveStartingPath;
+        // Finding the save root walks the launchers' folders; off the UI thread.
+        var startPath = await Task.Run(() => vm.DefaultOpenSaveStartingPath);
         if (Directory.Exists(startPath))
         {
             startLocation = await StorageProvider.TryGetFolderFromPathAsync(startPath);
@@ -783,12 +811,11 @@ public sealed partial class MainWindow : Window
         {
             // LoadSave throws CrimsonSaveException on any parse / HMAC /
             // IO failure (corrupt file, file picked mid-write by the
-            // running game, unsupported schema version). LoadSaveCommand
-            // is a synchronous RelayCommand, so the throw propagates here
-            // — guard it or it crashes the dispatcher.
+            // running game, unsupported schema version). Awaiting the command
+            // brings the throw here, where it becomes an alert.
             try
             {
-                vm.LoadSaveCommand.Execute(path);
+                await vm.LoadSaveCommand.ExecuteAsync(path);
             }
             catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex)
             {
@@ -887,7 +914,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void OnSetSecondaryLanguageClick(object? sender, RoutedEventArgs e)
+    private async void OnSetSecondaryLanguageClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel vm)
         {
@@ -899,9 +926,8 @@ public sealed partial class MainWindow : Window
         }
         // Tag carries the language code ("" = English only).
         var code = mi.Tag as string;
-        vm.SetSecondaryLanguage(string.IsNullOrEmpty(code) ? null : code);
-        // Re-paint the check marks.
-        OnDataContextChanged(this, System.EventArgs.Empty);
+        await vm.SetSecondaryLanguageAsync(string.IsNullOrEmpty(code) ? null : code);
+        // The menu ticks are repainted by GameDataReloaded.
     }
 
     private void OnSetUiLanguageClick(object? sender, RoutedEventArgs e)
@@ -951,7 +977,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void OnBrowseLocalizationClick(object? sender, RoutedEventArgs e)
+    private async void OnBrowseLocalizationClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel vm)
         {
@@ -965,9 +991,11 @@ public sealed partial class MainWindow : Window
         {
             return;
         }
+        // Copying ~180k PALOC entries takes a moment; off the UI thread.
+        var searchVm = await Task.Run(() => new LocalizationSearchViewModel(vm.Localization));
         var child = new LocalizationSearchWindow
         {
-            DataContext = new LocalizationSearchViewModel(vm.Localization),
+            DataContext = searchVm,
         };
         child.Show(this);
     }
@@ -980,7 +1008,7 @@ public sealed partial class MainWindow : Window
     /// <c>MainWindowViewModel.RestoreFromBackupAsync</c>. Same
     /// decoupling pattern as Browse Items / "+ Bag".
     /// </summary>
-    private void OnRestoreFromBackupClick(object? sender, RoutedEventArgs e)
+    private async void OnRestoreFromBackupClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel vm)
         {
@@ -993,7 +1021,13 @@ public sealed partial class MainWindow : Window
             open.Activate();
             return;
         }
-        var restoreVm = new RestoreFromBackupViewModel(vm.BackupService);
+        // Listing walks the whole backup tree; off the UI thread.
+        var entries = await Task.Run(() => vm.BackupService.ListBackups());
+        if (_restoreWindow is not null)
+        {
+            return;
+        }
+        var restoreVm = new RestoreFromBackupViewModel(vm.BackupService, entries);
         restoreVm.RestoreRequested += entry => RestoreAsync(vm, entry).SafeFireAndForget(
             ex => vm.BulkOpStatus = UiText.Format("RestoreFailed", "Restore failed: {0}", ex.Message));
         var dialog = new RestoreFromBackupWindow
@@ -1305,12 +1339,13 @@ public sealed partial class MainWindow : Window
         {
             return;
         }
-        var buybackVm = ViewModels.VendorBuybackViewModel.TryCreate(
+        // The scan reads every store block; off the UI thread.
+        var buybackVm = await Task.Run(() => ViewModels.VendorBuybackViewModel.TryCreate(
             vm.GetSaveLoader(),
             vm.Localization,
             vm.Journal,
             loadedPath,
-            blocks);
+            blocks));
         if (buybackVm is null)
         {
             var title = (string?)this.FindResource("VendorBuybackNotAvailableTitle")
@@ -1353,7 +1388,7 @@ public sealed partial class MainWindow : Window
     /// save — gated on <see cref="MainWindowViewModel.LoadedPath"/>
     /// since there's nothing to ping without a save.
     /// </summary>
-    private void OnWorldMapClick(object? sender, RoutedEventArgs e)
+    private async void OnWorldMapClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel vm
             || vm.LoadedPath is null)
@@ -1364,7 +1399,7 @@ public sealed partial class MainWindow : Window
         var paths = vm.GetPlatformPaths();
         var settings = Services.AppSettingsStore.Load(paths.LocalAppDataDirectory);
         var savedPath = settings.WorldMapPath;
-        var bitmap = Services.WorldMapBasemapService.TryLoad(savedPath);
+        var bitmap = await Task.Run(() => Services.WorldMapBasemapService.TryLoad(savedPath));
         // savedPath may have pointed to a file the user deleted /
         // moved — surface that by clearing the persisted path so the
         // dialog opens in the "no map selected" state instead of
@@ -1941,7 +1976,9 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var ok = vm.SetGameInstallRoot(path);
+        // Tool windows look names up; none may run while the tables reload.
+        CloseToolWindows();
+        var ok = await vm.SetGameInstallRootAsync(path);
         if (!ok)
         {
             var title = (string?)this.FindResource("SetGameInstallFolderInvalidTitle")
@@ -2026,12 +2063,13 @@ public sealed partial class MainWindow : Window
             // CrimsonSaveException. This runs inside an async void handler,
             // so an uncaught throw would crash the process — report it
             // instead, matching the other Tools dialogs.
-            socketsVm = ViewModels.SocketEditorViewModel.TryCreate(
+            var customSets = vm.LoadCustomGemSets();
+            socketsVm = await Task.Run(() => ViewModels.SocketEditorViewModel.TryCreate(
                 vm.GetSaveLoader(),
                 vm.Localization,
                 vm.Journal,
                 path,
-                vm.LoadCustomGemSets());
+                customSets));
         }
         catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex)
         {

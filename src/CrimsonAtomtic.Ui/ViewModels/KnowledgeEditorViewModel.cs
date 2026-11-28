@@ -92,7 +92,8 @@ public sealed partial class KnowledgeEditorViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(localization);
 
         var vm = new KnowledgeEditorViewModel(main);
-        var learned = main.GetLearnedKnowledgeKeys() ?? [];
+        // Reading the knowledge list decodes a save block; off the UI thread.
+        var learned = await Task.Run(() => main.GetLearnedKnowledgeKeys()) ?? [];
 
         var rows = await Task.Run(() =>
         {

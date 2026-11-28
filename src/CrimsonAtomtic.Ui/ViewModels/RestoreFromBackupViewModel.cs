@@ -24,13 +24,17 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 /// </summary>
 public sealed partial class RestoreFromBackupViewModel : ObservableObject
 {
-    public RestoreFromBackupViewModel(SaveBackupService backupService)
+    /// <param name="entries">
+    /// The backups to list, newest first: read with
+    /// <see cref="SaveBackupService.ListBackups()"/> off the UI thread.
+    /// </param>
+    public RestoreFromBackupViewModel(SaveBackupService backupService, IReadOnlyList<BackupEntry> entries)
     {
         ArgumentNullException.ThrowIfNull(backupService);
+        ArgumentNullException.ThrowIfNull(entries);
         BackupRoot = backupService.BackupRoot;
-        var raw = backupService.ListBackups();
         Backups = new ObservableCollection<BackupRowViewModel>(
-            raw.Select(b => new BackupRowViewModel(b)));
+            entries.Select(b => new BackupRowViewModel(b)));
     }
 
     /// <summary>Display string for the dialog header.</summary>

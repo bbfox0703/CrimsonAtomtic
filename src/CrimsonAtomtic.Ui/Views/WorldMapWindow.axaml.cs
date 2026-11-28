@@ -122,7 +122,7 @@ public sealed partial class WorldMapWindow : Window
         var path = picked[0].TryGetLocalPath();
         if (!string.IsNullOrEmpty(path))
         {
-            vm.SetBasemap(path);
+            await vm.SetBasemapAsync(path);
         }
     }
 }

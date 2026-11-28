@@ -512,7 +512,7 @@ public sealed partial class MainWindowViewModel(
     /// manifest) on next launch and on every subsequent
     /// <see cref="IPlatformPaths.GameInstallRoot"/> access.
     /// </summary>
-    public bool SetGameInstallRoot(string installRoot)
+    public async Task<bool> SetGameInstallRootAsync(string installRoot)
     {
         if (string.IsNullOrWhiteSpace(installRoot)
             || !SteamLibraryProbe.LooksLikeCrimsonDesertInstall(installRoot))
@@ -522,36 +522,69 @@ public sealed partial class MainWindowViewModel(
         var existing = AppSettingsStore.Load(paths.LocalAppDataDirectory);
         AppSettingsStore.TrySave(paths.LocalAppDataDirectory,
             existing with { GameInstallRoot = installRoot });
-        // Re-bootstrap localization against the new root. Best-effort:
-        // failure leaves the provider in whatever state the previous
-        // bootstrap left it (degraded or otherwise).
-        localization.TryBootstrapFromGameRoot(installRoot);
-        // Portrait provider keyed on the install's 0012/0.pamt — must
-        // be re-seeded so subsequent CharacterKey lookups extract from
-        // the new install's PAZ. Disk-cached portraits from the
-        // previous install stay valid (keyed on CharacterKey, not
-        // install path).
-        var displacedPortraits = localization.ConfigurePortraitProvider(
-            PortraitProvider.ResolveRoot(paths.LocalAppDataDirectory));
+        // Re-bootstrap against the new root (best-effort: a failure leaves
+        // the provider degraded), and re-seed the portrait provider, which
+        // extracts from the install's 0012/0.pamt.
+        await LoadGameDataAsync(() =>
+        {
+            localization.TryBootstrapFromGameRoot(installRoot);
+            return localization.ConfigurePortraitProvider(
+                PortraitProvider.ResolveRoot(paths.LocalAppDataDirectory));
+        });
+        return true;
+    }
+
+    /// <summary>True while game data loads; the main window is disabled meanwhile.</summary>
+    [ObservableProperty]
+    private bool _isLoadingGameData;
+
+    /// <summary>
+    /// Raised after game data (re)loaded, so the view can rebuild what it
+    /// derives from it, such as the secondary-language menu.
+    /// </summary>
+    public event Action? GameDataReloaded;
+
+    /// <summary>
+    /// Run <paramref name="load"/> (a bootstrap; it returns the portrait
+    /// provider it replaced, if any) on a background thread with
+    /// <see cref="IsLoadingGameData"/> set, then refresh everything that
+    /// shows game data. The caller keeps every window that can look a name
+    /// up closed or disabled until this returns: tables are released and DLC
+    /// rows merged meanwhile, which must not run alongside a lookup.
+    /// </summary>
+    public async Task LoadGameDataAsync(Func<PortraitProvider?> load)
+    {
+        ArgumentNullException.ThrowIfNull(load);
+        IsLoadingGameData = true;
+        PortraitProvider? displaced;
+        try
+        {
+            displaced = await Task.Run(load);
+        }
+        finally
+        {
+            IsLoadingGameData = false;
+        }
         OnPropertyChanged(nameof(LocalizationStatus));
         OnPropertyChanged(nameof(LocalizationLoadFailures));
         OnPropertyChanged(nameof(IconStatus));
-        // Repaint any open save view so resolved-name columns pick up
-        // the fresh catalog data.
+        OnPropertyChanged(nameof(SecondaryLanguage));
+        OnPropertyChanged(nameof(AvailableLanguages));
+        // Repaint an open save view so resolved names come from the new tables.
         if (_navStack.Count > 0)
         {
             RebuildFromTop();
         }
-        // Reclaim the displaced portrait cache's native memory after the
-        // UI has caught up (Background runs after render), so no open
-        // character/mercenary dialog is bound to a disposed Bitmap.
-        if (displacedPortraits is not null)
+        GameDataReloaded?.Invoke();
+        // Reclaim a displaced portrait cache's native memory after the UI has
+        // caught up (Background runs after render), so nothing is still bound
+        // to one of its Bitmaps.
+        if (displaced is not null)
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(
-                displacedPortraits.Dispose,
+                displaced.Dispose,
                 Avalonia.Threading.DispatcherPriority.Background);
         }
-        return true;
     }
 
     /// <summary>
@@ -597,34 +630,22 @@ public sealed partial class MainWindowViewModel(
     /// so the next launch reloads it. After the swap, refreshes the
     /// currently-displayed fields so their resolved names update in place.
     /// </summary>
-    public void SetSecondaryLanguage(string? langCode)
+    public async Task SetSecondaryLanguageAsync(string? langCode)
     {
-        localization.SecondaryLanguage = langCode;
+        // Loading a language's tables takes a moment; LoadGameDataAsync runs
+        // it off the UI thread and repaints the names afterwards. Adding a
+        // language only adds tables, so open tool windows can stay.
+        await LoadGameDataAsync(() =>
+        {
+            localization.SecondaryLanguage = langCode;
+            return null;
+        });
         // Preserve every other field — re-creating AppSettings from
         // scratch would otherwise drop the user's icon path, font
         // size, summary state, etc.
         var existing = AppSettingsStore.Load(paths.LocalAppDataDirectory);
         AppSettingsStore.TrySave(paths.LocalAppDataDirectory,
             existing with { SecondaryLanguage = localization.SecondaryLanguage });
-        // Rebuild the currently-visible field wrappers so their
-        // ResolvedName picks up the new secondary text. Same surgical
-        // refresh path the post-commit code uses.
-        if (SelectedBlock is { } sel && _loadedPath is not null && _navStack.Count > 0)
-        {
-            try
-            {
-                var fresh = loader.LoadBlockDetails(_loadedPath, sel.Index);
-                RefreshNavStack(fresh);
-                RebuildFromTop();
-            }
-            catch (CrimsonSaveException)
-            {
-                // Block re-fetch failed — leave the stale view in place.
-            }
-        }
-        OnPropertyChanged(nameof(SecondaryLanguage));
-        OnPropertyChanged(nameof(LocalizationStatus));
-        OnPropertyChanged(nameof(LocalizationLoadFailures));
     }
 
     /// <summary>
@@ -641,8 +662,11 @@ public sealed partial class MainWindowViewModel(
     /// menu uses this to put a check mark next to "Auto" rather than
     /// next to the auto-detected concrete code.
     /// </summary>
-    public bool IsUiLanguageAuto =>
+    public bool IsUiLanguageAuto => _uiLanguageAuto ??=
         string.IsNullOrEmpty(AppSettingsStore.Load(paths.LocalAppDataDirectory).UiLanguage);
+
+    // Read from settings once; SetUiLanguage keeps it current.
+    private bool? _uiLanguageAuto;
 
     /// <summary>
     /// Swap the running UI language. <paramref name="code"/> = <c>null</c>
@@ -671,6 +695,7 @@ public sealed partial class MainWindowViewModel(
         // travelled to.
         AppSettingsStore.TrySave(paths.LocalAppDataDirectory,
             existing with { UiLanguage = code });
+        _uiLanguageAuto = string.IsNullOrEmpty(code);
 
         OnPropertyChanged(nameof(CurrentUiLanguage));
         OnPropertyChanged(nameof(IsUiLanguageAuto));
@@ -825,6 +850,10 @@ public sealed partial class MainWindowViewModel(
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
     private bool _isDirty;
+
+    /// <summary>True while a save is being read in the background.</summary>
+    [ObservableProperty]
+    private bool _isBusy;
 
     // The loader's mutation version when the document was last loaded or written.
     private ulong _cleanVersion;
@@ -1484,13 +1513,23 @@ public sealed partial class MainWindowViewModel(
     /// load behavior is testable.
     /// </summary>
     [RelayCommand]
-    private void LoadSave(string? path)
+    private async Task LoadSaveAsync(string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
             return;
         }
-        Summary = loader.Load(path);
+        // Parsing and decoding a save takes seconds on a big one; the UI
+        // stays responsive meanwhile. A failure throws to the caller.
+        IsBusy = true;
+        try
+        {
+            Summary = await Task.Run(() => loader.Load(path));
+        }
+        finally
+        {
+            IsBusy = false;
+        }
         DocumentReplaced?.Invoke();
         _loadedPath = path;
         _loadedFileLastWriteTime = TryReadLastWriteTime(path);
@@ -5974,7 +6013,7 @@ public sealed partial class MainWindowViewModel(
         // the cached handle to the new bytes.
         try
         {
-            LoadSave(targetSavePath);
+            await LoadSaveAsync(targetSavePath);
             BulkOpStatus = UiText.Format("RestoreDone", "Restored {0} from {1}.",
                 entry.SlotName, SaveBackupService.FormatTimestamp(entry.Timestamp));
         }

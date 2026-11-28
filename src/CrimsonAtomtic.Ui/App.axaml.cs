@@ -43,16 +43,10 @@ public sealed class App : Application
             // detected, PAZ extraction error, PALOC parse error) leaves
             // the provider in a "not loaded" state — the editor still
             // functions, just without localized name resolution.
-            localization.TryBootstrapFromGameRoot(paths.GameInstallRoot);
-
-            // Apply the user's previously-saved secondary-language pick
-            // (if any). The provider silently rejects unknown codes so a
-            // stale settings file from a pre-discovery build degrades.
+            // The bootstrap itself runs once the window is open (see Opened
+            // below), so the window appears at once and shows that game data
+            // is loading.
             var settings = AppSettingsStore.Load(paths.LocalAppDataDirectory);
-            if (!string.IsNullOrEmpty(settings.SecondaryLanguage))
-            {
-                localization.SecondaryLanguage = settings.SecondaryLanguage;
-            }
 
             // UI language wiring. Resolve effective code from settings
             // (explicit pick wins) + OS UI culture (auto-detect fallback)
@@ -93,8 +87,6 @@ public sealed class App : Application
             // resolved on-demand per CharacterKey when a dialog asks
             // for one (mercenary list is small enough that batching
             // isn't worth it).
-            localization.ConfigurePortraitProvider(
-                CrimsonAtomtic.Ui.Services.PortraitProvider.ResolveRoot(paths.LocalAppDataDirectory));
 
             // Backup service: pure file-system orchestrator, no native deps.
             // Lives for the app lifetime alongside the loader so the same
@@ -146,6 +138,22 @@ public sealed class App : Application
             var startupSettings = settings;
             mainWindow.Opened += async (_, _) =>
             {
+                // Bootstrap with the window disabled: nothing can look a name
+                // up while tables load and DLC rows merge into them, which
+                // crimson-rs does not allow alongside lookups. The saved
+                // secondary language is applied after it (an unknown code
+                // is ignored), then the portrait cache keyed on the install.
+                var mainVm = (MainWindowViewModel)mainWindow.DataContext!;
+                await mainVm.LoadGameDataAsync(() =>
+                {
+                    localization.TryBootstrapFromGameRoot(paths.GameInstallRoot);
+                    if (!string.IsNullOrEmpty(startupSettings.SecondaryLanguage))
+                    {
+                        localization.SecondaryLanguage = startupSettings.SecondaryLanguage;
+                    }
+                    return localization.ConfigurePortraitProvider(
+                        CrimsonAtomtic.Ui.Services.PortraitProvider.ResolveRoot(paths.LocalAppDataDirectory));
+                });
                 var versionOk = await GameVersionMismatchDialog.ShowIfMismatchedAsync(
                     mainWindow, localization.GameDataVersion);
                 if (!versionOk)
