@@ -72,7 +72,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B1-18 | Rule 7：magic strings 沒有集中管理，錯誤碼名稱表重複 8 份且內容不一致 | rule violation | 確認 | P9 | 已修 | `ff24f9a` | 變嚴重：−26 LIST_PARTIALLY_DECODED、−27 ELEMENT_CLASS_MISMATCH、−28 HMAC_UNVERIFIED 不在常數與 8 份名稱表內。P0 先補常數與單一名稱表。 P0 建立 CrimsonErrorCode 單一名稱表並補 −26/−27/−28；其餘 magic strings 仍在 P9。 |
 | B1-19 | 整個專案抑制 CA1416，且理由已過時（削弱 Rule 4 的防線） | rule violation | 確認 | P10 | 待修 |  | 純 C# 問題。 |
 | B1-20 | 文件與註解過時或錯置 | cleanup | 確認 | P12 | 待修 |  | ISaveLoader 的「每次成功 mutation 剛好 +1」在新版更錯；NativePaverReader「最新 export」註解過時。 |
-| B1-21 | 例外訊息未本地化就直接送到 UI | cleanup | 確認 | P8 | 待修 |  | 純 C# 問題。 |
+| B1-21 | 例外訊息未本地化就直接送到 UI | cleanup | 確認 | P8 | 待修 | `6a8c473` | 純 C# 問題。 原生例外訊息直接顯示，需錯誤碼對應的本地化訊息。 |
 | B1-22 | 檔案規模與重複（只談結構） | cleanup | 確認 | P14 | 待修 |  | 純結構。 |
 | B1-23 | `IItemInfoCatalog` 缺少 `LookupSummary` / `LookupFlags` | cleanup | 確認 | P5 | 已修 | `559a80b` | 純 C# 問題。 |
 | B1-24 | 測試缺口 | cleanup | 部分 | P13 | 待修 |  | B1-01 的 rollback 測試在新版變成有效；C# 仍沒有自己的 layout 測試。 |
@@ -105,7 +105,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B2-22 | Rule 7：沒有集中的 magic-string 檔（Pre-scan #4，Block 2 範圍確認） | rule violation | 確認 | P9 | 待修 |  | 與 B1-18、B3-16、B4-26、B5-18、B6-24 合併。 |
 | B2-23 | Rule 4：平台相關的路徑知識與具體實作洩漏到 ViewModel / composition root 之外 | rule violation | 確認 | P10 | 待修 |  | VM 自己組 Windows 存檔路徑、直接呼叫 SteamLibraryProbe。 |
 | B2-24 | Rule 12：absent 欄位的型別是由消費端用 schema TypeName 猜出來的 | rule violation | 部分 | P5 | 待上游 | `559a80b` | TypeName 別名表與 *Key→u32 猜測確實是 Rule 12 workaround；i32/u32 風險不成立，實際代價是未知 typedef 無法編輯。需上游為 absent scalar 提供 type_tag。 需 crimson-rs 回報 absent scalar 的 type_tag。 |
-| B2-25 | UI 字串寫死英文，沒有放進三語系資源 | rule violation | 確認 | P8 | 待修 |  | 多處寫死英文。 |
+| B2-25 | UI 字串寫死英文，沒有放進三語系資源 | rule violation | 確認 | P8 | 已修 | `6a8c473` | 多處寫死英文。 |
 | B2-26 | `MainWindow.axaml.cs`（1,997 行）中有應該放在 ViewModel / Service 的邏輯 | cleanup | 確認 | P14 | 待修 |  | 約 20 個複製貼上的工具啟動器；Add Dye 邏輯在 View。 |
 | B2-27 | 過時或錯誤的註解與文件 | cleanup | 確認 | P12 | 部分 | `ff24f9a` | 多處過時註解；孤立 summary 已在 P0 由註解檢查修掉一部分。 P0 修掉孤立 summary 2 處。 |
 | B2-28 | `ChangeJournal` 的執行緒安全只是表面上的 | cleanup | 確認 | P6 | 已修 | `8577638` | CollectionChanged 在呼叫端執行緒觸發；目前沒有背景呼叫端。 |
@@ -132,7 +132,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B3-14 | Rule 4：`UiLanguageService` 直接 P/Invoke `kernel32!GetUserDefaultUILanguage` | rule violation | 確認 | P10 | 待修 |  | kernel32 P/Invoke 在 Ui；fallback 被 InvariantGlobalization 弄壞。 |
 | B3-15 | Rule 3：同步 I/O 與長時間工作跑在 UI 執行緒 | rule violation | 確認 | P7 | 已修 | `f3f25a8` | bootstrap、語言載入、180k 掃描、圖示解碼都在 UI 執行緒。 圖示在 converter 解碼一次後快取，未改。 |
 | B3-16 | Rule 7：magic string 散落各處，沒有集中檔案 | rule violation | 確認 | P9 | 待修 |  | 合併至 magic-strings 批次。 |
-| B3-17 | UI 字串寫死在 C#，沒有進三語系 `Strings/*.axaml` | rule violation | 確認 | P8 | 待修 |  | 合併至 UI 字串批次。 |
+| B3-17 | UI 字串寫死在 C#，沒有進三語系 `Strings/*.axaml` | rule violation | 確認 | P8 | 部分 | `6a8c473` | 合併至 UI 字串批次。 ItemPicker 內部分字串未改。 |
 | B3-18 | `FormatPair` 對只有 internal name 的 key 顯示「X / X」 | cleanup | 確認 | P5 | 已修 | `559a80b` | 只有 internal name 的 key 顯示「X / X」。 |
 | B3-19 | 重複的 helper 與死碼 | cleanup | 確認 | P14 | 待修 |  | LookupUiResourceString 三份、死碼。 |
 | B3-20 | XML doc 錯置、孤立，以及過時的註解 | cleanup | 確認 | P12 | 部分 | `ff24f9a` | 孤立 summary 在 P0 已修（4 處）；剩 Avalonia 版本與計數文字。 |
@@ -167,7 +167,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B4-22 | 測試缺口：deferred 模式的 dye 寫入、Socket 修復路徑、過期檢查與多個工具都沒有測試 | risk | 確認 | P13 | 待修 |  | 多個工具沒有測試。 |
 | B4-23 | 掃描時讀取失敗的 block 被靜默跳過，結果不完整也不告知使用者 | risk | 確認 | P4 | 已修 | `5127921` | 掃描讀取失敗的 block 被靜默跳過。 Dye 主清單只避免重複讀取，未顯示數量。 |
 | B4-24 | Rule：五個 UI 字串鍵在三個語系字典中都不存在 | rule violation | 確認 | P8 | 已修 | `ff24f9a` | 五個字串鍵三語系都缺；P0 補上並加鍵值測試。 |
-| B4-25 | Rule：UI 字串寫死在 C#（含原生例外訊息直接顯示） | rule violation | 確認 | P8 | 待修 |  | 寫死英文與原生例外訊息直接顯示。 |
+| B4-25 | Rule：UI 字串寫死在 C#（含原生例外訊息直接顯示） | rule violation | 確認 | P8 | 部分 | `6a8c473` | 寫死英文與原生例外訊息直接顯示。 新增訊息皆已進字典；工具視窗內既有英文狀態與原生例外訊息未全面改。 |
 | B4-26 | Rule 7：magic string 沒有集中；錯誤碼寫成 `-16` 字面值 | rule violation | 確認 | P9 | 待修 |  | 合併至 magic-strings 批次。 |
 | B4-27 | Rule 3：同步檔案 I/O 與耗時的 FFI 跑在 UI 執行緒 | rule violation | 確認 | P7 | 部分 | `f3f25a8` | 設定檔 I/O 與 FFI 在 UI 執行緒。 Socket/Buyback 掃描已移到背景；設定檔 I/O 與 dye slot editor（含 brush）未改。 |
 | B4-28 | 文件漂移與錯置的 XML doc | cleanup | 確認 | P12 | 部分 | `ff24f9a` | 孤立 summary 在 P0 已修（SocketEditor）；其餘過時說明。 |
@@ -190,7 +190,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B5-08 | 非 `CrimsonSaveException` 的例外會讓 process 崩潰 | risk | 確認 | P4 | 已修 | `5127921` | 沒有全域例外處理。 |
 | B5-09 | Faction Relations 的 Apply 會默默改寫所有「兩側不一致」的 faction | risk | 確認 | P5 | 已修 | `559a80b` | Apply 會默默改寫所有兩側不一致的 faction。 |
 | B5-10 | Sealed Abyss 對話框會套用被篩選隱藏、但仍勾選的列 | risk | 確認 | P5 | 已修 | `30dd0ce` | 套用被篩選隱藏但仍勾選的列。 P2 一併修正。 |
-| B5-11 | Mark Challenge 的警告文字仍宣稱「至少持有一件 SA 遺物才會啟用」，但這道檢查已經移除 | risk | 確認 | P8 | 待修 |  | 三語系警告文字仍寫「需持有遺物」。 |
+| B5-11 | Mark Challenge 的警告文字仍宣稱「至少持有一件 SA 遺物才會啟用」，但這道檢查已經移除 | risk | 確認 | P8 | 已修 | `6a8c473` | 三語系警告文字仍寫「需持有遺物」。 |
 | B5-12 | Rename Mercenary：清空名稱寫成「present + 長度 0」，長度也沒有上限 | risk | 確認 | P5 | 已修 | `559a80b` | _mercenaryName 98 筆中 95 筆 absent；清空寫成 present 長度 0、沒有長度上限。 |
 | B5-13 | Mount 對話框允許多列同時解鎖，工具視窗之間的 mutation 也沒有序列化 | risk | 確認 | P3 | 已修 | `951ac21` | IsBusy 只到列；兩次快速點擊可能算出相同 _itemNo。 |
 | B5-14 | 尚未實機驗證的寫入與啟發式判斷 | risk | 待資料 | P5 | 待實機 | `559a80b` | _relationGroupKey 寬度目前正確（146 筆 u16）；群組態度、Abyss 欄位、bulk Pattern B 仍待實機。 |
@@ -198,10 +198,10 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | B5-16 | 測試缺口 | risk | 確認 | P13 | 待修 |  | 多個 world 工具沒有測試。 |
 | B5-17 | Rule 3：UI 執行緒上的同步 FFI 與檔案 I/O | rule violation | 部分 | P7 | 已修 | `f3f25a8` | LoadBlockDetails 有快取；同步工作在 Rename、WorldMap 點陣圖、KnowledgeEditor。 |
 | B5-18 | Rule 7：magic strings 分散且重複（Pre-scan #4 在 Block 5 範圍確認） | rule violation | 確認 | P9 | 待修 |  | 合併至 magic-strings 批次。 |
-| B5-19 | UI 字串寫死英文；三語系字典的鍵一致，但用詞不一致 | rule violation | 確認 | P8 | 待修 |  | 另 zh-TW 混用阿比斯之門 / 深淵之門。 |
+| B5-19 | UI 字串寫死英文；三語系字典的鍵一致，但用詞不一致 | rule violation | 確認 | P8 | 部分 | `6a8c473` | 另 zh-TW 混用阿比斯之門 / 深淵之門。 狀態標籤與 zh-TW 用詞已改；skip reason 仍為英文診斷字串。 |
 | B5-20 | Rule 12：消費端的 workaround | rule violation | 確認 | P5 | 已修 | `559a80b` | WorldMap 以 " / " 切名稱；TryParseScalarUInt 複製三份。 |
 | B5-21 | 過時或錯置的註解與文件 | cleanup | 確認 | P12 | 部分 | `ff24f9a` | 孤立 summary 在 P0 已修（SA bulk）；其餘過時說明。 |
-| B5-22 | Skip reason 用英文子字串分類 | cleanup | 確認 | P8 | 待修 |  | 以英文子字串分類 skip reason。 |
+| B5-22 | Skip reason 用英文子字串分類 | cleanup | 確認 | P8 | 已修 | `6a8c473` | 以英文子字串分類 skip reason。 |
 | B5-23 | 結構：Sealed Abyss 佔 `MainWindowViewModel.cs` 約 1,300 行（Pre-scan #5 確認） | cleanup | 確認 | P14 | 待修 |  | 純結構。 |
 | B5-24 | 零碎項目 | cleanup | 部分 | P4 | 已修 | `5127921` | return default 那處不可達；FAR 重讀與 catch-all 屬實。 FAR 重讀保留（B1-01 已修後無害）。 |
 
@@ -255,7 +255,7 @@ Block [1](code-audit-2026-11-28-block1-interop.md) /
 | X-03 | status.md 的 gotcha「promote then write in place」與 set_object_list_present(1) 語意已過時 | cleanup | 確認 | P0 | 已修 | `ff24f9a` | 上游 G-08 / G-03 改變行為。 |
 | X-04 | ResolveDyeSlotCount 的意義改為 dye-slot bit 數；LookupSlotCount 是 sub-mesh 數 | cleanup | 確認 | P12 | 待修 |  | 目前沒有 UI 呼叫 ResolveDyeSlotCount；更新 C# 文件。 |
 | X-05 | Transplant 在同一個 handle 內已允許，C# 端的禁止可放寬 | cleanup | 確認 | P3 | 已修 | `951ac21` | 上游 G-15。 |
-| X-06 | FindItemsWindow 使用 ThemeAccentBrush2 / ThemeBorderLowBrush / ThemeForegroundBrush，Fluent 主題沒有定義 | bug | 確認 | P8 | 待修 |  | 字串鍵比對時發現；需確認畫面上是否失色。 |
+| X-06 | FindItemsWindow 使用 ThemeAccentBrush2 / ThemeBorderLowBrush / ThemeForegroundBrush，Fluent 主題沒有定義 | bug | 確認 | P8 | 已修 | `6a8c473` | 字串鍵比對時發現；需確認畫面上是否失色。 |
 | X-07 | 還原備份視窗是非 modal、fire-and-forget，可重複開啟並同時還原 | bug | 確認 | P1 | 已修 | `09394d6` | Block 2 確認時發現。 |
 | X-08 | 註解規則（docs/code-comments.md）與 CommentRulesTests：行號、稽核/PR/commit id、重複 summary 歸零；歷史語句 ratchet | rule | 確認 | P0/P12 | 部分 | `ff24f9a` | 使用者要求，參考 UE5CEDumper。 P0：行號/ID/重複 summary 歸零，歷史語句 ratchet 基準 43 行（22 檔）。 |
 
