@@ -229,7 +229,9 @@ public sealed partial class SealedArtifactChallengeViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanAct))]
     private async Task CompleteSelected()
     {
-        var picked = _allRows.Where(r => r.IsChecked).Select(r => r.Context).ToList();
+        // Only rows the user can see: a ticked row hidden by the filter is
+        // not part of what the confirm describes.
+        var picked = Rows.Where(r => r.IsChecked).Select(r => r.Context).ToList();
         if (picked.Count == 0)
         {
             StatusMessage = UiText.Get("SaNoneTicked", "No challenges are ticked.");
@@ -255,6 +257,15 @@ public sealed partial class SealedArtifactChallengeViewModel : ObservableObject
                 return;
             }
         }
+        // A context holds list counts and element indices from the scan;
+        // after any other write they may describe a different save.
+        if (_main.CurrentMutationVersion() != _scannedAt)
+        {
+            await RescanAsync().ConfigureAwait(true);
+            StatusMessage = UiText.Get("SaStale",
+                "The save changed since this list was built, so it has been rebuilt. Check the ticks and run again.");
+            return;
+        }
 
         IsBusy = true;
         StatusMessage = UiText.Format("SaApplying", "Applying Pattern B v1 to {0} challenge(s)…", picked.Count);
@@ -271,12 +282,9 @@ public sealed partial class SealedArtifactChallengeViewModel : ObservableObject
                     applied, picked.Count, err.Message);
 
             // Re-scan so completed (now state=5) challenges drop off the
-            // list and a re-run can't double-apply. Accurate even on
-            // partial failure.
-            if (applied > 0)
-            {
-                await RescanAsync().ConfigureAwait(true);
-            }
+            // list and a re-run can't double-apply; a failed run may have
+            // written part of a challenge, so it rescans too.
+            await RescanAsync().ConfigureAwait(true);
         }
         finally
         {
@@ -284,10 +292,14 @@ public sealed partial class SealedArtifactChallengeViewModel : ObservableObject
         }
     }
 
+    // The mutation version the rows were scanned at.
+    private ulong _scannedAt;
+
     private async Task RescanAsync()
     {
         var loc = _main.Localization;
         var include = IncludeNonSealedArtifact;
+        _scannedAt = _main.CurrentMutationVersion();
         var preview = await Task.Run(() => _main.ScanSealedArtifactCandidates(include)).ConfigureAwait(true);
         _preview = preview;
         var candidates = preview.Candidates ?? [];

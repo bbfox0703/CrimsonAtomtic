@@ -117,7 +117,10 @@ public sealed partial class VendorBuybackViewModel : ObservableObject
         _localization = localization;
         _journal = journal;
         _savePath = savePath;
+        _guard = new SnapshotGuard(loader);
     }
+
+    private readonly SnapshotGuard _guard;
 
     /// <summary>
     /// Build a fresh VM against the loaded save. Returns <c>null</c>
@@ -337,6 +340,14 @@ public sealed partial class VendorBuybackViewModel : ObservableObject
     /// </summary>
     internal void ApplyRemove(VendorBuybackRow row)
     {
+        if (_guard.IsStale)
+        {
+            row.LastError = UiText.Get("BuybackSnapshotStaleRow", "save changed elsewhere — reopen this dialog");
+            StatusMessage = UiText.Get("BuybackSnapshotStale",
+                "The save was changed in another window since this list was built, so a row may "
+                + "point at a different entry now. Close and reopen Vendor Buyback before removing.");
+            return;
+        }
         var path = new[] { new PathStep(row.StoreListFieldIdx, row.StoreElementIdx) };
         try
         {
@@ -351,6 +362,7 @@ public sealed partial class VendorBuybackViewModel : ObservableObject
             StatusMessage = UiText.Format("BuybackRemoveFailed", "Remove failed: {0}", ex.Message);
             return;
         }
+        _guard.Resync();
         // Shift down every sibling at index > removed.
         var sameStoreSiblings = new List<VendorBuybackRow>();
         var removedIdx = row.BuybackElementIdx;

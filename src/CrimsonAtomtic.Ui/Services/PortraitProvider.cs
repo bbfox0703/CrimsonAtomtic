@@ -161,7 +161,7 @@ public sealed class PortraitProvider : IDisposable
     /// </summary>
     public Bitmap? GetPortrait(uint characterKey)
     {
-        if (!IsAvailable || characterKey == 0)
+        if (_disposed || !IsAvailable || characterKey == 0)
         {
             return null;
         }
@@ -177,6 +177,11 @@ public sealed class PortraitProvider : IDisposable
 
         lock (_gate)
         {
+            if (_disposed)
+            {
+                bmp?.Dispose();
+                return null;
+            }
             // Race-safe cache insertion — keep the first winner so a
             // bound Bitmap doesn't get disposed under a UI element.
             if (_cache.TryGetValue(characterKey, out var winner))
@@ -308,6 +313,10 @@ public sealed class PortraitProvider : IDisposable
 #pragma warning restore CA1031
     }
 
+    // Set by Dispose: a picker still holding this provider gets no new
+    // Bitmaps and caches nothing that would never be released.
+    private bool _disposed;
+
     /// <summary>
     /// Dispose every decoded portrait Bitmap in the cache. Mirrors
     /// <see cref="IconProvider.Dispose"/>: a provider being replaced
@@ -320,6 +329,7 @@ public sealed class PortraitProvider : IDisposable
     {
         lock (_gate)
         {
+            _disposed = true;
             foreach (var bmp in _cache.Values)
             {
                 bmp?.Dispose();

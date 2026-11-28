@@ -28,6 +28,32 @@ read from the top.
 
 -----
 
+## 2026-11-28 (no release) — Code audit P2: tool windows never write through a stale snapshot
+
+- **What changes:** tool windows address items by element index, and an insert or remove made
+  elsewhere shifts those indices, so a write could land on a different item. Two guards now stop
+  that.
+  - **Another document:** Open, Save As and Restore raise `DocumentReplaced`, and the main window
+    closes every window it owns. Before, a tool kept writing by the old indices into the newly
+    loaded save, and read through the old file path (B2-03, B5-01).
+  - **The same document changed:** `SnapshotGuard` compares the loader's mutation version (which
+    now only moves forward) with the one a tool's rows were built at. The dye list rescans
+    instead of opening or adding on a stale row; the dye slot editor and Vendor Buyback refuse a
+    stale write and resync after their own; Find Items' Go rebuilds the list and finds the item
+    again by inventory and item number; the two bulk fills, Contributions and the Sealed Abyss
+    dialog re-check the version after their confirm dialog (B4-01, B4-10, B4-11, B5-02).
+  - **The main view** rebuilds itself when the version moved without a main-window edit, so its
+    rows follow edits made in tool windows (the rest of B4-11).
+  - The Sealed Abyss dialog applies only ticked rows the filter shows (B5-10) and rescans after
+    every run, a failed one included.
+  - The icon and portrait providers stop handing out or caching Bitmaps once disposed, so a picker
+    still holding a replaced provider leaks nothing (B3-04).
+- **Not verified in the app:** that closing the tool windows on Open feels right; the guards
+  themselves have tests.
+- **Tests:** 465 green (+2 `SnapshotGuardTests`).
+
+-----
+
 ## 2026-11-28 (no release) — Code audit P1: unsaved edits, Save failures, backups and restore
 
 - **What changes:**

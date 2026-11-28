@@ -841,6 +841,73 @@ public sealed partial class MainWindowViewModel(
         }
     }
 
+    /// <summary>
+    /// Raised when the loader holds a different document than before
+    /// (Open, Save As, Restore). Windows built on the previous document
+    /// must not write through the loader any more.
+    /// </summary>
+    public event Action? DocumentReplaced;
+
+    /// <summary>
+    /// The loader's mutation version, or 0 with no save loaded. Tool
+    /// windows read it before a scan and compare before they write.
+    /// </summary>
+    internal ulong CurrentMutationVersion()
+    {
+        try
+        {
+            return loader.GetMutationVersion();
+        }
+        catch (InvalidOperationException)
+        {
+            return 0;
+        }
+    }
+
+    // The mutation version the main view's rows were last built from.
+    private ulong _viewVersion;
+
+    private void StampViewVersion()
+    {
+        try
+        {
+            _viewVersion = loader.GetMutationVersion();
+        }
+        catch (InvalidOperationException)
+        {
+            _viewVersion = 0;
+        }
+    }
+
+    /// <summary>
+    /// Rebuild the main view when the save changed since its rows were
+    /// built, which happens when a tool window writes: list rows address
+    /// elements by index, and an insert or remove elsewhere shifts them.
+    /// The main window's own edits refresh the view themselves and stamp
+    /// the version, so this only fires for changes made elsewhere. Skipped
+    /// while a deferred batch is open.
+    /// </summary>
+    public void RefreshViewIfChangedElsewhere()
+    {
+        if (Summary is null)
+        {
+            return;
+        }
+        try
+        {
+            if (loader.IsDeferredRedecodeOpen() || loader.GetMutationVersion() == _viewVersion)
+            {
+                return;
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            return;
+        }
+        StampViewVersion();
+        RefreshSelectedBlockSilently();
+    }
+
     /// <summary>Whether closing or replacing the document would lose edits.</summary>
     public bool HasUnsavedChanges
     {
@@ -853,6 +920,7 @@ public sealed partial class MainWindowViewModel(
 
     private void MarkClean()
     {
+        StampViewVersion();
         _cleanVersion = loader.GetMutationVersion();
         IsDirty = false;
         Journal.Clear();
@@ -1411,6 +1479,7 @@ public sealed partial class MainWindowViewModel(
             return;
         }
         Summary = loader.Load(path);
+        DocumentReplaced?.Invoke();
         _loadedPath = path;
         _loadedFileLastWriteTime = TryReadLastWriteTime(path);
         _loadedFileStamp = TryReadFileStamp(path);
@@ -3286,6 +3355,7 @@ public sealed partial class MainWindowViewModel(
     /// </summary>
     private void RefreshNavStack(BlockDetails freshTop)
     {
+        StampViewVersion();
         var rebuilt = new List<NavFrame>(_navStack.Count);
         foreach (var frame in _navStack.Reverse())
         {
@@ -3408,6 +3478,7 @@ public sealed partial class MainWindowViewModel(
         // as clicking Set-to-max in the edit panel.
         if (row.IsContainerFillCandidate)
         {
+            var scannedAt = loader.GetMutationVersion();
             if (ConfirmRequested is not { } ask)
             {
                 return;
@@ -3425,6 +3496,13 @@ public sealed partial class MainWindowViewModel(
             if (!ok)
             {
                 BulkOpStatus = UiText.Get("FillCancelled", "Fill cancelled.");
+                return;
+            }
+            if (loader.GetMutationVersion() != scannedAt)
+            {
+                BulkOpStatus = UiText.Get("FillStale",
+                    "The save changed while the confirmation was open, so nothing was filled. Run Fill again.");
+                RefreshSelectedBlockSilently();
                 return;
             }
         }
@@ -4750,6 +4828,7 @@ public sealed partial class MainWindowViewModel(
         // the UI responsive even on 1112-block saves.
         BulkOpStatus = UiText.Get("ScanningInventories", "Scanning inventories…");
         var savePath = _loadedPath;
+        var scannedAt = loader.GetMutationVersion();
         var (allOps, containerCount) = await Task.Run(() =>
         {
             var ops = new List<ScalarBatchOp>();
@@ -4830,6 +4909,12 @@ public sealed partial class MainWindowViewModel(
         if (!ok)
         {
             BulkOpStatus = UiText.Get("FillCancelled", "Fill cancelled.");
+            return;
+        }
+        if (loader.GetMutationVersion() != scannedAt)
+        {
+            BulkOpStatus = UiText.Get("FillStale",
+                "The save changed while the confirmation was open, so nothing was filled. Run Fill again.");
             return;
         }
 
@@ -5630,6 +5715,7 @@ public sealed partial class MainWindowViewModel(
             }
             return;
         }
+        DocumentReplaced?.Invoke();
         _loadedPath = destinationPath;
         _loadedFileLastWriteTime = TryReadLastWriteTime(destinationPath);
         _loadedFileStamp = TryReadFileStamp(destinationPath);

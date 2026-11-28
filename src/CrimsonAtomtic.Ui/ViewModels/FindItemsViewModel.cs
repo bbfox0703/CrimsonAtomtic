@@ -66,10 +66,26 @@ public sealed partial class FindItemsViewModel : ObservableObject
 
     /// <summary>
     /// Invoked by the code-behind click handler when the user clicks
-    /// the "Go" button. Public so the AXAML.cs in this assembly can
-    /// call it without reaching into private state.
+    /// the "Go" button. When the save changed since the list was built,
+    /// the row's position may name a different item, so the list is
+    /// rebuilt first and the item found again by its inventory and item
+    /// number; an item that is gone is not navigated to.
     /// </summary>
-    public void RequestGoto(FindItemsRow row) => GotoRequested?.Invoke(row);
+    public void RequestGoto(FindItemsRow row)
+    {
+        if (IsStale)
+        {
+            Refresh();
+            var again = _allRows.Find(r => r.InventoryKey == row.InventoryKey && r.ItemNo == row.ItemNo);
+            if (again is null)
+            {
+                return;
+            }
+            SelectedRow = again;
+            row = again;
+        }
+        GotoRequested?.Invoke(row);
+    }
 
     public string? SecondaryLanguage { get; }
     public bool HasSecondary => !string.IsNullOrEmpty(SecondaryLanguage);

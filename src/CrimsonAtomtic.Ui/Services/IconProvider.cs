@@ -138,7 +138,7 @@ public sealed class IconProvider : IDisposable
     /// </summary>
     public Bitmap? GetItemIcon(uint itemKey)
     {
-        if (!IsAvailable)
+        if (_disposed || !IsAvailable)
         {
             return null;
         }
@@ -191,6 +191,11 @@ public sealed class IconProvider : IDisposable
         }
         lock (_gate)
         {
+            if (_disposed)
+            {
+                bmp?.Dispose();
+                return null;
+            }
             // Someone else may have raced us — keep the first result
             // to avoid disposing a Bitmap that's already bound.
             if (_cache.TryGetValue(itemKey, out var winner))
@@ -202,6 +207,10 @@ public sealed class IconProvider : IDisposable
         }
         return bmp;
     }
+
+    // Set by Dispose: a picker still holding this provider gets no new
+    // Bitmaps and caches nothing that would never be released.
+    private bool _disposed;
 
     /// <summary>
     /// Dispose every decoded icon Bitmap in the cache. The full item
@@ -221,6 +230,7 @@ public sealed class IconProvider : IDisposable
     {
         lock (_gate)
         {
+            _disposed = true;
             foreach (var bmp in _cache.Values)
             {
                 bmp?.Dispose();

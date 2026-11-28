@@ -36,6 +36,7 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
     private readonly ChangeJournal _journal;
     private readonly string _savePath;
     private readonly DyeEditorItemRow _itemRow;
+    private readonly SnapshotGuard _guard;
 
     [ObservableProperty]
     private string? _statusMessage;
@@ -79,6 +80,7 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
         _journal = journal;
         _savePath = savePath;
         _itemRow = itemRow;
+        _guard = new SnapshotGuard(loader);
 
         HeaderText = UiText.Format("DyeSlotEditorHeader", "Dye slots — {0}", itemRow.ItemName);
         SubHeaderText = UiText.Format("DyeSlotEditorSubHeader", "Bag: {0}   ItemKey: {1}",
@@ -132,6 +134,7 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
         finally
         {
             BuildAddableSlots();
+            _guard.Resync();
         }
     }
 
@@ -166,6 +169,7 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
     private void AddSlot()
     {
         if (SelectedAddSlot is not { } pick) return;
+        if (RejectIfStale()) return;
         var itemPath = _itemRow.BuildPathToItem();
         var listField = (int)_itemRow.DyeListFieldIndex;
         var index = Slots.Count;
@@ -232,6 +236,7 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
     /// </summary>
     internal void RemoveSlot(DyeSlotRow row)
     {
+        if (RejectIfStale()) return;
         var itemPath = _itemRow.BuildPathToItem();
         var listField = (int)_itemRow.DyeListFieldIndex;
         try
@@ -419,6 +424,25 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
     /// the parent VM.
     /// </summary>
     internal void LoaderRunDeferred(Action body) => _loader.RunDeferred(body);
+
+    /// <summary>
+    /// Refuse a write when the save changed in another window since these
+    /// rows were read: the item path may now name a different item.
+    /// </summary>
+    internal bool RejectIfStale()
+    {
+        if (!_guard.IsStale)
+        {
+            return false;
+        }
+        StatusMessage = UiText.Get("DyeSnapshotStale",
+            "The save was changed in another window since this editor opened, so its rows may "
+            + "point at a different item now. Close and reopen it before editing.");
+        return true;
+    }
+
+    /// <summary>Re-baseline the snapshot after this editor's own write.</summary>
+    internal void ResyncSnapshot() => _guard.Resync();
 
     /// <summary>
     /// Raised when a row's "Pick…" button is clicked. The hosting
@@ -724,6 +748,11 @@ public sealed partial class DyeSlotRow : ObservableObject
     private void Apply()
     {
         LastError = null;
+        if (_parent.RejectIfStale())
+        {
+            LastError = UiText.Get("DyeSnapshotStaleRow", "The save changed in another window; reopen this editor.");
+            return;
+        }
         var writes = new List<(int FieldIdx, bool WasPresent, byte[] Bytes, string Label)>();
 
         if (_fields.R >= 0 && (R != _origR || !_origRPresent))
@@ -791,10 +820,12 @@ public sealed partial class DyeSlotRow : ObservableObject
         }
         catch (CrimsonSaveException commitEx)
         {
+            _parent.ResyncSnapshot();
             LastError = $"Commit failed: {commitEx.Message} (code {commitEx.ErrorCode}). "
                 + "Reload the save without writing to revert.";
             return;
         }
+        _parent.ResyncSnapshot();
         if (LastError is not null && appliedLabels.Count == 0)
         {
             // First write failed pre-commit — LastError already set to

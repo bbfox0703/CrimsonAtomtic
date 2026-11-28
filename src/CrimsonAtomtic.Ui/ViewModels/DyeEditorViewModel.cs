@@ -36,6 +36,7 @@ public sealed partial class DyeEditorViewModel : ObservableObject
     private readonly LocalizationProvider _localization;
     private readonly string _savePath;
     private List<DyeEditorItemRow> _allRows = new();
+    private readonly SnapshotGuard _guard;
 
     public DyeEditorViewModel(
         ISaveLoader loader,
@@ -48,6 +49,7 @@ public sealed partial class DyeEditorViewModel : ObservableObject
         _loader = loader;
         _localization = localization;
         _savePath = savePath;
+        _guard = new SnapshotGuard(loader);
         SecondaryLanguage = localization.SecondaryLanguage;
         IsLoading = true;
     }
@@ -103,6 +105,12 @@ public sealed partial class DyeEditorViewModel : ObservableObject
 
     public void NotifyChildApplied() => IsDirty = true;
 
+    /// <summary>
+    /// True when the save changed since the rows were scanned, so a row's
+    /// item path may name a different item; refresh before acting on a row.
+    /// </summary>
+    public bool IsStale => _guard.IsStale;
+
     partial void OnSearchTextChanged(string? value) => ApplyFilter();
 
     public async Task RefreshAsync()
@@ -110,8 +118,10 @@ public sealed partial class DyeEditorViewModel : ObservableObject
         IsLoading = true;
         try
         {
+            ulong version = 0;
             var rows = await Task.Run(() =>
-                Scan(_loader, _localization, _savePath));
+                Scan(_loader, _localization, _savePath, out version));
+            _guard.Capture(version);
             _allRows = rows;
             ApplyFilter();
         }
@@ -145,11 +155,12 @@ public sealed partial class DyeEditorViewModel : ObservableObject
     private static List<DyeEditorItemRow> Scan(
         ISaveLoader loader,
         LocalizationProvider localization,
-        string savePath)
+        string savePath,
+        out ulong version)
     {
         var results = new List<DyeEditorItemRow>();
         var detailsCache = new Dictionary<uint, BlockDetails>();
-        foreach (var rec in loader.ListAllItems(out _))
+        foreach (var rec in loader.ListAllItems(out version))
         {
             if (!localization.IsPlayerEditableItem(rec)) continue;
             var includeUndyed = !rec.HasDyeData && IsEquippedKind(rec.Container);

@@ -95,10 +95,18 @@ public sealed partial class MainWindow : Window
         // tears down so we can cancel + show the modal + re-close.
         Closing += OnWindowClosing;
         // Tool windows write through the shared loader without telling this
-        // window; re-derive the dirty flag from the loader's mutation version
-        // so the title, Save and the close prompt see their edits.
+        // window; re-derive the dirty flag and the main view from the loader's
+        // mutation version so the title, Save, the close prompt and the rows
+        // shown here see their edits.
         _dirtyPoll = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _dirtyPoll.Tick += (_, _) => (DataContext as MainWindowViewModel)?.RefreshDirty();
+        _dirtyPoll.Tick += (_, _) =>
+        {
+            if (DataContext is MainWindowViewModel pollVm)
+            {
+                pollVm.RefreshDirty();
+                pollVm.RefreshViewIfChangedElsewhere();
+            }
+        };
         _dirtyPoll.Start();
         Closed += (_, _) => _dirtyPoll.Stop();
     }
@@ -608,6 +616,7 @@ public sealed partial class MainWindow : Window
             prev.ElementScrollRequested -= ScrollElementIntoView;
             prev.ConfirmRequested = null;
             prev.AlertRequested = null;
+            prev.DocumentReplaced -= CloseToolWindows;
             _wiredVm = null;
         }
         if (DataContext is not MainWindowViewModel vm)
@@ -621,6 +630,7 @@ public sealed partial class MainWindow : Window
         // Window type — keeps the MVVM boundary intact.
         vm.ConfirmRequested = (title, msg) => ConfirmDialog.ShowAsync(this, title, msg);
         vm.AlertRequested = (title, msg) => ConfirmDialog.ShowAlertAsync(this, title, msg);
+        vm.DocumentReplaced += CloseToolWindows;
         _wiredVm = vm;
         var menu = SecondaryLanguageMenu;
         // Clear any dynamic entries (everything past the static "English
@@ -995,6 +1005,39 @@ public sealed partial class MainWindow : Window
         dialog.Show(this);
     }
 
+    /// <summary>
+    /// When the dye list is stale (the save changed since it was scanned),
+    /// rescan it instead of acting on a row whose item path may now name a
+    /// different item, and tell the user to pick again.
+    /// </summary>
+    private bool RefreshIfStale(DyeEditorViewModel masterVm)
+    {
+        if (!masterVm.IsStale)
+        {
+            return false;
+        }
+        masterVm.RefreshAsync().SafeFireAndForget();
+        _ = ConfirmDialog.ShowAlertAsync(this,
+            UiText.Get("DyeListRefreshedTitle", "List refreshed"),
+            UiText.Get("DyeListRefreshedBody",
+                "The save changed since this list was built, so it has been rebuilt. Pick the item again."));
+        return true;
+    }
+
+    /// <summary>
+    /// Close every window this one owns. Tool windows hold element indices
+    /// and the path of the document they opened on; once another document
+    /// is loaded (Open, Save As, Restore) their writes would land in it at
+    /// the wrong place, and their reads would come from the old file.
+    /// </summary>
+    private void CloseToolWindows()
+    {
+        foreach (var owned in OwnedWindows.ToList())
+        {
+            owned.Close();
+        }
+    }
+
     private RestoreFromBackupWindow? _restoreWindow;
     private bool _restoreRunning;
 
@@ -1058,6 +1101,10 @@ public sealed partial class MainWindow : Window
         // Per-row Edit → open the child slot editor.
         masterVm.EditRequested += row =>
         {
+            if (RefreshIfStale(masterVm))
+            {
+                return;
+            }
             DyeSlotEditorViewModel childVm;
             try
             {
@@ -1088,6 +1135,10 @@ public sealed partial class MainWindow : Window
         // picker offers the prefab's own (sparse) dye slot numbers.
         masterVm.AddDyeRequested += async row =>
         {
+            if (RefreshIfStale(masterVm))
+            {
+                return;
+            }
             if (vm.Localization.LookupDyeSlotNumbers(row.ItemKey) is not { Count: > 0 } dyeSlotNumbers)
             {
                 return;

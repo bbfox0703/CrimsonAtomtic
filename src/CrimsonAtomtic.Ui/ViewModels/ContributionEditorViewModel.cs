@@ -56,8 +56,12 @@ public sealed partial class ContributionEditorViewModel : ObservableObject
         return vm;
     }
 
+    // The mutation version the rows were scanned at.
+    private ulong _scannedAt;
+
     private async Task RescanAsync()
     {
+        _scannedAt = _main.CurrentMutationVersion();
         var entries = await Task.Run(_main.ScanContributions).ConfigureAwait(true);
         var loc = _main.Localization;
         Rows.Clear();
@@ -140,6 +144,15 @@ public sealed partial class ContributionEditorViewModel : ObservableObject
                     changes.Count - adds, adds)).ConfigureAwait(true))
         {
             StatusMessage = UiText.Get("DialogCancelled", "Cancelled.");
+            return;
+        }
+        // A row's item path is an element index from the scan; an insert or
+        // remove elsewhere since then would point it at another item.
+        if (_main.CurrentMutationVersion() != _scannedAt)
+        {
+            await RescanAsync().ConfigureAwait(true);
+            StatusMessage = UiText.Get("ContribStale",
+                "The save changed since this list was built, so it has been rebuilt. Enter the amounts again.");
             return;
         }
 
