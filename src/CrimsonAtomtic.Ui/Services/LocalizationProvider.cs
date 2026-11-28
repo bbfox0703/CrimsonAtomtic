@@ -541,6 +541,34 @@ public sealed class LocalizationProvider : IDisposable
     }
 
     /// <summary>
+    /// The tables that failed to load during the last bootstrap and later
+    /// loads, as "where: what" lines. Each failure degrades a feature
+    /// (fewer names, no icons) rather than stopping the app, so this is the
+    /// only place it shows.
+    /// </summary>
+    public IReadOnlyList<string> LoadFailures
+    {
+        get
+        {
+            lock (_loadFailures)
+            {
+                return _loadFailures.ToArray();
+            }
+        }
+    }
+
+    private readonly List<string> _loadFailures = new();
+
+    private void NoteLoadFailure(Exception ex, [System.Runtime.CompilerServices.CallerMemberName] string where = "")
+    {
+        var code = ex is CrimsonSaveException cse ? $" ({CrimsonErrorCode.Name(cse.ErrorCode)})" : string.Empty;
+        lock (_loadFailures)
+        {
+            _loadFailures.Add($"{where}: {ex.Message}{code}");
+        }
+    }
+
+    /// <summary>
     /// Bootstrap from a Crimson Desert install root. Returns
     /// <c>true</c> when at least the iteminfo bridge + English PALOC
     /// loaded successfully; <c>false</c> means the editor will run
@@ -551,6 +579,10 @@ public sealed class LocalizationProvider : IDisposable
         if (string.IsNullOrEmpty(gameRoot))
         {
             return false;
+        }
+        lock (_loadFailures)
+        {
+            _loadFailures.Clear();
         }
         _gameRoot = gameRoot;
         _factionMembers = null; // rebuilt from the characterinfo loaded below
@@ -573,8 +605,17 @@ public sealed class LocalizationProvider : IDisposable
         // extraction. 2.01 renamed the gamedata directory and every file
         // extension without touching the contents, so every bridge below
         // keys off this one probe.
-        _layout = GameDataLayout.Resolve(
-            _paz, Path.Combine(gameRoot, GameDataLayout.GameDataGroup, "0.pamt"));
+        try
+        {
+            _layout = GameDataLayout.Resolve(
+                _paz, Path.Combine(gameRoot, GameDataLayout.GameDataGroup, "0.pamt"));
+        }
+        catch (CrimsonSaveException ex)
+        {
+            // An unreadable gamedata manifest: nothing below can load.
+            NoteLoadFailure(ex);
+            return false;
+        }
 
         // ── iteminfo bridge (group 0008). Required for any item-name
         // resolution to work. Failure here means we still load PALOC
@@ -653,12 +694,14 @@ public sealed class LocalizationProvider : IDisposable
             _itemInfo?.Dispose();
             _itemInfo = NativeItemInfoCatalog.LoadFromBytes(bytes, header);
         }
-        catch (CrimsonSaveException)
+        catch (CrimsonSaveException ex)
         {
             // ItemInfo missing or malformed — degrade gracefully.
+            NoteLoadFailure(ex);
         }
-        catch (IOException)
+        catch (IOException ex)
         {
+            NoteLoadFailure(ex);
         }
     }
 
@@ -675,14 +718,16 @@ public sealed class LocalizationProvider : IDisposable
             _stringInfo?.Dispose();
             _stringInfo = NativeStringInfoCatalog.LoadFromBytes(bytes);
         }
-        catch (CrimsonSaveException)
+        catch (CrimsonSaveException ex)
         {
             // StringInfo missing or malformed — the icon pipeline
             // degrades to "no extraction" but everything else still
             // works.
+            NoteLoadFailure(ex);
         }
-        catch (IOException)
+        catch (IOException ex)
         {
+            NoteLoadFailure(ex);
         }
     }
 
@@ -715,16 +760,16 @@ public sealed class LocalizationProvider : IDisposable
                     }
                 }
             }
-            catch (CrimsonSaveException) { }
-            catch (IOException) { }
+            catch (CrimsonSaveException ex) { NoteLoadFailure(ex); }
+            catch (IOException ex) { NoteLoadFailure(ex); }
             try
             {
                 var bytes = _paz.ExtractFile(pamt, _layout.BinDirectory,
                     _layout.Body(GameDataLayout.DlcTableStem(StringInfoTable, dlc)));
                 _dlcStringInfo.Add(NativeStringInfoCatalog.LoadFromBytes(bytes));
             }
-            catch (CrimsonSaveException) { }
-            catch (IOException) { }
+            catch (CrimsonSaveException ex) { NoteLoadFailure(ex); }
+            catch (IOException ex) { NoteLoadFailure(ex); }
         }
     }
 
@@ -759,8 +804,8 @@ public sealed class LocalizationProvider : IDisposable
                     merge(_paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(stem)),
                           _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Header(stem)));
                 }
-                catch (CrimsonSaveException) { }
-                catch (IOException) { }
+                catch (CrimsonSaveException ex) { NoteLoadFailure(ex); }
+                catch (IOException ex) { NoteLoadFailure(ex); }
             }
         }
         _factionMembers = null; // member lists now include DLC characters
@@ -853,8 +898,8 @@ public sealed class LocalizationProvider : IDisposable
                         b => internalLookup(b, key)));
             }
         }
-        catch (CrimsonSaveException) { }
-        catch (IOException) { }
+        catch (CrimsonSaveException ex) { NoteLoadFailure(ex); }
+        catch (IOException ex) { NoteLoadFailure(ex); }
     }
 
     /// <summary>
@@ -915,11 +960,13 @@ public sealed class LocalizationProvider : IDisposable
             _skillInfo?.Dispose();
             _skillInfo = NativeSkillInfoCatalog.LoadFromBytes(pabgh, pabgb);
         }
-        catch (CrimsonSaveException)
+        catch (CrimsonSaveException ex)
         {
+            NoteLoadFailure(ex);
         }
-        catch (IOException)
+        catch (IOException ex)
         {
+            NoteLoadFailure(ex);
         }
     }
 
@@ -969,8 +1016,8 @@ public sealed class LocalizationProvider : IDisposable
             _itemPartPrefab = NativeItemPartPrefabCatalog.LoadFromBytes(
                 iteminfo, stringinfo, pabgb, pabgh);
         }
-        catch (CrimsonSaveException) { }
-        catch (IOException) { }
+        catch (CrimsonSaveException ex) { NoteLoadFailure(ex); }
+        catch (IOException ex) { NoteLoadFailure(ex); }
     }
 
     /// <summary>
@@ -991,8 +1038,8 @@ public sealed class LocalizationProvider : IDisposable
             slot?.Dispose();
             slot = loader(pabgb, pabgh);
         }
-        catch (CrimsonSaveException) { }
-        catch (IOException) { }
+        catch (CrimsonSaveException ex) { NoteLoadFailure(ex); }
+        catch (IOException ex) { NoteLoadFailure(ex); }
     }
 
     /// <summary>
@@ -1016,8 +1063,8 @@ public sealed class LocalizationProvider : IDisposable
             _storeInfo?.Dispose();
             _storeInfo = NativeStoreInfoCatalog.LoadFromBytes(pabgb, pabgh);
         }
-        catch (CrimsonSaveException) { }
-        catch (IOException) { }
+        catch (CrimsonSaveException ex) { NoteLoadFailure(ex); }
+        catch (IOException ex) { NoteLoadFailure(ex); }
     }
 
     /// <summary>
@@ -1089,8 +1136,8 @@ public sealed class LocalizationProvider : IDisposable
             slot?.Dispose();
             slot = loader(pabgb, pabgh);
         }
-        catch (CrimsonSaveException) { }
-        catch (IOException) { }
+        catch (CrimsonSaveException ex) { NoteLoadFailure(ex); }
+        catch (IOException ex) { NoteLoadFailure(ex); }
     }
 
     private void DiscoverLanguages(string gameRoot)
@@ -1139,9 +1186,19 @@ public sealed class LocalizationProvider : IDisposable
                 // We deliberately do NOT read the bytes here — caching all
                 // 14 language catalogs eagerly would consume ~350 MB; they
                 // are extracted lazily on first request in TryLoadCatalog.
-                if (GameDataLayout.ResolvePalocFiles(_paz, pamt, code) is { } files)
+                // A manifest that cannot be read (a broken DLC) costs that
+                // group's languages, not the bootstrap.
+                try
                 {
-                    found[code] = (pamt, files.Directory, files.Files);
+                    if (GameDataLayout.ResolvePalocFiles(_paz, pamt, code) is { } files)
+                    {
+                        found[code] = (pamt, files.Directory, files.Files);
+                    }
+                }
+                catch (CrimsonSaveException ex)
+                {
+                    NoteLoadFailure(ex);
+                    break;
                 }
             }
         }
@@ -1465,8 +1522,8 @@ public sealed class LocalizationProvider : IDisposable
                     _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Header(DyeSlotInfoTable)),
                     prefabPamt);
             }
-            catch (CrimsonSaveException) { }
-            catch (IOException) { }
+            catch (CrimsonSaveException ex) { NoteLoadFailure(ex); }
+            catch (IOException ex) { NoteLoadFailure(ex); }
             if (_itemDyeJoin is { } join)
             {
                 MergeDlcDyeJoin(root, join);
@@ -1501,8 +1558,8 @@ public sealed class LocalizationProvider : IDisposable
                         _layout.Body(GameDataLayout.DlcTableStem(StringInfoTable, dlc))),
                     dlcPrefabPamt);
             }
-            catch (CrimsonSaveException) { }
-            catch (IOException) { }
+            catch (CrimsonSaveException ex) { NoteLoadFailure(ex); }
+            catch (IOException ex) { NoteLoadFailure(ex); }
         }
     }
 

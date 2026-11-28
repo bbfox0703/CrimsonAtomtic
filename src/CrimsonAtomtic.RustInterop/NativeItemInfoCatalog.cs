@@ -79,7 +79,18 @@ public sealed class NativeItemInfoCatalog : IItemInfoCatalog
                     p, (nuint)body.Length, h, (nuint)header.Length, out var raw);
                 if (rc == NativeMethods.BODY_PARSE)
                 {
-                    return LoadFromBytes(body);
+                    // Pre-2.06 data: the names are in the body. If the body-only
+                    // load names nothing, the header was a 2.06 one the parser
+                    // refused, and nameless items would only hide that.
+                    var bodyOnly = LoadFromBytes(body);
+                    if (!bodyOnly.NamesAnyOfFirst(64))
+                    {
+                        bodyOnly.Dispose();
+                        throw new CrimsonSaveException(rc,
+                            "crimson_iteminfo_load_from_bytes_with_header refused the header "
+                            + $"({ErrorName(rc)}), and the body alone names no item.");
+                    }
+                    return bodyOnly;
                 }
                 if (rc != NativeMethods.OK)
                 {
@@ -89,6 +100,23 @@ public sealed class NativeItemInfoCatalog : IItemInfoCatalog
                 return Build(CrimsonItemInfoHandle.FromOwnedPointer(raw));
             }
         }
+    }
+
+    // True when at least one of the first <paramref name="sample"/> rows has a name.
+    private bool NamesAnyOfFirst(int sample)
+    {
+        for (var i = 0; i < sample; i++)
+        {
+            if (GetEntry(i) is not { } e)
+            {
+                return false;
+            }
+            if (!string.IsNullOrEmpty(e.StringKey))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static NativeItemInfoCatalog Build(CrimsonItemInfoHandle handle)

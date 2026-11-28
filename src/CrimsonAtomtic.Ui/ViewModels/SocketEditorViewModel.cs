@@ -402,7 +402,8 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         foreach (var r in vm.Sockets) if (r.IsFilled) filledCount++;
         vm.StatusMessage = UiText.Format("SocketHeaderStatus",
             "{0} slot(s) across {1} item(s) ({2} filled).",
-            vm.Sockets.Count, CountDistinctItems(vm.Sockets), filledCount);
+            vm.Sockets.Count, CountDistinctItems(vm.Sockets), filledCount)
+            + (vm._unreadableBlocks > 0 ? UiText.Format("ScanSkippedBlocks", " ({0} block(s) could not be read and were left out.)", vm._unreadableBlocks) : string.Empty);
         // Publish the initial filter-count text now that _allSockets
         // is populated. ApplyFilter normally raises this when
         // SearchText changes, but we never went through that path
@@ -621,6 +622,9 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     /// NPC followers' gear; widen for player-controlled mounts whose
     /// <c>_ownedCharacterKey</c> is absent).
     /// </summary>
+    // Blocks the last walk could not read; their items are not listed.
+    private int _unreadableBlocks;
+
     private void CollectViaAllItems()
     {
         var detailsCache = new Dictionary<uint, BlockDetails>();
@@ -629,10 +633,12 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         // IsSnapshotStale permanently true.
         var records = _loader.ListAllItems(out var version);
         _snapshotVersion = version;
+        var unreadable = new HashSet<uint>();
         foreach (var rec in records)
         {
             if (!rec.HasSocketData) continue;
             if (!_localization.IsPlayerEditableItem(rec)) continue;
+            if (unreadable.Contains(rec.BlockIndex)) continue;
             if (!detailsCache.TryGetValue(rec.BlockIndex, out var top))
             {
                 try
@@ -641,6 +647,7 @@ public sealed partial class SocketEditorViewModel : ObservableObject
                 }
                 catch (CrimsonSaveException)
                 {
+                    unreadable.Add(rec.BlockIndex);
                     continue;
                 }
                 detailsCache[rec.BlockIndex] = top;
@@ -656,6 +663,7 @@ public sealed partial class SocketEditorViewModel : ObservableObject
                 item: item,
                 bagLabel: _localization.FormatItemSourceLabel(rec));
         }
+        _unreadableBlocks = unreadable.Count;
     }
 
     /// <summary>

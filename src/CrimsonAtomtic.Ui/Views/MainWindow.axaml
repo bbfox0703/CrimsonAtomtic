@@ -194,6 +194,7 @@
             ColumnSpacing="16">
         <TextBlock Grid.Column="0"
                    Text="{Binding LocalizationStatus}"
+                   ToolTip.Tip="{Binding LocalizationLoadFailures}"
                    Opacity="0.6"
                    FontSize="{Binding StatusBarFontSize}"
                    TextTrimming="CharacterEllipsis" />

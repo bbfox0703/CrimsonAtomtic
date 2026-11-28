@@ -28,6 +28,36 @@ read from the top.
 
 -----
 
+## 2026-11-28 (no release) — Code audit P4: failures are reported, not swallowed or fatal
+
+- **What changes:**
+  - **Nothing a handler misses ends the process.** The dispatcher's unhandled-exception event,
+    unobserved tasks and fire-and-forget faults all go to `AppErrors`, which shows an alert; the
+    edits stay in memory (B2-19, B4-20, B5-08). The four copy buttons share one handler that
+    tolerates a busy clipboard (B3-09).
+  - **Lookups say "none" only for "not there".** Catalog lookups return null / 0 for
+    `NOT_FOUND` / `OUT_OF_RANGE` and throw for any other code, where they used to turn a panic into
+    "unknown character" or an early end of a list (B1-07). The PAZ directory probe folds only "not
+    there" into null (B1-08). The paver reads survive a missing or stale DLL as documented (B1-09);
+    the compatible-minor list is read-only (B1-10). An item path longer than two steps, or an enum
+    value this build does not know, throws instead of becoming a wrong path or a default branch
+    (B1-11, B1-12).
+  - **iteminfo** falls back to the body-only loader only when that names items; a 2.06 header the
+    parser refused no longer turns into a catalog of nameless items (X-02).
+  - **Load failures are visible.** LocalizationProvider records every table that failed to load
+    ("where: what (CODE)"), the status bar counts them and its tooltip lists them (B3-22). A
+    broken DLC costs its languages, an unreadable DLC folder or gamedata manifest no longer stops
+    the start-up (B3-11).
+  - A field edit marks the document dirty and journals before re-reading the block, and a failed
+    re-read shows in the details pane (B2-07).
+  - Scans name how many blocks they could not read (sockets, buyback, fill-all) and stop asking
+    again for the same block; the Sealed Abyss Mark refuses to stamp a completion time when a
+    quest block cannot be read, since it could sort before an existing one (B4-23, B5-15).
+  - The basemap loader no longer swallows out-of-memory (B5-24).
+- **Tests:** 466 green.
+
+-----
+
 ## 2026-11-28 (no release) — Code audit P3: multi-step writes land whole or not at all
 
 - **The rule:** inside a deferred batch crimson-rs keeps the ops before a failure applied (it has no

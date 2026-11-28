@@ -26,22 +26,8 @@ public sealed partial class ItemPickerWindow : Window
     /// null / empty Tag or a missing clipboard implementation is a
     /// silent no-op.
     /// </summary>
-    private async void OnCopyButtonClick(object? sender, RoutedEventArgs e)
-    {
-        if (sender is not Control source)
-        {
-            return;
-        }
-        if (source.Tag is not string text || string.IsNullOrEmpty(text))
-        {
-            return;
-        }
-        var topLevel = TopLevel.GetTopLevel(source);
-        if (topLevel?.Clipboard is { } clipboard)
-        {
-            await clipboard.SetTextAsync(text);
-        }
-    }
+    private async void OnCopyButtonClick(object? sender, RoutedEventArgs e) =>
+        await ClipboardHelper.CopyTagAsync(sender);
 
     /// <summary>
     /// "+ Bag" button: forwards the row's ItemKey to the picker VM's

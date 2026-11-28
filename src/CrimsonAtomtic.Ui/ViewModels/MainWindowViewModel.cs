@@ -484,9 +484,16 @@ public sealed partial class MainWindowViewModel(
             {
                 parts.Add($"+ {localization.SecondaryLanguage}");
             }
+            if (localization.LoadFailures.Count is var failed and > 0)
+            {
+                parts.Add(UiText.Format("LocalizationLoadFailures", "{0} table(s) failed to load", failed));
+            }
             return $"Localization: {string.Join(" / ", parts)}";
         }
     }
+
+    /// <summary>The tables that failed to load, one per line, for the status tooltip.</summary>
+    public string LocalizationLoadFailures => string.Join(Environment.NewLine, localization.LoadFailures);
 
     /// <summary>Available secondary-language codes (per-language picker).</summary>
     public IReadOnlyList<string> AvailableLanguages =>
@@ -527,6 +534,7 @@ public sealed partial class MainWindowViewModel(
         var displacedPortraits = localization.ConfigurePortraitProvider(
             PortraitProvider.ResolveRoot(paths.LocalAppDataDirectory));
         OnPropertyChanged(nameof(LocalizationStatus));
+        OnPropertyChanged(nameof(LocalizationLoadFailures));
         OnPropertyChanged(nameof(IconStatus));
         // Repaint any open save view so resolved-name columns pick up
         // the fresh catalog data.
@@ -616,6 +624,7 @@ public sealed partial class MainWindowViewModel(
         }
         OnPropertyChanged(nameof(SecondaryLanguage));
         OnPropertyChanged(nameof(LocalizationStatus));
+        OnPropertyChanged(nameof(LocalizationLoadFailures));
     }
 
     /// <summary>
@@ -1862,8 +1871,8 @@ public sealed partial class MainWindowViewModel(
         // across peer fields via the schema). Each existing FieldRowViewModel
         // gets its DisplayValue updated in place so the DataGrid keeps its
         // scroll position and the user's selection.
-        var freshTop = loader.LoadBlockDetails(_loadedPath, block.Index);
-        RefreshNavStack(freshTop);
+        // The edit landed: account for it before re-reading, so a failed
+        // re-read cannot leave a changed document that does not look dirty.
         IsDirty = true;
         var fieldEditFrom = row.Present
             ? preEditValue
@@ -1872,6 +1881,7 @@ public sealed partial class MainWindowViewModel(
             UiText.Format("JournalFieldEdit", "{0}.{1}: {2} → {3} <{4}>",
                 block.ClassName, row.Name, fieldEditFrom, row.RawText, row.TypeTag));
         OnPropertyChanged(nameof(WindowTitle));
+        RefreshAfterEdit(block.Index);
         // The "(absent — Apply makes present)" suffix on SelectedFieldTypeHint
         // depends on SelectedField.Present, which may have just flipped from
         // false → true. The accessor doesn't observe nested property changes,
@@ -1915,13 +1925,34 @@ public sealed partial class MainWindowViewModel(
             row.EditError = $"{ex.Message} (code {ex.ErrorCode})";
             return;
         }
-        var freshTop = loader.LoadBlockDetails(_loadedPath, block.Index);
-        RefreshNavStack(freshTop);
         IsDirty = true;
         Journal.Log(UiText.Get("JournalCatFieldEdit", "Field edit"),
             UiText.Format("JournalFieldMadeAbsent", "{0}.{1}: made absent", block.ClassName, row.Name));
         OnPropertyChanged(nameof(WindowTitle));
+        RefreshAfterEdit(block.Index);
         OnPropertyChanged(nameof(SelectedFieldTypeHint));
+    }
+
+    /// <summary>
+    /// Re-read block <paramref name="blockIndex"/> after an edit and refresh
+    /// the open frames in place. A failed read shows in the details pane
+    /// instead of escaping the edit command.
+    /// </summary>
+    private void RefreshAfterEdit(int blockIndex)
+    {
+        if (_loadedPath is null)
+        {
+            return;
+        }
+        try
+        {
+            RefreshNavStack(loader.LoadBlockDetails(_loadedPath, blockIndex));
+        }
+        catch (CrimsonSaveException ex)
+        {
+            DetailsError = UiText.Format("RefreshAfterEditFailed",
+                "The edit was applied, but re-reading the block failed: {0}", ex.Message);
+        }
     }
 
     /// <summary>
@@ -2201,7 +2232,12 @@ public sealed partial class MainWindowViewModel(
         BulkOpStatus = UiText.Get("MarkApplying", "Applying Pattern B v1 (FAR tracker + X_2 sub-mission)…");
         // Compute timestamp watermark — engine-natural completions
         // always sort after older ones.
-        var maxCt = await Task.Run(() => ScanMaxMissionCompletedTime());
+        if (await Task.Run(() => ScanMaxMissionCompletedTime()) is not { } maxCt)
+        {
+            BulkOpStatus = UiText.Get("MarkFailedWatermark",
+                "Mark failed: a quest block could not be read, so the completion time cannot be placed after the existing ones.");
+            return;
+        }
         var newCt = maxCt == 0UL ? 1UL : maxCt + 1UL;
         var newElementIdx = ctx.MissionStateListCount; // append index (= old count)
 
@@ -2514,7 +2550,12 @@ public sealed partial class MainWindowViewModel(
         // instead of looking frozen.
         var totalCandidates = contexts.Count;
         BulkOpStatus = UiText.Format("BulkMarkProgress", "Applying Pattern B v1: {0} / {1}…", 0, totalCandidates);
-        var baseCt = await Task.Run(() => ScanMaxMissionCompletedTime());
+        if (await Task.Run(() => ScanMaxMissionCompletedTime()) is not { } baseCt)
+        {
+            BulkOpStatus = UiText.Get("MarkFailedWatermark",
+                "Mark failed: a quest block could not be read, so the completion time cannot be placed after the existing ones.");
+            return (0, new CrimsonSaveException(CrimsonErrorCode.BodyParse, BulkOpStatus), 0u);
+        }
         var newCt = baseCt == 0UL ? 1UL : baseCt + 1UL;
         // Per-block running append index — different QuestSaveData
         // blocks have independent _missionStateList counts.
@@ -2975,7 +3016,7 @@ public sealed partial class MainWindowViewModel(
     /// Pattern B v1 recipe to stamp the FAR tracker with a value that
     /// sorts after every prior engine-natural completion.
     /// </summary>
-    private ulong ScanMaxMissionCompletedTime()
+    private ulong? ScanMaxMissionCompletedTime()
     {
         if (_loadedPath is null || Summary is not { Blocks: { } blocks })
         {
@@ -2990,7 +3031,9 @@ public sealed partial class MainWindowViewModel(
             }
             BlockDetails top;
             try { top = loader.LoadBlockDetails(_loadedPath, b.Index); }
-            catch (CrimsonSaveException) { continue; }
+            // A quest block that cannot be read might hold the newest time;
+            // stamping below it would sort the new completion before older ones.
+            catch (CrimsonSaveException) { return null; }
             foreach (var listField in top.Fields)
             {
                 if (!string.Equals(listField.Name, "_missionStateList", StringComparison.Ordinal)
@@ -4889,6 +4932,7 @@ public sealed partial class MainWindowViewModel(
         BulkOpStatus = UiText.Get("ScanningInventories", "Scanning inventories…");
         var savePath = _loadedPath;
         var scannedAt = loader.GetMutationVersion();
+        var unreadable = 0;
         var (allOps, containerCount) = await Task.Run(() =>
         {
             var ops = new List<ScalarBatchOp>();
@@ -4906,6 +4950,7 @@ public sealed partial class MainWindowViewModel(
                 }
                 catch (CrimsonSaveException)
                 {
+                    unreadable++;
                     continue;
                 }
                 for (var f = 0; f < top.Fields.Count; f++)
@@ -5007,6 +5052,9 @@ public sealed partial class MainWindowViewModel(
         }
         BulkOpStatus = firstError is null
             ? UiText.Format("FillAllDone", "Filled {0} stack(s) across {1} container(s).", applied, containerCount)
+              + (unreadable > 0
+                  ? UiText.Format("ScanSkippedBlocks", " ({0} block(s) could not be read and were left out.)", unreadable)
+                  : string.Empty)
             : UiText.Format("FillFailed", "Failed after {0}/{1}: {2}", applied, allOps.Count, firstError.Message);
     }
 

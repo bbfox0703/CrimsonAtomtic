@@ -22,22 +22,8 @@ public sealed partial class FindItemsWindow : Window
     /// by Browse Items / Browse Characters — kept per-window so each
     /// dialog stays self-contained.
     /// </summary>
-    private async void OnCopyButtonClick(object? sender, RoutedEventArgs e)
-    {
-        if (sender is not Control source)
-        {
-            return;
-        }
-        if (source.Tag is not string text || string.IsNullOrEmpty(text))
-        {
-            return;
-        }
-        var topLevel = TopLevel.GetTopLevel(source);
-        if (topLevel?.Clipboard is { } clipboard)
-        {
-            await clipboard.SetTextAsync(text);
-        }
-    }
+    private async void OnCopyButtonClick(object? sender, RoutedEventArgs e) =>
+        await ClipboardHelper.CopyTagAsync(sender);
 
     /// <summary>
     /// "Go" button: ask the picker VM to fire its GotoRequested

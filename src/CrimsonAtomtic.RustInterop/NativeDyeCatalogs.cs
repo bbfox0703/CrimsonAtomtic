@@ -1079,16 +1079,9 @@ public sealed class NativeItemPartPrefabCatalog : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         var rc = NativeMethods.ItemPartPrefabLookupCount(_handle, itemKey, out var count);
-        if (rc == NativeMethods.NOT_FOUND || count == 0) return null;
-        if (rc != NativeMethods.OK)
-        {
-            throw new CrimsonSaveException(rc,
-                $"crimson_item_part_prefab_lookup_count(item_key={itemKey}) failed: "
-                + NameBuffer.ErrorName(rc));
-        }
+        if (NameBuffer.NoneOrThrow(rc, "crimson_item_part_prefab_lookup_count") || count == 0) return null;
         rc = NativeMethods.ItemPartPrefabLookupKeyAt(_handle, itemKey, 0, out var key);
-        if (rc != NativeMethods.OK) return null;
-        return key;
+        return NameBuffer.NoneOrThrow(rc, "crimson_item_part_prefab_lookup_key_at") ? null : key;
     }
 
     /// <summary>
@@ -1109,6 +1102,10 @@ public sealed class NativeItemPartPrefabCatalog : IDisposable
             throw new CrimsonSaveException(rc,
                 $"crimson_item_part_prefab_resolve_dye_slot_count(item_key={itemKey}) failed: "
                 + NameBuffer.ErrorName(rc));
+        }
+        if (!Enum.IsDefined((DyeSlotCountSource)source))
+        {
+            throw new InvalidDataException($"Unknown dye slot count source {source} from crimson-rs.");
         }
         return ((int)slotCount, (DyeSlotCountSource)source);
     }

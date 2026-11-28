@@ -160,8 +160,10 @@ public sealed partial class DyeEditorViewModel : ObservableObject
     {
         var results = new List<DyeEditorItemRow>();
         var detailsCache = new Dictionary<uint, BlockDetails>();
+        var unreadable = new HashSet<uint>();
         foreach (var rec in loader.ListAllItems(out version))
         {
+            if (unreadable.Contains(rec.BlockIndex)) continue;
             if (!localization.IsPlayerEditableItem(rec)) continue;
             var includeUndyed = !rec.HasDyeData && IsEquippedKind(rec.Container);
             if (!rec.HasDyeData && !includeUndyed) continue;
@@ -173,6 +175,7 @@ public sealed partial class DyeEditorViewModel : ObservableObject
                 }
                 catch (CrimsonSaveException)
                 {
+                    unreadable.Add(rec.BlockIndex);
                     continue;
                 }
                 detailsCache[rec.BlockIndex] = top;

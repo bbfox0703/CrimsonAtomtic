@@ -113,7 +113,9 @@ public readonly struct PositionedEntityRecord
     public readonly ulong MercenaryNo;
 
     /// <summary>Typed accessor over <see cref="KindValue"/>.</summary>
-    public PositionKind Kind => (PositionKind)KindValue;
+    public PositionKind Kind => Enum.IsDefined((PositionKind)KindValue)
+        ? (PositionKind)KindValue
+        : throw new InvalidDataException($"Unknown position kind {KindValue} from crimson-rs.");
 
     public bool IsMainMercenary => (Flags & PositionEntityFlags.IsMainMercenary) != 0;
     public bool IsPlayerOwned => (Flags & PositionEntityFlags.IsPlayerOwned) != 0;

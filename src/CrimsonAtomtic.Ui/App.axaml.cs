@@ -109,6 +109,26 @@ public sealed class App : Application
             // Cross-restart placement: load last-session position / size /
             // maximized state and apply BEFORE the window is shown (validation
             // against the monitors present this session happens on Opened).
+            // An exception no handler caught (an async void handler, a
+            // fire-and-forget task) is shown instead of ending the process.
+            AppErrors.Sink = ex => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                ConfirmDialog.ShowAlertAsync(mainWindow,
+                    UiText.Get("UnhandledErrorTitle", "Something went wrong"),
+                    UiText.Format("UnhandledErrorBody",
+                        "An operation failed: {0}\n\nThe editor kept running; your edits are still in memory. "
+                        + "Save them, or reload the save, before trying again.",
+                        ex.Message)).SafeFireAndForget(_ => { }));
+            Avalonia.Threading.Dispatcher.UIThread.UnhandledException += (_, e) =>
+            {
+                e.Handled = true;
+                AppErrors.Report(e.Exception);
+            };
+            TaskScheduler.UnobservedTaskException += (_, e) =>
+            {
+                e.SetObserved();
+                AppErrors.Report(e.Exception);
+            };
+
             mainWindow.AttachWindowState(
                 new CrimsonAtomtic.Ui.Services.WindowStateStore(paths.LocalAppDataDirectory));
 

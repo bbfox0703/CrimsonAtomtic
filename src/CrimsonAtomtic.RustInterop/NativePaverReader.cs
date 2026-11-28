@@ -128,7 +128,7 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     /// </para>
     /// <see cref="ParserTargetMinor"/> is always present here.
     /// </summary>
-    public static ushort[] CompatibleMinors => ParserTargetInfo.Value.Compatible;
+    public static IReadOnlyList<ushort> CompatibleMinors => Array.AsReadOnly(ParserTargetInfo.Value.Compatible);
 
     /// <summary>
     /// The lowest <see cref="Patch"/> of the target minor this build parses
@@ -156,11 +156,11 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     {
         try
         {
-            // crimson_parser_min_gamedata_patch is the newest export (added at
-            // the 2.04.08 alignment), so a stale vendored DLL throws
-            // EntryPointNotFound here and takes the whole tuple down with it.
-            // That is intended: a lib old enough to lack it cannot parse
-            // 2.04.08 iteminfo, so nothing it reports should read as compatible.
+            // crimson_parser_min_gamedata_patch arrived with the 2.04.08
+            // alignment, so a DLL older than that throws EntryPointNotFound
+            // here and takes the whole tuple down with it. That is intended: a
+            // lib that old cannot parse 2.04.08 iteminfo, so nothing it
+            // reports should read as compatible.
             ushort minPatch = NativeMethods.ParserMinGamedataPatch();
             ushort major = NativeMethods.ParserTargetGamedataMajor();
             ushort target = NativeMethods.ParserTargetGamedataMinor();
@@ -174,6 +174,10 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
             return (0, 0, [], 0);
         }
         catch (EntryPointNotFoundException)
+        {
+            return (0, 0, [], 0);
+        }
+        catch (BadImageFormatException)
         {
             return (0, 0, [], 0);
         }
@@ -219,7 +223,7 @@ public readonly record struct GameDataVersion(ushort Major, ushort Minor, ushort
     /// </remarks>
     public bool IsCompatibleWithParser =>
         Major == ParserTargetMajor
-        && Array.IndexOf(CompatibleMinors, Minor) >= 0
+        && Array.IndexOf(ParserTargetInfo.Value.Compatible, Minor) >= 0
         && (Minor != ParserTargetMinor || Patch >= ParserMinPatch);
 
     /// <summary>
@@ -273,9 +277,16 @@ public static class NativePaverReader
         ushort minor = 0;
         ushort patch = 0;
         uint build = 0;
-        var rc = NativeMethods.PaverReadFromFile(
-            installRoot, out major, out minor, out patch, out build);
-        if (rc != NativeMethods.OK)
+        try
+        {
+            var rc = NativeMethods.PaverReadFromFile(
+                installRoot, out major, out minor, out patch, out build);
+            if (rc != NativeMethods.OK)
+            {
+                return null;
+            }
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
         {
             return null;
         }
@@ -292,18 +303,25 @@ public static class NativePaverReader
         ushort minor = 0;
         ushort patch = 0;
         uint build = 0;
-        unsafe
+        try
         {
-            fixed (byte* p = bytes)
+            unsafe
             {
-                var rc = NativeMethods.PaverReadFromBytes(
-                    p, (nuint)bytes.Length,
-                    out major, out minor, out patch, out build);
-                if (rc != NativeMethods.OK)
+                fixed (byte* p = bytes)
                 {
-                    return null;
+                    var rc = NativeMethods.PaverReadFromBytes(
+                        p, (nuint)bytes.Length,
+                        out major, out minor, out patch, out build);
+                    if (rc != NativeMethods.OK)
+                    {
+                        return null;
+                    }
                 }
             }
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
+        {
+            return null;
         }
         return new GameDataVersion(major, minor, patch, build);
     }

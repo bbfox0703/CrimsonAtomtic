@@ -100,8 +100,14 @@ public readonly struct ItemRecord
     /// </summary>
     public readonly ulong OwnerMercenaryNo;
 
-    /// <summary>Typed accessor over <see cref="ContainerKindValue"/>.</summary>
-    public ContainerKind Container => (ContainerKind)ContainerKindValue;
+    /// <summary>
+    /// Typed accessor over <see cref="ContainerKindValue"/>. A value this
+    /// build does not know (a newer crimson-rs) throws rather than falling
+    /// into some caller's default branch.
+    /// </summary>
+    public ContainerKind Container => Enum.IsDefined((ContainerKind)ContainerKindValue)
+        ? (ContainerKind)ContainerKindValue
+        : throw new InvalidDataException($"Unknown container kind {ContainerKindValue} from crimson-rs.");
 
     public bool IsLocked => (Flags & ItemRecordFlags.Locked) != 0;
     public bool IsNewMark => (Flags & ItemRecordFlags.NewMark) != 0;
@@ -111,15 +117,18 @@ public readonly struct ItemRecord
     public bool IsPlayerOwned => (Flags & ItemRecordFlags.IsPlayerOwned) != 0;
 
     /// <summary>
-    /// Materialize the descent path as a stack-allocated
-    /// <see cref="PathStep"/>[] suitable for any
-    /// <c>SetScalarFieldPath</c>-shaped mutation. Honours
-    /// <see cref="PathLen"/> so future longer paths still work without
-    /// caller changes.
+    /// Materialize the descent path as a <see cref="PathStep"/>[] for any
+    /// <c>SetScalarFieldPath</c>-shaped mutation. The record carries two
+    /// steps; a longer <see cref="PathLen"/> throws instead of padding the
+    /// path with steps that would address the wrong field.
     /// </summary>
     public PathStep[] ToPathSteps()
     {
         var len = (int)PathLen;
+        if (len > 2)
+        {
+            throw new InvalidDataException($"Item path of {len} steps; this build reads at most 2.");
+        }
         var path = new PathStep[len];
         if (len > 0)
         {

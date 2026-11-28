@@ -141,6 +141,7 @@ public sealed partial class VendorBuybackViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(blocks);
 
         var vm = new VendorBuybackViewModel(loader, localization, journal, savePath);
+        var unreadable = 0;
         foreach (var b in blocks)
         {
             if (!string.Equals(b.ClassName, StoreSaveDataClass, StringComparison.Ordinal))
@@ -154,6 +155,7 @@ public sealed partial class VendorBuybackViewModel : ObservableObject
             }
             catch (CrimsonSaveException)
             {
+                unreadable++;
                 continue;
             }
             vm.CollectFromStoreBlock(top, b.Index);
@@ -174,7 +176,8 @@ public sealed partial class VendorBuybackViewModel : ObservableObject
         var distinctStores = new HashSet<uint>();
         foreach (var r in vm._allItems) distinctStores.Add(r.StoreKey);
         vm.StatusMessage = UiText.Format("BuybackHeaderStatus",
-            "{0} sold item(s) across {1} store(s).", vm._allItems.Count, distinctStores.Count);
+            "{0} sold item(s) across {1} store(s).", vm._allItems.Count, distinctStores.Count)
+            + (unreadable > 0 ? UiText.Format("ScanSkippedBlocks", " ({0} block(s) could not be read and were left out.)", unreadable) : string.Empty);
         return vm;
     }
 

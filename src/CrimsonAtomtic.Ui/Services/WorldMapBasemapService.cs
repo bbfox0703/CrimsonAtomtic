@@ -36,7 +36,9 @@ public static class WorldMapBasemapService
         {
             return new Bitmap(path);
         }
-        catch
+        // Skia reports an undecodable image with a plain Exception, so only
+        // an out-of-memory condition is let through.
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             return null;
         }

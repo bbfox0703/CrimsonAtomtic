@@ -107,11 +107,19 @@ public sealed class GameDataLayout
         {
             return [];
         }
-        return Directory.GetDirectories(root)
-            .Where(d => File.Exists(Path.Combine(d, GameDataGroup, "0.pamt")))
-            .Select(d => Path.GetFileName(d))
-            .OrderBy(n => n, StringComparer.Ordinal)
-            .ToArray();
+        // An unreadable DLC folder means no DLC tables, not a failed start.
+        try
+        {
+            return Directory.GetDirectories(root)
+                .Where(d => File.Exists(Path.Combine(d, GameDataGroup, "0.pamt")))
+                .Select(d => Path.GetFileName(d))
+                .OrderBy(n => n, StringComparer.Ordinal)
+                .ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
     }
 
     /// <summary>
@@ -227,11 +235,15 @@ public sealed class GameDataLayout
         {
             return paz.ListDir(pamtPath, directory);
         }
-        catch (CrimsonSaveException)
+        catch (CrimsonSaveException ex) when (ex.ErrorCode is CrimsonErrorCode.NotFound or CrimsonErrorCode.Io)
         {
             return null;
         }
-        catch (IOException)
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+        catch (DirectoryNotFoundException)
         {
             return null;
         }

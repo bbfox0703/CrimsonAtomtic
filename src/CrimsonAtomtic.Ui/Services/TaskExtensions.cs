@@ -46,7 +46,7 @@ public static class TaskExtensions
             }
             else
             {
-                Trace.TraceError($"Fire-and-forget task faulted: {ex}");
+                AppErrors.Report(ex);
             }
         }
 #pragma warning restore CA1031

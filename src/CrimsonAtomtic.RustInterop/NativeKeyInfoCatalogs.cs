@@ -80,6 +80,19 @@ internal static class NameBuffer
     /// <summary>Native getter signature shared by every two-call lookup.</summary>
     public unsafe delegate int NativeStringGetter(byte* buf, nuint bufLen, out nuint required);
 
+    /// <summary>
+    /// For a lookup's status: false on <c>OK</c>, true when the key or index
+    /// is simply not there (<c>NOT_FOUND</c> / <c>OUT_OF_RANGE</c>), and a
+    /// <see cref="CrimsonSaveException"/> for any other code, which is a
+    /// failure, not an answer.
+    /// </summary>
+    public static bool NoneOrThrow(int rc, string function) => rc switch
+    {
+        NativeMethods.OK => false,
+        NativeMethods.NOT_FOUND or NativeMethods.OUT_OF_RANGE => true,
+        _ => throw new CrimsonSaveException(rc, $"{function} failed: {CrimsonErrorCode.Name(rc)}"),
+    };
+
     public static string ErrorName(int code) => CrimsonErrorCode.Name(code);
 }
 
@@ -1239,7 +1252,7 @@ public sealed class NativeCharacterInfoCatalog : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         var rc = NativeMethods.CharacterInfoLookupFactionKey(_handle, characterKey, out var faction);
-        return rc == NativeMethods.OK ? faction : null;
+        return NameBuffer.NoneOrThrow(rc, "crimson_characterinfo_lookup_faction_key") ? null : faction;
     }
 
     /// <summary>
@@ -1250,7 +1263,7 @@ public sealed class NativeCharacterInfoCatalog : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         var rc = NativeMethods.CharacterInfoFactionMemberCount(_handle, factionKey, out var count);
-        return rc == NativeMethods.OK ? (int)count : 0;
+        return NameBuffer.NoneOrThrow(rc, "crimson_characterinfo_faction_member_count") ? 0 : (int)count;
     }
 
     public int EntryCount
@@ -2961,7 +2974,11 @@ public sealed class NativeFactionInfoCatalog : IDisposable
         {
             // The size query alone fills the key.
             var rc = NativeMethods.FactionInfoGetEntry(_handle, (uint)index, out var key, null, 0, out _);
-            return rc is NativeMethods.OK or NativeMethods.BUFFER_TOO_SMALL ? key : null;
+            if (rc == NativeMethods.BUFFER_TOO_SMALL)
+            {
+                return key;
+            }
+            return NameBuffer.NoneOrThrow(rc, "crimson_faction_info_get_entry") ? null : key;
         }
     }
 
@@ -3114,9 +3131,8 @@ public sealed class NativeFactionRelationGroupCatalog : IDisposable
     public uint? LookupRelation(uint groupA, uint groupB)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        return NativeMethods.FactionRelationGroupLookupRelation(_handle, groupA, groupB, out var relation) == NativeMethods.OK
-            ? relation
-            : null;
+        var rc = NativeMethods.FactionRelationGroupLookupRelation(_handle, groupA, groupB, out var relation);
+        return NameBuffer.NoneOrThrow(rc, "crimson_factionrelationgroup_lookup_relation") ? null : relation;
     }
 
     public void Dispose()
