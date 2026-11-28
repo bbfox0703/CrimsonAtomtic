@@ -308,10 +308,89 @@ public sealed class SaveBackupServiceTests : IDisposable
         // Corrupt the live save.
         File.WriteAllBytes(savePath, new byte[] { 0xFF, 0xFF, 0xFF });
 
-        var restoredPath = SaveBackupService.Restore(backupOutcome.Entry!, _paths.GameSaveRoot);
+        var entry = backupOutcome.Entry!;
+        var slotDir = SaveBackupService.RestoreDirectory(entry, _paths.GameSaveRoot)!;
+        var restoredPath = _service.Restore(entry, slotDir);
 
         Assert.Equal(savePath, restoredPath);
         Assert.Equal(content, File.ReadAllBytes(savePath));
+    }
+
+    [Fact]
+    public void Restore_MovesTheSlotsCurrentFilesToAPreRestoreSnapshot()
+    {
+        var savePath = CreateSaveFile("102190433", "slot0", [0x11], withLobby: false);
+        var entry = _service.BackupBeforeWrite(savePath).Entry!;
+        // The slot gains a lobby.save the backup does not have: left in
+        // place it would pair the restored save with a newer lobby.
+        File.WriteAllBytes(savePath, [0x22]);
+        var lobby = Path.Combine(Path.GetDirectoryName(savePath)!, SaveBackupService.LobbyFileName);
+        File.WriteAllBytes(lobby, [0x33]);
+
+        _service.Restore(entry, Path.GetDirectoryName(savePath)!);
+
+        Assert.Equal([0x11], File.ReadAllBytes(savePath));
+        Assert.False(File.Exists(lobby));
+        var pre = Assert.Single(_service.ListBackups(), e => e.IsPreRestore);
+        Assert.Equal(["save.save", "lobby.save"], pre.FileNames);
+        Assert.Equal([0x22], File.ReadAllBytes(Path.Combine(pre.BackupDirectory, "save.save")));
+    }
+
+    [Fact]
+    public void BackupBeforeWrite_BacksUpTheTargetFileUnderItsOwnName()
+    {
+        var savePath = CreateSaveFile("102190433", "slot0", [0x01]);
+        var edited = Path.Combine(Path.GetDirectoryName(savePath)!, "save.edited.save");
+        File.WriteAllBytes(edited, [0x02]);
+
+        var entry = _service.BackupBeforeWrite(edited).Entry!;
+
+        Assert.Equal(["save.edited.save", "lobby.save"], entry.FileNames);
+        Assert.Equal([0x02], File.ReadAllBytes(Path.Combine(entry.BackupDirectory, "save.edited.save")));
+        Assert.Equal(Path.GetFullPath(edited), entry.SourcePath);
+    }
+
+    [Fact]
+    public void BackupBeforeWrite_SkipsAnIdenticalSecondBackup()
+    {
+        var savePath = CreateSaveFile("102190433", "slot0", [0x01]);
+        Assert.True(_service.BackupBeforeWrite(savePath).IsSuccess);
+
+        var again = _service.BackupBeforeWrite(savePath);
+
+        Assert.Equal(BackupOutcomeKind.SkippedDuplicate, again.Kind);
+        Assert.Single(_service.ListBackups());
+    }
+
+    [Fact]
+    public void BackupBeforeWrite_NeverPrunesTheBackupItJustWrote()
+    {
+        var savePath = CreateSaveFile("102190433", "slot0", [0x01]);
+        // Six older-format (local time) folders dated a day ahead sort after
+        // the new UTC one, which would make it the oldest.
+        var slotDir = Path.Combine(_paths.LocalAppDataDirectory, SaveBackupService.BackupsSubdirectory,
+            "Steam", "102190433", "slot0");
+        for (var i = 0; i < SaveBackupService.MaxVersionsPerSlot; i++)
+        {
+            var dir = Path.Combine(slotDir, SaveBackupService.FormatTimestamp(DateTime.Now.AddDays(1).AddMinutes(i)));
+            Directory.CreateDirectory(dir);
+            File.WriteAllBytes(Path.Combine(dir, "save.save"), [(byte)i]);
+        }
+
+        var outcome = _service.BackupBeforeWrite(savePath);
+
+        Assert.True(outcome.IsSuccess);
+        Assert.True(Directory.Exists(outcome.Entry!.BackupDirectory));
+    }
+
+    [Fact]
+    public void RestoreDirectory_UnknownPlatformWithoutSource_IsNull()
+    {
+        var entry = new BackupEntry(SavePlatform.Unknown, "u", "s", DateTime.UtcNow, _root, ["save.save"], 1);
+        Assert.Null(SaveBackupService.RestoreDirectory(entry, _paths.GameSaveRoot));
+        Assert.Equal(Path.Combine(@"D:\copies", "slot5"),
+            SaveBackupService.RestoreDirectory(entry with { SourcePath = Path.Combine(@"D:\copies", "slot5", "save.save") },
+                _paths.GameSaveRoot));
     }
 
     [Fact]
@@ -332,13 +411,22 @@ public sealed class SaveBackupServiceTests : IDisposable
     }
 
     [Fact]
-    public void FormatTimestamp_RoundTripsThroughParse()
+    public void FolderStamp_IsUtcAndRoundTripsThroughParse()
     {
-        var when = new DateTime(2026, 5, 14, 15, 30, 45);
-        var stamp = SaveBackupService.FormatTimestamp(when);
-        Assert.Equal("2026-05-14_15-30-45", stamp);
+        var when = new DateTime(2026, 5, 14, 15, 30, 45, DateTimeKind.Utc);
+        var stamp = SaveBackupService.FolderStamp(when);
+        Assert.Equal("2026-05-14_15-30-45Z", stamp);
         Assert.True(SaveBackupService.TryParseTimestamp(stamp, out var parsed));
         Assert.Equal(when, parsed);
+        Assert.Equal(DateTimeKind.Utc, parsed.Kind);
+    }
+
+    [Fact]
+    public void TryParseTimestamp_ReadsAnOlderLocalTimeFolderAsTheSameInstant()
+    {
+        var local = new DateTime(2026, 5, 14, 15, 30, 45, DateTimeKind.Local);
+        Assert.True(SaveBackupService.TryParseTimestamp("2026-05-14_15-30-45", out var parsed));
+        Assert.Equal(local.ToUniversalTime(), parsed);
     }
 
     [Fact]

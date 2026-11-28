@@ -94,7 +94,16 @@ public sealed partial class MainWindow : Window
         // Close-on-dirty confirm — Closing fires before the window
         // tears down so we can cancel + show the modal + re-close.
         Closing += OnWindowClosing;
+        // Tool windows write through the shared loader without telling this
+        // window; re-derive the dirty flag from the loader's mutation version
+        // so the title, Save and the close prompt see their edits.
+        _dirtyPoll = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _dirtyPoll.Tick += (_, _) => (DataContext as MainWindowViewModel)?.RefreshDirty();
+        _dirtyPoll.Start();
+        Closed += (_, _) => _dirtyPoll.Stop();
     }
+
+    private readonly Avalonia.Threading.DispatcherTimer _dirtyPoll;
 
     /// <summary>
     /// Set true once the user has confirmed via the change-summary
@@ -108,68 +117,47 @@ public sealed partial class MainWindow : Window
     {
         if (_allowCloseWithoutPrompt) return;
         if (DataContext is not MainWindowViewModel vm) return;
-        if (!vm.Journal.HasUnsavedChanges) return;
-        // Cancel the default close — we'll re-trigger after the
-        // user makes a choice. Avalonia 12's Closing event allows
-        // this synchronously; the awaitable dialog continues after
-        // the early return.
+        if (!vm.HasUnsavedChanges) return;
+        // Cancel the default close and re-close once the user has chosen;
+        // Avalonia 12's Closing allows the cancel before the first await.
         e.Cancel = true;
-        var result = await ChangeSummaryDialog.ShowAsync(this, vm.Journal, closingContext: true);
+        if (await ConfirmDiscardChangesAsync(closingContext: true))
+        {
+            _allowCloseWithoutPrompt = true;
+            Close();
+        }
+    }
+
+    /// <summary>
+    /// Ask what to do with unsaved edits before the document is closed or
+    /// replaced (close, Open, Restore): Save, Discard or Cancel. Returns
+    /// <c>true</c> when the caller may go ahead: nothing was unsaved, the
+    /// user discarded, or the save went through.
+    /// </summary>
+    private async Task<bool> ConfirmDiscardChangesAsync(bool closingContext = false)
+    {
+        if (DataContext is not MainWindowViewModel vm || !vm.HasUnsavedChanges)
+        {
+            return true;
+        }
+        var result = await ChangeSummaryDialog.ShowAsync(this, vm.Journal, closingContext);
         switch (result)
         {
             case ChangeSummaryDialogResult.Save:
-                // Attempt save; on success the journal clears + we
-                // close. On failure the dialog stays implicitly
-                // dismissed but the close is aborted so the user
-                // can try again.
-                //
-                // SaveCommand is an AsyncRelayCommand. Await the actual
-                // task (ExecuteAsync) rather than the fire-and-forget
-                // Execute so that:
-                //   (a) a write failure surfaces in the catch below
-                //       instead of being rethrown on the dispatcher and
-                //       crashing the AOT process during teardown, and
-                //   (b) the window stays open while SaveAsync's
-                //       structural-edit confirm dialog runs — calling
-                //       Close() synchronously (as before) tore that modal
-                //       down, resolving its await to "cancel" and
-                //       silently abandoning the save.
-                try
+                // Await the command itself so the window stays up while
+                // SaveAsync's own confirms run; SaveAsync reports a failed
+                // write and leaves the document dirty.
+                if (vm.SaveCommand.CanExecute(null))
                 {
-                    if (vm.SaveCommand.CanExecute(null))
-                    {
-                        await vm.SaveCommand.ExecuteAsync(null);
-                    }
+                    await vm.SaveCommand.ExecuteAsync(null);
                 }
-                catch (System.Exception ex)
-                {
-                    await ConfirmDialog.ShowAlertAsync(this,
-                        UiText.Get("SaveFailedTitle", "Save failed"),
-                        UiText.Format("SaveFailedBody",
-                            "Could not write save: {0}. The app stayed open so you can retry or use Discard.",
-                            ex.Message));
-                    return;
-                }
-                // Only close if the save actually went through. Declining
-                // the structural-edit warning returns without writing and
-                // without throwing; closing then would discard the edits
-                // silently. The journal is cleared on a successful write.
-                if (vm.Journal.HasUnsavedChanges)
-                {
-                    return;
-                }
-                _allowCloseWithoutPrompt = true;
-                Close();
-                break;
+                // Declining a confirm inside Save writes nothing; go ahead
+                // only when the edits are on disk.
+                return !vm.HasUnsavedChanges;
             case ChangeSummaryDialogResult.Discard:
-                _allowCloseWithoutPrompt = true;
-                Close();
-                break;
-            case ChangeSummaryDialogResult.Cancel:
+                return true;
             default:
-                // Stay open — leave _allowCloseWithoutPrompt false
-                // so a subsequent close re-prompts.
-                break;
+                return false;
         }
     }
 
@@ -749,6 +737,10 @@ public sealed partial class MainWindow : Window
         {
             return;
         }
+        if (!await ConfirmDiscardChangesAsync())
+        {
+            return;
+        }
 
         // Default to the Crimson Desert save folder when it exists.
         // TryGetFolderFromPathAsync returns null for non-existent paths,
@@ -984,16 +976,46 @@ public sealed partial class MainWindow : Window
         {
             return;
         }
-        var restoreVm = new RestoreFromBackupViewModel(vm.BackupService);
-        restoreVm.RestoreRequested += entry =>
+        // One picker at a time: two open pickers could start overlapping
+        // restores of the same slot.
+        if (_restoreWindow is { } open)
         {
-            vm.RestoreFromBackupAsync(entry).SafeFireAndForget();
-        };
+            open.Activate();
+            return;
+        }
+        var restoreVm = new RestoreFromBackupViewModel(vm.BackupService);
+        restoreVm.RestoreRequested += entry => RestoreAsync(vm, entry).SafeFireAndForget(
+            ex => vm.BulkOpStatus = UiText.Format("RestoreFailed", "Restore failed: {0}", ex.Message));
         var dialog = new RestoreFromBackupWindow
         {
             DataContext = restoreVm,
         };
+        _restoreWindow = dialog;
+        dialog.Closed += (_, _) => _restoreWindow = null;
         dialog.Show(this);
+    }
+
+    private RestoreFromBackupWindow? _restoreWindow;
+    private bool _restoreRunning;
+
+    private async Task RestoreAsync(MainWindowViewModel vm, BackupEntry entry)
+    {
+        if (_restoreRunning)
+        {
+            return;
+        }
+        _restoreRunning = true;
+        try
+        {
+            if (await ConfirmDiscardChangesAsync())
+            {
+                await vm.RestoreFromBackupAsync(entry);
+            }
+        }
+        finally
+        {
+            _restoreRunning = false;
+        }
     }
 
     /// <summary>
@@ -1106,7 +1128,7 @@ public sealed partial class MainWindow : Window
                         initialBytes: [(byte)slotIdx]);
                 }
             }
-            catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex) when (ex.ErrorCode == -16)
+            catch (CrimsonAtomtic.RustInterop.CrimsonSaveException ex) when (ex.ErrorCode == CrimsonAtomtic.RustInterop.CrimsonErrorCode.NotFound)
             {
                 // NOT_FOUND from SetObjectListPresent: no sibling block
                 // provides a template element. Tell the user how to
@@ -1126,6 +1148,10 @@ public sealed partial class MainWindow : Window
                     $"{ex.Message} (code {ex.ErrorCode})");
                 return;
             }
+            vm.Journal.Log(UiText.Get("JournalCatDye", "Dye"),
+                UiText.Format("JournalDyeSlotAdded", "Added dye {0} to {1}",
+                    UiText.Format("DyeSlotPickerSlotLabel", "Slot {0}", slotIdx), row.ItemName));
+            vm.MarkDirtyFromExternalEdit();
             masterVm.NotifyChildApplied();
             await masterVm.RefreshAsync();
         };
@@ -1986,12 +2012,7 @@ public sealed partial class MainWindow : Window
         picker.Show(owner);
     }
 
-    private void OnExitClick(object? sender, RoutedEventArgs e)
-    {
-        if (Avalonia.Application.Current?.ApplicationLifetime
-            is IClassicDesktopStyleApplicationLifetime desktop)
-        {
-            desktop.Shutdown();
-        }
-    }
+    // Close() runs the Closing handler and its unsaved-edits prompt; the
+    // lifetime's Shutdown() would close the window without it.
+    private void OnExitClick(object? sender, RoutedEventArgs e) => Close();
 }

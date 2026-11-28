@@ -28,6 +28,41 @@ read from the top.
 
 -----
 
+## 2026-11-28 (no release) — Code audit P1: unsaved edits, Save failures, backups and restore
+
+- **What changes:**
+  - **One dirty state.** `IsDirty` follows the loader's mutation version (`RefreshDirty`), and the
+    main window re-derives it every second, so edits made in tool windows count before the tool
+    closes; the close prompt asks the same state instead of the journal (B2-14, B2-06). Add Dye
+    also journals its edit.
+  - **No edit is dropped without asking.** File → Exit closes the window through its Closing
+    prompt instead of shutting the lifetime down (B2-01); Open and Restore ask Save / Discard /
+    Cancel first (B2-02).
+  - **A failed write no longer crashes the app.** Save and Save As report the failure, with the
+    crimson-rs code name, and keep the document dirty; a Save As whose reload fails says the file
+    was written (B2-04).
+  - **Save checks the file first.** When the file changed on disk since the editor read or wrote
+    it (the game saved), Save asks before overwriting (B2-09); when the backup fails, it asks
+    before writing without one (B2-08). The write itself is crimson-rs's temp file + rename.
+  - **Backups** capture the file about to be overwritten under its own name, so a
+    `save.edited.save` is backed up too (B2-05); record the full source path; skip a backup equal
+    to the newest; are named in UTC (`…Z`, older local-time folders still read) and never prune
+    the backup just written (B2-10).
+  - **Restore** goes back to the recorded source folder; an Unknown-platform backup without one is
+    refused instead of landing in the first launcher's tree (B2-11). The slot's current files move
+    to a pre-restore snapshot (outside the retention cap, listed as "before a restore") before the
+    backup's files are copied in by temp + rename, so no stale `lobby.save` survives and a failed
+    restore puts the files back (B2-12). The list names the platform and survives an unreadable
+    folder (B2-13); only one picker and one restore run at a time (X-07).
+  - **Settings** are written by temp + rename; a corrupt `settings.json` is kept as
+    `settings.corrupt-<utc>.json` instead of being overwritten by defaults (B2-17).
+- **Not verified in the app:** Exit with unsaved edits, the external-change prompt after an
+  in-game save, and a restore over a slot with a newer `lobby.save`. The service paths have tests.
+- **Tests:** 463 green (+6 backup tests: pre-restore snapshot, own-name backup, duplicate skip,
+  never pruning the new backup, restore folder, UTC stamps).
+
+-----
+
 ## 2026-11-28 (no release) — Code audit P0: crimson-rs ebf7304, error codes, HMAC re-sign, comment rules
 
 - **What changes:** the 2026-11-28 code audit (168 findings in six blocks) is verified and tracked in

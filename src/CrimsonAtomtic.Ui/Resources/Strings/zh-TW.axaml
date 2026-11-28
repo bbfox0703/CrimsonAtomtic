@@ -635,6 +635,7 @@
   <sys:String x:Key="StructuralEditWarningBody" xml:space="preserve">此存檔包含會改變長度的（結構性）變更，例如完成封印阿比斯神器挑戰或新增／移除清單項目。&#10;&#10;資料本身寫入正確，但《赤色沙漠》自家的存檔讀取器有一個臭蟲，可能讓某些高進度存檔在這類變更後載入時崩潰。就地變更（道具數量、狀態、開關旗標）則不受影響。&#10;&#10;原始檔案已保留備份。仍要儲存嗎？</sys:String>
   <sys:String x:Key="HmacRewrapWarningTitle">存檔完整性檢查失敗</sys:String>
   <sys:String x:Key="HmacRewrapWarningBody" xml:space="preserve">此存檔開啟時 HMAC 驗證失敗：檔案可能已損毀，或被其他工具修改過。&#10;&#10;儲存會重新簽章，遊戲將接受它目前的內容。原始檔案已保留備份。仍要儲存嗎？</sys:String>
+  <sys:String x:Key="DyeSlotPickerSlotLabel">槽位 {0}</sys:String>
   <sys:String x:Key="DyeSlotAdded">已新增 {0}。請選擇顏色後再套用。</sys:String>
   <sys:String x:Key="DyeSlotAddFailed">無法新增 {0}：{1}（代碼 {2}）</sys:String>
   <sys:String x:Key="DyeSlotRemoved">已移除 {0}。</sys:String>
@@ -669,14 +670,14 @@
   <sys:String x:Key="ItemPickerAddToBagTip">把這個物品加入主視窗目前顯示的背包清單。請先打開一個背包 (鑽進 _inventorylist[N]._itemList)；否則點擊會在狀態列回報前置需求。</sys:String>
   <sys:String x:Key="MenuRestoreFromBackup">從備份還原…</sys:String>
   <sys:String x:Key="RestoreFromBackupTitle">從備份還原</sys:String>
-  <sys:String x:Key="RestoreFromBackupColumnHint">在某一列按下「還原」可以將該快照覆寫到目前的存檔。目前存檔狀態「不會」被備份 — 只有在編輯器中執行儲存時才會建立備份。</sys:String>
+  <sys:String x:Key="RestoreFromBackupColumnHint">在某一列按下「還原」可將該快照放回。插槽目前的檔案會先移到還原前快照，並以「(還原前)」列在這裡。</sys:String>
   <sys:String x:Key="RestoreColSlot">Slot (使用者 / 名稱)</sys:String>
   <sys:String x:Key="RestoreColTimestamp">備份時間</sys:String>
   <sys:String x:Key="RestoreColFiles">檔案</sys:String>
   <sys:String x:Key="RestoreColSize">大小</sys:String>
   <sys:String x:Key="RestoreColAction">動作</sys:String>
   <sys:String x:Key="RestoreButton">⤺ 還原</sys:String>
-  <sys:String x:Key="RestoreButtonTip">用此備份覆寫目前的存檔。目前的存檔狀態「不會」備份 — 若想保留，請先在編輯器中儲存。</sys:String>
+  <sys:String x:Key="RestoreButtonTip">把此備份放回它的插槽。插槽目前的檔案會保留為還原前快照。</sys:String>
   <sys:String x:Key="EditPanelNestedReadOnly">尚不支援編輯巢狀欄位。請按 Back 回到頂層 block。</sys:String>
   <sys:String x:Key="ElementsColIcon">圖示</sys:String>
   <sys:String x:Key="ElementsColIndex">#</sys:String>
@@ -862,15 +863,24 @@
   <!-- 備份／還原狀態 -->
   <sys:String x:Key="BackupOk">備份：{0} @ {1}（{2:N0} B）。</sys:String>
   <sys:String x:Key="BackupOkPruned">備份：{0} @ {1}（{2:N0} B，已清除 {3}）。</sys:String>
-  <sys:String x:Key="BackupFailed">⚠ 備份失敗（存檔仍已寫入）：{0}</sys:String>
   <sys:String x:Key="RestoreNoHook">還原需要確認對話框掛鉤 — UI bug，請回報。</sys:String>
   <sys:String x:Key="RestoreNoRoot">還原失敗：本機未偵測到 {0} 的存檔根目錄。寫入原始存檔的啟動器可能未安裝於此。</sys:String>
   <sys:String x:Key="RestoreConfirmTitle">從備份還原？</sys:String>
-  <sys:String x:Key="RestoreConfirmBody" xml:space="preserve">要從 {1} 拍攝的備份還原 {0} 嗎？&#10;&#10;平台：{2}&#10;檔案：{3}（{4:N0} bytes）&#10;目標：{5}&#10;&#10;這會覆寫該插槽目前的存檔。目前存檔狀態「不會」被備份 — 只有在編輯器中執行儲存時才會建立備份。</sys:String>
+  <sys:String x:Key="RestoreConfirmBody" xml:space="preserve">要從 {1} 拍攝的備份還原 {0} 嗎？&#10;&#10;平台：{2}&#10;檔案：{3}（{4:N0} bytes）&#10;目標：{5}&#10;&#10;插槽目前的檔案會先移到還原前快照，並列在此清單中。</sys:String>
   <sys:String x:Key="RestoreCancelled">已取消還原。</sys:String>
   <sys:String x:Key="RestoreFailed">還原失敗：{0}</sys:String>
   <sys:String x:Key="RestoreDone">已從 {1} 還原 {0}。</sys:String>
   <sys:String x:Key="RestoreReloadFailed">已還原，但重新載入失敗：{0}</sys:String>
+  <sys:String x:Key="ExternalChangeBody" xml:space="preserve">{0} 在開啟後被其他程式（遊戲或其他工具）寫入過。&#10;&#10;儲存會以此編輯器的內容取代那個版本。目前的檔案會保留備份。要覆寫嗎？</sys:String>
+  <sys:String x:Key="ExternalChangeTitle">存檔已在磁碟上被修改</sys:String>
+  <sys:String x:Key="SaveAsReloadFailed">已儲存到 {0}，但重新開啟失敗：{1}</sys:String>
+  <sys:String x:Key="SaveFailedStatus">儲存失敗：{0}</sys:String>
+  <sys:String x:Key="BackupFailedBody" xml:space="preserve">無法寫入即將被覆寫檔案的備份：&#10;{0}&#10;&#10;仍要在沒有備份的情況下儲存嗎？</sys:String>
+  <sys:String x:Key="BackupFailedTitle">備份失敗</sys:String>
+  <sys:String x:Key="BackupFailedStatus">⚠ 備份失敗：{0}</sys:String>
+  <sys:String x:Key="RestoreRowPreRestore">(還原前)</sys:String>
+  <sys:String x:Key="RestoreRowSlot">{0}：{1} / {2}</sys:String>
+  <sys:String x:Key="RestoreNoSource">還原失敗：此備份沒有記錄來源資料夾。請從備份資料夾手動複製檔案回去。</sys:String>
 
   <!-- 欄位明細導覽錯誤 -->
   <sys:String x:Key="DetailsErrorBlockNotFound">目前存檔中找不到區塊 #{0}。</sys:String>

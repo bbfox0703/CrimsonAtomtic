@@ -630,6 +630,7 @@
   <sys:String x:Key="StructuralEditWarningBody" xml:space="preserve">This save has length-changing (structural) edits, such as completing a sealed abyss artifact challenge or adding/removing list items.&#10;&#10;The data is written correctly, but Crimson Desert's own save loader has a bug that can make some heavily-progressed saves crash on load after such an edit. In-place edits (item counts, states, gate/flag toggles) are safe.&#10;&#10;A backup of the original is kept. Save anyway?</sys:String>
   <sys:String x:Key="HmacRewrapWarningTitle">Save failed its integrity check</sys:String>
   <sys:String x:Key="HmacRewrapWarningBody" xml:space="preserve">This save's HMAC did not verify when it was opened: the file may be damaged or edited by another tool.&#10;&#10;Saving re-signs it, so the game will accept whatever it now contains. A backup of the original is kept. Save anyway?</sys:String>
+  <sys:String x:Key="DyeSlotPickerSlotLabel">Slot {0}</sys:String>
   <sys:String x:Key="DyeSlotAdded">Added {0}. Pick its colour, then Apply.</sys:String>
   <sys:String x:Key="DyeSlotAddFailed">Could not add {0}: {1} (code {2})</sys:String>
   <sys:String x:Key="DyeSlotRemoved">Removed {0}.</sys:String>
@@ -665,14 +666,14 @@
   <sys:String x:Key="ItemPickerAddToBagTip">Add this item to the inventory list the main window is currently showing. Open a bag (drill into _inventorylist[N]._itemList) first; otherwise the click reports the requirement in the status bar.</sys:String>
   <sys:String x:Key="MenuRestoreFromBackup">Restore from Backup…</sys:String>
   <sys:String x:Key="RestoreFromBackupTitle">Restore from Backup</sys:String>
-  <sys:String x:Key="RestoreFromBackupColumnHint">Click "Restore" on a row to overwrite the live save with that snapshot. The current state is NOT backed up — backups are only taken when you Save in the editor.</sys:String>
+  <sys:String x:Key="RestoreFromBackupColumnHint">Click "Restore" on a row to put that snapshot back. The slot's current files are moved to a pre-restore snapshot first, listed here as "(before a restore)".</sys:String>
   <sys:String x:Key="RestoreColSlot">Slot (user / name)</sys:String>
   <sys:String x:Key="RestoreColTimestamp">Backup taken</sys:String>
   <sys:String x:Key="RestoreColFiles">Files</sys:String>
   <sys:String x:Key="RestoreColSize">Size</sys:String>
   <sys:String x:Key="RestoreColAction">Action</sys:String>
   <sys:String x:Key="RestoreButton">⤺ Restore</sys:String>
-  <sys:String x:Key="RestoreButtonTip">Overwrite the live save with this backup. The current state is NOT backed up first — Save it in the editor beforehand if you want to keep it.</sys:String>
+  <sys:String x:Key="RestoreButtonTip">Put this backup back in its slot. The slot's current files are kept as a pre-restore snapshot.</sys:String>
   <sys:String x:Key="EditPanelNestedReadOnly">Editing nested fields is not yet supported. Use Back to return to the top-level block.</sys:String>
   <sys:String x:Key="ElementsColIcon">Icon</sys:String>
   <sys:String x:Key="ElementsColIndex">#</sys:String>
@@ -860,15 +861,24 @@
   <!-- Backup / restore status. -->
   <sys:String x:Key="BackupOk">Backup: {0} @ {1} ({2:N0} B).</sys:String>
   <sys:String x:Key="BackupOkPruned">Backup: {0} @ {1} ({2:N0} B, pruned {3}).</sys:String>
-  <sys:String x:Key="BackupFailed">⚠ Backup failed (save still wrote): {0}</sys:String>
   <sys:String x:Key="RestoreNoHook">Restore needs a confirm dialog hook — UI bug, file an issue.</sys:String>
   <sys:String x:Key="RestoreNoRoot">Restore failed: no {0} save root is detected on this machine. The launcher that wrote the original save may not be installed here.</sys:String>
   <sys:String x:Key="RestoreConfirmTitle">Restore from backup?</sys:String>
-  <sys:String x:Key="RestoreConfirmBody" xml:space="preserve">Restore {0} from backup taken at {1}?&#10;&#10;Platform: {2}&#10;Files: {3} ({4:N0} bytes)&#10;Target: {5}&#10;&#10;This overwrites the current save in that slot. The current state is NOT backed up — backups are only taken when you Save in the editor.</sys:String>
+  <sys:String x:Key="RestoreConfirmBody" xml:space="preserve">Restore {0} from backup taken at {1}?&#10;&#10;Platform: {2}&#10;Files: {3} ({4:N0} bytes)&#10;Target: {5}&#10;&#10;The slot's current files are moved to a pre-restore snapshot first, which this list shows.</sys:String>
   <sys:String x:Key="RestoreCancelled">Restore cancelled.</sys:String>
   <sys:String x:Key="RestoreFailed">Restore failed: {0}</sys:String>
   <sys:String x:Key="RestoreDone">Restored {0} from {1}.</sys:String>
   <sys:String x:Key="RestoreReloadFailed">Restored, but reload failed: {0}</sys:String>
+  <sys:String x:Key="ExternalChangeBody" xml:space="preserve">{0} was written by something else after it was opened (the game, or another tool).&#10;&#10;Saving replaces that version with this editor's copy. A backup of the current file is kept. Overwrite it?</sys:String>
+  <sys:String x:Key="ExternalChangeTitle">Save changed on disk</sys:String>
+  <sys:String x:Key="SaveAsReloadFailed">Saved to {0}, but reopening it failed: {1}</sys:String>
+  <sys:String x:Key="SaveFailedStatus">Save failed: {0}</sys:String>
+  <sys:String x:Key="BackupFailedBody" xml:space="preserve">The backup of the file about to be overwritten could not be written:&#10;{0}&#10;&#10;Write the save anyway, without a backup?</sys:String>
+  <sys:String x:Key="BackupFailedTitle">Backup failed</sys:String>
+  <sys:String x:Key="BackupFailedStatus">⚠ Backup failed: {0}</sys:String>
+  <sys:String x:Key="RestoreRowPreRestore">(before a restore)</sys:String>
+  <sys:String x:Key="RestoreRowSlot">{0}: {1} / {2}</sys:String>
+  <sys:String x:Key="RestoreNoSource">Restore failed: this backup does not record the folder it came from. Copy its files back by hand from the backup folder.</sys:String>
 
   <!-- Field-detail navigation error. -->
   <sys:String x:Key="DetailsErrorBlockNotFound">Block #{0} not found in current save.</sys:String>

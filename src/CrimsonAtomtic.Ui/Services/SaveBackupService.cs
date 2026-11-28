@@ -27,10 +27,17 @@ namespace CrimsonAtomtic.Ui.Services;
 ///   {platform}\               e.g. Steam / Epic / GamePass / Unknown
 ///     {userId}\               e.g. 102190433
 ///       {slotName}\           e.g. slot100
-///         {timestamp}\        e.g. 2026-05-14_15-30-45
-///           save.save
+///         {timestamp}\        e.g. 2026-05-14_07-30-45Z (UTC)
+///           save.save         (the file that was about to be overwritten,
+///                              under its own name)
 ///           lobby.save        (only when the source slot has one)
+///           source.txt        (the full path the backup was taken from)
+///     PreRestore\{platform}\{userId}\{slotName}\{timestamp}\
+///                             (a slot's files as they were just before a
+///                              Restore replaced them; not pruned)
 /// </code>
+/// Folder names without the <c>Z</c> are local time; both sort by the
+/// instant they denote.
 /// </para>
 /// <para>
 /// Legacy layout (still readable): pre-multi-platform builds wrote
@@ -44,8 +51,10 @@ namespace CrimsonAtomtic.Ui.Services;
 /// <para>
 /// Retention: at most <see cref="MaxVersionsPerSlot"/> timestamp
 /// folders per (platform, userId, slotName). New backups land first;
-/// the oldest are deleted afterwards so a mid-write failure leaves the
-/// previous version intact.
+/// the oldest are deleted afterwards, never the one just written, so a
+/// mid-write failure leaves the earlier backups intact. A backup whose
+/// files equal the newest one's is skipped rather than pushing an older
+/// distinct version out.
 /// </para>
 /// <para>
 /// Failures during backup are reported via the returned
@@ -72,11 +81,22 @@ public sealed class SaveBackupService
     public const string BackupsSubdirectory = "Backups";
 
     /// <summary>
-    /// Files inside each slot folder that get backed up. The game writes
-    /// both atomically together; restoring just one risks a desync, so
-    /// the service captures whichever subset exists.
+    /// The companion file the game writes beside every slot's save; it is
+    /// backed up and restored together with the save so the pair stays in
+    /// sync.
     /// </summary>
-    private static readonly string[] BackupFileNames = ["save.save", "lobby.save"];
+    public const string LobbyFileName = "lobby.save";
+
+    /// <summary>The game's own save file name in a slot folder.</summary>
+    public const string SaveFileName = "save.save";
+
+    /// <summary>Holds the full path a backup was taken from.</summary>
+    public const string SourceFileName = "source.txt";
+
+    /// <summary>Subfolder of <see cref="BackupRoot"/> for the pre-restore snapshots.</summary>
+    public const string PreRestoreSubdirectory = "PreRestore";
+
+    private const string StampFormat = "yyyy-MM-dd_HH-mm-ss";
 
     /// <summary>
     /// Directory names used for the platform layer of the backup tree.
@@ -144,30 +164,22 @@ public sealed class SaveBackupService
         var platform = _paths.ClassifySavePath(targetSavePath);
 
         var sourceDir = Path.GetDirectoryName(targetSavePath)!;
-        var timestamp = DateTime.Now;
+        var names = FilesToBackUp(targetSavePath);
         var slotDir = SlotBackupDirectory(platform, userId, slotName);
-        var stamp = FormatTimestamp(timestamp);
-        var destDir = Path.Combine(slotDir, stamp);
-        // The stamp resolves to the second, so two Saves within the same
-        // second would collide on the same folder and the later one would
-        // overwrite (and silently lose) the earlier snapshot. Advance the
-        // stamp a second at a time until the folder is free. This keeps the
-        // yyyy-MM-dd_HH-mm-ss format intact, so List/Prune still parse it —
-        // unlike adding sub-second precision, which would orphan every
-        // existing backup folder that lacks the finer suffix.
-        while (Directory.Exists(destDir))
+
+        if (NewestMatches(slotDir, sourceDir, names))
         {
-            timestamp = timestamp.AddSeconds(1);
-            stamp = FormatTimestamp(timestamp);
-            destDir = Path.Combine(slotDir, stamp);
+            return BackupOutcome.Skipped(BackupOutcomeKind.SkippedDuplicate,
+                "The newest backup already holds these exact files.");
         }
 
+        var (timestamp, destDir) = FreeStampDirectory(slotDir);
         try
         {
             Directory.CreateDirectory(destDir);
-            var copied = new List<string>(BackupFileNames.Length);
+            var copied = new List<string>(names.Count);
             long totalBytes = 0;
-            foreach (var name in BackupFileNames)
+            foreach (var name in names)
             {
                 var src = Path.Combine(sourceDir, name);
                 if (!File.Exists(src))
@@ -181,17 +193,13 @@ public sealed class SaveBackupService
             }
             if (copied.Count == 0)
             {
-                // Source dir didn't have any backup-eligible files.
-                // Clean up the empty timestamp folder so List doesn't
-                // surface it as a phantom version.
                 TryDeleteDirectoryQuietly(destDir);
                 return BackupOutcome.Skipped(BackupOutcomeKind.SkippedNoSource,
-                    $"Source folder {sourceDir} has no save.save / lobby.save to back up.");
+                    $"Source folder {sourceDir} has nothing to back up.");
             }
+            File.WriteAllText(Path.Combine(destDir, SourceFileName), Path.GetFullPath(targetSavePath));
 
-            // Prune AFTER the new copy lands so a partial-prune failure
-            // can't leave us with zero backups for the slot.
-            var pruned = PruneBackups(platform, userId, slotName);
+            var pruned = PruneBackups(platform, userId, slotName, keep: destDir);
 
             return BackupOutcome.Ok(new BackupEntry(
                 Platform: platform,
@@ -200,7 +208,8 @@ public sealed class SaveBackupService
                 Timestamp: timestamp,
                 BackupDirectory: destDir,
                 FileNames: copied.ToArray(),
-                TotalBytes: totalBytes),
+                TotalBytes: totalBytes,
+                SourcePath: Path.GetFullPath(targetSavePath)),
                 pruned: pruned);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -211,134 +220,297 @@ public sealed class SaveBackupService
     }
 
     /// <summary>
-    /// All backups currently on disk, newest-first. Walks both the
-    /// current platform-scoped layout and the legacy un-platformed
-    /// layout — legacy entries are tagged as <see cref="SavePlatform.Steam"/>
-    /// (the only launcher supported before this change).
+    /// All backups currently on disk, newest-first: the platform-scoped
+    /// layout, the pre-restore snapshots, and the legacy un-platformed
+    /// layout (tagged <see cref="SavePlatform.Steam"/>, the only launcher
+    /// that layout was written for). A folder that cannot be read is
+    /// skipped and counted in <paramref name="unreadable"/>.
     /// </summary>
-    public IReadOnlyList<BackupEntry> ListBackups()
+    public IReadOnlyList<BackupEntry> ListBackups() => ListBackups(out _);
+
+    /// <inheritdoc cref="ListBackups()"/>
+    public IReadOnlyList<BackupEntry> ListBackups(out int unreadable)
     {
+        unreadable = 0;
         var root = BackupRoot;
         if (!Directory.Exists(root))
         {
             return Array.Empty<BackupEntry>();
         }
         var entries = new List<BackupEntry>();
-        foreach (var childDir in Directory.EnumerateDirectories(root))
+        var skipped = 0;
+        foreach (var childDir in SafeDirs(root, ref skipped))
         {
             var childName = Path.GetFileName(childDir);
-            if (KnownPlatformDirNames.Contains(childName)
+            if (string.Equals(childName, PreRestoreSubdirectory, StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var platformDir in SafeDirs(childDir, ref skipped))
+                {
+                    if (Enum.TryParse<SavePlatform>(Path.GetFileName(platformDir), ignoreCase: true, out var p))
+                    {
+                        ScanUserDirs(platformDir, p, isPreRestore: true, entries, ref skipped);
+                    }
+                }
+            }
+            else if (KnownPlatformDirNames.Contains(childName)
                 && Enum.TryParse<SavePlatform>(childName, ignoreCase: true, out var platform))
             {
-                // Current layout: BackupRoot\<platform>\<userId>\<slot>\<stamp>\
-                ScanUserDirs(childDir, platform, entries);
+                ScanUserDirs(childDir, platform, isPreRestore: false, entries, ref skipped);
             }
             else
             {
-                // Legacy layout: BackupRoot\<userId>\<slot>\<stamp>\
-                // — pre-multi-platform builds. Tag as Steam since that
-                // was the only supported launcher before this change.
                 ScanSlotDirs(parentUserDir: childDir, platform: SavePlatform.Steam,
-                             userId: childName, entries);
+                             userId: childName, isPreRestore: false, entries, ref skipped);
             }
         }
         entries.Sort((a, b) => b.Timestamp.CompareTo(a.Timestamp));
+        unreadable = skipped;
         return entries;
     }
 
-    /// <summary>
-    /// Walk one <c>BackupRoot\&lt;platform&gt;\</c> subtree, appending
-    /// one <see cref="BackupEntry"/> per timestamp folder.
-    /// </summary>
-    private static void ScanUserDirs(string platformDir, SavePlatform platform, List<BackupEntry> entries)
+    private static void ScanUserDirs(string platformDir, SavePlatform platform, bool isPreRestore,
+        List<BackupEntry> entries, ref int skipped)
     {
-        foreach (var userDir in Directory.EnumerateDirectories(platformDir))
+        foreach (var userDir in SafeDirs(platformDir, ref skipped))
         {
-            var userId = Path.GetFileName(userDir);
-            ScanSlotDirs(userDir, platform, userId, entries);
+            ScanSlotDirs(userDir, platform, Path.GetFileName(userDir), isPreRestore, entries, ref skipped);
         }
     }
 
-    /// <summary>
-    /// Walk one <c>...\&lt;userId&gt;\</c> subtree, appending one
-    /// <see cref="BackupEntry"/> per timestamp folder under each slot.
-    /// </summary>
-    private static void ScanSlotDirs(string parentUserDir, SavePlatform platform, string userId, List<BackupEntry> entries)
+    private static void ScanSlotDirs(string parentUserDir, SavePlatform platform, string userId,
+        bool isPreRestore, List<BackupEntry> entries, ref int skipped)
     {
-        foreach (var slotDir in Directory.EnumerateDirectories(parentUserDir))
+        foreach (var slotDir in SafeDirs(parentUserDir, ref skipped))
         {
             var slotName = Path.GetFileName(slotDir);
-            foreach (var stampDir in Directory.EnumerateDirectories(slotDir))
+            foreach (var stampDir in SafeDirs(slotDir, ref skipped))
             {
-                var stamp = Path.GetFileName(stampDir);
-                if (!TryParseTimestamp(stamp, out var when))
+                if (!TryParseTimestamp(Path.GetFileName(stampDir), out var when))
                 {
                     continue;
                 }
-                var files = new List<string>(BackupFileNames.Length);
-                long bytes = 0;
-                foreach (var name in BackupFileNames)
+                try
                 {
-                    var p = Path.Combine(stampDir, name);
-                    if (File.Exists(p))
+                    var files = Directory.GetFiles(stampDir, "*.save")
+                        .Select(Path.GetFileName)
+                        .OfType<string>()
+                        .OrderBy(n => string.Equals(n, LobbyFileName, StringComparison.OrdinalIgnoreCase))
+                        .ThenBy(n => n, StringComparer.OrdinalIgnoreCase)
+                        .ToArray();
+                    if (files.Length == 0)
                     {
-                        files.Add(name);
-                        bytes += new FileInfo(p).Length;
+                        continue;
                     }
+                    var bytes = files.Sum(n => new FileInfo(Path.Combine(stampDir, n)).Length);
+                    var sourceFile = Path.Combine(stampDir, SourceFileName);
+                    var source = File.Exists(sourceFile) ? File.ReadAllText(sourceFile).Trim() : null;
+                    entries.Add(new BackupEntry(
+                        Platform: platform,
+                        UserId: userId,
+                        SlotName: slotName,
+                        Timestamp: when,
+                        BackupDirectory: stampDir,
+                        FileNames: files,
+                        TotalBytes: bytes,
+                        SourcePath: string.IsNullOrEmpty(source) ? null : source,
+                        IsPreRestore: isPreRestore));
                 }
-                if (files.Count == 0)
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
-                    continue;
+                    skipped++;
                 }
-                entries.Add(new BackupEntry(
-                    Platform: platform,
-                    UserId: userId,
-                    SlotName: slotName,
-                    Timestamp: when,
-                    BackupDirectory: stampDir,
-                    FileNames: files.ToArray(),
-                    TotalBytes: bytes));
             }
         }
     }
 
+    private static string[] SafeDirs(string dir, ref int skipped)
+    {
+        try
+        {
+            return Directory.GetDirectories(dir);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            skipped++;
+            return Array.Empty<string>();
+        }
+    }
+
     /// <summary>
-    /// Restore <paramref name="entry"/>'s backed-up files into the
-    /// original slot folder under <paramref name="gameSaveRoot"/>.
-    /// Returns the target save.save path on success; throws on
-    /// failure (the UI surfaces the error in a confirm dialog).
-    ///
-    /// <para>
-    /// <paramref name="gameSaveRoot"/> is platform-specific — the caller
-    /// looks up the right save root for <c>entry.Platform</c> before
-    /// invoking. We pass it as a raw string (not <see cref="IPlatformPaths"/>)
-    /// so this stays unit-testable against a temp-directory fake.
-    /// </para>
-    /// <para>
-    /// Atomicity model: the restore happens via straightforward
-    /// <see cref="File.Copy(string, string, bool)"/>. We don't take a
-    /// transactional lock — if a copy fails partway, the slot folder
-    /// may have one file from the new backup + one from the old
-    /// state. The user is restoring from a snapshot they can re-pick,
-    /// and the prior editor-Save backups remain on disk, so a
-    /// half-failed restore is still recoverable by restoring again.
-    /// </para>
+    /// The folder a backup restores into: the folder it was taken from
+    /// when the backup recorded it, else the slot folder under the
+    /// platform's <paramref name="platformSaveRoot"/>. Null when neither
+    /// is known (an <see cref="SavePlatform.Unknown"/> backup written
+    /// before backups recorded their source).
     /// </summary>
-    public static string Restore(BackupEntry entry, string gameSaveRoot)
+    public static string? RestoreDirectory(BackupEntry entry, string? platformSaveRoot)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        ArgumentException.ThrowIfNullOrEmpty(gameSaveRoot);
+        if (entry.SourcePath is { } source && Path.GetDirectoryName(source) is { Length: > 0 } dir)
+        {
+            return dir;
+        }
+        if (entry.Platform == SavePlatform.Unknown || string.IsNullOrEmpty(platformSaveRoot))
+        {
+            return null;
+        }
+        return Path.Combine(platformSaveRoot, entry.UserId, entry.SlotName);
+    }
 
-        var slotDir = Path.Combine(gameSaveRoot, entry.UserId, entry.SlotName);
+    /// <summary>
+    /// Restore <paramref name="entry"/>'s files into <paramref name="slotDir"/>
+    /// and return the restored save's path. The slot's current save files
+    /// (the backup's names plus <c>save.save</c> / <c>lobby.save</c>) are
+    /// moved into a pre-restore snapshot first, so a stale companion file
+    /// cannot survive next to the restored save and the replaced state stays
+    /// recoverable. Each file is copied to a temporary name and renamed into
+    /// place; on failure the moved files are put back. Throws on failure.
+    /// </summary>
+    public string Restore(BackupEntry entry, string slotDir)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentException.ThrowIfNullOrEmpty(slotDir);
         Directory.CreateDirectory(slotDir);
 
-        foreach (var name in entry.FileNames)
+        var displaced = entry.FileNames
+            .Append(SaveFileName).Append(LobbyFileName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(n => File.Exists(Path.Combine(slotDir, n)))
+            .ToList();
+        string? preRestoreDir = null;
+        if (displaced.Count > 0)
         {
-            var src = Path.Combine(entry.BackupDirectory, name);
-            var dst = Path.Combine(slotDir, name);
-            File.Copy(src, dst, overwrite: true);
+            var parent = Path.Combine(BackupRoot, PreRestoreSubdirectory, entry.Platform.ToString(),
+                entry.UserId, entry.SlotName);
+            (_, preRestoreDir) = FreeStampDirectory(parent);
+            Directory.CreateDirectory(preRestoreDir);
+            File.WriteAllText(Path.Combine(preRestoreDir, SourceFileName),
+                Path.Combine(slotDir, entry.FileNames.FirstOrDefault(IsSaveName) ?? SaveFileName));
         }
-        return Path.Combine(slotDir, "save.save");
+
+        var moved = new List<string>();
+        var placed = new List<string>();
+        try
+        {
+            foreach (var name in displaced)
+            {
+                File.Move(Path.Combine(slotDir, name), Path.Combine(preRestoreDir!, name));
+                moved.Add(name);
+            }
+            foreach (var name in entry.FileNames)
+            {
+                var dst = Path.Combine(slotDir, name);
+                var temp = dst + ".restore-tmp";
+                File.Copy(Path.Combine(entry.BackupDirectory, name), temp, overwrite: true);
+                File.Move(temp, dst, overwrite: true);
+                placed.Add(name);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            foreach (var name in placed)
+            {
+                TryDeleteFileQuietly(Path.Combine(slotDir, name));
+            }
+            foreach (var name in moved)
+            {
+                try { File.Move(Path.Combine(preRestoreDir!, name), Path.Combine(slotDir, name), overwrite: true); }
+                catch (Exception undo) when (undo is IOException or UnauthorizedAccessException) { }
+            }
+            throw;
+        }
+        return Path.Combine(slotDir, entry.FileNames.FirstOrDefault(IsSaveName) ?? SaveFileName);
+    }
+
+    private static bool IsSaveName(string name) =>
+        !string.Equals(name, LobbyFileName, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The files a backup of <paramref name="targetSavePath"/> captures: the
+    /// file itself under its own name, and the slot's <c>lobby.save</c>.
+    /// </summary>
+    private static List<string> FilesToBackUp(string targetSavePath)
+    {
+        var names = new List<string> { Path.GetFileName(targetSavePath) };
+        if (!string.Equals(names[0], LobbyFileName, StringComparison.OrdinalIgnoreCase))
+        {
+            names.Add(LobbyFileName);
+        }
+        return names;
+    }
+
+    /// <summary>
+    /// True when the slot's newest backup holds exactly the files
+    /// <paramref name="names"/> in <paramref name="sourceDir"/> currently
+    /// has, byte for byte.
+    /// </summary>
+    private static bool NewestMatches(string slotDir, string sourceDir, List<string> names)
+    {
+        try
+        {
+            if (!Directory.Exists(slotDir))
+            {
+                return false;
+            }
+            var newest = Directory.GetDirectories(slotDir)
+                .Select(d => (Dir: d, Ok: TryParseTimestamp(Path.GetFileName(d), out var t), When: t))
+                .Where(x => x.Ok)
+                .OrderByDescending(x => x.When)
+                .Select(x => x.Dir)
+                .FirstOrDefault();
+            if (newest is null)
+            {
+                return false;
+            }
+            var present = names.Where(n => File.Exists(Path.Combine(sourceDir, n))).ToList();
+            var backed = Directory.GetFiles(newest, "*.save").Select(Path.GetFileName).OfType<string>().ToList();
+            if (present.Count == 0 || present.Count != backed.Count
+                || present.Any(n => !backed.Contains(n, StringComparer.OrdinalIgnoreCase)))
+            {
+                return false;
+            }
+            return present.All(n => SameBytes(Path.Combine(sourceDir, n), Path.Combine(newest, n)));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static bool SameBytes(string a, string b)
+    {
+        var fa = new FileInfo(a);
+        var fb = new FileInfo(b);
+        if (fa.Length != fb.Length)
+        {
+            return false;
+        }
+        return System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(a))
+            .AsSpan().SequenceEqual(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(b)));
+    }
+
+    /// <summary>
+    /// A timestamp folder under <paramref name="parent"/> that does not
+    /// exist yet: now (UTC), advanced a second at a time past any folder
+    /// that already has that name.
+    /// </summary>
+    private static (DateTime Timestamp, string Directory) FreeStampDirectory(string parent)
+    {
+        var when = DateTime.UtcNow;
+        when = new DateTime(when.Ticks - when.Ticks % TimeSpan.TicksPerSecond, DateTimeKind.Utc);
+        var dir = Path.Combine(parent, FolderStamp(when));
+        while (System.IO.Directory.Exists(dir))
+        {
+            when = when.AddSeconds(1);
+            dir = Path.Combine(parent, FolderStamp(when));
+        }
+        return (when, dir);
+    }
+
+    private static void TryDeleteFileQuietly(string path)
+    {
+        try { File.Delete(path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 
     /// <summary>
@@ -349,7 +521,7 @@ public sealed class SaveBackupService
     /// those age out on their original (pre-change) retention cycle and
     /// are never written to again.
     /// </summary>
-    public int PruneBackups(SavePlatform platform, string userId, string slotName)
+    public int PruneBackups(SavePlatform platform, string userId, string slotName, string? keep = null)
     {
         var slotDir = SlotBackupDirectory(platform, userId, slotName);
         if (!Directory.Exists(slotDir))
@@ -366,7 +538,9 @@ public sealed class SaveBackupService
             return 0;
         }
         var pruned = 0;
-        foreach (var (dir, _) in stampDirs.Skip(MaxVersionsPerSlot))
+        foreach (var (dir, _) in stampDirs.Skip(MaxVersionsPerSlot)
+                     .Where(x => keep is null || !string.Equals(Path.GetFullPath(x.Dir), Path.GetFullPath(keep),
+                         StringComparison.OrdinalIgnoreCase)))
         {
             if (TryDeleteDirectoryQuietly(dir))
             {
@@ -431,17 +605,38 @@ public sealed class SaveBackupService
         return true;
     }
 
-    /// <summary>Render <paramref name="when"/> as <c>YYYY-MM-DD_HH-mm-ss</c>.</summary>
+    /// <summary>
+    /// Render <paramref name="when"/> for display as local
+    /// <c>YYYY-MM-DD_HH-mm-ss</c>; a UTC value is converted first.
+    /// </summary>
     public static string FormatTimestamp(DateTime when) =>
-        when.ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture);
+        (when.Kind == DateTimeKind.Utc ? when.ToLocalTime() : when)
+            .ToString(StampFormat, CultureInfo.InvariantCulture);
 
-    /// <summary>Inverse of <see cref="FormatTimestamp"/>.</summary>
-    public static bool TryParseTimestamp(string s, out DateTime when) =>
-        DateTime.TryParseExact(
-            s, "yyyy-MM-dd_HH-mm-ss",
-            CultureInfo.InvariantCulture,
-            DateTimeStyles.None,
-            out when);
+    /// <summary>A backup folder name for the UTC instant <paramref name="utc"/>.</summary>
+    public static string FolderStamp(DateTime utc) =>
+        utc.ToString(StampFormat, CultureInfo.InvariantCulture) + "Z";
+
+    /// <summary>
+    /// Parse a backup folder name into a UTC instant. A name ending in
+    /// <c>Z</c> is UTC; one without is local time.
+    /// </summary>
+    public static bool TryParseTimestamp(string s, out DateTime when)
+    {
+        if (s.EndsWith('Z')
+            && DateTime.TryParseExact(s[..^1], StampFormat, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out when))
+        {
+            return true;
+        }
+        if (DateTime.TryParseExact(s, StampFormat, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeLocal | DateTimeStyles.AdjustToUniversal, out when))
+        {
+            return true;
+        }
+        when = default;
+        return false;
+    }
 
     private static bool TryDeleteDirectoryQuietly(string dir)
     {
@@ -462,6 +657,9 @@ public sealed class SaveBackupService
 /// One backup snapshot on disk: which slot it came from (with launcher),
 /// when it was taken, where the files live, and what they're called.
 /// </summary>
+/// <param name="Timestamp">When the backup was taken, in UTC.</param>
+/// <param name="SourcePath">The full path the backup was taken from, when recorded.</param>
+/// <param name="IsPreRestore">A slot's files as they were just before a Restore replaced them.</param>
 public sealed record BackupEntry(
     SavePlatform Platform,
     string UserId,
@@ -469,7 +667,9 @@ public sealed record BackupEntry(
     DateTime Timestamp,
     string BackupDirectory,
     IReadOnlyList<string> FileNames,
-    long TotalBytes);
+    long TotalBytes,
+    string? SourcePath = null,
+    bool IsPreRestore = false);
 
 /// <summary>
 /// Result of a <see cref="SaveBackupService.BackupBeforeWrite"/> call.
@@ -501,5 +701,7 @@ public enum BackupOutcomeKind
     Ok,
     SkippedNoSource,
     SkippedBadPath,
+    /// <summary>The newest backup already holds these exact files.</summary>
+    SkippedDuplicate,
     Failed,
 }

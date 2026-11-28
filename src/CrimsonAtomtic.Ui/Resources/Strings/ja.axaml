@@ -636,6 +636,7 @@
   <sys:String x:Key="StructuralEditWarningBody" xml:space="preserve">このセーブには長さが変わる（構造的な）変更が含まれています。封印アビス遺物チャレンジの完了や、リスト項目の追加／削除などです。&#10;&#10;データ自体は正しく書き込まれますが、Crimson Desert 本体のセーブローダーにはバグがあり、一部の高進行度セーブはこうした変更後の読み込みでクラッシュすることがあります。その場での変更（アイテム数・状態・ゲート/フラグの切り替え）は安全です。&#10;&#10;元ファイルのバックアップは保持されます。それでも保存しますか？</sys:String>
   <sys:String x:Key="HmacRewrapWarningTitle">セーブの整合性チェックに失敗</sys:String>
   <sys:String x:Key="HmacRewrapWarningBody" xml:space="preserve">このセーブは開いたときに HMAC の検証に失敗しました。ファイルが壊れているか、別のツールで編集された可能性があります。&#10;&#10;保存すると署名し直されるため、ゲームは現在の内容をそのまま受け入れます。元ファイルのバックアップは保持されます。それでも保存しますか？</sys:String>
+  <sys:String x:Key="DyeSlotPickerSlotLabel">スロット {0}</sys:String>
   <sys:String x:Key="DyeSlotAdded">{0} を追加しました。色を選んでから適用してください。</sys:String>
   <sys:String x:Key="DyeSlotAddFailed">{0} を追加できませんでした: {1}（コード {2}）</sys:String>
   <sys:String x:Key="DyeSlotRemoved">{0} を削除しました。</sys:String>
@@ -670,14 +671,14 @@
   <sys:String x:Key="ItemPickerAddToBagTip">このアイテムを、メインウィンドウが現在表示しているインベントリリストに追加します。先にバッグを開いて (_inventorylist[N]._itemList へドリルダウン) ください。さもないとクリック時に必要条件がステータスバーに表示されます。</sys:String>
   <sys:String x:Key="MenuRestoreFromBackup">バックアップから復元…</sys:String>
   <sys:String x:Key="RestoreFromBackupTitle">バックアップから復元</sys:String>
-  <sys:String x:Key="RestoreFromBackupColumnHint">行の「復元」をクリックすると、そのスナップショットで現セーブを上書きします。現在の状態はバックアップされません — バックアップはエディタで保存したときのみ作成されます。</sys:String>
+  <sys:String x:Key="RestoreFromBackupColumnHint">行の「復元」をクリックすると、そのスナップショットを戻します。スロットの現在のファイルは先に復元前スナップショットへ移され、ここに「(復元前)」として表示されます。</sys:String>
   <sys:String x:Key="RestoreColSlot">Slot (ユーザー / 名前)</sys:String>
   <sys:String x:Key="RestoreColTimestamp">バックアップ取得時刻</sys:String>
   <sys:String x:Key="RestoreColFiles">ファイル</sys:String>
   <sys:String x:Key="RestoreColSize">サイズ</sys:String>
   <sys:String x:Key="RestoreColAction">操作</sys:String>
   <sys:String x:Key="RestoreButton">⤺ 復元</sys:String>
-  <sys:String x:Key="RestoreButtonTip">このバックアップで現セーブを上書きします。現在の状態は事前にバックアップされません — 残したい場合はエディタで先に保存してください。</sys:String>
+  <sys:String x:Key="RestoreButtonTip">このバックアップをスロットに戻します。スロットの現在のファイルは復元前スナップショットとして保持されます。</sys:String>
   <sys:String x:Key="EditPanelNestedReadOnly">ネストされたフィールドの編集はまだサポートされていません。Back でトップレベル block に戻ってください。</sys:String>
   <sys:String x:Key="ElementsColIcon">アイコン</sys:String>
   <sys:String x:Key="ElementsColIndex">#</sys:String>
@@ -863,15 +864,24 @@
   <!-- バックアップ/復元ステータス -->
   <sys:String x:Key="BackupOk">バックアップ：{0} @ {1}（{2:N0} B）。</sys:String>
   <sys:String x:Key="BackupOkPruned">バックアップ：{0} @ {1}（{2:N0} B、{3} 件削除）。</sys:String>
-  <sys:String x:Key="BackupFailed">⚠ バックアップ失敗（セーブは書き込み済み）：{0}</sys:String>
   <sys:String x:Key="RestoreNoHook">復元には確認ダイアログのフックが必要です — UI のバグです。報告してください。</sys:String>
   <sys:String x:Key="RestoreNoRoot">復元失敗：このマシンで {0} のセーブルートが検出されません。元のセーブを書いたランチャーがここにインストールされていない可能性があります。</sys:String>
   <sys:String x:Key="RestoreConfirmTitle">バックアップから復元しますか？</sys:String>
-  <sys:String x:Key="RestoreConfirmBody" xml:space="preserve">{1} に取得したバックアップから {0} を復元しますか？&#10;&#10;プラットフォーム：{2}&#10;ファイル：{3}（{4:N0} bytes）&#10;対象：{5}&#10;&#10;これはそのスロットの現在のセーブを上書きします。現在の状態はバックアップされません — バックアップはエディタで保存したときのみ取得されます。</sys:String>
+  <sys:String x:Key="RestoreConfirmBody" xml:space="preserve">{1} に取得したバックアップから {0} を復元しますか？&#10;&#10;プラットフォーム：{2}&#10;ファイル：{3}（{4:N0} bytes）&#10;対象：{5}&#10;&#10;スロットの現在のファイルは先に復元前スナップショットへ移され、この一覧に表示されます。</sys:String>
   <sys:String x:Key="RestoreCancelled">復元をキャンセルしました。</sys:String>
   <sys:String x:Key="RestoreFailed">復元失敗：{0}</sys:String>
   <sys:String x:Key="RestoreDone">{1} から {0} を復元しました。</sys:String>
   <sys:String x:Key="RestoreReloadFailed">復元しましたが、再読み込みに失敗：{0}</sys:String>
+  <sys:String x:Key="ExternalChangeBody" xml:space="preserve">{0} は開いた後に別のもの（ゲームや別のツール）によって書き込まれました。&#10;&#10;保存するとその内容がこのエディタの内容で置き換わります。現在のファイルのバックアップは保持されます。上書きしますか？</sys:String>
+  <sys:String x:Key="ExternalChangeTitle">セーブがディスク上で変更されています</sys:String>
+  <sys:String x:Key="SaveAsReloadFailed">{0} に保存しましたが、開き直しに失敗しました：{1}</sys:String>
+  <sys:String x:Key="SaveFailedStatus">保存に失敗しました：{0}</sys:String>
+  <sys:String x:Key="BackupFailedBody" xml:space="preserve">上書きされるファイルのバックアップを書き込めませんでした：&#10;{0}&#10;&#10;バックアップなしで保存しますか？</sys:String>
+  <sys:String x:Key="BackupFailedTitle">バックアップ失敗</sys:String>
+  <sys:String x:Key="BackupFailedStatus">⚠ バックアップ失敗：{0}</sys:String>
+  <sys:String x:Key="RestoreRowPreRestore">(復元前)</sys:String>
+  <sys:String x:Key="RestoreRowSlot">{0}：{1} / {2}</sys:String>
+  <sys:String x:Key="RestoreNoSource">復元に失敗しました：このバックアップには元のフォルダーが記録されていません。バックアップフォルダーから手動でコピーしてください。</sys:String>
 
   <!-- フィールド詳細のナビゲーションエラー -->
   <sys:String x:Key="DetailsErrorBlockNotFound">現在のセーブにブロック #{0} が見つかりません。</sys:String>

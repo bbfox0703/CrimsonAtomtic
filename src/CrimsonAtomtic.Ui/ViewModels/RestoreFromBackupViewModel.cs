@@ -72,7 +72,8 @@ public sealed class BackupRowViewModel
     {
         ArgumentNullException.ThrowIfNull(entry);
         Entry = entry;
-        SlotLabel = $"{entry.UserId} / {entry.SlotName}";
+        SlotLabel = UiText.Format("RestoreRowSlot", "{0}: {1} / {2}", entry.Platform, entry.UserId, entry.SlotName)
+            + (entry.IsPreRestore ? " " + UiText.Get("RestoreRowPreRestore", "(before a restore)") : "");
         TimestampLabel = SaveBackupService.FormatTimestamp(entry.Timestamp);
         FileSummary = string.Join(" + ", entry.FileNames);
         // Show as "1.42 MB" / "315 KB" so the user can spot truncations

@@ -86,7 +86,7 @@ public sealed partial class MainWindowViewModel(
     /// </remarks>
     internal void MarkDirtyFromExternalEdit(string? logCategory = null, string? logSummary = null)
     {
-        IsDirty = true;
+        RefreshDirty();
         OnPropertyChanged(nameof(WindowTitle));
         if (!string.IsNullOrEmpty(logCategory) && !string.IsNullOrEmpty(logSummary))
         {
@@ -736,27 +736,16 @@ public sealed partial class MainWindowViewModel(
     }
 
     /// <summary>
-    /// Find the on-disk save root that matches a backup entry's
-    /// platform. Returns <c>null</c> when the launcher that owned the
-    /// backed-up save is no longer installed on this machine (rare but
-    /// possible — user reinstalled, switched platforms, etc.). Legacy
-    /// backups (<see cref="SavePlatform.Unknown"/>) restore into the
-    /// first available save root as a best-effort fallback so the
-    /// pre-multi-platform history isn't stranded.
+    /// The folder a backup restores into (<see cref="SaveBackupService.RestoreDirectory"/>):
+    /// the folder it was taken from when recorded, else the slot under the
+    /// save root of the backup's own launcher. Null when neither is known,
+    /// for example an <see cref="SavePlatform.Unknown"/> backup with no
+    /// recorded source, or a launcher not installed on this machine.
     /// </summary>
-    private string? ResolveSaveRootForBackup(BackupEntry entry)
+    private string? ResolveRestoreDirectory(BackupEntry entry)
     {
-        var discovered = paths.DiscoverSaveRoots();
-        if (discovered.Count == 0)
-        {
-            return null;
-        }
-        if (entry.Platform == SavePlatform.Unknown)
-        {
-            return discovered[0].RootPath;
-        }
-        var match = discovered.FirstOrDefault(r => r.Platform == entry.Platform);
-        return match?.RootPath;
+        var root = paths.DiscoverSaveRoots().FirstOrDefault(r => r.Platform == entry.Platform)?.RootPath;
+        return SaveBackupService.RestoreDirectory(entry, root);
     }
 
     /// <summary>
@@ -819,13 +808,55 @@ public sealed partial class MainWindowViewModel(
     private string? _detailsError;
 
     /// <summary>
-    /// True when there are uncommitted in-memory edits — set whenever a
-    /// successful <see cref="CommitFieldEditCommand"/> mutates a scalar
-    /// field, cleared by Save / Save As.
+    /// True when the in-memory save differs from what was last loaded or
+    /// written. It follows the loader's mutation version
+    /// (<see cref="RefreshDirty"/>), so an edit made anywhere, a tool
+    /// window included, counts.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
     private bool _isDirty;
+
+    // The loader's mutation version when the document was last loaded or written.
+    private ulong _cleanVersion;
+
+    /// <summary>
+    /// Re-derive <see cref="IsDirty"/> from the loader's mutation version.
+    /// Safe to call at any time; with no save loaded it clears the flag.
+    /// </summary>
+    public void RefreshDirty()
+    {
+        if (Summary is null)
+        {
+            IsDirty = false;
+            return;
+        }
+        try
+        {
+            IsDirty = loader.GetMutationVersion() != _cleanVersion;
+        }
+        catch (InvalidOperationException)
+        {
+            IsDirty = false;
+        }
+    }
+
+    /// <summary>Whether closing or replacing the document would lose edits.</summary>
+    public bool HasUnsavedChanges
+    {
+        get
+        {
+            RefreshDirty();
+            return IsDirty;
+        }
+    }
+
+    private void MarkClean()
+    {
+        _cleanVersion = loader.GetMutationVersion();
+        IsDirty = false;
+        Journal.Clear();
+    }
 
     /// <summary>
     /// Live text filter for <see cref="VisibleBlocks"/>. Empty / null
@@ -1382,8 +1413,8 @@ public sealed partial class MainWindowViewModel(
         Summary = loader.Load(path);
         _loadedPath = path;
         _loadedFileLastWriteTime = TryReadLastWriteTime(path);
-        IsDirty = false;
-        Journal.Clear();
+        _loadedFileStamp = TryReadFileStamp(path);
+        MarkClean();
         ReplaceBlocks(Summary?.Blocks);
         SelectedBlock = null;
         ClearNavigation();
@@ -1403,7 +1434,23 @@ public sealed partial class MainWindowViewModel(
     {
         try
         {
-            return File.GetLastWriteTime(path);
+            return File.GetLastWriteTimeUtc(path);
+        }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
+    }
+
+    // The loaded file's (last write, length) when it was last read or
+    // written by the editor; a different value at Save time means
+    // something else wrote it in between.
+    private (DateTime WriteUtc, long Length)? _loadedFileStamp;
+
+    private static (DateTime, long)? TryReadFileStamp(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            return info.Exists ? (info.LastWriteTimeUtc, info.Length) : null;
         }
         catch (IOException) { return null; }
         catch (UnauthorizedAccessException) { return null; }
@@ -1423,7 +1470,7 @@ public sealed partial class MainWindowViewModel(
         }
         try
         {
-            File.SetLastWriteTime(path, t);
+            File.SetLastWriteTimeUtc(path, t);
         }
         catch (IOException) { /* best-effort */ }
         catch (UnauthorizedAccessException) { /* best-effort */ }
@@ -5379,27 +5426,81 @@ public sealed partial class MainWindowViewModel(
     [RelayCommand(CanExecute = nameof(CanSave))]
     private async Task SaveAsync()
     {
-        if (_loadedPath is null)
+        if (_loadedPath is not { } path)
         {
             return;
         }
-        if (!await ConfirmStructuralEditOrAbortAsync() || !await ConfirmHmacRewrapOrAbortAsync())
+        if (!await ConfirmStructuralEditOrAbortAsync()
+            || !await ConfirmHmacRewrapOrAbortAsync()
+            || !await ConfirmOverwriteExternalChangeAsync(path)
+            || !await BackupBeforeWriteAsync(path)
+            || !await TryWriteAsync(path))
         {
             return;
         }
-        // PR B addendum: snapshot the on-disk state into the backup
-        // tree before overwriting it. Backup failure (read-only folder,
-        // disk full) reports via BulkOpStatus but doesn't abort the
-        // Save itself — a missing backup is better than a missing Save.
-        BackupBeforeWriteSilent(_loadedPath);
-        loader.WriteToFile(_loadedPath);
-        PreserveOriginalTimestamp(_loadedPath);
-        IsDirty = false;
-        Journal.Clear();
+        PreserveOriginalTimestamp(path);
+        _loadedFileStamp = TryReadFileStamp(path);
+        MarkClean();
         OnPropertyChanged(nameof(WindowTitle));
     }
 
     private bool CanSave() => HasSave && IsDirty && _loadedPath is not null;
+
+    /// <summary>
+    /// Write the document to <paramref name="path"/>. A failure leaves the
+    /// document dirty and is reported to the user instead of escaping the
+    /// command; returns whether the write succeeded.
+    /// </summary>
+    private async Task<bool> TryWriteAsync(string path)
+    {
+        try
+        {
+            loader.WriteToFile(path);
+            return true;
+        }
+        catch (Exception ex) when (ex is CrimsonSaveException or IOException or UnauthorizedAccessException
+                                       or InvalidOperationException)
+        {
+            var reason = ex is CrimsonSaveException cse
+                ? $"{ex.Message} ({CrimsonErrorCode.Name(cse.ErrorCode)})"
+                : ex.Message;
+            BulkOpStatus = UiText.Format("SaveFailedStatus", "Save failed: {0}", reason);
+            if (AlertRequested is { } alert)
+            {
+                await alert(UiText.Get("SaveFailedTitle", "Save failed"),
+                    UiText.Format("SaveFailedBody",
+                        "Could not write save: {0}. The app stayed open so you can retry or use Discard.",
+                        reason));
+            }
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Gate a Save over a file that changed on disk since the editor last
+    /// read or wrote it (the game saved, or another tool did). Overwriting
+    /// it loses that write, and putting the old timestamp back would hide
+    /// that it happened. Returns <c>true</c> to proceed; headless hosts do
+    /// not overwrite a changed file.
+    /// </summary>
+    private async Task<bool> ConfirmOverwriteExternalChangeAsync(string path)
+    {
+        if (_loadedFileStamp is not { } loaded || TryReadFileStamp(path) is not { } now || now == loaded)
+        {
+            return true;
+        }
+        if (ConfirmRequested is not { } ask)
+        {
+            return false;
+        }
+        return await ask(
+            UiText.Get("ExternalChangeTitle", "Save changed on disk"),
+            UiText.Format("ExternalChangeBody",
+                "{0} was written by something else after it was opened (the game, or another tool).\n\n"
+                + "Saving replaces that version with this editor's copy. A backup of the current file is "
+                + "kept. Overwrite it?",
+                Path.GetFileName(path)));
+    }
 
     // One-shot (per loaded document) acknowledgement of the structural-
     // edit warning. Reset whenever the loader reports no structural edit
@@ -5501,11 +5602,11 @@ public sealed partial class MainWindowViewModel(
         {
             return;
         }
-        // Same backup-before-overwrite policy as Save: snapshot the
-        // destination's current state if it exists. Save As to a brand-
-        // new path is a no-op (Skipped_NoSource).
-        BackupBeforeWriteSilent(destinationPath);
-        loader.WriteToFile(destinationPath);
+        // Save As to a brand-new path has nothing to back up (SkippedNoSource).
+        if (!await BackupBeforeWriteAsync(destinationPath) || !await TryWriteAsync(destinationPath))
+        {
+            return;
+        }
         // Stamp the destination with the original save's mtime BEFORE
         // re-loading. SaveAs re-anchors `_loadedFileLastWriteTime` to
         // the destination's now-restored timestamp below, so the next
@@ -5514,11 +5615,25 @@ public sealed partial class MainWindowViewModel(
         // Re-anchor: load the freshly-written file so the cached handle
         // matches the new path, then clear nav state. Re-reading also
         // proves the file round-trips (HMAC + LZ4 + ChaCha20 all good).
-        Summary = loader.Load(destinationPath);
+        // The write already succeeded, so a reload failure says so.
+        try
+        {
+            Summary = loader.Load(destinationPath);
+        }
+        catch (CrimsonSaveException ex)
+        {
+            BulkOpStatus = UiText.Format("SaveAsReloadFailed",
+                "Saved to {0}, but reopening it failed: {1}", destinationPath, ex.Message);
+            if (AlertRequested is { } alert)
+            {
+                await alert(UiText.Get("SaveFailedTitle", "Save failed"), BulkOpStatus);
+            }
+            return;
+        }
         _loadedPath = destinationPath;
         _loadedFileLastWriteTime = TryReadLastWriteTime(destinationPath);
-        IsDirty = false;
-        Journal.Clear();
+        _loadedFileStamp = TryReadFileStamp(destinationPath);
+        MarkClean();
         ReplaceBlocks(Summary?.Blocks);
         SelectedBlock = null;
         ClearNavigation();
@@ -5529,10 +5644,11 @@ public sealed partial class MainWindowViewModel(
     /// <summary>
     /// Snapshot <paramref name="targetPath"/>'s on-disk state into the
     /// backup tree and surface the result via <see cref="BulkOpStatus"/>.
-    /// Never throws — backup failures are logged for the user but the
-    /// caller's Save / Save As proceeds either way.
+    /// When the backup fails, the user decides whether to write without
+    /// one; returns <c>true</c> to proceed. Headless hosts do not write
+    /// without a backup.
     /// </summary>
-    private void BackupBeforeWriteSilent(string targetPath)
+    private async Task<bool> BackupBeforeWriteAsync(string targetPath)
     {
         var outcome = backupService.BackupBeforeWrite(targetPath);
         if (outcome.IsSuccess && outcome.Entry is { } entry)
@@ -5546,23 +5662,28 @@ public sealed partial class MainWindowViewModel(
         }
         else if (outcome.Kind == BackupOutcomeKind.Failed)
         {
-            // Show the failure prominently so the user knows the safety
-            // net's down; their Save still works.
-            BulkOpStatus = UiText.Format("BackupFailed", "⚠ Backup failed (save still wrote): {0}", outcome.Message);
+            BulkOpStatus = UiText.Format("BackupFailedStatus", "⚠ Backup failed: {0}", outcome.Message);
+            if (ConfirmRequested is not { } ask)
+            {
+                return false;
+            }
+            return await ask(
+                UiText.Get("BackupFailedTitle", "Backup failed"),
+                UiText.Format("BackupFailedBody",
+                    "The backup of the file about to be overwritten could not be written:\n{0}\n\n"
+                    + "Write the save anyway, without a backup?", outcome.Message));
         }
-        // Skipped (no source / bad path) is silent — common for first
-        // Save As to a fresh path, or for paths outside the canonical
-        // <userId>/<slotName>/save.save layout.
+        // Skipped (no source, a path outside a slot folder, or identical to
+        // the newest backup) needs no backup.
+        return true;
     }
 
     /// <summary>
-    /// Restore a backup snapshot back to the user's live save folder.
-    /// Copies the backup files over the slot's current contents, then
-    /// re-loads the restored save so the UI reflects the new state.
-    /// The current state is deliberately NOT snapshotted first — the
-    /// user explicitly asked to roll back, and an extra "undo of the
-    /// undo" backup only clutters the history and risks evicting an
-    /// older wanted snapshot. Backups are taken only on an editor Save.
+    /// Restore a backup snapshot back to the folder it came from, then
+    /// re-load the restored save so the UI reflects it. The slot's current
+    /// files move into a pre-restore snapshot first
+    /// (<see cref="SaveBackupService.Restore"/>), outside the per-slot
+    /// retention cap, so a restore never evicts an editor-Save backup.
     ///
     /// <para>
     /// The View opens a picker dialog that resolves the user's choice
@@ -5582,29 +5703,30 @@ public sealed partial class MainWindowViewModel(
             return;
         }
 
-        // Restore target = the discovered save root for the BACKUP'S
-        // platform, NOT the currently-loaded save's platform. A user
-        // might have a Steam save open and be restoring an Epic
-        // backup; the restore has to land in Epic's tree.
-        var gameSaveRoot = ResolveSaveRootForBackup(entry);
-        if (gameSaveRoot is null)
+        // The backup's own folder (or its launcher's tree), never the
+        // currently-loaded save's: a Steam save may be open while an Epic
+        // backup is restored.
+        var targetSlotDir = ResolveRestoreDirectory(entry);
+        if (targetSlotDir is null)
         {
-            BulkOpStatus = UiText.Format("RestoreNoRoot",
-                "Restore failed: no {0} save root is detected on this machine. "
-                + "The launcher that wrote the original save may not be installed here.",
-                entry.Platform);
+            BulkOpStatus = entry.Platform == SavePlatform.Unknown
+                ? UiText.Get("RestoreNoSource",
+                    "Restore failed: this backup does not record the folder it came from. "
+                    + "Copy its files back by hand from the backup folder.")
+                : UiText.Format("RestoreNoRoot",
+                    "Restore failed: no {0} save root is detected on this machine. "
+                    + "The launcher that wrote the original save may not be installed here.",
+                    entry.Platform);
             return;
         }
-        var targetSlotDir = Path.Combine(gameSaveRoot, entry.UserId, entry.SlotName);
-        var targetSavePath = Path.Combine(targetSlotDir, "save.save");
 
         var msg = UiText.Format("RestoreConfirmBody",
             "Restore {0} from backup taken at {1}?\n\n"
             + "Platform: {2}\n"
             + "Files: {3} ({4:N0} bytes)\n"
             + "Target: {5}\n\n"
-            + "This overwrites the current save in that slot. The current state is NOT "
-            + "backed up — backups are only taken when you Save in the editor.",
+            + "The slot's current files are moved to a pre-restore snapshot first, "
+            + "which the restore list shows.",
             entry.SlotName, SaveBackupService.FormatTimestamp(entry.Timestamp), entry.Platform,
             string.Join(", ", entry.FileNames), entry.TotalBytes, targetSlotDir);
         var ok = await ask(UiText.Get("RestoreConfirmTitle", "Restore from backup?"), msg);
@@ -5614,15 +5736,10 @@ public sealed partial class MainWindowViewModel(
             return;
         }
 
-        // No pre-restore backup: the user explicitly chose to roll back to
-        // an earlier snapshot, so snapshotting the about-to-be-discarded
-        // current state would just clutter the history and (worse) could
-        // evict an older wanted backup via the retention cap. Backups are
-        // created only on an editor Save (see SaveAsync / SaveAsAsync).
-
+        string targetSavePath;
         try
         {
-            await Task.Run(() => SaveBackupService.Restore(entry, gameSaveRoot));
+            targetSavePath = await Task.Run(() => backupService.Restore(entry, targetSlotDir));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

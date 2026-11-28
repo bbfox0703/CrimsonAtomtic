@@ -152,9 +152,10 @@ public sealed record CustomGemSet
 public sealed partial class AppSettingsJsonContext : JsonSerializerContext;
 
 /// <summary>
-/// Read / write helpers for <see cref="AppSettings"/>. Best-effort: any
-/// failure (missing file, malformed JSON, IO error) collapses to the
-/// default empty settings.
+/// Read / write helpers for <see cref="AppSettings"/>. A missing or
+/// unreadable file loads as the default settings; a file that is not
+/// valid settings JSON is renamed aside (<c>settings.corrupt-*.json</c>)
+/// first, so the user's choices are not overwritten by the next save.
 /// </summary>
 public static class AppSettingsStore
 {
@@ -163,37 +164,70 @@ public static class AppSettingsStore
     /// <summary>Load settings from <paramref name="localAppDataDirectory"/>. Never throws.</summary>
     public static AppSettings Load(string localAppDataDirectory)
     {
+        var path = Path.Combine(localAppDataDirectory, FileName);
         try
         {
-            var path = Path.Combine(localAppDataDirectory, FileName);
             if (!File.Exists(path))
             {
                 return new AppSettings();
             }
-            using var stream = File.OpenRead(path);
-            return JsonSerializer.Deserialize(stream, AppSettingsJsonContext.Default.AppSettings)
-                   ?? new AppSettings();
+            using (var stream = File.OpenRead(path))
+            {
+                var settings = JsonSerializer.Deserialize(stream, AppSettingsJsonContext.Default.AppSettings);
+                if (settings is not null)
+                {
+                    return settings;
+                }
+            }
         }
-        catch
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return new AppSettings();
         }
+        catch (JsonException)
+        {
+            // Fall through: the file exists but is not settings JSON.
+        }
+        KeepCorruptFile(path);
+        return new AppSettings();
     }
 
-    /// <summary>Persist <paramref name="settings"/>. Returns <c>true</c> on success.</summary>
+    /// <summary>
+    /// Persist <paramref name="settings"/>. The JSON goes to a temporary file
+    /// that replaces <c>settings.json</c> only once it is complete, so a
+    /// failed write leaves the previous settings intact. Returns <c>true</c>
+    /// on success.
+    /// </summary>
     public static bool TrySave(string localAppDataDirectory, AppSettings settings)
     {
+        var path = Path.Combine(localAppDataDirectory, FileName);
+        var temp = path + ".tmp";
         try
         {
             Directory.CreateDirectory(localAppDataDirectory);
-            var path = Path.Combine(localAppDataDirectory, FileName);
-            using var stream = File.Create(path);
-            JsonSerializer.Serialize(stream, settings, AppSettingsJsonContext.Default.AppSettings);
+            using (var stream = File.Create(temp))
+            {
+                JsonSerializer.Serialize(stream, settings, AppSettingsJsonContext.Default.AppSettings);
+            }
+            File.Move(temp, path, overwrite: true);
             return true;
         }
-        catch
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {
+            try { File.Delete(temp); }
+            catch (Exception cleanup) when (cleanup is IOException or UnauthorizedAccessException) { }
             return false;
         }
+    }
+
+    private static void KeepCorruptFile(string path)
+    {
+        try
+        {
+            var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+            var aside = Path.Combine(Path.GetDirectoryName(path)!, $"settings.corrupt-{stamp}.json");
+            File.Move(path, aside, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 }
