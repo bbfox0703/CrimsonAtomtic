@@ -28,6 +28,17 @@ read from the top.
 
 -----
 
+## 2026-11-28 (no release) — crimson-rs vendored at 414430d
+
+- **What changes:** nothing in the editor yet. crimson-rs PR #130 is vendored (`vendor/crimson-rs.ref`
+  = `414430d`): absent scalars carry `scalar_tag` in the block JSON, PyO3 gains
+  `parse_missioninfo_from_bytes`, and the C ABI gains `crimson_paz_open` /
+  `crimson_paz_handle_extract_file` / `crimson_paz_handle_list_dir` / `crimson_paz_close`.
+  Using them here (audit B2-24, B6-25, B1-14) is the next step.
+- **Tests:** 509 C# + 60 Python green on the rebuilt DLL and Python module.
+
+-----
+
 ## 2026-11-28 (no release) — Code audit P13 (part) and P14 (start): interop tests, key coverage, first cleanups
 
 - **What changes:**

@@ -48,8 +48,9 @@ As of 2026-11-28. What shipped, release by release, is in
 - **Saves are version-agnostic:** each save carries its own schema, so 1.05
   to 2.06 saves load and re-save in their own format. Names and icons resolve
   against the installed game, with each DLC's tables as a fallback.
-- **crimson-rs is vendored at `ebf7304`** (its 2026-11-28 audit fixes), on the
-  fork's `main`. CI builds exactly the commit in `vendor/crimson-rs.ref`, which
+- **crimson-rs is vendored at `414430d`** (crimson-rs PR #130: `scalar_tag` in
+  the block JSON, `parse_missioninfo_from_bytes`, the open-PAMT handle API), on
+  the fork's `main`. CI builds exactly the commit in `vendor/crimson-rs.ref`, which
   `vendor/update_vendors.ps1` writes; commit that file with the change that
   needs the new vendor. The fork still has **no pushed version tags**
   (`git ls-remote --tags origin` returned 0 refs on 2026-11-28); the
