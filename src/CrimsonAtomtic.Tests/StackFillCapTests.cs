@@ -88,4 +88,16 @@ public sealed class StackFillCapTests
         Assert.False(MainWindowViewModel.TryComputeTargetStack(5, 0, capLarge: true, out _));
         Assert.False(MainWindowViewModel.TryComputeTargetStack(5, 0, capLarge: false, out _));
     }
+
+    [Fact]
+    public void CappedItem_FillsToMaxAndNeverRoundsUpPastIt()
+    {
+        // Uncapped, 120 of max 50 rounds up to 150; with ApplyMaxStackCap the
+        // game clamps to 50, so a stack at or above max is left alone.
+        Assert.True(MainWindowViewModel.TryComputeTargetStack(120, 50, capLarge: true, capAtMax: false, out var t));
+        Assert.Equal(150UL, t);
+        Assert.False(MainWindowViewModel.TryComputeTargetStack(120, 50, capLarge: true, capAtMax: true, out _));
+        Assert.True(MainWindowViewModel.TryComputeTargetStack(20, 50, capLarge: true, capAtMax: true, out var below));
+        Assert.Equal(50UL, below);
+    }
 }

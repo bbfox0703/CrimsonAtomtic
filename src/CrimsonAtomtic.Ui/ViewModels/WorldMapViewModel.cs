@@ -266,33 +266,17 @@ public sealed partial class WorldMapViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Resolve <paramref name="typeName"/> + <paramref name="key"/> into
-    /// English + secondary names by re-using the LocalizationProvider's
-    /// public resolver. Returns <c>(null, null)</c> when the catalog
-    /// isn't loaded or the key has no entry.
+    /// Resolve <paramref name="typeName"/> + <paramref name="key"/> into its
+    /// English and secondary names. (null, null) when the catalog isn't
+    /// loaded or the key has no entry.
     /// </summary>
     private static (string? English, string? Secondary) ResolveNamePair(
         LocalizationProvider localization, string typeName, uint key)
     {
         if (key == 0) return (null, null);
-        // ResolveByFieldTypeName returns the pre-formatted "English / Secondary"
-        // (or just one side, or empty). For filter matching we want the
-        // raw per-language strings, not the joined display form. Re-derive
-        // by calling each language separately via the existing low-level
-        // PALOC + table-driven entry points the provider exposes.
-        //
-        // Simpler approach for now: split the formatted result back. The
-        // formatter joins with " / " so a single split works for the
-        // bilingual case. Single-language results have no " / " and land
-        // entirely in English.
-        var combined = localization.ResolveByFieldTypeName(typeName, key);
-        if (string.IsNullOrEmpty(combined)) return (null, null);
-        var sep = combined.IndexOf(" / ", StringComparison.Ordinal);
-        if (sep < 0)
-        {
-            return (combined, null);
-        }
-        return (combined[..sep], combined[(sep + 3)..]);
+        var (english, secondary) = localization.ResolveByFieldTypeNamePair(typeName, key);
+        return (string.IsNullOrEmpty(english) ? null : english,
+                string.IsNullOrEmpty(secondary) ? null : secondary);
     }
 
     /// <summary>

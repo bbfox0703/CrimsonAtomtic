@@ -38,10 +38,12 @@ public sealed partial class CustomGemSetsEditorViewModel : ObservableObject
     /// </summary>
     public bool Saved { get; private set; }
 
-    public CustomGemSetsEditorViewModel(IPlatformPaths paths, IReadOnlyList<CustomGemSet>? existing)
+    public CustomGemSetsEditorViewModel(IPlatformPaths paths, IReadOnlyList<CustomGemSet>? existing,
+        Func<uint, bool?>? isGem = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
         _paths = paths;
+        _isGem = isGem;
         // Seed each of the 3 fixed slots, padding existing with empty
         // entries when the user has fewer than SlotCount stored.
         for (var i = 0; i < SlotCount; i++)
@@ -49,9 +51,13 @@ public sealed partial class CustomGemSetsEditorViewModel : ObservableObject
             var src = (existing is { } e && i < e.Count) ? e[i] : null;
             Rows.Add(CustomGemSetEditorRow.From(src, i));
         }
-        StatusMessage = UiText.Get("GemSetsHeader",
-            "Up to 3 custom sets, each with up to 5 gems. Empty key cells are skipped at Save.");
+        StatusMessage = UiText.Get("GemSetsHeaderPositions",
+            "Up to 3 custom sets, each with up to 5 gems; the n-th cell goes into socket n. An empty cell "
+            + "leaves that socket as it is.");
     }
+
+    // Tells a gem from any other item; null when iteminfo is not loaded.
+    private readonly Func<uint, bool?>? _isGem;
 
     [RelayCommand]
     private void Save()
@@ -64,7 +70,11 @@ public sealed partial class CustomGemSetsEditorViewModel : ObservableObject
             foreach (var cell in row.Cells)
             {
                 var text = cell.KeyText?.Trim();
-                if (string.IsNullOrEmpty(text)) continue;
+                if (string.IsNullOrEmpty(text))
+                {
+                    keys.Add(0);
+                    continue;
+                }
                 if (!uint.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var k))
                 {
                     StatusMessage = UiText.Format("GemSetsInvalidKey",
@@ -72,8 +82,20 @@ public sealed partial class CustomGemSetsEditorViewModel : ObservableObject
                         row.Index + 1, text);
                     return;
                 }
-                if (k == 0) continue;
+                if (k != 0 && _isGem?.Invoke(k) == false)
+                {
+                    StatusMessage = UiText.Format("GemSetsNotAGem",
+                        "Set {0}: {1} is not a gem; a socket only holds gems. Save aborted.",
+                        row.Index + 1, k);
+                    return;
+                }
                 keys.Add(k);
+            }
+            // Keep each key in its socket's position; an empty cell is 0
+            // ("leave this socket"), and trailing ones carry nothing.
+            while (keys.Count > 0 && keys[^1] == 0)
+            {
+                keys.RemoveAt(keys.Count - 1);
             }
             built.Add(new CustomGemSet
             {

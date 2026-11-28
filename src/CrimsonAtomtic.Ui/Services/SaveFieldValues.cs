@@ -39,6 +39,35 @@ internal static class SaveFieldValues
         return bytes;
     }
 
+    /// <summary>
+    /// Parse a formatted <c>u8</c>..<c>u64</c> scalar (<c>"123 &lt;u32&gt;"</c>).
+    /// False for any other type tag or text.
+    /// </summary>
+    public static bool TryParseUInt(string formatted, out ulong value)
+    {
+        value = 0;
+        return ScalarFieldEditing.TryParse(formatted, out var raw, out var tag)
+               && tag is "u8" or "u16" or "u32" or "u64"
+               && ulong.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+    }
+
+    /// <summary>
+    /// A present flag field as a bool: a <c>bool</c> scalar, or an unsigned
+    /// one where non-zero is true. Null when absent or of another type.
+    /// </summary>
+    public static bool? TryFlag(DecodedFieldRow f)
+    {
+        if (!f.Present || !ScalarFieldEditing.TryParse(f.Value, out var raw, out var tag))
+        {
+            return null;
+        }
+        if (tag == "bool")
+        {
+            return bool.TryParse(raw, out var b) ? b : null;
+        }
+        return TryParseUInt(f.Value, out var n) ? n != 0 : null;
+    }
+
     /// <summary>The field named <paramref name="name"/>, or null.</summary>
     public static DecodedFieldRow? Field(BlockDetails block, string name) =>
         block.Fields.FirstOrDefault(f => string.Equals(f.Name, name, StringComparison.Ordinal));

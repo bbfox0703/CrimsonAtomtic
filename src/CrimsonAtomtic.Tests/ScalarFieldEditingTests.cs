@@ -302,4 +302,26 @@ public sealed class ScalarFieldEditingTests
         Note: string.Empty,
         Child: null,
         Elements: null);
+
+    [Theory]
+    [InlineData("f32", "NaN")]
+    [InlineData("f32", "Infinity")]
+    [InlineData("f32", "-Infinity")]
+    [InlineData("f32", "1e39")]
+    [InlineData("f64", "NaN")]
+    [InlineData("f64", "1e309")]
+    [InlineData("f32x3", "[1, NaN, 2]")]
+    [InlineData("f32x4", "[1, 2, 3, 1e39]")]
+    public void TryEncode_RefusesNonFiniteFloats(string tag, string raw)
+    {
+        Assert.False(ScalarFieldEditing.TryEncode(tag, raw, out _, out var error));
+        Assert.Contains("finite", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TryEncode_AcceptsTheLargestFiniteF32()
+    {
+        Assert.True(ScalarFieldEditing.TryEncode("f32", "3.4028235E+38", out var bytes, out _));
+        Assert.Equal(float.MaxValue, BitConverter.ToSingle(bytes));
+    }
 }

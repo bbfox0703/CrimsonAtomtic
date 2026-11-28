@@ -28,12 +28,8 @@ namespace CrimsonAtomtic.Ui.ViewModels;
 /// <see cref="LocalizationProvider.ResolveByFieldTypeName"/> — same
 /// source as the main window's <c>mercenaryDataList</c> Name column.
 /// That makes rows recognisable as e.g. "Damiane / 德米安" instead of
-/// raw numbers. The user's <i>custom</i> rename (stored as
-/// <c>InlineBytes</c> in <c>_mercenaryName</c>) is still not shown —
-/// the FFI exposes an
-/// <see cref="ISaveLoader.SetInlineBytesField">inline_bytes setter</see>
-/// but no symmetric getter. A read-side FFI is the natural next
-/// iteration.
+/// raw numbers. The custom name (<c>InlineBytes</c> in
+/// <c>_mercenaryName</c>) is read back into the textbox.
 /// </para>
 /// </remarks>
 public sealed partial class RenameMercenaryViewModel : ObservableObject
@@ -191,6 +187,7 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
                 {
                     row.NewName = System.Text.Encoding.UTF8.GetString(nameBytes);
                 }
+                row.OriginalName = row.NewName ?? string.Empty;
             }
             catch (CrimsonSaveException)
             {
@@ -218,12 +215,12 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
         foreach (var f in element.Fields)
         {
             if (string.Equals(f.Name, MercenaryNumberField, StringComparison.Ordinal)
-                && TryParseScalarUInt(f.Value, out var mn))
+                && SaveFieldValues.TryParseUInt(f.Value, out var mn))
             {
                 mercNo = mn;
             }
             else if (string.Equals(f.Name, MercenaryCharacterKeyField, StringComparison.Ordinal)
-                     && TryParseScalarUInt(f.Value, out var ck)
+                     && SaveFieldValues.TryParseUInt(f.Value, out var ck)
                      && ck <= uint.MaxValue)
             {
                 characterKey = (uint)ck;
@@ -307,7 +304,34 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
     internal void ApplyRename(MercenaryRow row)
     {
         var newName = row.NewName ?? string.Empty;
+        if (newName == (row.AppliedName ?? row.OriginalName))
+        {
+            StatusMessage = UiText.Get("RenameMercUnchanged", "The name is unchanged; nothing written.");
+            return;
+        }
+        // The game leaves _mercenaryName absent when there is no custom name;
+        // an empty write would make a present empty name, a shape it never
+        // writes, so clearing is refused rather than guessed.
+        if (newName.Length == 0)
+        {
+            row.LastError = StatusMessage = UiText.Get("RenameMercClearUnsupported",
+                "Clearing a custom name is not supported: the game stores \"no custom name\" as an absent "
+                + "field, which this editor cannot write.");
+            return;
+        }
         var bytes = Encoding.UTF8.GetBytes(newName);
+        if (bytes.Length > MaxNameBytes)
+        {
+            row.LastError = StatusMessage = UiText.Format("RenameMercTooLong",
+                "The name is {0} bytes in UTF-8; at most {1} are written.", bytes.Length, MaxNameBytes);
+            return;
+        }
+        if (WriteGate.IsBusy)
+        {
+            row.LastError = StatusMessage = UiText.Get("WriteGateBusy",
+                "Another edit is still running; try again when it finishes.");
+            return;
+        }
         var path = new[] { new PathStep((uint)_listFieldIdx, (uint)row.Index) };
         try
         {
@@ -337,6 +361,10 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
                 : UiText.Format("JournalRenameSet", "Renamed {0} → \"{1}\"", identity, newName));
     }
 
+    // The longest name accepted. The game's own limit is unknown; this keeps
+    // a pasted paragraph out of the save while allowing any real name.
+    private const int MaxNameBytes = 64;
+
     /// <summary>
     /// Becomes true after the first successful Apply. The hosting
     /// MainWindowViewModel reads this on dialog close to flip its own
@@ -344,27 +372,6 @@ public sealed partial class RenameMercenaryViewModel : ObservableObject
     /// </summary>
     public bool IsDirty { get; private set; }
 
-    /// <summary>
-    /// Pre-formatted scalar value (<c>"123 &lt;u32&gt;"</c>) →
-    /// <see cref="ulong"/>. Returns false on signed / float / bytes
-    /// values so the caller can skip the field instead of writing a
-    /// wrong number.
-    /// </summary>
-    private static bool TryParseScalarUInt(string formatted, out ulong value)
-    {
-        value = 0;
-        if (!ScalarFieldEditing.TryParse(formatted, out var rawText, out var tag))
-        {
-            return false;
-        }
-        if (tag is not ("u8" or "u16" or "u32" or "u64"))
-        {
-            return false;
-        }
-        return ulong.TryParse(rawText, System.Globalization.NumberStyles.Integer,
-                              System.Globalization.CultureInfo.InvariantCulture,
-                              out value);
-    }
 }
 
 /// <summary>
@@ -397,6 +404,9 @@ public enum MercenaryCategory
 /// </summary>
 public sealed partial class MercenaryRow : ObservableObject
 {
+    /// <summary>The custom name the save held when the dialog opened ("" for none).</summary>
+    public string OriginalName { get; set; } = string.Empty;
+
     private readonly RenameMercenaryViewModel _parent;
 
     public MercenaryRow(
@@ -518,15 +528,9 @@ public sealed partial class MercenaryRow : ObservableObject
     [ObservableProperty]
     private string? _lastError;
 
-    // Apply is always enabled. Empty NewName clears the custom rename
-    // (see ApplyRename's "(empty)" / "Cleared custom name on …" branch),
-    // which is a legitimate user action. The earlier CanApply gate
-    // depended on a manually-implemented bool that wasn't wired to
-    // ApplyCommand.NotifyCanExecuteChanged — the button effectively
-    // stuck disabled until you tabbed out of the textbox, which
-    // surfaced as "Apply 沒反應" against an obviously-typed value.
-    // Dropping the gate fixes the bug AND enables the clear-name flow
-    // without an extra "Clear" button.
+    // Always enabled: the textbox commits on focus loss, so a CanExecute
+    // tied to the typed text would lag behind it. ApplyRename refuses an
+    // empty or unchanged name and says why.
     [RelayCommand]
     private void Apply() => _parent.ApplyRename(this);
 }

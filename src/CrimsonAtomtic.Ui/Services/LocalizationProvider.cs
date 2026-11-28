@@ -692,6 +692,7 @@ public sealed class LocalizationProvider : IDisposable
             var bytes = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Body(ItemInfoTable));
             var header = _paz.ExtractFile(pamt, _layout.BinDirectory, _layout.Header(ItemInfoTable));
             _itemInfo?.Dispose();
+            _canonicalGems = null;
             _itemInfo = NativeItemInfoCatalog.LoadFromBytes(bytes, header);
         }
         catch (CrimsonSaveException ex)
@@ -2263,6 +2264,21 @@ public sealed class LocalizationProvider : IDisposable
             // a hardcoded table sourced from inspecting live saves.
             return InventoryContainerLabels.GetValueOrDefault(key, string.Empty);
         }
+        return FormatPair(ResolveByFieldTypeNamePair(typeName, key));
+    }
+
+    /// <summary>
+    /// <see cref="ResolveByFieldTypeName"/> as its two sides, English and
+    /// the secondary language, for callers that match or show them apart.
+    /// (null, null) when nothing resolves.
+    /// </summary>
+    public (string? English, string? Secondary) ResolveByFieldTypeNamePair(string? typeName, uint key)
+    {
+        if (typeName == "InventoryKey")
+        {
+            var label = InventoryContainerLabels.GetValueOrDefault(key);
+            return (label, null);
+        }
         // Table-driven Key bridges (Mission/Quest/Stage/Knowledge/Gauge/
         // Skill/Gimmick/SubLevel) resolve through their dedicated
         // .pabgb files. Tried first because some of these (e.g.
@@ -2271,8 +2287,8 @@ public sealed class LocalizationProvider : IDisposable
         // wrong-namespace answer through.
         if (typeName is not null && TableDrivenKeyTypes.Contains(typeName))
         {
-            var bridgeResult = FormatPair(ResolveViaKeyTable(typeName, key));
-            if (!string.IsNullOrEmpty(bridgeResult))
+            var bridgeResult = ResolveViaKeyTable(typeName, key);
+            if (!string.IsNullOrEmpty(bridgeResult.English) || !string.IsNullOrEmpty(bridgeResult.Secondary))
             {
                 return bridgeResult;
             }
@@ -2286,9 +2302,9 @@ public sealed class LocalizationProvider : IDisposable
         if (typeName is null
             || !TypeNameToTypeByte.TryGetValue(typeName, out var typeByte))
         {
-            return string.Empty;
+            return (null, null);
         }
-        return FormatPair(ResolveAt(typeByte, key));
+        return ResolveAt(typeByte, key);
     }
 
     /// <summary>
@@ -2534,6 +2550,33 @@ public sealed class LocalizationProvider : IDisposable
         return (english, secondary);
     }
 
+    /// <summary>
+    /// True when <paramref name="itemKey"/> is in the engine's canonical gem
+    /// set (iteminfo <c>item_type</c> 74 and <c>category_info</c> 2501), the
+    /// only items a socket accepts. Null when iteminfo is not loaded.
+    /// </summary>
+    public bool? IsGem(uint itemKey)
+    {
+        if (_itemInfo is not { } info)
+        {
+            return null;
+        }
+        var gems = _canonicalGems;
+        if (gems is null)
+        {
+            gems = new HashSet<uint>();
+            for (var i = 0; info.GetCanonicalGemKey(i) is { } k; i++)
+            {
+                gems.Add(k);
+            }
+            _canonicalGems = gems;
+        }
+        return gems.Contains(itemKey);
+    }
+
+    // Built on first use from the loaded iteminfo; cleared with it.
+    private HashSet<uint>? _canonicalGems;
+
     private static string FormatPair((string? English, string? Secondary) pair)
     {
         var hasEn = !string.IsNullOrEmpty(pair.English);
@@ -2541,6 +2584,8 @@ public sealed class LocalizationProvider : IDisposable
         if (!hasEn && !hasSec) return string.Empty;
         if (!hasSec) return pair.English!;
         if (!hasEn) return pair.Secondary!;
+        // Tables that carry only an internal name answer the same in every language.
+        if (string.Equals(pair.English, pair.Secondary, StringComparison.Ordinal)) return pair.English!;
         return $"{pair.English} / {pair.Secondary}";
     }
 

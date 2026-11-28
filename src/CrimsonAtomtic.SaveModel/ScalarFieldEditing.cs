@@ -293,25 +293,31 @@ public static class ScalarFieldEditing
                 return false;
 
             case "f32":
-                if (float.TryParse(trimmed, NumberStyles.Float, ci, out var f32))
+                // Finite only: NaN, infinity and a value past the f32 range
+                // (which parses as infinity) are never written into a save.
+                if (float.TryParse(trimmed, NumberStyles.Float, ci, out var f32) && float.IsFinite(f32))
                 {
                     var buf = new byte[4];
                     BinaryPrimitives.WriteSingleLittleEndian(buf, f32);
                     bytes = buf;
                     return true;
                 }
-                error = $"Value '{trimmed}' is not a valid f32.";
+                error = float.TryParse(trimmed, NumberStyles.Float, ci, out _)
+                    ? $"Value '{trimmed}' is not a finite f32."
+                    : $"Value '{trimmed}' is not a valid f32.";
                 return false;
 
             case "f64":
-                if (double.TryParse(trimmed, NumberStyles.Float, ci, out var f64))
+                if (double.TryParse(trimmed, NumberStyles.Float, ci, out var f64) && double.IsFinite(f64))
                 {
                     var buf = new byte[8];
                     BinaryPrimitives.WriteDoubleLittleEndian(buf, f64);
                     bytes = buf;
                     return true;
                 }
-                error = $"Value '{trimmed}' is not a valid f64.";
+                error = double.TryParse(trimmed, NumberStyles.Float, ci, out _)
+                    ? $"Value '{trimmed}' is not a finite f64."
+                    : $"Value '{trimmed}' is not a valid f64.";
                 return false;
 
             case "f32x3": return TryEncodeFloatVec(trimmed, expectedCount: 3, out bytes, out error);
@@ -346,6 +352,11 @@ public static class ScalarFieldEditing
             if (!float.TryParse(parts[i], NumberStyles.Float, ci, out var f))
             {
                 error = $"Component {i} ('{parts[i]}') is not a valid f32.";
+                return false;
+            }
+            if (!float.IsFinite(f))
+            {
+                error = $"Component {i} ('{parts[i]}') is not a finite f32.";
                 return false;
             }
             BinaryPrimitives.WriteSingleLittleEndian(buf.AsSpan(i * 4), f);

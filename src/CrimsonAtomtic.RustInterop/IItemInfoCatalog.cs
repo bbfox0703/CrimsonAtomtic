@@ -122,4 +122,10 @@ public interface IItemInfoCatalog : IDisposable
     /// <paramref name="index"/>. Returns <c>null</c> past the end.
     /// </summary>
     uint? GetCanonicalGemKey(int index);
+
+    /// <summary>The item's static iteminfo metadata, or null for an unknown key.</summary>
+    ItemInfoSummary? LookupSummary(uint itemKey);
+
+    /// <summary>The item's iteminfo flag bits, or null for an unknown key.</summary>
+    ItemInfoFlags? LookupFlags(uint itemKey);
 }

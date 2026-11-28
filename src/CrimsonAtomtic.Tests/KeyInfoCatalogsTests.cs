@@ -425,10 +425,7 @@ public sealed class KeyInfoCatalogsTests
         var prefabName = cat.LookupPrefabName(firstKey.Value);
         Assert.False(string.IsNullOrEmpty(prefabName));
 
-        // Slot 0 has 3 mask bytes + 3 mat-index bytes available.
-        var mask = cat.LookupSlotMask(firstKey.Value, 0);
-        Assert.NotNull(mask);
-        Assert.Equal(3, mask!.Length);
+        // Slot 0 has its 3 mat-index bytes.
         var matIdx = cat.LookupSlotMatIndices(firstKey.Value, 0);
         Assert.NotNull(matIdx);
         Assert.Equal(3, matIdx!.Length);
@@ -483,21 +480,16 @@ public sealed class KeyInfoCatalogsTests
         Assert.True(count!.Value >= 1,
             $"expected ≥1 extra layer on 0x{layeredKey:X8} slot {layeredSlot}, got {count}");
 
-        // The three per-layer getters all resolve for layer 0. Material
-        // may be an empty string (unset channel) but never null; mask is
-        // 3 bytes; flag is a defined byte.
+        // The per-layer getters resolve for layer 0. Material may be an
+        // empty string (unset channel) but never null; flag is a defined byte.
         var material = cat.LookupSlotExtraLayerMaterial(layeredKey, layeredSlot, 0, 0);
         Assert.NotNull(material);
-        var xmask = cat.LookupSlotExtraLayerMask(layeredKey, layeredSlot, 0);
-        Assert.NotNull(xmask);
-        Assert.Equal(3, xmask!.Length);
         var flag = cat.LookupSlotExtraLayerFlag(layeredKey, layeredSlot, 0);
         Assert.NotNull(flag);
 
         // Negative paths: layer_idx past the count is OUT_OF_RANGE → null;
         // an unknown prefab is NOT_FOUND → null.
         Assert.Null(cat.LookupSlotExtraLayerFlag(layeredKey, layeredSlot, 99));
-        Assert.Null(cat.LookupSlotExtraLayerMask(layeredKey, layeredSlot, 99));
         Assert.Null(cat.LookupSlotExtraLayerCount(uint.MaxValue, 0));
     }
 

@@ -1396,7 +1396,10 @@ public sealed partial class MainWindowViewModel(
     private bool TryGetSelectedFieldMaxStack(out ulong maxStack)
     {
         maxStack = 0;
-        if (SelectedField is not { IsEditable: true } sel)
+        // Only the stack count has a max stack; offering it on another
+        // integer of the item (its endurance, its slot) would pre-fill a
+        // meaningless value.
+        if (SelectedField is not { IsEditable: true, Name: "_stackCount" } sel)
         {
             return false;
         }
@@ -1828,7 +1831,17 @@ public sealed partial class MainWindowViewModel(
             row.EditError = err;
             return;
         }
-        await Task.CompletedTask; // keep async signature; no awaits remain
+        // Absent and zero are different states: the game stores a default by
+        // leaving the field absent (an unopened socket count, an undyed slot),
+        // so writing a present zero makes a shape it never writes.
+        if (!row.Present && bytes.All(b => b == 0) && ConfirmRequested is { } ask
+            && !await ask(UiText.Get("AbsentZeroTitle", "Write a present zero?"),
+                UiText.Format("AbsentZeroBody",
+                    "{0} is absent. The game stores this field's default by leaving it absent, which is not the "
+                    + "same as a present 0.\n\nWrite a present 0 anyway?", row.Name)))
+        {
+            return;
+        }
         try
         {
             // Path-addressed FFI: empty path collapses to a top-level mutation,
@@ -1905,11 +1918,19 @@ public sealed partial class MainWindowViewModel(
     /// once <see cref="FieldRowViewModel.Present"/> is false.
     /// </remarks>
     [RelayCommand]
-    private void MakeFieldAbsent(FieldRowViewModel? row)
+    private async Task MakeFieldAbsentAsync(FieldRowViewModel? row)
     {
         var block = SelectedBlock;
         if (row is null || !row.IsEditable || !row.Present
             || _loadedPath is null || block is null)
+        {
+            return;
+        }
+        if (ConfirmRequested is { } ask
+            && !await ask(UiText.Get("MakeAbsentTitle", "Make this field absent?"),
+                UiText.Format("MakeAbsentBody",
+                    "Removes {0} from the save; the game then reads its default. Some fields must be present "
+                    + "for the game to load the save (an item's key, for example).\n\nMake it absent?", row.Name)))
         {
             return;
         }
@@ -2758,7 +2779,7 @@ public sealed partial class MainWindowViewModel(
                         else if (stateFld is null && f.Name == "_state") stateFld = f;
                     }
                     if (keyFld is null
-                        || !TryParseScalarUInt(keyFld.Value, out var kU64)
+                        || !SaveFieldValues.TryParseUInt(keyFld.Value, out var kU64)
                         || kU64 == 0
                         || kU64 > uint.MaxValue
                         || !missionKeyToArtifact.ContainsKey((uint)kU64))
@@ -2768,7 +2789,7 @@ public sealed partial class MainWindowViewModel(
                     // Already done: catalog state=5 is a separate skip
                     // bucket from "context build failed".
                     if (stateFld is not null
-                        && TryParseScalarUInt(stateFld.Value, out var stateU64)
+                        && SaveFieldValues.TryParseUInt(stateFld.Value, out var stateU64)
                         && stateU64 == 5UL)
                     {
                         skippedAlreadyDone++;
@@ -2909,16 +2930,16 @@ public sealed partial class MainWindowViewModel(
                         {
                             case "_factionState":
                                 stateFieldIdx = f.FieldIndex;
-                                if (TryParseScalarUInt(f.Value, out var sv)) currentState = (byte)sv;
+                                if (SaveFieldValues.TryParseUInt(f.Value, out var sv)) currentState = (byte)sv;
                                 break;
                             case "_ownerFactionKey":
-                                if (TryParseScalarUInt(f.Value, out var ov)) ownerKey = (uint)ov;
+                                if (SaveFieldValues.TryParseUInt(f.Value, out var ov)) ownerKey = (uint)ov;
                                 break;
                             case "_conquerorFactionKey":
-                                if (TryParseScalarUInt(f.Value, out var cv)) conquerorKey = (uint)cv;
+                                if (SaveFieldValues.TryParseUInt(f.Value, out var cv)) conquerorKey = (uint)cv;
                                 break;
                             case "_isCapital":
-                                if (TryParseScalarUInt(f.Value, out var capv)) isCapital = capv != 0;
+                                isCapital = SaveFieldValues.TryFlag(f) ?? false;
                                 break;
                         }
                     }
@@ -3047,7 +3068,7 @@ public sealed partial class MainWindowViewModel(
                     {
                         if (f.Name != "_completedTime") continue;
                         if (f.Present
-                            && TryParseScalarUInt(f.Value, out var v)
+                            && SaveFieldValues.TryParseUInt(f.Value, out var v)
                             && v > max)
                         {
                             max = v;
@@ -3142,10 +3163,10 @@ public sealed partial class MainWindowViewModel(
         }
         if (keyFld is null || stateFld is null)
         { skipReason = "catalog row missing _key or _state field"; return false; }
-        if (!TryParseScalarUInt(keyFld.Value, out var keyU64)
+        if (!SaveFieldValues.TryParseUInt(keyFld.Value, out var keyU64)
             || keyU64 == 0
             || keyU64 > uint.MaxValue
-            || !TryParseScalarUInt(stateFld.Value, out var stateU64))
+            || !SaveFieldValues.TryParseUInt(stateFld.Value, out var stateU64))
         { skipReason = "catalog _key/_state could not be parsed"; return false; }
         // Catalog-only: negative-encoded engine-internal keys (0xFFFFxxxx) are
         // out of scope.
@@ -3176,14 +3197,14 @@ public sealed partial class MainWindowViewModel(
         }
         if (twinKeyFld is null || twinStateFld is null || twinCtFld is null || twinTagsFld is null)
         { skipReason = "adjacent twin missing one of (_key, _state, _completedTime, _usedTagList)"; return false; }
-        if (!TryParseScalarUInt(twinKeyFld.Value, out var twinKeyU64)
+        if (!SaveFieldValues.TryParseUInt(twinKeyFld.Value, out var twinKeyU64)
             || twinKeyU64 < 0xFFFF0000UL
             || twinKeyU64 > uint.MaxValue)
         { skipReason = "adjacent twin _key is not negative-encoded (not an SA-shape twin)"; return false; }
         // Visibility gate: twin must be at state=5 + _completedTime present + 2+ tags.
         // That's the engine's "user has picked up the artifact" marker —
         // without it the recipe is unsafe (likely to leave the card hidden).
-        if (!TryParseScalarUInt(twinStateFld.Value, out var twinStateU64) || twinStateU64 != 5UL)
+        if (!SaveFieldValues.TryParseUInt(twinStateFld.Value, out var twinStateU64) || twinStateU64 != 5UL)
         { skipReason = "adjacent twin _state != 5 (artifact never picked up)"; return false; }
         if (!twinCtFld.Present)
         { skipReason = "adjacent twin _completedTime absent (artifact pickup incomplete)"; return false; }
@@ -3233,7 +3254,7 @@ public sealed partial class MainWindowViewModel(
             {
                 if (f.Name != "_key") continue;
                 if (!f.Present
-                    || !TryParseScalarUInt(f.Value, out var k)
+                    || !SaveFieldValues.TryParseUInt(f.Value, out var k)
                     || k > uint.MaxValue)
                 {
                     break;
@@ -3266,7 +3287,7 @@ public sealed partial class MainWindowViewModel(
         { skipReason = "FAR tracker missing one of (_state, _completedTime, _usedTagList, _branchedTime)"; return false; }
         // Skip if FAR is already at state=5 (engine has already marked completion;
         // user just needs to claim the reward in-game to push it to catalog).
-        if (TryParseScalarUInt(farStateFld.Value, out var farStateU64) && farStateU64 == 5UL)
+        if (SaveFieldValues.TryParseUInt(farStateFld.Value, out var farStateU64) && farStateU64 == 5UL)
         { skipReason = "FAR tracker already at state=5 (challenge engine-completed; claim reward in-game)"; return false; }
         // FAR's _branchedTime must already be present (engine sets it on
         // artifact pickup); the cloned X_2 entry needs this field to
@@ -3862,7 +3883,7 @@ public sealed partial class MainWindowViewModel(
         for (var i = 0; i < sourceElement.Fields.Count; i++)
         {
             var f = sourceElement.Fields[i];
-            if (f.Name == "_transferredItemKey" && f.Present && TryParseScalarUInt(f.Value, out _))
+            if (f.Name == "_transferredItemKey" && f.Present && SaveFieldValues.TryParseUInt(f.Value, out _))
             {
                 idxTransferred = i;
             }
@@ -4047,7 +4068,7 @@ public sealed partial class MainWindowViewModel(
             foreach (var f in containers[i].Fields)
             {
                 if (string.Equals(f.Name, "_inventoryKey", StringComparison.Ordinal)
-                    && TryParseScalarUInt(f.Value, out var ik) && ik == inventoryKey)
+                    && SaveFieldValues.TryParseUInt(f.Value, out var ik) && ik == inventoryKey)
                 {
                     containerIdx = i;
                     break;
@@ -4175,9 +4196,17 @@ public sealed partial class MainWindowViewModel(
     /// </summary>
     private async Task<string> LearnItemKnowledgeAsync(uint itemKey)
     {
-        if (localization.LookupItemInfoSummary(itemKey) is not { KnowledgeInfo: not 0 } summary
-            || GetLearnedKnowledgeKeys() is not { } learned
-            || learned.Contains(summary.KnowledgeInfo))
+        if (localization.LookupItemInfoSummary(itemKey) is not { KnowledgeInfo: not 0 } summary)
+        {
+            return string.Empty;
+        }
+        if (GetLearnedKnowledgeKeys() is not { } learned)
+        {
+            // Without a knowledge list the item shows as "Unknown item" in-game.
+            return " " + UiText.Get("AddItemNoKnowledgeList",
+                "The save has no knowledge list, so the item's knowledge could not be learned.");
+        }
+        if (learned.Contains(summary.KnowledgeInfo))
         {
             return string.Empty;
         }
@@ -4247,7 +4276,7 @@ public sealed partial class MainWindowViewModel(
             foreach (var f in el.Fields)
             {
                 if (string.Equals(f.Name, "_characterKey", StringComparison.Ordinal)
-                    && TryParseScalarUInt(f.Value, out var ck)
+                    && SaveFieldValues.TryParseUInt(f.Value, out var ck)
                     && ck == MountCatalog.DragonCharacterKey)
                 {
                     dragonAlreadyPresent = true;
@@ -4362,7 +4391,7 @@ public sealed partial class MainWindowViewModel(
         {
             var el = merc.Value.Elements[i];
             if (FindFieldByName(el, "_characterKey") is { } ckField
-                && TryParseScalarUInt(ckField.Value, out var ck)
+                && SaveFieldValues.TryParseUInt(ckField.Value, out var ck)
                 && ck == MountCatalog.DragonCharacterKey)
             {
                 dragonIdx = i;
@@ -4370,7 +4399,7 @@ public sealed partial class MainWindowViewModel(
             }
         }
         if (hpField is not { Present: true, MetaSize: 8 }
-            || !TryParseScalarUInt(hpField.Value, out var current))
+            || !SaveFieldValues.TryParseUInt(hpField.Value, out var current))
         {
             return (false, string.Empty);
         }
@@ -4422,7 +4451,7 @@ public sealed partial class MainWindowViewModel(
             foreach (var f in el.Fields)
             {
                 if (string.Equals(f.Name, "_mercenaryNo", StringComparison.Ordinal)
-                    && f.Present && TryParseScalarUInt(f.Value, out var mn) && mn > maxMercNo)
+                    && f.Present && SaveFieldValues.TryParseUInt(f.Value, out var mn) && mn > maxMercNo)
                 {
                     maxMercNo = mn;
                 }
@@ -4592,7 +4621,7 @@ public sealed partial class MainWindowViewModel(
             var node = stack.Pop();
             foreach (var f in node.Fields)
             {
-                if (f.Name == "_itemNo" && f.Present && TryParseScalarUInt(f.Value, out var n))
+                if (f.Name == "_itemNo" && f.Present && SaveFieldValues.TryParseUInt(f.Value, out var n))
                 {
                     max = Math.Max(max, n);
                 }
@@ -4629,39 +4658,17 @@ public sealed partial class MainWindowViewModel(
                 {
                     continue;
                 }
-                if (f.Name == "_slotNo" && TryParseScalarUInt(f.Value, out var slot) && slot > maxSlot)
+                if (f.Name == "_slotNo" && SaveFieldValues.TryParseUInt(f.Value, out var slot) && slot > maxSlot)
                 {
                     maxSlot = slot;
                 }
-                else if (f.Name == "_itemNo" && TryParseScalarUInt(f.Value, out var itemNo) && itemNo > maxItemNo)
+                else if (f.Name == "_itemNo" && SaveFieldValues.TryParseUInt(f.Value, out var itemNo) && itemNo > maxItemNo)
                 {
                     maxItemNo = itemNo;
                 }
             }
         }
         return (maxSlot, maxItemNo);
-    }
-
-    /// <summary>
-    /// Parse a pre-formatted scalar value (<c>"123 &lt;u32&gt;"</c>,
-    /// <c>"100 &lt;u64&gt;"</c>) as an unsigned integer. Lossy on
-    /// signed / float / bytes values — returns false instead of a
-    /// wrong number, so the caller can skip the field.
-    /// </summary>
-    private static bool TryParseScalarUInt(string formatted, out ulong value)
-    {
-        value = 0;
-        if (!ScalarFieldEditing.TryParse(formatted, out var rawText, out var tag))
-        {
-            return false;
-        }
-        if (tag is not ("u8" or "u16" or "u32" or "u64"))
-        {
-            return false;
-        }
-        return ulong.TryParse(rawText, System.Globalization.NumberStyles.Integer,
-                              System.Globalization.CultureInfo.InvariantCulture,
-                              out value);
     }
 
     /// <summary>
@@ -4769,7 +4776,9 @@ public sealed partial class MainWindowViewModel(
         {
             return false;
         }
-        if (!TryComputeTargetStack(current, maxVal, capLarge, out var target))
+        var capAtMax = localization.LookupItemInfoSummary(itemKey) is { } summary
+                       && (summary.Flags & ItemInfoFlags.ApplyMaxStackCap) != 0;
+        if (!TryComputeTargetStack(current, maxVal, capLarge, capAtMax, out var target))
         {
             return false;
         }
@@ -4837,9 +4846,23 @@ public sealed partial class MainWindowViewModel(
     /// </para>
     /// </summary>
     internal static bool TryComputeTargetStack(ulong current, ulong max, bool capLarge, out ulong target)
+        => TryComputeTargetStack(current, max, capLarge, capAtMax: false, out target);
+
+    /// <summary>
+    /// <see cref="TryComputeTargetStack(ulong, ulong, bool, out ulong)"/>, and
+    /// with <paramref name="capAtMax"/> (iteminfo's <c>ApplyMaxStackCap</c>,
+    /// which makes the game clamp the count to <c>max_stack_count</c>) never
+    /// above <paramref name="max"/>: such a stack is filled to max, not
+    /// rounded up to a multiple of it.
+    /// </summary>
+    internal static bool TryComputeTargetStack(ulong current, ulong max, bool capLarge, bool capAtMax, out ulong target)
     {
         target = 0;
         if (max == 0)
+        {
+            return false;
+        }
+        if (capAtMax && current >= max)
         {
             return false;
         }
@@ -5368,7 +5391,7 @@ public sealed partial class MainWindowViewModel(
             {
                 if (!string.Equals(f.Name, KnowledgeElemKeyField, StringComparison.Ordinal))
                     continue;
-                if (TryParseScalarUInt(f.Value, out var k) && k <= uint.MaxValue)
+                if (SaveFieldValues.TryParseUInt(f.Value, out var k) && k <= uint.MaxValue)
                 {
                     existingSet.Add((uint)k);
                 }

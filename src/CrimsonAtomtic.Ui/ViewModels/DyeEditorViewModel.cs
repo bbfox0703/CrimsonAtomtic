@@ -190,7 +190,6 @@ public sealed partial class DyeEditorViewModel : ObservableObject
                 secondStepElementIdx: rec.PathStep1Element,
                 bagLabel: localization.FormatItemSourceLabel(rec),
                 item: item);
-            if (results.Count >= MaxResults) break;
         }
         // Sort: dyed rows first (most actionable), then "+ Add" rows;
         // within each group by source label then item name.
@@ -201,6 +200,11 @@ public sealed partial class DyeEditorViewModel : ObservableObject
             var byBag = string.CompareOrdinal(a.BagLabel, b.BagLabel);
             return byBag != 0 ? byBag : string.CompareOrdinal(a.ItemNameEnglish, b.ItemNameEnglish);
         });
+        // Cap after sorting, so the dyed rows (first in the order) are kept.
+        if (results.Count > MaxResults)
+        {
+            results.RemoveRange(MaxResults, results.Count - MaxResults);
+        }
         return results;
     }
 
@@ -256,7 +260,7 @@ public sealed partial class DyeEditorViewModel : ObservableObject
         {
             if (string.Equals(f.Name, ItemKeyFieldName, StringComparison.Ordinal)
                 && f.Present
-                && TryParseScalarUInt(f.Value, out var k)
+                && SaveFieldValues.TryParseUInt(f.Value, out var k)
                 && k <= uint.MaxValue)
             {
                 itemKey = (uint)k;
@@ -310,21 +314,6 @@ public sealed partial class DyeEditorViewModel : ObservableObject
             itemNameSecondary: nameSecondary,
             itemNameDisplay: nameDisplay,
             canAddDye: !isDyed));
-    }
-
-    private static bool TryParseScalarUInt(string formatted, out ulong value)
-    {
-        value = 0;
-        if (!ScalarFieldEditing.TryParse(formatted, out var rawText, out var tag))
-        {
-            return false;
-        }
-        if (tag is not ("u8" or "u16" or "u32" or "u64"))
-        {
-            return false;
-        }
-        return ulong.TryParse(rawText, NumberStyles.Integer,
-                              CultureInfo.InvariantCulture, out value);
     }
 
     private void ApplyFilter()

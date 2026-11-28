@@ -30,7 +30,7 @@ public sealed partial class SocketEditorWindow : Window
             return;
         }
         var existing = mainVm.LoadCustomGemSets();
-        var editorVm = new CustomGemSetsEditorViewModel(mainVm.GetPlatformPaths(), existing);
+        var editorVm = new CustomGemSetsEditorViewModel(mainVm.GetPlatformPaths(), existing, mainVm.Localization.IsGem);
         var dlg = new CustomGemSetsEditorWindow { DataContext = editorVm };
         await dlg.ShowDialog(this);
         if (editorVm.Saved && DataContext is SocketEditorViewModel socketsVm)

@@ -1186,10 +1186,15 @@ public sealed partial class MainWindow : Window
                         throw new InvalidOperationException(UiText.Get("DyeSlotFieldMissing",
                             "The new dye element has no _dyeSlotNo field, so its slot cannot be set."));
                     }
-                    loader.SetScalarFieldPresent(
-                        row.BlockIndex, newElementPath, fieldIdx,
-                        makePresent: true,
-                        initialBytes: [(byte)slotIdx]);
+                    // The game stores dye slot 0 as an absent _dyeSlotNo,
+                    // which is what the materialised element already has.
+                    if (slotIdx != 0)
+                    {
+                        loader.SetScalarFieldPresent(
+                            row.BlockIndex, newElementPath, fieldIdx,
+                            makePresent: true,
+                            initialBytes: [(byte)slotIdx]);
+                    }
                 });
             }
             catch (InvalidOperationException ex)

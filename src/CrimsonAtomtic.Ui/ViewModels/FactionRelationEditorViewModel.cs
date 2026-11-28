@@ -167,7 +167,10 @@ public sealed partial class FactionRelationEditorViewModel : ObservableObject
     private async Task Apply()
     {
         var changed = _allRows
-            .Where(r => r.NewRelation is { } n && (n.Value != r.Entry.PlayerToFaction || r.Entry.IsMismatched))
+            // A row whose two sides disagree is rewritten only when the user
+            // picked a relation for it; untouched, it is left as the save has it.
+            .Where(r => r.NewRelation is { } n
+                        && (n.Value != r.Entry.PlayerToFaction || (r.Entry.IsMismatched && r.RelationPicked)))
             .ToList();
         var regrouped = _allRows
             .Where(r => r.NewGroup is { } g && g.Key != r.Entry.RelationGroupKey)
@@ -321,6 +324,11 @@ public sealed partial class FactionRelationRow : ObservableObject
 
     [ObservableProperty]
     private FactionRelationOption? _newRelation;
+
+    /// <summary>True once the user has picked a relation on this row.</summary>
+    public bool RelationPicked { get; private set; }
+
+    partial void OnNewRelationChanged(FactionRelationOption? value) => RelationPicked = true;
 
     /// <summary>The relation groups a faction can be moved to.</summary>
     public IReadOnlyList<FactionGroupOption> GroupOptions { get; }

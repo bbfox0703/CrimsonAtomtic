@@ -300,11 +300,18 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                 throw new CrimsonSaveException(rc,
                     $"crimson_save_list_inventory_items size query failed: {ErrorName(rc)}");
             }
-            var buf = new InventoryItemRecord[(int)count];
+            var buf = new InventoryItemRecord[checked((int)count)];
+            nuint filled;
             fixed (InventoryItemRecord* p = buf)
             {
                 rc = NativeMethods.ListInventoryItems(
-                    cached, p, count, out _, out v);
+                    cached, p, count, out filled, out v);
+            }
+            if (rc == NativeMethods.BUFFER_TOO_SMALL)
+            {
+                // The list grew between the size query and the fill (an edit
+                // on another thread); a partial list would be a wrong one.
+                throw new CrimsonSaveException(rc, "The save changed while it was being listed; list it again.");
             }
             if (rc != NativeMethods.OK)
             {
@@ -312,7 +319,8 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                     $"crimson_save_list_inventory_items fill failed: {ErrorName(rc)}");
             }
             version = v;
-            return buf;
+            // The list shrank in between: the tail holds no records.
+            return filled < (nuint)buf.Length ? buf[..(int)filled] : buf;
         }
     }
 
@@ -336,11 +344,18 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                 throw new CrimsonSaveException(rc,
                     $"crimson_save_list_all_items size query failed: {ErrorName(rc)}");
             }
-            var buf = new ItemRecord[(int)count];
+            var buf = new ItemRecord[checked((int)count)];
+            nuint filled;
             fixed (ItemRecord* p = buf)
             {
                 rc = NativeMethods.ListAllItems(
-                    cached, p, count, out _, out v);
+                    cached, p, count, out filled, out v);
+            }
+            if (rc == NativeMethods.BUFFER_TOO_SMALL)
+            {
+                // The list grew between the size query and the fill (an edit
+                // on another thread); a partial list would be a wrong one.
+                throw new CrimsonSaveException(rc, "The save changed while it was being listed; list it again.");
             }
             if (rc != NativeMethods.OK)
             {
@@ -348,7 +363,8 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                     $"crimson_save_list_all_items fill failed: {ErrorName(rc)}");
             }
             version = v;
-            return buf;
+            // The list shrank in between: the tail holds no records.
+            return filled < (nuint)buf.Length ? buf[..(int)filled] : buf;
         }
     }
 
@@ -372,11 +388,18 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                 throw new CrimsonSaveException(rc,
                     $"crimson_save_list_field_positions size query failed: {ErrorName(rc)}");
             }
-            var buf = new PositionedEntityRecord[(int)count];
+            var buf = new PositionedEntityRecord[checked((int)count)];
+            nuint filled;
             fixed (PositionedEntityRecord* p = buf)
             {
                 rc = NativeMethods.ListFieldPositions(
-                    cached, p, count, out _, out v);
+                    cached, p, count, out filled, out v);
+            }
+            if (rc == NativeMethods.BUFFER_TOO_SMALL)
+            {
+                // The list grew between the size query and the fill (an edit
+                // on another thread); a partial list would be a wrong one.
+                throw new CrimsonSaveException(rc, "The save changed while it was being listed; list it again.");
             }
             if (rc != NativeMethods.OK)
             {
@@ -384,7 +407,8 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                     $"crimson_save_list_field_positions fill failed: {ErrorName(rc)}");
             }
             version = v;
-            return buf;
+            // The list shrank in between: the tail holds no records.
+            return filled < (nuint)buf.Length ? buf[..(int)filled] : buf;
         }
     }
 
@@ -414,11 +438,18 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                 throw new CrimsonSaveException(rc,
                     $"crimson_save_list_character_refs size query failed: {ErrorName(rc)}");
             }
-            var buf = new CharacterRefRecord[(int)count];
+            var buf = new CharacterRefRecord[checked((int)count)];
+            nuint filled;
             fixed (CharacterRefRecord* p = buf)
             {
                 rc = NativeMethods.ListCharacterRefs(
-                    cached, p, count, out _, out v);
+                    cached, p, count, out filled, out v);
+            }
+            if (rc == NativeMethods.BUFFER_TOO_SMALL)
+            {
+                // The list grew between the size query and the fill (an edit
+                // on another thread); a partial list would be a wrong one.
+                throw new CrimsonSaveException(rc, "The save changed while it was being listed; list it again.");
             }
             if (rc != NativeMethods.OK)
             {
@@ -426,7 +457,8 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
                     $"crimson_save_list_character_refs fill failed: {ErrorName(rc)}");
             }
             version = v;
-            return buf;
+            // The list shrank in between: the tail holds no records.
+            return filled < (nuint)buf.Length ? buf[..(int)filled] : buf;
         }
     }
 
@@ -1559,20 +1591,22 @@ public sealed class NativeSaveLoader : ISaveLoader, IDisposable
             return "{}";
         }
 
-        var rented = ArrayPool<byte>.Shared.Rent((int)required);
+        var rented = ArrayPool<byte>.Shared.Rent(checked((int)required));
         try
         {
+            nuint written;
             fixed (byte* p = rented)
             {
-                var rc = NativeMethods.GetBlockJson(h, index, p, (nuint)rented.Length, out _);
+                var rc = NativeMethods.GetBlockJson(h, index, p, (nuint)rented.Length, out written);
                 if (rc != NativeMethods.OK)
                 {
                     throw new CrimsonSaveException(rc,
                         $"crimson_save_get_block_json[{index}] failed: {ErrorName(rc)}");
                 }
             }
-            // Exclude the trailing NUL.
-            return Encoding.UTF8.GetString(rented, 0, (int)required - 1);
+            // The fill's own length, which an edit between the two calls can
+            // change; it counts the trailing NUL.
+            return written <= 1 ? "{}" : Encoding.UTF8.GetString(rented, 0, checked((int)written) - 1);
         }
         finally
         {
@@ -3583,11 +3617,6 @@ internal static partial class NativeMethods
         CrimsonPartPrefabDyeSlotInfoHandle handle, uint prefabKey, uint slotIdx,
         byte* outIndices);
 
-    [LibraryImport(LibraryName,
-        EntryPoint = "crimson_part_prefab_dye_slot_info_lookup_slot_mask")]
-    public static unsafe partial int PartPrefabDyeSlotInfoLookupSlotMask(
-        CrimsonPartPrefabDyeSlotInfoHandle handle, uint prefabKey, uint slotIdx,
-        byte* outMask);
 
     // 1.13 "expanded dyeable equipment" — a slot's optional second
     // (extra) material/dye layer (DyeExtraLayer). extra_layer_count is 0
@@ -3606,11 +3635,6 @@ internal static partial class NativeMethods
         CrimsonPartPrefabDyeSlotInfoHandle handle, uint prefabKey, uint slotIdx,
         uint layerIdx, uint matIdx, byte* buf, nuint bufLen, out nuint required);
 
-    [LibraryImport(LibraryName,
-        EntryPoint = "crimson_part_prefab_dye_slot_info_lookup_slot_extra_layer_mask")]
-    public static unsafe partial int PartPrefabDyeSlotInfoLookupSlotExtraLayerMask(
-        CrimsonPartPrefabDyeSlotInfoHandle handle, uint prefabKey, uint slotIdx,
-        uint layerIdx, byte* outMask);
 
     [LibraryImport(LibraryName,
         EntryPoint = "crimson_part_prefab_dye_slot_info_lookup_slot_extra_layer_flag")]

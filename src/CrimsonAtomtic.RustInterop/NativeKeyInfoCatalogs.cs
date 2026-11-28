@@ -58,18 +58,20 @@ internal static class NameBuffer
         {
             return string.Empty;
         }
-        var rented = ArrayPool<byte>.Shared.Rent((int)required);
+        var rented = ArrayPool<byte>.Shared.Rent(checked((int)required));
         try
         {
+            nuint written;
             fixed (byte* b = rented)
             {
-                rc = call(b, (nuint)rented.Length, out _);
+                rc = call(b, (nuint)rented.Length, out written);
             }
             if (rc != NativeMethods.OK)
             {
                 throw new CrimsonSaveException(rc, $"{errPrefix} fill failed: {ErrorName(rc)}");
             }
-            return Encoding.UTF8.GetString(rented, 0, (int)required - 1);
+            // The fill's own length (with its NUL), not the size query's.
+            return written <= 1 ? string.Empty : Encoding.UTF8.GetString(rented, 0, checked((int)written) - 1);
         }
         finally
         {

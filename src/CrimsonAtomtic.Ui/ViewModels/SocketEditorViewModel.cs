@@ -544,7 +544,13 @@ public sealed partial class SocketEditorViewModel : ObservableObject
                 {
                     for (var i = 0; i < applyCount; i++)
                     {
-                        if (!rows.TryGetValue(i, out var row)) continue;
+                        if (!rows.TryGetValue(i, out var row) || set.GemKeys[i] == 0) continue;
+                        if (_localization.IsGem(set.GemKeys[i]) == false)
+                        {
+                            row.LastError = UiText.Format("SocketNotAGem", "{0} is not a gem.", set.GemKeys[i]);
+                            failedRow = row;
+                            throw new OperationCanceledException(row.LastError);
+                        }
                         switch (ApplyGemPick(row, set.GemKeys[i]))
                         {
                             case GemPickResult.Changed:
@@ -720,7 +726,7 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         {
             if (string.Equals(f.Name, ItemKeyFieldName, StringComparison.Ordinal)
                 && f.Present
-                && TryParseScalarUInt(f.Value, out var ik)
+                && SaveFieldValues.TryParseUInt(f.Value, out var ik)
                 && ik <= uint.MaxValue)
             {
                 itemKey = (uint)ik;
@@ -741,7 +747,7 @@ public sealed partial class SocketEditorViewModel : ObservableObject
                 // or an absent → present promotion.
                 validSocketCountPresent = f.Present;
                 if (f.Present
-                    && TryParseScalarUInt(f.Value, out var vsc)
+                    && SaveFieldValues.TryParseUInt(f.Value, out var vsc)
                     && vsc <= byte.MaxValue)
                 {
                     currentValidSocketCount = (byte)vsc;
@@ -843,7 +849,7 @@ public sealed partial class SocketEditorViewModel : ObservableObject
         }
         var gemField = socket.Fields[gemKeyFieldIdx];
         if (!gemField.Present
-            || !TryParseScalarUInt(gemField.Value, out var keyU64)
+            || !SaveFieldValues.TryParseUInt(gemField.Value, out var keyU64)
             || keyU64 == 0
             || keyU64 > uint.MaxValue)
         {
@@ -1314,27 +1320,6 @@ public sealed partial class SocketEditorViewModel : ObservableObject
     private static string FormatCombinedName(string english, string? secondary) =>
         string.IsNullOrEmpty(secondary) ? english : $"{english} / {secondary}";
 
-    /// <summary>
-    /// Pre-formatted scalar value (<c>"123 &lt;u32&gt;"</c>) →
-    /// <see cref="ulong"/>. Returns false on signed / float / bytes
-    /// values so the caller can skip the field instead of writing a
-    /// wrong number.
-    /// </summary>
-    private static bool TryParseScalarUInt(string formatted, out ulong value)
-    {
-        value = 0;
-        if (!ScalarFieldEditing.TryParse(formatted, out var rawText, out var tag))
-        {
-            return false;
-        }
-        if (tag is not ("u8" or "u16" or "u32" or "u64"))
-        {
-            return false;
-        }
-        return ulong.TryParse(rawText, System.Globalization.NumberStyles.Integer,
-                              System.Globalization.CultureInfo.InvariantCulture,
-                              out value);
-    }
 }
 
 /// <summary>What <see cref="SocketEditorViewModel.ApplyGemPick"/> did to a slot.</summary>

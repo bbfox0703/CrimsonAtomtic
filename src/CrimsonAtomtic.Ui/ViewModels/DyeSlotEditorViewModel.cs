@@ -200,7 +200,14 @@ public sealed partial class DyeSlotEditorViewModel : ObservableObject
                 {
                     if (f.Name == "_dyeSlotNo")
                     {
-                        if (f.Present)
+                        // The game stores dye slot 0 as an absent _dyeSlotNo.
+                        if (pick.SlotIndex == 0)
+                        {
+                            if (f.Present)
+                                _loader.SetScalarFieldPresent(_itemRow.BlockIndex, newPath, f.FieldIndex,
+                                    makePresent: false, initialBytes: ReadOnlySpan<byte>.Empty);
+                        }
+                        else if (f.Present)
                             _loader.SetScalarField(_itemRow.BlockIndex, newPath, f.FieldIndex, [(byte)pick.SlotIndex]);
                         else
                             _loader.SetScalarFieldPresent(_itemRow.BlockIndex, newPath, f.FieldIndex,
@@ -560,12 +567,15 @@ public sealed partial class DyeSlotRow : ObservableObject
 {
     private readonly DyeSlotEditorViewModel _parent;
     private readonly DyeFieldIndices _fields;
-    private readonly bool _origRPresent, _origGPresent, _origBPresent, _origAPresent;
-    private readonly bool _origGrimePresent, _origColorGroupPresent, _origMaterialPresent;
-    private readonly byte _origR, _origG, _origB, _origA;
-    private readonly sbyte _origGrime;
-    private readonly uint _origColorGroupKey;
-    private readonly ushort _origMaterialKey;
+    // What the save holds for this slot: set when the row is built and
+    // moved to the applied values after each committed Apply, so the next
+    // Apply writes only what changed since.
+    private bool _origRPresent, _origGPresent, _origBPresent, _origAPresent;
+    private bool _origGrimePresent, _origColorGroupPresent, _origMaterialPresent;
+    private byte _origR, _origG, _origB, _origA;
+    private sbyte _origGrime;
+    private uint _origColorGroupKey;
+    private ushort _origMaterialKey;
 
     public int SlotIndex { get; }
     public sbyte SlotNo { get; }
@@ -776,15 +786,27 @@ public sealed partial class DyeSlotRow : ObservableObject
         }
         var writes = new List<(int FieldIdx, bool WasPresent, byte[] Bytes, string Label)>();
 
-        if (_fields.R >= 0 && (R != _origR || !_origRPresent))
+        // Only what the user changed is written: an absent field stays absent
+        // (the game leaves _grimeOpacity absent on every dye it writes, and
+        // absent is not the same as 0).
+        if (_fields.R >= 0 && R != _origR)
             writes.Add((_fields.R, _origRPresent, [R], "R"));
-        if (_fields.G >= 0 && (G != _origG || !_origGPresent))
+        if (_fields.G >= 0 && G != _origG)
             writes.Add((_fields.G, _origGPresent, [G], "G"));
-        if (_fields.B >= 0 && (B != _origB || !_origBPresent))
+        if (_fields.B >= 0 && B != _origB)
             writes.Add((_fields.B, _origBPresent, [B], "B"));
-        if (_fields.A >= 0 && (A != _origA || !_origAPresent))
+        var colourWritten = writes.Count > 0;
+        if (_fields.A >= 0 && A != _origA)
+        {
             writes.Add((_fields.A, _origAPresent, [A], "A"));
-        if (_fields.Grime >= 0 && (Grime != _origGrime || !_origGrimePresent))
+        }
+        else if (_fields.A >= 0 && colourWritten && !_origAPresent)
+        {
+            // A colour the game writes always carries alpha 255.
+            A = 255;
+            writes.Add((_fields.A, false, [255], "A"));
+        }
+        if (_fields.Grime >= 0 && Grime != _origGrime)
             writes.Add((_fields.Grime, _origGrimePresent, [(byte)Grime], "Grime"));
 
         if (_fields.ColorGroup >= 0 && SelectedColorGroup is { } cg
@@ -854,11 +876,35 @@ public sealed partial class DyeSlotRow : ObservableObject
         }
         _parent.ResyncSnapshot();
         _parent.MarkApplied();
+        Rebaseline(writes.Select(w => w.FieldIdx).ToHashSet());
         // Single per-slot journal entry aggregates which scalars
         // flipped, so the user's change list reads "Edited dye on
         // Robe slot 1 (R,G,B,Material)" not 4 separate lines.
         _parent.LogSlotApplied(this, appliedLabels);
         LastError = $"Applied: {string.Join(", ", appliedLabels)}.";
+    }
+
+    /// <summary>
+    /// After a committed Apply, take the written values as the save's, so
+    /// changing a field back to its earlier value writes it again.
+    /// </summary>
+    private void Rebaseline(HashSet<int> written)
+    {
+        if (written.Contains(_fields.R)) { _origR = R; _origRPresent = true; }
+        if (written.Contains(_fields.G)) { _origG = G; _origGPresent = true; }
+        if (written.Contains(_fields.B)) { _origB = B; _origBPresent = true; }
+        if (written.Contains(_fields.A)) { _origA = A; _origAPresent = true; }
+        if (written.Contains(_fields.Grime)) { _origGrime = Grime; _origGrimePresent = true; }
+        if (written.Contains(_fields.ColorGroup) && SelectedColorGroup is { } cg)
+        {
+            _origColorGroupKey = cg.Key;
+            _origColorGroupPresent = true;
+        }
+        if (written.Contains(_fields.Material) && SelectedMaterial is { } mat)
+        {
+            _origMaterialKey = (ushort)mat.Key;
+            _origMaterialPresent = true;
+        }
     }
 
     // ── Helpers: parse pre-formatted "<value> <tag>" scalar strings ──────────

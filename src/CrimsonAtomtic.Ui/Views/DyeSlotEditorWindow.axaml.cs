@@ -34,10 +34,9 @@ public sealed partial class DyeSlotEditorWindow : Window
         if (catalog is null) return;
         if (row.SelectedColorGroup is not { } cg)
         {
-            // Picker needs a theme — gracefully bail if the row doesn't
-            // have one selected (e.g. brand-new dye element with the
-            // color-group field still absent). Real UX should disable
-            // the Pick button in this state; for now the click is a no-op.
+            // The palette comes from the theme, so a slot without one has
+            // nothing to show yet.
+            row.LastError = Services.UiText.Get("DyePickNeedsTheme", "Pick a dye theme for this slot first; the palette comes from it.");
             return;
         }
         var pickerVm = new DyePalettePickerViewModel(

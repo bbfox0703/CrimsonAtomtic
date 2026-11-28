@@ -195,8 +195,9 @@ public sealed partial class CharacterPickerViewModel : ObservableObject
 
 /// <summary>
 /// One row in the Character Picker DataGrid. <see cref="CharacterKey"/>
-/// is the u32 row key from <c>characterinfo.pabgb</c> (already in lo24
-/// form — no cat-byte). <see cref="InternalName"/> is the entry's
+/// is the row's own key in <c>characterinfo.pabgb</c>: a 24-bit key for
+/// most rows, the full 32-bit hash for the hashed ones, and that exact
+/// value is what a pick writes. <see cref="InternalName"/> is the entry's
 /// internal id (e.g. <c>"Yann_Friendly"</c>, <c>"FieldNPC_Bandit_Lvl3"</c>);
 /// <see cref="NameEnglish"/> falls back to <see cref="InternalName"/>
 /// when no PALOC entry exists at <c>lo32 = 0x30</c>, so the column

@@ -208,7 +208,7 @@ public sealed partial class VendorBuybackViewModel : ObservableObject
             {
                 if (string.Equals(f.Name, StoreKeyFieldName, StringComparison.Ordinal)
                     && f.Present
-                    && TryParseScalarUInt(f.Value, out var sk)
+                    && SaveFieldValues.TryParseUInt(f.Value, out var sk)
                     && sk <= uint.MaxValue)
                 {
                     storeKey = (uint)sk;
@@ -237,22 +237,22 @@ public sealed partial class VendorBuybackViewModel : ObservableObject
                 {
                     if (!f.Present) continue;
                     if (string.Equals(f.Name, ItemKeyFieldName, StringComparison.Ordinal)
-                        && TryParseScalarUInt(f.Value, out var ik) && ik <= uint.MaxValue)
+                        && SaveFieldValues.TryParseUInt(f.Value, out var ik) && ik <= uint.MaxValue)
                     {
                         itemKey = (uint)ik;
                     }
                     else if (string.Equals(f.Name, StackCountFieldName, StringComparison.Ordinal)
-                             && TryParseScalarUInt(f.Value, out var sc))
+                             && SaveFieldValues.TryParseUInt(f.Value, out var sc))
                     {
                         stackCount = sc;
                     }
                     else if (string.Equals(f.Name, EnduranceFieldName, StringComparison.Ordinal)
-                             && TryParseScalarUInt(f.Value, out var ed))
+                             && SaveFieldValues.TryParseUInt(f.Value, out var ed))
                     {
                         endurance = ed;
                     }
                     else if (string.Equals(f.Name, TimePushedFieldName, StringComparison.Ordinal)
-                             && TryParseScalarUInt(f.Value, out var ta))
+                             && SaveFieldValues.TryParseUInt(f.Value, out var ta))
                     {
                         soldAt = ta;
                     }
@@ -357,12 +357,23 @@ public sealed partial class VendorBuybackViewModel : ObservableObject
             return;
         }
         var path = new[] { new PathStep(row.StoreListFieldIdx, row.StoreElementIdx) };
+        // The game never writes an empty buyback list: a store with nothing
+        // sold has the list absent, so removing the last entry clears it.
+        var isLast = !_allItems.Any(r => r != row && r.BlockIndex == row.BlockIndex
+                                         && r.StoreElementIdx == row.StoreElementIdx);
         try
         {
-            _loader.ListRemoveElement(
-                row.BlockIndex, path,
-                (int)row.BuybackListFieldIdx,
-                (int)row.BuybackElementIdx);
+            if (isLast)
+            {
+                _loader.SetObjectListPresent(row.BlockIndex, path, (int)row.BuybackListFieldIdx, makePresent: false);
+            }
+            else
+            {
+                _loader.ListRemoveElement(
+                    row.BlockIndex, path,
+                    (int)row.BuybackListFieldIdx,
+                    (int)row.BuybackElementIdx);
+            }
         }
         catch (CrimsonSaveException ex)
         {
@@ -401,20 +412,6 @@ public sealed partial class VendorBuybackViewModel : ObservableObject
         OnPropertyChanged(nameof(FilterCountText));
     }
 
-    private static bool TryParseScalarUInt(string formatted, out ulong value)
-    {
-        value = 0;
-        if (!ScalarFieldEditing.TryParse(formatted, out var rawText, out var tag))
-        {
-            return false;
-        }
-        if (tag is not ("u8" or "u16" or "u32" or "u64"))
-        {
-            return false;
-        }
-        return ulong.TryParse(rawText, NumberStyles.Integer,
-                              CultureInfo.InvariantCulture, out value);
-    }
 }
 
 /// <summary>

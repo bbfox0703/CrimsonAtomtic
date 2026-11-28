@@ -28,6 +28,44 @@ read from the top.
 
 -----
 
+## 2026-11-28 (no release) — Code audit P5: values the game writes, and only those
+
+- **Save scan first.** Twelve live saves (2.06) settle what several fixes depend on: every dye
+  element stores slot 0 as an absent `_dyeSlotNo`, `_grimeOpacity` is absent on all of them and
+  `_dyeColorA` is a present 255; a store's sold list is absent or non-empty, never present and
+  empty; 60 of 12,600 `CharacterKey` values use the high byte (the hashed character rows).
+- **What changes:**
+  - **Dye:** a row's Apply writes only the channels the user changed, so an absent grime stays
+    absent; a new colour on a slot without alpha gets 255, as the game writes it; after Apply the
+    row takes the written values as the save's, so changing one back writes again; slot 0 is
+    written as an absent `_dyeSlotNo` (B4-04, B4-05, B4-14). The palette button says a theme is
+    needed instead of doing nothing, and the dye list keeps the dyed items when it caps at 500.
+  - **Vendor Buyback:** removing a store's last entry makes the list absent (B4-15).
+  - **Generic editor:** writing a present zero into an absent field and "Make absent" both ask
+    first (B2-15); f32 / f64 / vector values refuse NaN, infinity and out-of-range numbers (B2-16).
+  - **Sockets:** a custom gem set keeps each gem in its socket's position (an empty cell leaves
+    that socket alone), refuses a key that is not in the engine's canonical gem set, and Apply-Set
+    refuses a non-gem too (B4-16, B4-17).
+  - **Stack fill** stops at max for items iteminfo flags with `ApplyMaxStackCap` (B4-13); "Fill
+    to max" is offered on `_stackCount` only; Add Item says when the save has no knowledge list.
+  - **World editors:** the Abyss gate Lock / Unlock buttons follow the row's state (B5-04); the
+    faction-node ★ shows, since `_isCapital` is a bool (B5-05); Faction Relations no longer
+    rewrites one-sided rows the user did not touch (B5-09); Rename refuses an unchanged, empty
+    (the game stores "no custom name" as absent) or over-64-byte name (B5-12).
+  - **Shared parsing:** six copies of the integer parser are one `SaveFieldValues.TryParseUInt`,
+    plus `TryFlag` for bool fields; the world map asks the resolver for both names instead of
+    splitting a formatted string on " / " (B5-20). A name that only exists as an internal name
+    no longer shows as "X / X" (B3-18).
+  - **Interop:** list reads keep the count the fill call reports and refuse a list that grew in
+    between, and block JSON and name reads decode the fill's own length (B1-04); the 3-byte dye
+    mask wrappers, whose meaning the 12-byte mask replaced, are gone (B1-13); `IItemInfoCatalog`
+    has `LookupSummary` / `LookupFlags` (B1-23).
+- **Left open:** B2-24 needs crimson-rs to report the type of an absent scalar; B3-08 and B3-12
+  need a data check; B5-07 and B5-14 need an in-game check.
+- **Tests:** 476 green (+8 non-finite float cases, +1 stack cap).
+
+-----
+
 ## 2026-11-28 (no release) — Code audit P4: failures are reported, not swallowed or fatal
 
 - **What changes:**

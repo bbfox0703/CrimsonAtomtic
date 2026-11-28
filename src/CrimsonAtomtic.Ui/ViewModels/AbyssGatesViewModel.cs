@@ -348,14 +348,14 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
         foreach (var f in element.Fields)
         {
             if (string.Equals(f.Name, GimmickInfoKeyField, StringComparison.Ordinal)
-                && TryParseScalarUInt(f.Value, out var gk) && gk <= uint.MaxValue)
+                && SaveFieldValues.TryParseUInt(f.Value, out var gk) && gk <= uint.MaxValue)
             {
                 gimmickInfoKey = (uint)gk;
                 haveGimmickKey = true;
             }
             else if (string.Equals(f.Name, InitStateNameHashField, StringComparison.Ordinal)
                      && f.Present
-                     && TryParseScalarUInt(f.Value, out var sh) && sh <= uint.MaxValue)
+                     && SaveFieldValues.TryParseUInt(f.Value, out var sh) && sh <= uint.MaxValue)
             {
                 stateHash = (uint)sh;
                 haveStateHash = true;
@@ -367,7 +367,7 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
                 ownerLevelFieldIdx = f.FieldIndex;
             }
             else if (string.Equals(f.Name, FieldGimmickSaveKeyField, StringComparison.Ordinal)
-                     && TryParseScalarUInt(f.Value, out var fk) && fk <= uint.MaxValue)
+                     && SaveFieldValues.TryParseUInt(f.Value, out var fk) && fk <= uint.MaxValue)
             {
                 fieldGimmickSaveKey = (uint)fk;
             }
@@ -516,20 +516,6 @@ public sealed partial class AbyssGatesViewModel : ObservableObject
         return formatted;
     }
 
-    private static bool TryParseScalarUInt(string formatted, out ulong value)
-    {
-        value = 0;
-        if (!ScalarFieldEditing.TryParse(formatted, out var rawText, out var tag))
-        {
-            return false;
-        }
-        if (tag is not ("u8" or "u16" or "u32" or "u64"))
-        {
-            return false;
-        }
-        return ulong.TryParse(rawText, NumberStyles.Integer, CultureInfo.InvariantCulture,
-                              out value);
-    }
 }
 
 /// <summary>
@@ -626,6 +612,8 @@ public sealed partial class AbyssGateRow : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanLock))]
     [NotifyPropertyChangedFor(nameof(CanUnlock))]
     [NotifyPropertyChangedFor(nameof(StateHashText))]
+    [NotifyCanExecuteChangedFor(nameof(LockCommand))]
+    [NotifyCanExecuteChangedFor(nameof(UnlockCommand))]
     private uint _currentStateHash;
 
     [ObservableProperty]
